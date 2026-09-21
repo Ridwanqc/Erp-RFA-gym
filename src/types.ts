@@ -211,6 +211,7 @@ export interface Transaction {
   type: 'POS' | 'Membership' | 'PT' | 'Pelunasan Cicilan' | 'Bundling';
   desc: string;
   customer: string;
+  memberId?: string;
   billName?: string;
   amount: number;            // Total invoice amount
   amountPaid: number;        // Cumulative amount paid

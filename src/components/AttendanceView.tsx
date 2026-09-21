@@ -381,14 +381,14 @@ export const AttendanceView: React.FC<AttendanceViewProps> = ({
                 todayMemberAttendances.map((att) => (
                   <div
                     key={att.id}
-                    className="flex justify-between items-center bg-zinc-950/60 border border-zinc-800/80 p-3.5 rounded-2xl hover:border-zinc-700 transition"
+                    className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-zinc-950/60 border border-zinc-800/80 p-3.5 rounded-2xl hover:border-zinc-700 transition"
                   >
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-xl bg-zinc-800 flex items-center justify-center font-black text-white text-xs border border-zinc-700">
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="w-10 h-10 rounded-xl bg-zinc-800 flex items-center justify-center font-black text-white text-xs border border-zinc-700 shrink-0">
                         {att.memberName.substring(0, 2).toUpperCase()}
                       </div>
-                      <div>
-                        <h4 className="text-xs font-bold text-white leading-tight">{att.memberName}</h4>
+                      <div className="min-w-0">
+                        <h4 className="text-xs font-bold text-white leading-tight truncate">{att.memberName}</h4>
                         <span
                           className={`inline-block px-2 py-0.5 rounded text-[10px] font-bold mt-1 ${
                             att.type === 'PT'
@@ -401,8 +401,8 @@ export const AttendanceView: React.FC<AttendanceViewProps> = ({
                       </div>
                     </div>
 
-                    <div className="text-right flex items-center gap-4">
-                      <div>
+                    <div className="flex items-center justify-between sm:justify-end gap-3 sm:gap-4 w-full sm:w-auto pt-2 sm:pt-0 border-t sm:border-t-0 border-zinc-800/70">
+                      <div className="text-left sm:text-right">
                         <p className="text-xs font-bold text-white">Masuk: {att.timeIn}</p>
                         <p className={`text-[10px] font-semibold mt-0.5 ${att.timeOut ? 'text-zinc-500' : 'text-emerald-400 animate-pulse'}`}>
                           Keluar: {att.timeOut || 'Masih Di Dalam'}
@@ -412,12 +412,12 @@ export const AttendanceView: React.FC<AttendanceViewProps> = ({
                       {!att.timeOut ? (
                         <button
                           onClick={() => onCheckoutMember(att.id)}
-                          className="px-3 py-1.5 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 text-xs font-bold border border-rose-500/30 transition flex items-center gap-1"
+                          className="px-3 py-1.5 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 text-xs font-bold border border-rose-500/30 transition flex items-center gap-1 shrink-0"
                         >
                           <LogOut className="w-3.5 h-3.5" /> Checkout
                         </button>
                       ) : (
-                        <span className="text-[10px] font-bold text-zinc-500 px-2 py-1 bg-zinc-900 rounded-lg">
+                        <span className="text-[10px] font-bold text-zinc-500 px-2 py-1 bg-zinc-900 rounded-lg shrink-0">
                           SELESAI
                         </span>
                       )}
@@ -485,20 +485,20 @@ export const AttendanceView: React.FC<AttendanceViewProps> = ({
                 todayStaffAttendances.map((sAtt) => (
                   <div
                     key={sAtt.id}
-                    className="flex justify-between items-center bg-zinc-950/60 border border-zinc-800/80 p-3.5 rounded-2xl"
+                    className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 bg-zinc-950/60 border border-zinc-800/80 p-3.5 rounded-2xl"
                   >
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-xl bg-zinc-800 flex items-center justify-center font-bold text-white text-xs border border-zinc-700">
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="w-10 h-10 rounded-xl bg-zinc-800 flex items-center justify-center font-bold text-white text-xs border border-zinc-700 shrink-0">
                         {sAtt.staffName.substring(0, 2).toUpperCase()}
                       </div>
-                      <div>
-                        <h4 className="text-xs font-bold text-white">{sAtt.staffName}</h4>
+                      <div className="min-w-0">
+                        <h4 className="text-xs font-bold text-white truncate">{sAtt.staffName}</h4>
                         <span className="bg-indigo-500/20 text-indigo-400 border border-indigo-500/30 px-2 py-0.5 rounded text-[10px] font-bold">
                           Shift {sAtt.shift}
                         </span>
                       </div>
                     </div>
-                    <div className="text-right">
+                    <div className="flex items-center justify-between sm:justify-end gap-3 w-full sm:w-auto pt-1.5 sm:pt-0 border-t sm:border-t-0 border-zinc-800/70">
                       <p className="text-xs font-bold text-emerald-400">IN: {sAtt.timeIn}</p>
                       <p className={`text-xs font-semibold ${sAtt.timeOut ? 'text-rose-400' : 'text-zinc-500'}`}>
                         OUT: {sAtt.timeOut || 'Aktif Bekerja'}

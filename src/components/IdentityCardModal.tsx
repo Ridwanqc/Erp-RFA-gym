@@ -47,9 +47,9 @@ export const IdentityCardModal: React.FC<IdentityCardModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-sm p-3 sm:p-4 overflow-y-auto">
-      <div className="bg-zinc-900 border border-zinc-700/80 rounded-3xl shadow-2xl w-full max-w-xl overflow-hidden my-auto animate-in fade-in zoom-in-95">
+      <div className="bg-zinc-900 border border-zinc-700/80 rounded-3xl shadow-2xl w-full max-w-xl max-h-[92vh] flex flex-col overflow-hidden my-auto animate-in fade-in zoom-in-95">
         {/* Modal Header */}
-        <div className="p-4 sm:p-5 border-b border-zinc-800 bg-zinc-950 flex items-center justify-between">
+        <div className="p-4 sm:p-5 border-b border-zinc-800 bg-zinc-950 flex items-center justify-between shrink-0">
           <div className="flex items-center gap-2.5">
             <div className="w-9 h-9 rounded-xl bg-orange-500/20 border border-orange-500/30 flex items-center justify-center text-orange-400">
               <ShieldCheck className="w-5 h-5" />

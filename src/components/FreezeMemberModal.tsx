@@ -1,5 +1,18 @@
-import React, { useState, useMemo } from 'react';
-import { X, Snowflake, Calendar, AlertCircle, Clock, ShieldCheck, CheckCircle2, User, FileText, ArrowRight } from 'lucide-react';
+import React, { useState, useMemo, useEffect } from 'react';
+import {
+  X,
+  Snowflake,
+  Calendar,
+  AlertCircle,
+  Clock,
+  CheckCircle2,
+  User,
+  Search,
+  ArrowRight,
+  Sparkles,
+  Phone,
+  ShieldAlert
+} from 'lucide-react';
 import { Member, User as StaffUser, MemberFreezeRecord } from '../types';
 import { APP_TODAY, formatDateIndo, formatRp } from '../utils/formatters';
 import { addDaysToDate, getDaysBetween } from '../utils/memberStatus';
@@ -24,7 +37,8 @@ export const FreezeMemberModal: React.FC<FreezeMemberModalProps> = ({
   staffUsers,
   onConfirmFreeze
 }) => {
-  const [selectedMemberId, setSelectedMemberId] = useState<string>(initialMember?.id || '');
+  const [selectedMemberId, setSelectedMemberId] = useState<string>('');
+  const [searchQuery, setSearchQuery] = useState<string>('');
   const [startDate, setStartDate] = useState<string>(APP_TODAY);
   const [plannedEndDate, setPlannedEndDate] = useState<string>(() => addDaysToDate(APP_TODAY, 14));
   const [reason, setReason] = useState<string>(FREEZE_REASONS[0]);
@@ -34,16 +48,49 @@ export const FreezeMemberModal: React.FC<FreezeMemberModalProps> = ({
   const [notes, setNotes] = useState<string>('');
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
-  // Sync when initialMember changes or opens
-  React.useEffect(() => {
-    if (initialMember) {
-      setSelectedMemberId(initialMember.id);
-    } else if (allMembers.length > 0 && !selectedMemberId) {
-      const eligible = allMembers.find((m) => !m.isFrozen && m.membershipType !== 'VISIT');
-      if (eligible) setSelectedMemberId(eligible.id);
-    }
-  }, [initialMember, isOpen]);
+  // Filter members eligible for freeze: not already frozen & not single-day visit passes
+  const eligibleMembers = useMemo(() => {
+    return allMembers.filter((m) => !m.isFrozen && m.status !== 'FREEZE' && m.membershipType !== 'VISIT');
+  }, [allMembers]);
 
+  // Filter eligible members by search query (name, id, phone)
+  const filteredEligibleMembers = useMemo(() => {
+    if (!searchQuery.trim()) return eligibleMembers;
+    const q = searchQuery.toLowerCase().trim();
+    return eligibleMembers.filter(
+      (m) =>
+        m.name.toLowerCase().includes(q) ||
+        m.id.toLowerCase().includes(q) ||
+        (m.phone && m.phone.includes(q))
+    );
+  }, [eligibleMembers, searchQuery]);
+
+  // Reset and synchronize fields when modal opens or initialMember changes
+  useEffect(() => {
+    if (isOpen) {
+      setErrorMsg(null);
+      setSearchQuery('');
+      setStartDate(APP_TODAY);
+      setPlannedEndDate(addDaysToDate(APP_TODAY, 14));
+      setReason(FREEZE_REASONS[0]);
+      setCustomReason('');
+      setNotes('');
+      setAdminFee('0');
+      setStaffId(currentUser?.id || staffUsers[0]?.id || 'S01');
+
+      if (initialMember) {
+        setSelectedMemberId(initialMember.id);
+      } else {
+        // Pick first eligible member or maintain current if still eligible
+        const exists = eligibleMembers.some((m) => m.id === selectedMemberId);
+        if (!exists) {
+          setSelectedMemberId(eligibleMembers[0]?.id || '');
+        }
+      }
+    }
+  }, [isOpen, initialMember, eligibleMembers, currentUser, staffUsers]);
+
+  // Find the currently selected member object
   const currentMember = useMemo(() => {
     if (initialMember) return initialMember;
     return allMembers.find((m) => m.id === selectedMemberId) || null;
@@ -51,12 +98,12 @@ export const FreezeMemberModal: React.FC<FreezeMemberModalProps> = ({
 
   // Compute duration in days (inclusive)
   const freezeDays = useMemo(() => {
-    return getDaysBetween(startDate, plannedEndDate, true);
+    return Math.max(1, getDaysBetween(startDate, plannedEndDate, true));
   }, [startDate, plannedEndDate]);
 
   // Compute new adjusted expiry date
   const newAdjustedExpiry = useMemo(() => {
-    if (!currentMember) return '';
+    if (!currentMember?.expired) return '';
     return addDaysToDate(currentMember.expired, freezeDays);
   }, [currentMember, freezeDays]);
 
@@ -65,13 +112,17 @@ export const FreezeMemberModal: React.FC<FreezeMemberModalProps> = ({
   const handleQuickPreset = (days: number) => {
     const end = addDaysToDate(startDate, days - 1);
     setPlannedEndDate(end);
+    setErrorMsg(null);
   };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!currentMember) return;
 
-    setErrorMsg(null);
+    if (!currentMember) {
+      setErrorMsg('Silakan pilih member terlebih dahulu untuk mengajukan freeze.');
+      return;
+    }
+
     if (new Date(plannedEndDate + 'T00:00:00') < new Date(startDate + 'T00:00:00')) {
       setErrorMsg('Tanggal selesai freeze tidak boleh mendahului tanggal mulai freeze!');
       return;
@@ -81,7 +132,12 @@ export const FreezeMemberModal: React.FC<FreezeMemberModalProps> = ({
     const finalReason = reason === 'Lainnya' && customReason.trim() ? customReason.trim() : reason;
     const numericFee = Math.max(0, parseInt(adminFee) || 0);
 
-    const recordId = 'FRZ-' + new Date().getFullYear() + String(new Date().getMonth() + 1).padStart(2, '0') + '-' + Math.floor(1000 + Math.random() * 9000);
+    const recordId =
+      'FRZ-' +
+      new Date().getFullYear() +
+      String(new Date().getMonth() + 1).padStart(2, '0') +
+      '-' +
+      Math.floor(1000 + Math.random() * 9000);
 
     const freezeRecord: MemberFreezeRecord = {
       id: recordId,
@@ -92,9 +148,11 @@ export const FreezeMemberModal: React.FC<FreezeMemberModalProps> = ({
       startDate,
       plannedEndDate,
       plannedDays: freezeDays,
+      freezeDays: freezeDays,
       previousStatus: currentMember.status || 'AKTIF',
       previousExpiredDate: currentMember.expired,
       newAdjustedExpiredDate: newAdjustedExpiry,
+      adjustedExpiryDate: newAdjustedExpiry,
       reason: finalReason,
       notes: notes.trim() || undefined,
       staffId: staffObj?.id || 'S01',
@@ -109,84 +167,186 @@ export const FreezeMemberModal: React.FC<FreezeMemberModalProps> = ({
       isFrozen: true,
       status: 'FREEZE',
       activeFreezeId: recordId,
+      lastFreezeRecordId: recordId,
       freezeStartDate: startDate,
       freezeEndDate: plannedEndDate,
+      freezePlannedEndDate: plannedEndDate,
+      freezeDays: freezeDays,
       freezeReason: finalReason,
       freezeStaffName: staffObj?.name || 'Staf Admin',
       freezeNotes: notes.trim() || undefined,
+      previousStatus: (currentMember.status as any) || 'AKTIF',
       expired: newAdjustedExpiry
     };
 
     onConfirmFreeze(freezeRecord, updatedMember);
-    onClose();
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-xs p-4 overflow-y-auto">
-      <div className="bg-zinc-900 border border-sky-500/30 rounded-3xl shadow-2xl w-full max-w-xl overflow-hidden my-auto animate-in fade-in zoom-in-95">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-xs p-3 sm:p-4 overflow-y-auto">
+      <div className="bg-zinc-900 border border-sky-500/30 rounded-3xl shadow-2xl w-full max-w-xl max-h-[92vh] flex flex-col overflow-hidden my-auto animate-in fade-in zoom-in-95">
         {/* Header */}
-        <div className="p-5 border-b border-zinc-800 bg-gradient-to-r from-sky-950/40 via-zinc-950 to-zinc-950 flex justify-between items-center">
+        <div className="p-4 sm:p-5 border-b border-zinc-800 bg-gradient-to-r from-sky-950/40 via-zinc-950 to-zinc-950 flex justify-between items-center shrink-0">
           <div className="flex items-center gap-3">
-            <span className="w-10 h-10 rounded-2xl bg-sky-500/20 text-sky-400 flex items-center justify-center border border-sky-500/30">
+            <span className="w-10 h-10 rounded-2xl bg-sky-500/20 text-sky-400 flex items-center justify-center border border-sky-500/30 shrink-0">
               <Snowflake className="w-5 h-5" />
             </span>
             <div>
-              <h3 className="text-lg font-black text-white flex items-center gap-2">
-                Freeze Membership
+              <h3 className="text-base sm:text-lg font-black text-white flex items-center gap-2">
+                Ajukan Freeze Member
                 <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-sky-500/20 text-sky-400 border border-sky-500/30 font-bold">
-                  MODUL SUSPENSI
+                  SUSPENSI AKTIF
                 </span>
               </h3>
               <p className="text-xs text-zinc-400">
-                Hentikan sementara masa aktif member tanpa menghapus histori keanggotaan.
+                Tangguhkan masa aktif member sementara dan perpanjang expired otomatis.
               </p>
             </div>
           </div>
           <button
             onClick={onClose}
-            className="text-zinc-400 hover:text-white p-2 rounded-xl hover:bg-zinc-800 transition"
+            className="text-zinc-400 hover:text-white p-2 rounded-xl hover:bg-zinc-800 transition cursor-pointer"
+            title="Tutup Modal"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-5 sm:p-6 space-y-4">
+        <form onSubmit={handleSubmit} className="p-4 sm:p-6 space-y-4 overflow-y-auto flex-1">
           {errorMsg && (
             <div className="bg-rose-500/10 border border-rose-500/30 rounded-2xl p-3 flex items-center gap-2.5 text-xs text-rose-300">
               <AlertCircle className="w-4 h-4 text-rose-400 shrink-0" />
               <span>{errorMsg}</span>
             </div>
           )}
-          {/* Member Selection / Display */}
+
+          {/* Member Selection / Search */}
           {!initialMember ? (
-            <div>
-              <label className="text-xs font-bold text-zinc-300 block mb-1">Pilih Member</label>
-              <select
-                value={selectedMemberId}
-                onChange={(e) => setSelectedMemberId(e.target.value)}
-                className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-hidden focus:border-sky-500"
-                required
-              >
-                {allMembers
-                  .filter((m) => !m.isFrozen && m.membershipType !== 'VISIT')
-                  .map((m) => (
-                    <option key={m.id} value={m.id}>
-                      {m.name} ({m.id}) - Exp: {formatDateIndo(m.expired)}
-                    </option>
-                  ))}
-              </select>
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-bold text-zinc-300 flex items-center gap-1.5">
+                  <User className="w-3.5 h-3.5 text-sky-400" />
+                  <span>Pilih Member Yang Akan Di-Freeze</span>
+                </label>
+                <span className="text-[11px] text-zinc-400 font-mono">
+                  {filteredEligibleMembers.length} member aktif
+                </span>
+              </div>
+
+              {eligibleMembers.length === 0 ? (
+                <div className="bg-amber-500/10 border border-amber-500/30 rounded-2xl p-3.5 flex items-start gap-3">
+                  <ShieldAlert className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
+                  <div>
+                    <h5 className="text-xs font-bold text-amber-300">Tidak Ada Member Aktif</h5>
+                    <p className="text-[11px] text-zinc-400 mt-0.5 leading-relaxed">
+                      Semua member di database saat ini berstatus FREEZE atau bertipe tiket harian.
+                    </p>
+                  </div>
+                </div>
+              ) : (
+                <>
+                  {/* Search Input */}
+                  <div className="relative">
+                    <Search className="w-4 h-4 absolute left-3 top-2.5 text-zinc-500" />
+                    <input
+                      type="text"
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      placeholder="Cari nama, ID, atau no HP member..."
+                      className="w-full bg-zinc-950 border border-zinc-800 rounded-xl pl-9 pr-3 py-2 text-xs text-white placeholder-zinc-500 focus:outline-hidden focus:border-sky-500"
+                    />
+                    {searchQuery && (
+                      <button
+                        type="button"
+                        onClick={() => setSearchQuery('')}
+                        className="absolute right-2.5 top-2 text-zinc-500 hover:text-white text-xs"
+                      >
+                        ✕
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Dropdown Selector */}
+                  <select
+                    value={selectedMemberId}
+                    onChange={(e) => {
+                      setSelectedMemberId(e.target.value);
+                      setErrorMsg(null);
+                    }}
+                    className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-hidden focus:border-sky-500 cursor-pointer"
+                    required
+                  >
+                    {filteredEligibleMembers.map((m) => (
+                      <option key={m.id} value={m.id}>
+                        {m.name} ({m.id}) • Exp: {formatDateIndo(m.expired)}
+                      </option>
+                    ))}
+                  </select>
+                </>
+              )}
+
+              {/* Live Preview Card of Selected Member */}
+              {currentMember && (
+                <div className="bg-zinc-950 border border-zinc-800 rounded-2xl p-3 flex items-center gap-3 mt-1.5">
+                  <div className="relative">
+                    {currentMember.photo ? (
+                      <img
+                        src={currentMember.photo}
+                        alt={currentMember.name}
+                        className="w-12 h-12 rounded-xl object-cover border border-zinc-700 shrink-0"
+                      />
+                    ) : (
+                      <div className="w-12 h-12 rounded-xl bg-zinc-800 border border-zinc-700 flex items-center justify-center text-sky-400 font-bold shrink-0">
+                        {currentMember.name.substring(0, 2).toUpperCase()}
+                      </div>
+                    )}
+                    <span className="absolute -bottom-1 -right-1 w-3.5 h-3.5 rounded-full bg-emerald-500 border-2 border-zinc-950" />
+                  </div>
+
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <h4 className="text-xs sm:text-sm font-bold text-white truncate">{currentMember.name}</h4>
+                      <span className="text-[10px] font-mono px-1.5 py-0.5 rounded-md bg-zinc-900 border border-zinc-800 text-sky-400 font-bold">
+                        {currentMember.id}
+                      </span>
+                    </div>
+                    <div className="text-[11px] text-zinc-400 flex items-center gap-3 mt-0.5 flex-wrap">
+                      <span className="flex items-center gap-1 text-zinc-400">
+                        <Phone className="w-3 h-3 text-zinc-500" />
+                        {currentMember.phone || '-'}
+                      </span>
+                      <span>•</span>
+                      <span>
+                        Expired Saat Ini:{' '}
+                        <strong className="text-emerald-400 font-mono font-bold">
+                          {formatDateIndo(currentMember.expired)}
+                        </strong>
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           ) : (
-            <div className="bg-zinc-950 border border-zinc-800 rounded-2xl p-3.5 flex items-center gap-3">
-              <img
-                src={currentMember?.photo}
-                alt={currentMember?.name}
-                className="w-12 h-12 rounded-xl object-cover border border-zinc-700"
-              />
+            /* Locked Single Member Card (when opened with pre-selected member) */
+            <div className="bg-zinc-950 border border-sky-500/30 rounded-2xl p-3.5 flex items-center gap-3">
+              {currentMember?.photo ? (
+                <img
+                  src={currentMember.photo}
+                  alt={currentMember.name}
+                  className="w-12 h-12 rounded-xl object-cover border border-zinc-700 shrink-0"
+                />
+              ) : (
+                <div className="w-12 h-12 rounded-xl bg-zinc-800 border border-zinc-700 flex items-center justify-center text-sky-400 font-bold shrink-0">
+                  {currentMember?.name.substring(0, 2).toUpperCase()}
+                </div>
+              )}
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2">
                   <h4 className="text-sm font-bold text-white truncate">{currentMember?.name}</h4>
-                  <span className="text-[10px] font-mono font-bold text-orange-400">{currentMember?.id}</span>
+                  <span className="text-[10px] font-mono font-bold text-sky-400 px-2 py-0.5 rounded-md bg-sky-950/50 border border-sky-800/40">
+                    {currentMember?.id}
+                  </span>
                 </div>
                 <div className="text-xs text-zinc-400 flex items-center gap-2 mt-0.5">
                   <span>Masa Aktif Sekarang:</span>
@@ -208,7 +368,10 @@ export const FreezeMemberModal: React.FC<FreezeMemberModalProps> = ({
               <input
                 type="date"
                 value={startDate}
-                onChange={(e) => setStartDate(e.target.value)}
+                onChange={(e) => {
+                  setStartDate(e.target.value);
+                  setErrorMsg(null);
+                }}
                 className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-hidden focus:border-sky-500"
                 required
               />
@@ -217,13 +380,15 @@ export const FreezeMemberModal: React.FC<FreezeMemberModalProps> = ({
             <div>
               <label className="text-xs font-bold text-zinc-300 flex items-center gap-1.5 mb-1">
                 <Clock className="w-3.5 h-3.5 text-sky-400" />
-                Tanggal Selesai Freeze
+                Tanggal Rencana Selesai Freeze
               </label>
               <input
                 type="date"
                 value={plannedEndDate}
-                onChange={(e) => setPlannedEndDate(e.target.value)}
-                min={startDate}
+                onChange={(e) => {
+                  setPlannedEndDate(e.target.value);
+                  setErrorMsg(null);
+                }}
                 className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-hidden focus:border-sky-500"
                 required
               />
@@ -232,7 +397,10 @@ export const FreezeMemberModal: React.FC<FreezeMemberModalProps> = ({
 
           {/* Presets Durasi */}
           <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-[11px] text-zinc-400">Preset Cepat:</span>
+            <span className="text-[11px] text-zinc-400 flex items-center gap-1">
+              <Sparkles className="w-3 h-3 text-amber-400" />
+              Preset Durasi Cepat:
+            </span>
             {[
               { label: '7 Hari', days: 7 },
               { label: '11 Hari', days: 11 },
@@ -244,7 +412,7 @@ export const FreezeMemberModal: React.FC<FreezeMemberModalProps> = ({
                 type="button"
                 key={preset.label}
                 onClick={() => handleQuickPreset(preset.days)}
-                className="px-2.5 py-1 rounded-lg bg-zinc-950 hover:bg-sky-500/20 hover:text-sky-400 border border-zinc-800 text-[11px] font-bold text-zinc-300 transition"
+                className="px-2.5 py-1 rounded-lg bg-zinc-950 hover:bg-sky-500/20 hover:text-sky-400 hover:border-sky-500/40 border border-zinc-800 text-[11px] font-bold text-zinc-300 transition cursor-pointer"
               >
                 {preset.label}
               </button>
@@ -288,7 +456,7 @@ export const FreezeMemberModal: React.FC<FreezeMemberModalProps> = ({
 
             <p className="text-[11px] text-zinc-400 pt-1 leading-relaxed">
               💡 <em>Contoh:</em> Member di-freeze {freezeDays} hari (
-              {formatDateIndo(startDate)} s/d {formatDateIndo(plannedEndDate)}). Masa aktif otomatis diperpanjang {freezeDays} hari ke <strong>{formatDateIndo(newAdjustedExpiry)}</strong>.
+              {formatDateIndo(startDate)} s/d {formatDateIndo(plannedEndDate)}). Masa aktif otomatis diperpanjang {freezeDays} hari ke <strong className="text-emerald-300 font-semibold">{formatDateIndo(newAdjustedExpiry)}</strong>.
             </p>
           </div>
 
@@ -298,7 +466,7 @@ export const FreezeMemberModal: React.FC<FreezeMemberModalProps> = ({
             <select
               value={reason}
               onChange={(e) => setReason(e.target.value)}
-              className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-hidden focus:border-sky-500"
+              className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-hidden focus:border-sky-500 cursor-pointer"
             >
               {FREEZE_REASONS.map((r) => (
                 <option key={r} value={r}>
@@ -332,7 +500,7 @@ export const FreezeMemberModal: React.FC<FreezeMemberModalProps> = ({
               <select
                 value={staffId}
                 onChange={(e) => setStaffId(e.target.value)}
-                className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-hidden focus:border-sky-500"
+                className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-hidden focus:border-sky-500 cursor-pointer"
               >
                 {staffUsers.map((s) => (
                   <option key={s.id} value={s.id}>
@@ -376,13 +544,14 @@ export const FreezeMemberModal: React.FC<FreezeMemberModalProps> = ({
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2.5 rounded-xl border border-zinc-800 hover:bg-zinc-800 text-xs font-bold text-zinc-400 hover:text-white transition"
+              className="px-4 py-2.5 rounded-xl border border-zinc-800 hover:bg-zinc-800 text-xs font-bold text-zinc-400 hover:text-white transition cursor-pointer"
             >
               Batal
             </button>
             <button
               type="submit"
-              className="px-5 py-2.5 rounded-xl bg-sky-500 hover:bg-sky-400 text-zinc-950 text-xs font-black shadow-lg shadow-sky-500/20 transition flex items-center gap-1.5"
+              disabled={!currentMember}
+              className="px-5 py-2.5 rounded-xl bg-sky-500 hover:bg-sky-400 disabled:opacity-50 disabled:cursor-not-allowed text-zinc-950 text-xs font-black shadow-lg shadow-sky-500/20 transition flex items-center gap-1.5 cursor-pointer active:scale-95"
             >
               <Snowflake className="w-4 h-4" />
               <span>Konfirmasi Freeze Member</span>

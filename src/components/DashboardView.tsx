@@ -244,96 +244,121 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
     setRestockModal({ isOpen: false, product: null, qty: '' });
   };
 
-  // Draw smooth weekly chart
+  // Draw smooth weekly chart with responsive ResizeObserver
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
 
-    const width = canvas.parentElement?.clientWidth || 600;
-    const height = 240;
-    canvas.width = width;
-    canvas.height = height;
+    const renderChart = () => {
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return;
 
-    // Past 7 days data
-    const days = ['H-6', 'H-5', 'H-4', 'H-3', 'H-2', 'H-1', 'Hari Ini'];
-    const data = [1600000, 2400000, 1850000, 3100000, 2200000, 4200000, todayRevenue];
-    const maxVal = Math.max(...data, 5000000);
+      const width = canvas.parentElement?.clientWidth || 600;
+      const height = 240;
+      canvas.width = width;
+      canvas.height = height;
 
-    ctx.clearRect(0, 0, width, height);
+      // Past 7 days data
+      const days = ['H-6', 'H-5', 'H-4', 'H-3', 'H-2', 'H-1', 'Hari Ini'];
+      const data = [1600000, 2400000, 1850000, 3100000, 2200000, 4200000, todayRevenue];
+      const maxVal = Math.max(...data, 5000000);
 
-    // Grid lines
-    ctx.strokeStyle = '#27272a';
-    ctx.lineWidth = 1;
-    for (let i = 0; i <= 4; i++) {
-      const y = height - 40 - (i * (height - 60)) / 4;
+      ctx.clearRect(0, 0, width, height);
+
+      // Grid lines
+      ctx.strokeStyle = '#27272a';
+      ctx.lineWidth = 1;
+      for (let i = 0; i <= 4; i++) {
+        const y = height - 40 - (i * (height - 60)) / 4;
+        ctx.beginPath();
+        ctx.moveTo(40, y);
+        ctx.lineTo(width - 20, y);
+        ctx.stroke();
+
+        // Label
+        ctx.fillStyle = '#71717a';
+        ctx.font = '10px Inter, sans-serif';
+        ctx.textAlign = 'right';
+        ctx.fillText((((maxVal * i) / 4) / 1000000).toFixed(1) + 'M', 35, y + 3);
+      }
+
+      // Gradient fill under curve
+      const stepX = (width - 70) / (data.length - 1);
+      const points = data.map((val, idx) => ({
+        x: 45 + idx * stepX,
+        y: height - 40 - (val / maxVal) * (height - 70)
+      }));
+
+      const gradient = ctx.createLinearGradient(0, 0, 0, height);
+      gradient.addColorStop(0, 'rgba(249, 115, 22, 0.45)');
+      gradient.addColorStop(1, 'rgba(249, 115, 22, 0.0)');
+
       ctx.beginPath();
-      ctx.moveTo(40, y);
-      ctx.lineTo(width - 20, y);
-      ctx.stroke();
-
-      // Label
-      ctx.fillStyle = '#71717a';
-      ctx.font = '10px Inter, sans-serif';
-      ctx.textAlign = 'right';
-      ctx.fillText((((maxVal * i) / 4) / 1000000).toFixed(1) + 'M', 35, y + 3);
-    }
-
-    // Gradient fill under curve
-    const stepX = (width - 70) / (data.length - 1);
-    const points = data.map((val, idx) => ({
-      x: 45 + idx * stepX,
-      y: height - 40 - (val / maxVal) * (height - 70)
-    }));
-
-    const gradient = ctx.createLinearGradient(0, 0, 0, height);
-    gradient.addColorStop(0, 'rgba(249, 115, 22, 0.45)');
-    gradient.addColorStop(1, 'rgba(249, 115, 22, 0.0)');
-
-    ctx.beginPath();
-    ctx.moveTo(points[0].x, points[0].y);
-    for (let i = 1; i < points.length; i++) {
-      const prev = points[i - 1];
-      const curr = points[i];
-      const cpX = (prev.x + curr.x) / 2;
-      ctx.bezierCurveTo(cpX, prev.y, cpX, curr.y, curr.x, curr.y);
-    }
-    ctx.lineTo(points[points.length - 1].x, height - 40);
-    ctx.lineTo(points[0].x, height - 40);
-    ctx.closePath();
-    ctx.fillStyle = gradient;
-    ctx.fill();
-
-    // Line stroke
-    ctx.beginPath();
-    ctx.moveTo(points[0].x, points[0].y);
-    for (let i = 1; i < points.length; i++) {
-      const prev = points[i - 1];
-      const curr = points[i];
-      const cpX = (prev.x + curr.x) / 2;
-      ctx.bezierCurveTo(cpX, prev.y, cpX, curr.y, curr.x, curr.y);
-    }
-    ctx.strokeStyle = '#f97316';
-    ctx.lineWidth = 3;
-    ctx.stroke();
-
-    // Dots and Labels
-    points.forEach((pt, idx) => {
-      ctx.beginPath();
-      ctx.arc(pt.x, pt.y, idx === points.length - 1 ? 6 : 4, 0, Math.PI * 2);
-      ctx.fillStyle = idx === points.length - 1 ? '#ea580c' : '#ffffff';
+      ctx.moveTo(points[0].x, points[0].y);
+      for (let i = 1; i < points.length; i++) {
+        const prev = points[i - 1];
+        const curr = points[i];
+        const cpX = (prev.x + curr.x) / 2;
+        ctx.bezierCurveTo(cpX, prev.y, cpX, curr.y, curr.x, curr.y);
+      }
+      ctx.lineTo(points[points.length - 1].x, height - 40);
+      ctx.lineTo(points[0].x, height - 40);
+      ctx.closePath();
+      ctx.fillStyle = gradient;
       ctx.fill();
-      ctx.strokeStyle = '#09090b';
-      ctx.lineWidth = 2;
+
+      // Line stroke
+      ctx.beginPath();
+      ctx.moveTo(points[0].x, points[0].y);
+      for (let i = 1; i < points.length; i++) {
+        const prev = points[i - 1];
+        const curr = points[i];
+        const cpX = (prev.x + curr.x) / 2;
+        ctx.bezierCurveTo(cpX, prev.y, cpX, curr.y, curr.x, curr.y);
+      }
+      ctx.strokeStyle = '#f97316';
+      ctx.lineWidth = 3;
       ctx.stroke();
 
-      // Bottom day label
-      ctx.fillStyle = idx === points.length - 1 ? '#f97316' : '#a1a1aa';
-      ctx.font = idx === points.length - 1 ? 'bold 11px Inter, sans-serif' : '10px Inter, sans-serif';
-      ctx.textAlign = 'center';
-      ctx.fillText(days[idx], pt.x, height - 15);
-    });
+      // Dots and Labels
+      points.forEach((pt, idx) => {
+        ctx.beginPath();
+        ctx.arc(pt.x, pt.y, idx === points.length - 1 ? 6 : 4, 0, Math.PI * 2);
+        ctx.fillStyle = idx === points.length - 1 ? '#ea580c' : '#ffffff';
+        ctx.fill();
+        ctx.strokeStyle = '#09090b';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+
+        // Bottom day label
+        ctx.fillStyle = idx === points.length - 1 ? '#f97316' : '#a1a1aa';
+        ctx.font = idx === points.length - 1 ? 'bold 11px Inter, sans-serif' : '10px Inter, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText(days[idx], pt.x, height - 15);
+      });
+    };
+
+    renderChart();
+
+    let animationFrameId: number;
+    const handleResize = () => {
+      cancelAnimationFrame(animationFrameId);
+      animationFrameId = requestAnimationFrame(renderChart);
+    };
+
+    const parent = canvas.parentElement;
+    let observer: ResizeObserver | null = null;
+    if (parent && typeof ResizeObserver !== 'undefined') {
+      observer = new ResizeObserver(handleResize);
+      observer.observe(parent);
+    }
+    window.addEventListener('resize', handleResize);
+
+    return () => {
+      window.removeEventListener('resize', handleResize);
+      if (observer) observer.disconnect();
+      cancelAnimationFrame(animationFrameId);
+    };
   }, [todayRevenue]);
 
   // Open WhatsApp Modal helper

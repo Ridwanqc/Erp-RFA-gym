@@ -215,20 +215,20 @@ export const BundlingManagerModal: React.FC<BundlingManagerModalProps> = ({
   const commVal = (Number(ptComponentValue) * (Number(commissionRate) / 100)) || 0;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-xs p-4 overflow-y-auto">
-      <div className="bg-zinc-900 border border-zinc-800 rounded-3xl shadow-2xl w-full max-w-5xl flex flex-col max-h-[90vh] overflow-hidden animate-in fade-in zoom-in-95">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-xs p-2 sm:p-4 overflow-y-auto">
+      <div className="bg-zinc-900 border border-zinc-800 rounded-3xl shadow-2xl w-full max-w-[96vw] lg:max-w-5xl flex flex-col max-h-[92vh] overflow-hidden animate-in fade-in zoom-in-95">
         {/* Header */}
-        <div className="p-6 border-b border-zinc-800 bg-zinc-950 flex justify-between items-center shrink-0">
+        <div className="p-4 sm:p-6 border-b border-zinc-800 bg-zinc-950 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 shrink-0">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-2xl bg-amber-500/20 text-amber-400 border border-amber-500/30 flex items-center justify-center">
+            <div className="w-10 h-10 rounded-2xl bg-amber-500/20 text-amber-400 border border-amber-500/30 flex items-center justify-center shrink-0">
               <Sparkles className="w-5 h-5" />
             </div>
             <div>
-              <h2 className="text-xl font-black text-white tracking-tight">Master Modul Paket Bundling</h2>
+              <h2 className="text-lg sm:text-xl font-black text-white tracking-tight">Master Modul Paket Bundling</h2>
               <p className="text-xs text-zinc-400">Konfigurasi struktur produk bundling (Membership + PT + FnB/Produk)</p>
             </div>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 self-end sm:self-auto">
             {!isCreatingNew && !editingBundle && (
               <button
                 type="button"

@@ -205,8 +205,8 @@ export const HRPayrollView: React.FC<HRPayrollViewProps> = ({
 
       {/* MODAL: PRINT SLIP GAJI */}
       {selectedStaffSlip && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-xs p-4">
-          <div className="bg-zinc-900 border border-zinc-800 rounded-3xl shadow-2xl w-full max-w-md p-6 animate-in fade-in zoom-in-95">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-xs p-3 sm:p-4 overflow-y-auto">
+          <div className="bg-zinc-900 border border-zinc-800 rounded-3xl shadow-2xl w-full max-w-md p-4 sm:p-6 my-auto max-h-[92vh] overflow-y-auto animate-in fade-in zoom-in-95">
             <div className="border-b border-zinc-800 pb-4 text-center">
               <h3 className="text-base font-black text-white uppercase tracking-wider">RFA GYM & FITNESS</h3>
               <p className="text-[11px] text-zinc-400">Slip Gaji Karyawan — Periode September 2026</p>

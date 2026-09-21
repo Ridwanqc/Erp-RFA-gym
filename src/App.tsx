@@ -108,7 +108,24 @@ export default function App() {
   // Navigation
   const [activeTab, setActiveTab] = useState<ActiveTab>('dashboard');
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [isDesktopCollapsed, setIsDesktopCollapsed] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem('gympro_sidebar_collapsed') === 'true';
+    } catch {
+      return false;
+    }
+  });
   const [firebaseConnected, setFirebaseConnected] = useState(true);
+
+  const handleToggleDesktopSidebar = () => {
+    setIsDesktopCollapsed((prev) => {
+      const next = !prev;
+      try {
+        localStorage.setItem('gympro_sidebar_collapsed', String(next));
+      } catch {}
+      return next;
+    });
+  };
 
   // State with LocalStorage fallbacks and mock data synchronization
   const [staffUsers, setStaffUsers] = useState<User[]>(() => {
@@ -337,6 +354,7 @@ export default function App() {
   });
 
   const [activeFreezeMember, setActiveFreezeMember] = useState<Member | null>(null);
+  const [isFreezeModalOpen, setIsFreezeModalOpen] = useState(false);
   const [activeUnfreezeMember, setActiveUnfreezeMember] = useState<Member | null>(null);
   const [activeUnfreezeRecord, setActiveUnfreezeRecord] = useState<MemberFreezeRecord | null>(null);
 
@@ -877,13 +895,13 @@ export default function App() {
   };
 
   // Handler: Freeze Member (Cuti Sementara)
-  const handleFreezeMember = (record: MemberFreezeRecord) => {
+  const handleFreezeMember = (record: MemberFreezeRecord, precalculatedMember?: Member) => {
     setFreezeRecords((prev) => [record, ...prev]);
 
     setMembers((prev) =>
       prev.map((m) => {
         if (m.id === record.memberId) {
-          const updated: Member = {
+          const updated: Member = precalculatedMember || {
             ...m,
             status: 'FREEZE',
             isFrozen: true,
@@ -901,6 +919,28 @@ export default function App() {
         return m;
       })
     );
+
+    // Record optional admin fee transaction to cash flow
+    if (record.adminFee && record.adminFee > 0) {
+      const feeTrx: Transaction = {
+        id: 'TRX-FRZ-' + Math.floor(100000 + Math.random() * 900000),
+        date: record.startDate || APP_TODAY,
+        time: new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) + ' WIB',
+        type: 'Membership',
+        customer: record.memberName,
+        memberId: record.memberId,
+        desc: `Biaya Admin Freeze Membership (${record.plannedDays} Hari) - ${record.reason}`,
+        amount: record.adminFee,
+        method: 'Tunai',
+        status: 'Paid',
+        cashier: record.staffName || currentUser?.name || 'Kasir',
+        initialCashPaid: record.adminFee,
+        amountPaid: record.adminFee,
+        amountRemaining: 0
+      };
+      setTransactions((tPrev) => [feeTrx, ...tPrev]);
+      saveTransactionToFirestore(feeTrx).catch(() => {});
+    }
 
     const daysCount = record.freezeDays || record.plannedDays;
     const newExp = record.newAdjustedExpiredDate || record.adjustedExpiryDate || '';
@@ -1494,10 +1534,12 @@ export default function App() {
         onLogout={handleLogout}
         isStoreClosed={isStoreClosed}
         firebaseConnected={firebaseConnected}
+        onToggleSidebar={handleToggleDesktopSidebar}
         onToggleMobileSidebar={() => setIsSidebarOpen(!isSidebarOpen)}
+        isSidebarCollapsed={isDesktopCollapsed}
       />
 
-      <div className="flex flex-1 overflow-hidden">
+      <div className="flex flex-1 overflow-hidden relative">
         {/* Navigation Sidebar */}
         <Sidebar
           activeTab={activeTab}
@@ -1506,6 +1548,8 @@ export default function App() {
             setIsSidebarOpen(false);
           }}
           currentUser={currentUser}
+          isCollapsed={isDesktopCollapsed}
+          onToggleCollapse={handleToggleDesktopSidebar}
           isOpenMobile={isSidebarOpen}
           onCloseMobile={() => setIsSidebarOpen(false)}
           piutangCount={piutangCount}
@@ -1514,7 +1558,7 @@ export default function App() {
         />
 
         {/* Main Content Area */}
-        <main className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8 bg-zinc-950/50 scrollbar-thin scrollbar-thumb-zinc-800">
+        <main className="flex-1 overflow-y-auto overflow-x-hidden p-3 sm:p-5 md:p-6 lg:p-8 bg-zinc-950/50 scrollbar-thin scrollbar-thumb-zinc-800 w-full min-w-0">
           {activeTab === 'dashboard' && (
             <DashboardView
               transactions={transactions}
@@ -1708,6 +1752,7 @@ export default function App() {
               staffUsers={staffUsers}
               onOpenFreezeModal={(member) => {
                 setActiveFreezeMember(member || null);
+                setIsFreezeModalOpen(true);
               }}
               onOpenUnfreezeModal={(member, record) => {
                 setActiveUnfreezeMember(member);
@@ -1909,6 +1954,7 @@ export default function App() {
         onOpenFreeze={(m) => {
           setActiveDetailMember(null);
           setActiveFreezeMember(m);
+          setIsFreezeModalOpen(true);
         }}
         onOpenUnfreeze={(m, rec) => {
           setActiveDetailMember(null);
@@ -1919,14 +1965,18 @@ export default function App() {
 
       {/* 4. Freeze Membership Modal */}
       <FreezeMemberModal
-        isOpen={Boolean(activeFreezeMember)}
+        isOpen={isFreezeModalOpen}
         member={activeFreezeMember}
         allMembers={members}
         currentUser={currentUser}
         staffUsers={staffUsers}
-        onClose={() => setActiveFreezeMember(null)}
-        onConfirmFreeze={(record: MemberFreezeRecord) => {
-          handleFreezeMember(record);
+        onClose={() => {
+          setIsFreezeModalOpen(false);
+          setActiveFreezeMember(null);
+        }}
+        onConfirmFreeze={(record: MemberFreezeRecord, updatedMember: Member) => {
+          handleFreezeMember(record, updatedMember);
+          setIsFreezeModalOpen(false);
           setActiveFreezeMember(null);
         }}
       />

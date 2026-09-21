@@ -1398,8 +1398,8 @@ export const MembershipView: React.FC<MembershipViewProps> = ({
 
       {/* MODAL: MASTER PAKET BARU */}
       {isPkgModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-xs p-4">
-          <div className="bg-zinc-900 border border-zinc-800 rounded-2xl shadow-2xl w-full max-w-md p-6 animate-in fade-in zoom-in-95">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-xs p-3 sm:p-4 overflow-y-auto">
+          <div className="bg-zinc-900 border border-zinc-800 rounded-2xl shadow-2xl w-full max-w-md p-4 sm:p-6 my-auto max-h-[92vh] overflow-y-auto animate-in fade-in zoom-in-95">
             <h3 className="text-base font-bold text-white mb-4">Buat Master Paket Baru</h3>
             <form onSubmit={handleSaveMasterPackage} className="space-y-4">
               <div className="grid grid-cols-2 gap-3">

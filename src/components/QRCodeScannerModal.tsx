@@ -496,7 +496,7 @@ export const QRCodeScannerModal: React.FC<QRCodeScannerModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 backdrop-blur-md p-3 sm:p-4 overflow-y-auto animate-in fade-in duration-200">
-      <div className="bg-zinc-950 border border-zinc-800 rounded-3xl shadow-2xl w-full max-w-2xl overflow-hidden flex flex-col my-auto relative">
+      <div className="bg-zinc-950 border border-zinc-800 rounded-3xl shadow-2xl w-full max-w-2xl max-h-[92vh] overflow-y-auto scrollbar-thin scrollbar-thumb-zinc-800 flex flex-col my-auto relative">
         {/* Hidden internal elements */}
         <canvas ref={canvasRef} className="hidden" />
         <input

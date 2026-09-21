@@ -38,7 +38,7 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({
     >
       <div
         id="receipt-content"
-        className="bg-white text-zinc-900 rounded-2xl shadow-2xl w-full max-w-sm p-6 flex flex-col font-sans border border-zinc-200 animate-in fade-in zoom-in-95 duration-200"
+        className="bg-white text-zinc-900 rounded-2xl shadow-2xl w-full max-w-sm p-4 sm:p-6 flex flex-col font-sans border border-zinc-200 animate-in fade-in zoom-in-95 duration-200 max-h-[90vh] overflow-y-auto"
       >
         {/* Header */}
         <div className="text-center pb-4 border-b border-dashed border-zinc-300 relative">

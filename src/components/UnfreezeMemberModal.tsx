@@ -74,16 +74,16 @@ export const UnfreezeMemberModal: React.FC<UnfreezeMemberModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-xs p-4 overflow-y-auto">
-      <div className="bg-zinc-900 border border-emerald-500/30 rounded-3xl shadow-2xl w-full max-w-lg overflow-hidden my-auto animate-in fade-in zoom-in-95">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-xs p-3 sm:p-4 overflow-y-auto">
+      <div className="bg-zinc-900 border border-emerald-500/30 rounded-3xl shadow-2xl w-full max-w-lg max-h-[92vh] flex flex-col overflow-hidden my-auto animate-in fade-in zoom-in-95">
         {/* Header */}
-        <div className="p-5 border-b border-zinc-800 bg-gradient-to-r from-emerald-950/40 via-zinc-950 to-zinc-950 flex justify-between items-center">
+        <div className="p-4 sm:p-5 border-b border-zinc-800 bg-gradient-to-r from-emerald-950/40 via-zinc-950 to-zinc-950 flex justify-between items-center shrink-0">
           <div className="flex items-center gap-3">
-            <span className="w-10 h-10 rounded-2xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center border border-emerald-500/30">
+            <span className="w-10 h-10 rounded-2xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center border border-emerald-500/30 shrink-0">
               <PlayCircle className="w-5 h-5" />
             </span>
             <div>
-              <h3 className="text-lg font-black text-white flex items-center gap-2">
+              <h3 className="text-base sm:text-lg font-black text-white flex items-center gap-2">
                 Aktifkan Kembali (Unfreeze)
                 <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 font-bold">
                   KEMBALI AKTIF
@@ -102,7 +102,7 @@ export const UnfreezeMemberModal: React.FC<UnfreezeMemberModalProps> = ({
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-5 sm:p-6 space-y-4">
+        <form onSubmit={handleSubmit} className="p-4 sm:p-6 space-y-4 overflow-y-auto flex-1">
           {/* Member Card */}
           <div className="bg-zinc-950 border border-zinc-800 rounded-2xl p-3.5 flex items-center gap-3">
             <img

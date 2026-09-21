@@ -1322,8 +1322,8 @@ export const CRMView: React.FC<CRMViewProps> = ({
 
       {/* MODAL: TAMBAH LEAD BARU */}
       {isAddLeadOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-xs p-4">
-          <div className="bg-zinc-900 border border-zinc-800 rounded-2xl shadow-2xl w-full max-w-sm p-6 animate-in fade-in zoom-in-95">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-xs p-3 sm:p-4 overflow-y-auto">
+          <div className="bg-zinc-900 border border-zinc-800 rounded-2xl shadow-2xl w-full max-w-sm p-4 sm:p-6 my-auto max-h-[92vh] overflow-y-auto animate-in fade-in zoom-in-95">
             <h3 className="text-base font-bold text-white mb-4">Tambah Prospek Lead Baru</h3>
             <form onSubmit={handleSaveLead} className="space-y-4">
               <div>
@@ -1391,8 +1391,8 @@ export const CRMView: React.FC<CRMViewProps> = ({
 
       {/* MODAL: CATAT LOG FOLLOW UP */}
       {selectedMemberForFU && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-xs p-4">
-          <div className="bg-zinc-900 border border-zinc-800 rounded-2xl shadow-2xl w-full max-w-md p-6 animate-in fade-in zoom-in-95">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-xs p-3 sm:p-4 overflow-y-auto">
+          <div className="bg-zinc-900 border border-zinc-800 rounded-2xl shadow-2xl w-full max-w-md p-4 sm:p-6 my-auto max-h-[92vh] overflow-y-auto animate-in fade-in zoom-in-95">
             <h3 className="text-base font-bold text-white mb-2">Update Catatan Follow Up</h3>
             <p className="text-xs text-zinc-400 mb-4">
               Member: <strong className="text-white">{selectedMemberForFU.name}</strong> ({selectedMemberForFU.expired})
@@ -1478,8 +1478,8 @@ export const CRMView: React.FC<CRMViewProps> = ({
 
       {/* MODAL: RIWAYAT FOLLOW UP MEMBER */}
       {historyMember && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-xs p-4">
-          <div className="bg-zinc-900 border border-zinc-800 rounded-2xl shadow-2xl w-full max-w-md p-6 max-h-[80vh] flex flex-col animate-in fade-in zoom-in-95">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-xs p-3 sm:p-4 overflow-y-auto">
+          <div className="bg-zinc-900 border border-zinc-800 rounded-2xl shadow-2xl w-full max-w-md p-4 sm:p-6 my-auto max-h-[88vh] flex flex-col animate-in fade-in zoom-in-95">
             <h3 className="text-base font-bold text-white mb-1">Riwayat Interaksi Follow Up</h3>
             <p className="text-xs text-zinc-400 mb-4">
               Member: <strong className="text-white">{historyMember.name}</strong>
@@ -1517,8 +1517,8 @@ export const CRMView: React.FC<CRMViewProps> = ({
 
       {/* MODAL: DETAIL PRODUK & PAKET PIC SALES LENGKAP */}
       {selectedModalPic && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-xs p-4 overflow-y-auto">
-          <div className="bg-zinc-900 border border-zinc-800 rounded-3xl shadow-2xl w-full max-w-4xl p-6 my-8 max-h-[90vh] flex flex-col animate-in fade-in zoom-in-95">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-xs p-2 sm:p-4 overflow-y-auto">
+          <div className="bg-zinc-900 border border-zinc-800 rounded-3xl shadow-2xl w-full max-w-4xl p-4 sm:p-6 my-auto max-h-[92vh] flex flex-col animate-in fade-in zoom-in-95">
             {/* Modal Header */}
             <div className="flex items-start justify-between pb-4 border-b border-zinc-800">
               <div className="flex items-center gap-3">

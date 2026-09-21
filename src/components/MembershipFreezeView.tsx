@@ -100,8 +100,9 @@ export const MembershipFreezeView: React.FC<MembershipFreezeViewProps> = ({
 
         <div className="flex items-center gap-2.5">
           <button
+            id="btn-ajukan-freeze-member"
             onClick={() => onOpenFreezeModal()}
-            className="px-4 py-2.5 rounded-xl bg-sky-500 hover:bg-sky-400 text-zinc-950 text-xs font-black shadow-lg shadow-sky-500/20 transition flex items-center gap-2 cursor-pointer"
+            className="px-4 py-2.5 rounded-xl bg-sky-500 hover:bg-sky-400 text-zinc-950 text-xs font-black shadow-lg shadow-sky-500/20 transition flex items-center gap-2 cursor-pointer active:scale-95"
           >
             <Plus className="w-4 h-4" />
             <span>Ajukan Freeze Member</span>
@@ -264,9 +265,17 @@ export const MembershipFreezeView: React.FC<MembershipFreezeViewProps> = ({
                   <td colSpan={9} className="py-12 text-center text-zinc-500">
                     <Snowflake className="w-8 h-8 mx-auto mb-2 opacity-30 text-sky-400" />
                     <p className="text-sm font-semibold">Tidak ada riwayat freeze yang cocok</p>
-                    <p className="text-xs text-zinc-600 mt-0.5">
+                    <p className="text-xs text-zinc-600 mt-0.5 mb-3">
                       Gunakan tombol "Ajukan Freeze Member" untuk menangguhkan keanggotaan.
                     </p>
+                    <button
+                      type="button"
+                      onClick={() => onOpenFreezeModal()}
+                      className="px-4 py-2 rounded-xl bg-sky-500/20 hover:bg-sky-500/30 text-sky-300 border border-sky-500/40 text-xs font-bold transition inline-flex items-center gap-1.5 cursor-pointer active:scale-95"
+                    >
+                      <Plus className="w-4 h-4" />
+                      <span>Ajukan Freeze Member Sekarang</span>
+                    </button>
                   </td>
                 </tr>
               ) : (

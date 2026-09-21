@@ -1456,8 +1456,8 @@ export const TrainerPortalView: React.FC<TrainerPortalViewProps> = ({
       {/* MODAL: CATAT LOG LATIHAN (WORKOUT LOG MODAL)                              */}
       {/* ========================================================================= */}
       {isLogModalOpen && selectedScheduleForLog && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 overflow-y-auto">
-          <div className="bg-zinc-900 border border-zinc-700 text-white rounded-3xl shadow-2xl w-full max-w-xl my-auto p-6 space-y-5">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-3 sm:p-4 overflow-y-auto">
+          <div className="bg-zinc-900 border border-zinc-700 text-white rounded-3xl shadow-2xl w-full max-w-xl my-auto p-4 sm:p-6 max-h-[92vh] overflow-y-auto space-y-5">
             <div className="flex items-center justify-between border-b border-zinc-800 pb-4">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-2xl bg-orange-500/20 text-orange-400 flex items-center justify-center">
@@ -1580,8 +1580,8 @@ export const TrainerPortalView: React.FC<TrainerPortalViewProps> = ({
       {/* MODAL: JADWALKAN SESI BARU (QUICK SCHEDULE MODAL)                         */}
       {/* ========================================================================= */}
       {isAddScheduleModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 overflow-y-auto">
-          <div className="bg-zinc-900 border border-zinc-700 text-white rounded-3xl shadow-2xl w-full max-w-md my-auto p-6 space-y-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-3 sm:p-4 overflow-y-auto">
+          <div className="bg-zinc-900 border border-zinc-700 text-white rounded-3xl shadow-2xl w-full max-w-md my-auto p-4 sm:p-6 max-h-[92vh] overflow-y-auto space-y-4">
             <div className="flex items-center justify-between border-b border-zinc-800 pb-3">
               <div className="flex items-center gap-2.5">
                 <CalendarDays className="w-5 h-5 text-orange-400" />
@@ -1679,8 +1679,8 @@ export const TrainerPortalView: React.FC<TrainerPortalViewProps> = ({
       {/* MODAL: RESCHEDULE SESI                                                    */}
       {/* ========================================================================= */}
       {rescheduleTarget && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 overflow-y-auto">
-          <div className="bg-zinc-900 border border-zinc-700 text-white rounded-3xl shadow-2xl w-full max-w-sm my-auto p-5 space-y-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-3 sm:p-4 overflow-y-auto">
+          <div className="bg-zinc-900 border border-zinc-700 text-white rounded-3xl shadow-2xl w-full max-w-sm my-auto p-4 sm:p-5 max-h-[92vh] overflow-y-auto space-y-4">
             <div className="flex items-center justify-between border-b border-zinc-800 pb-3">
               <div className="flex items-center gap-2">
                 <RefreshCw className="w-4 h-4 text-blue-400" />

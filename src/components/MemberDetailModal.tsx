@@ -71,38 +71,38 @@ export const MemberDetailModal: React.FC<MemberDetailModalProps> = ({
     .reduce((sum, t) => sum + (t.amountRemaining || 0), 0);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-xs p-4">
-      <div className="bg-zinc-900 border border-zinc-800 rounded-3xl shadow-2xl w-full max-w-3xl flex flex-col h-[85vh] overflow-hidden animate-in fade-in zoom-in-95">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-xs p-2 sm:p-4 overflow-y-auto">
+      <div className="bg-zinc-900 border border-zinc-800 rounded-3xl shadow-2xl w-full max-w-[96vw] sm:max-w-2xl lg:max-w-3xl flex flex-col max-h-[92vh] my-auto overflow-hidden animate-in fade-in zoom-in-95">
         {/* Modal Top Profile Header */}
-        <div className="p-5 sm:p-6 border-b border-zinc-800 bg-zinc-950 flex justify-between items-start shrink-0">
-          <div className="flex items-center gap-4">
+        <div className="p-4 sm:p-6 border-b border-zinc-800 bg-zinc-950 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 shrink-0">
+          <div className="flex items-center gap-3 sm:gap-4 min-w-0">
             <img
               src={member.photo}
               alt={member.name}
-              className="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl object-cover border-2 border-zinc-700 shadow-md"
+              className="w-14 h-14 sm:w-20 sm:h-20 rounded-2xl object-cover border-2 border-zinc-700 shadow-md shrink-0"
             />
-            <div className="space-y-1">
-              <div className="flex items-center gap-2">
-                <h2 className="text-xl sm:text-2xl font-black text-white tracking-tight">{member.name}</h2>
+            <div className="space-y-1 min-w-0">
+              <div className="flex items-center gap-2 flex-wrap">
+                <h2 className="text-lg sm:text-2xl font-black text-white tracking-tight truncate">{member.name}</h2>
                 <span
-                  className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-mono font-black uppercase tracking-wider border ${currentStatus.badgeBg} ${currentStatus.badgeColor} ${currentStatus.badgeBorder}`}
+                  className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-mono font-black uppercase tracking-wider border shrink-0 ${currentStatus.badgeBg} ${currentStatus.badgeColor} ${currentStatus.badgeBorder}`}
                 >
                   <span className={`w-1.5 h-1.5 rounded-full ${currentStatus.dotColor}`} />
                   {currentStatus.status}
                 </span>
               </div>
-              <div className="flex items-center gap-3 text-xs text-zinc-400">
+              <div className="flex items-center gap-2 sm:gap-3 text-xs text-zinc-400 flex-wrap">
                 <span className="font-mono text-orange-400 font-bold">{member.id}</span>
                 <span>•</span>
                 <span className="flex items-center gap-1">
                   <Phone className="w-3 h-3 text-emerald-400" /> {member.phone}
                 </span>
                 <span>•</span>
-                <span>PIC: <strong className="text-zinc-200">{member.picName}</strong></span>
+                <span className="truncate">PIC: <strong className="text-zinc-200">{member.picName}</strong></span>
               </div>
             </div>
           </div>
-          <div className="flex items-center gap-2 flex-wrap justify-end">
+          <div className="flex items-center gap-2 flex-wrap justify-end self-end sm:self-auto shrink-0">
             {/* Action Button: Freeze / Unfreeze Member */}
             {member.isFrozen && onOpenUnfreeze && (
               <button

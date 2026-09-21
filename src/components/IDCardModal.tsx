@@ -112,7 +112,7 @@ export const IDCardModal: React.FC<IDCardModalProps> = ({ isOpen, onClose, membe
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-sm p-3 sm:p-4 overflow-y-auto">
-      <div className="bg-zinc-900 border border-zinc-800 rounded-3xl shadow-2xl w-full max-w-xl p-4 sm:p-6 my-auto animate-in fade-in zoom-in-95 flex flex-col">
+      <div className="bg-zinc-900 border border-zinc-800 rounded-3xl shadow-2xl w-full max-w-xl p-4 sm:p-6 my-auto animate-in fade-in zoom-in-95 flex flex-col max-h-[92vh] overflow-y-auto">
         {/* Modal Header */}
         <div className="flex items-center justify-between pb-3.5 border-b border-zinc-800">
           <div className="flex items-center gap-2.5">

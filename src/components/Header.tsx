@@ -1,5 +1,17 @@
-import React from 'react';
-import { Calendar, Menu, UserCheck, ShieldAlert, Sparkles, LogOut, Flame } from 'lucide-react';
+import React, { useState, useRef, useEffect } from 'react';
+import {
+  Calendar,
+  Menu,
+  ShieldAlert,
+  LogOut,
+  Flame,
+  ChevronDown,
+  User as UserIcon,
+  Shield,
+  PanelLeftClose,
+  PanelLeftOpen,
+  X
+} from 'lucide-react';
 import { User } from '../types';
 import { formatDateIndo, APP_TODAY } from '../utils/formatters';
 
@@ -8,7 +20,7 @@ interface HeaderProps {
   pageTitle?: string;
   onToggleSidebar?: () => void;
   onToggleMobileSidebar?: () => void;
-  onOpenAIHelper?: () => void;
+  isSidebarCollapsed?: boolean;
   isStoreClosed?: boolean;
   staffUsers?: User[];
   onSwitchUser?: (userId: string) => void;
@@ -18,93 +30,228 @@ interface HeaderProps {
 
 export const Header: React.FC<HeaderProps> = ({
   currentUser,
-  pageTitle = 'GymPro ERP Ultimate',
+  pageTitle = 'GymPro ERP Enterprise',
   onToggleSidebar,
   onToggleMobileSidebar,
+  isSidebarCollapsed = false,
   isStoreClosed,
   staffUsers = [],
   onSwitchUser,
   onLogout,
   firebaseConnected = true
 }) => {
-  const toggleAction = onToggleMobileSidebar || onToggleSidebar;
+  const [isProfileOpen, setIsProfileOpen] = useState(false);
+  const profileMenuRef = useRef<HTMLDivElement | null>(null);
+
+  // Close profile dropdown when clicking outside or pressing Escape
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (profileMenuRef.current && !profileMenuRef.current.contains(e.target as Node)) {
+        setIsProfileOpen(false);
+      }
+    };
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setIsProfileOpen(false);
+      }
+    };
+    if (isProfileOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+      document.addEventListener('keydown', handleKeyDown);
+    }
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [isProfileOpen]);
 
   return (
-    <header className="h-16 border-b border-zinc-800 flex items-center justify-between px-4 sm:px-6 z-10 shrink-0 bg-[#09090b]/80 backdrop-blur-md">
-      <div className="flex items-center gap-3">
+    <header className="h-16 border-b border-zinc-800 flex items-center justify-between px-3 sm:px-5 lg:px-6 z-30 shrink-0 bg-[#09090b]/90 backdrop-blur-md sticky top-0 w-full">
+      {/* Left: Hamburger Toggles & Brand Title */}
+      <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+        {/* Mobile Hamburger (< 1024px) */}
         <button
-          id="btn-toggle-sidebar"
-          className="lg:hidden text-zinc-400 hover:text-white p-2 rounded-lg hover:bg-zinc-800 transition"
-          onClick={toggleAction}
-          aria-label="Toggle navigation menu"
+          id="btn-toggle-sidebar-mobile"
+          className="lg:hidden text-zinc-300 hover:text-white p-2.5 rounded-xl hover:bg-zinc-800/80 active:scale-95 transition flex items-center justify-center min-w-[44px] min-h-[44px]"
+          onClick={onToggleMobileSidebar}
+          aria-label="Buka menu navigasi"
         >
-          <Menu className="w-5 h-5" />
+          <Menu className="w-5 h-5 text-orange-400" />
         </button>
-        <div>
-          <h1 className="text-base sm:text-lg font-bold text-white tracking-tight flex items-center gap-2">
-            {pageTitle}
+
+        {/* Desktop Collapse / Expand Toggle (>= 1024px) */}
+        {onToggleSidebar && (
+          <button
+            id="btn-toggle-sidebar-desktop"
+            className="hidden lg:flex text-zinc-400 hover:text-white p-2 rounded-xl hover:bg-zinc-800 transition items-center justify-center"
+            onClick={onToggleSidebar}
+            title={isSidebarCollapsed ? 'Perluas Sidebar (Desktop)' : 'Ciutkan Sidebar (Desktop)'}
+            aria-label="Toggle collapse sidebar desktop"
+          >
+            {isSidebarCollapsed ? (
+              <PanelLeftOpen className="w-5 h-5 text-orange-400" />
+            ) : (
+              <PanelLeftClose className="w-5 h-5 text-zinc-400" />
+            )}
+          </button>
+        )}
+
+        <div className="min-w-0">
+          <h1 className="text-sm sm:text-base lg:text-lg font-black text-white tracking-tight flex items-center gap-2 truncate">
+            <span className="truncate">{pageTitle}</span>
             {isStoreClosed && (
-              <span className="text-[10px] uppercase font-extrabold bg-rose-500/20 text-rose-400 border border-rose-500/30 px-2 py-0.5 rounded-full flex items-center gap-1">
-                <ShieldAlert className="w-3 h-3" /> Toko Ditutup
+              <span className="shrink-0 text-[10px] uppercase font-extrabold bg-rose-500/20 text-rose-400 border border-rose-500/30 px-2 py-0.5 rounded-full flex items-center gap-1">
+                <ShieldAlert className="w-3 h-3" />
+                <span className="hidden xs:inline">Toko Ditutup</span>
               </span>
             )}
           </h1>
         </div>
       </div>
 
-      <div className="flex items-center gap-2 sm:gap-3">
+      {/* Right: Cloud Sync, Date & User Profile */}
+      <div className="flex items-center gap-1.5 sm:gap-3 shrink-0">
         {/* Firebase Cloud Status Indicator */}
         <div
-          title="Terkoneksi ke Google Cloud Firestore (oval-post-pcf5x)"
-          className="flex items-center gap-1.5 text-xs text-amber-300 bg-amber-500/10 px-2.5 py-1.5 rounded-xl border border-amber-500/20"
+          title={firebaseConnected ? 'Terkoneksi ke Cloud Firestore' : 'Mode Offline / Transien'}
+          className="flex items-center gap-1.5 text-xs text-amber-300 bg-amber-500/10 px-2 sm:px-2.5 py-1.5 rounded-xl border border-amber-500/20"
         >
-          <Flame className="w-3.5 h-3.5 text-amber-400 animate-pulse" />
-          <span className="hidden sm:inline text-[11px] font-bold text-amber-200">Cloud Sync</span>
+          <Flame className="w-3.5 h-3.5 text-amber-400 animate-pulse shrink-0" />
+          <span className="hidden md:inline text-[11px] font-bold text-amber-200">Cloud Sync</span>
         </div>
 
-        <div className="text-xs font-semibold text-zinc-300 bg-zinc-900 px-3 py-1.5 rounded-xl border border-zinc-800 flex items-center shadow-inner">
-          <Calendar className="w-3.5 h-3.5 text-orange-500 mr-2" />
-          <span>{formatDateIndo(APP_TODAY)}</span>
+        {/* Current Date Widget (hidden on mobile, visible on sm) */}
+        <div className="hidden sm:flex text-xs font-semibold text-zinc-300 bg-zinc-900 px-3 py-1.5 rounded-xl border border-zinc-800 items-center shadow-inner">
+          <Calendar className="w-3.5 h-3.5 text-orange-500 mr-2 shrink-0" />
+          <span className="whitespace-nowrap">{formatDateIndo(APP_TODAY)}</span>
         </div>
 
-        {staffUsers.length > 0 && onSwitchUser && (
-          <div className="flex items-center gap-1.5 bg-zinc-900 border border-zinc-800 px-2.5 py-1 rounded-xl">
-            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-            <select
-              value={currentUser?.id || ''}
-              onChange={(e) => onSwitchUser(e.target.value)}
-              className="bg-transparent text-xs font-bold text-zinc-200 outline-none cursor-pointer"
-            >
-              {staffUsers.map((u) => (
-                <option key={u.id} value={u.id} className="bg-zinc-900 text-white">
-                  {u.name} ({u.roleName})
-                </option>
-              ))}
-            </select>
-          </div>
-        )}
-
-        {!onSwitchUser && currentUser && (
-          <div className="hidden sm:flex items-center gap-2 bg-zinc-900 border border-zinc-800 px-3 py-1.5 rounded-xl">
-            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-            <span className="text-xs font-medium text-zinc-300">
-              {currentUser.name.split(' ')[0]} <span className="text-[10px] text-orange-400 uppercase font-bold">({currentUser.roleName})</span>
-            </span>
-          </div>
-        )}
-
-        {onLogout && (
+        {/* User Profile Trigger & Dropdown */}
+        <div className="relative" ref={profileMenuRef}>
           <button
             type="button"
-            id="btn-header-logout"
-            onClick={onLogout}
-            title="Keluar dari sesi akun (Logout)"
-            className="text-xs font-bold text-zinc-400 hover:text-rose-400 bg-zinc-900 hover:bg-zinc-800/80 border border-zinc-800 px-2.5 py-1.5 rounded-xl transition flex items-center gap-1.5"
+            id="btn-user-profile-menu"
+            onClick={() => setIsProfileOpen(!isProfileOpen)}
+            aria-expanded={isProfileOpen}
+            aria-haspopup="true"
+            aria-label="Buka menu pengguna"
+            className="flex items-center gap-2 p-1 sm:px-3 sm:py-1.5 rounded-xl bg-zinc-900/90 hover:bg-zinc-800 border border-zinc-800 transition active:scale-95 text-left min-h-[44px]"
           >
-            <LogOut className="w-3.5 h-3.5" />
-            <span className="hidden sm:inline">Keluar</span>
+            <img
+              src={
+                currentUser?.photo ||
+                'https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=200&auto=format&fit=crop'
+              }
+              alt={currentUser?.name || 'User'}
+              className="w-8 h-8 rounded-lg object-cover border border-zinc-700 shrink-0"
+            />
+            <div className="hidden md:block truncate max-w-[120px] lg:max-w-[150px]">
+              <p className="text-xs font-bold text-white truncate leading-tight">
+                {currentUser?.name || 'Pengguna'}
+              </p>
+              <p className="text-[10px] text-orange-400 uppercase font-semibold truncate leading-none mt-0.5">
+                {currentUser?.roleName || 'Staf'}
+              </p>
+            </div>
+            <ChevronDown
+              className={`w-3.5 h-3.5 text-zinc-400 hidden sm:block transition-transform duration-200 ${
+                isProfileOpen ? 'rotate-180 text-orange-400' : ''
+              }`}
+            />
           </button>
-        )}
+
+          {/* Interactive User Dropdown Menu */}
+          {isProfileOpen && (
+            <div
+              className="absolute right-0 mt-2 w-72 sm:w-80 max-w-[calc(100vw-1.5rem)] bg-zinc-900 border border-zinc-700/80 rounded-2xl shadow-2xl overflow-hidden z-50 animate-in fade-in zoom-in-95 duration-150"
+              role="menu"
+            >
+              {/* Profile Card Header */}
+              <div className="p-4 bg-gradient-to-br from-zinc-800/60 to-zinc-900 border-b border-zinc-800 flex items-center gap-3">
+                <img
+                  src={
+                    currentUser?.photo ||
+                    'https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=200&auto=format&fit=crop'
+                  }
+                  alt={currentUser?.name || 'User'}
+                  className="w-12 h-12 rounded-xl object-cover border-2 border-orange-500 shrink-0 shadow-md shadow-orange-500/20"
+                />
+                <div className="min-w-0 flex-1">
+                  <h4 className="text-sm font-black text-white truncate">{currentUser?.name}</h4>
+                  <div className="flex items-center gap-1.5 mt-0.5">
+                    <span className="px-2 py-0.5 rounded-md bg-orange-500/20 text-orange-400 border border-orange-500/30 text-[10px] font-mono font-bold uppercase tracking-wider">
+                      {currentUser?.roleName || currentUser?.role}
+                    </span>
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                  </div>
+                  <p className="text-[11px] text-zinc-400 font-mono mt-1 truncate">
+                    ID: {currentUser?.id || 'USR-01'}
+                  </p>
+                </div>
+              </div>
+
+              {/* Quick Switch Staff Role (if available) */}
+              {staffUsers.length > 0 && onSwitchUser && (
+                <div className="p-3 border-b border-zinc-800 bg-zinc-950/40">
+                  <label className="text-[10px] font-bold uppercase tracking-wider text-zinc-400 block mb-1.5">
+                    Ganti Profil Staf Cepat
+                  </label>
+                  <select
+                    value={currentUser?.id || ''}
+                    onChange={(e) => {
+                      onSwitchUser(e.target.value);
+                      setIsProfileOpen(false);
+                    }}
+                    className="w-full bg-zinc-900 border border-zinc-700 rounded-xl px-2.5 py-2 text-xs font-bold text-zinc-200 outline-hidden focus:border-orange-500 cursor-pointer"
+                  >
+                    {staffUsers.map((u) => (
+                      <option key={u.id} value={u.id} className="bg-zinc-900 text-white">
+                        {u.name} — ({u.roleName})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              {/* Account Quick Info */}
+              <div className="p-3 space-y-1 text-xs text-zinc-300">
+                <div className="flex items-center justify-between p-2 rounded-xl hover:bg-zinc-800/50 transition">
+                  <div className="flex items-center gap-2">
+                    <Shield className="w-4 h-4 text-orange-400" />
+                    <span>Hak Akses Role</span>
+                  </div>
+                  <span className="font-bold text-white uppercase text-[11px]">
+                    {currentUser?.role}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between p-2 rounded-xl hover:bg-zinc-800/50 transition">
+                  <div className="flex items-center gap-2">
+                    <UserIcon className="w-4 h-4 text-emerald-400" />
+                    <span>Status Login</span>
+                  </div>
+                  <span className="text-emerald-400 font-bold text-[11px]">Sesi Aktif</span>
+                </div>
+              </div>
+
+              {/* Logout Button */}
+              {onLogout && (
+                <div className="p-3 border-t border-zinc-800 bg-zinc-950/60">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsProfileOpen(false);
+                      onLogout();
+                    }}
+                    className="w-full flex items-center justify-center gap-2 py-2.5 px-3 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/30 text-xs font-bold transition active:scale-98 cursor-pointer"
+                  >
+                    <LogOut className="w-4 h-4" />
+                    <span>Keluar dari Akun (Logout)</span>
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
       </div>
     </header>
   );

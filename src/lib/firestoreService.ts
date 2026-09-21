@@ -37,7 +37,12 @@ export async function saveMemberToFirestore(member: Member): Promise<void> {
       followUpStatus: String(member.followUpStatus || 'AKTIF').slice(0, 100),
       photo: member.photo ? String(member.photo).slice(0, 500) : '',
       gender: member.gender || 'L',
-      status: member.expired && new Date(member.expired) >= new Date() ? 'Aktif' : 'Kadaluarsa',
+      status: member.isFrozen || member.status === 'FREEZE' ? 'FREEZE' : member.expired && new Date(member.expired) >= new Date() ? 'Aktif' : 'Kadaluarsa',
+      isFrozen: Boolean(member.isFrozen),
+      freezeStartDate: member.freezeStartDate || '',
+      freezeEndDate: member.freezeEndDate || member.freezePlannedEndDate || '',
+      freezeReason: member.freezeReason || '',
+      lastFreezeRecordId: member.lastFreezeRecordId || '',
       joinDate: member.joinDate ? String(member.joinDate).slice(0, 50) : '',
       notes: member.notes ? String(member.notes).slice(0, 300) : '',
       updatedAt: new Date().toISOString()
