@@ -21,12 +21,16 @@ import {
   Edit3,
   Search,
   X,
-  AlertTriangle
+  AlertTriangle,
+  PieChart,
+  Landmark,
+  Download
 } from 'lucide-react';
 import { Transaction, PettyCashItem, DailyClosingRecord, User } from '../types';
 import { formatRp, getTimestamp, APP_TODAY, getDayDiff, formatDateIndo } from '../utils/formatters';
 import { FinanceRevenueChart } from './FinanceRevenueChart';
 import { PettyCashManagementView } from './PettyCashManagementView';
+import { FinancialSummaryCard, FinancialSummaryData } from './FinancialSummaryCard';
 
 interface FinanceViewProps {
   transactions: Transaction[];
@@ -102,9 +106,12 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
     }
   }, [initialSelectedPiutangId, transactions]);
 
-  // Daily closing form state
+  // Daily closing states
+  const [closingDate, setClosingDate] = useState<string>(APP_TODAY);
   const [physicalCashInput, setPhysicalCashInput] = useState('');
   const [closingNotes, setClosingNotes] = useState('');
+  const [isClosingPrintOpen, setIsClosingPrintOpen] = useState(false);
+  const [closingAuditTab, setClosingAuditTab] = useState<'ALL' | 'Tunai' | 'Non-Tunai' | 'VOID'>('ALL');
 
   // Piutang filter states (Status, Name, Date)
   const [piutangStatusFilter, setPiutangStatusFilter] = useState<'all' | 'BELUM LUNAS' | 'LUNAS' | 'OVERDUE'>('all');
@@ -271,52 +278,90 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
   const filteredTotalTerbayar = filteredPiutangList.reduce((sum, t) => sum + (t.amountPaid || 0), 0);
   const filteredTotalSisa = filteredPiutangList.reduce((sum, t) => sum + (t.amountRemaining || 0), 0);
 
-  // 2. DAILY CLOSING MATHEMATICAL CALCULATIONS
-  // Today's cash receipts:
-  // a. New transactions from today paid via cash:
-  //    - POS cash
-  //    - Membership cash (paidAmount or initialCashPaid)
-  // b. PAY-* installment payments paid via cash today
-  const todayTransactions = transactions.filter((t) => t.date === APP_TODAY && t.status !== 'VOID');
+  // 2. DAILY CLOSING MATHEMATICAL CALCULATIONS (BASED ON closingDate)
+  const targetClosingTrx = transactions.filter((t) => t.date === closingDate);
+  const activeClosingTrx = targetClosingTrx.filter((t) => t.status !== 'VOID');
 
-  const todayCashFromSales = todayTransactions
-    .filter((t) => !t.id.startsWith('PAY-') && (t.method === 'Tunai' || t.status === 'Paid' || t.status === 'DP 50%'))
-    .reduce((sum, t) => {
-      if (t.method === 'Tunai') {
-        // If it's a DP 50% or Paid, take the cash actually paid today
-        return sum + (t.initialCashPaid !== undefined ? t.initialCashPaid : t.amountPaid);
-      }
-      return sum;
-    }, 0);
+  const getTrxInflow = (t: Transaction) => {
+    if (t.status === 'VOID') return 0;
+    if (t.id.startsWith('PAY-')) return t.amount;
+    if (t.initialCashPaid !== undefined) return t.initialCashPaid;
+    return t.amountPaid !== undefined ? t.amountPaid : (t.amount || 0);
+  };
 
-  const todayCashFromInstallments = todayTransactions
-    .filter((t) => t.id.startsWith('PAY-') && t.method === 'Tunai')
-    .reduce((sum, t) => sum + t.amount, 0);
+  const isArthaBank = (t: Transaction) => {
+    if (t.bankDest === 'Artha Graha') return true;
+    if (t.bankDest && t.bankDest.toLowerCase().includes('artha')) return true;
+    if (!t.bankDest && t.type === 'POS') return true;
+    return false;
+  };
 
-  const totalCashIncomeToday = todayCashFromSales + todayCashFromInstallments;
+  const isMandiriBank = (t: Transaction) => {
+    if (t.bankDest === 'Mandiri') return true;
+    if (t.bankDest && t.bankDest.toLowerCase().includes('mandiri')) return true;
+    if (!t.bankDest && t.type !== 'POS') return true;
+    return false;
+  };
 
-  // Non-Cash by Banks
-  const mandiriIncomeToday = todayTransactions
-    .filter((t) => t.bankDest === 'Mandiri' && t.method !== 'Tunai' && t.method !== 'Kasbon')
-    .reduce((sum, t) => {
-      if (t.id.startsWith('PAY-')) return sum + t.amount;
-      return sum + (t.initialCashPaid !== undefined ? t.initialCashPaid : t.amountPaid);
-    }, 0);
+  // Cash / Tunai
+  const cashTrxToday = activeClosingTrx.filter((t) => t.method === 'Tunai');
+  const tunaiLaciKasir = cashTrxToday.reduce((sum, t) => sum + getTrxInflow(t), 0);
 
-  const arthaGrahaIncomeToday = todayTransactions
-    .filter((t) => t.bankDest === 'Artha Graha' && t.method !== 'Tunai' && t.method !== 'Kasbon')
-    .reduce((sum, t) => {
-      if (t.id.startsWith('PAY-')) return sum + t.amount;
-      return sum + (t.initialCashPaid !== undefined ? t.initialCashPaid : t.amountPaid);
-    }, 0);
+  // Non-Cash
+  const nonCashTrxToday = activeClosingTrx.filter((t) => t.method !== 'Tunai' && t.method !== 'Kasbon');
 
-  // Today's Petty Cash Expense
-  const todayPettyExpenses = pettyCashList
+  // Artha Graha Breakdown
+  const arthaTrx = nonCashTrxToday.filter(isArthaBank);
+  const arthaGrahaQRIS = arthaTrx
+    .filter((t) => t.method === 'QRIS')
+    .reduce((sum, t) => sum + getTrxInflow(t), 0);
+  const arthaGrahaTransfer = arthaTrx
+    .filter((t) => t.method === 'Transfer')
+    .reduce((sum, t) => sum + getTrxInflow(t), 0);
+  const arthaGrahaEDC = arthaTrx
+    .filter((t) => t.method === 'EDC' || t.method === 'Debit')
+    .reduce((sum, t) => sum + getTrxInflow(t), 0);
+  const arthaGrahaTotal = arthaGrahaQRIS + arthaGrahaTransfer + arthaGrahaEDC;
+
+  // Mandiri Breakdown
+  const mandiriTrx = nonCashTrxToday.filter(isMandiriBank);
+  const mandiriQRIS = mandiriTrx
+    .filter((t) => t.method === 'QRIS')
+    .reduce((sum, t) => sum + getTrxInflow(t), 0);
+  const mandiriTransfer = mandiriTrx
+    .filter((t) => t.method === 'Transfer')
+    .reduce((sum, t) => sum + getTrxInflow(t), 0);
+  const mandiriEDC = mandiriTrx
+    .filter((t) => t.method === 'EDC' || t.method === 'Debit')
+    .reduce((sum, t) => sum + getTrxInflow(t), 0);
+  const mandiriTotal = mandiriQRIS + mandiriTransfer + mandiriEDC;
+
+  const nonTunaiMasuk = arthaGrahaTotal + mandiriTotal;
+  const totalOmset = tunaiLaciKasir + nonTunaiMasuk;
+  const totalTrxCount = activeClosingTrx.length;
+
+  const financialSummaryData: FinancialSummaryData = {
+    totalOmset,
+    totalTrx: totalTrxCount,
+    tunaiLaci: tunaiLaciKasir,
+    nonTunai: nonTunaiMasuk,
+    arthaGrahaTotal,
+    arthaGrahaQRIS,
+    arthaGrahaTransfer,
+    arthaGrahaEDC,
+    mandiriTotal,
+    mandiriQRIS,
+    mandiriTransfer,
+    mandiriEDC
+  };
+
+  // Selected Date Petty Cash Expense
+  const selectedDatePettyExpenses = pettyCashList
     .filter(
       (p) =>
-        p.date === APP_TODAY ||
-        p.date.includes(APP_TODAY) ||
-        (p.created_at && p.created_at.startsWith(APP_TODAY))
+        p.date === closingDate ||
+        p.date.includes(closingDate) ||
+        (p.created_at && p.created_at.startsWith(closingDate))
     )
     .reduce(
       (sum, p) => sum + (p.total_expense !== undefined ? p.total_expense : p.amount || 0),
@@ -325,10 +370,12 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
 
   // Initial Drawer Cash
   const openingDrawerCash = 500000; // Fixed default operational cash drawer
-  const expectedSystemCash = openingDrawerCash + totalCashIncomeToday - todayPettyExpenses;
+  const expectedSystemCash = openingDrawerCash + tunaiLaciKasir - selectedDatePettyExpenses;
 
   const inputCashNumber = Number(physicalCashInput) || 0;
   const cashVariance = physicalCashInput ? inputCashNumber - expectedSystemCash : 0;
+
+  const isSelectedDateClosed = closingRecords.some((r) => r.date === closingDate) || (closingDate === APP_TODAY && isStoreClosed);
 
   // Handle Pay Installment
   const handleOpenPayModal = (trx: Transaction) => {
@@ -491,26 +538,159 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
     }
 
     const record: DailyClosingRecord = {
-      id: 'DC-' + APP_TODAY,
-      date: APP_TODAY,
+      id: 'DC-' + closingDate,
+      date: closingDate,
       closedAt: getTimestamp(),
       cashierName: currentUser?.name || 'Kasir',
-      cashSales: totalCashIncomeToday,
-      mandiriSales: mandiriIncomeToday,
-      arthaSales: arthaGrahaIncomeToday,
-      pettyExpenses: todayPettyExpenses,
+      revenue: totalOmset,
+      trxCount: totalTrxCount,
+      tunai: tunaiLaciKasir,
+      nonTunai: nonTunaiMasuk,
+      cashSales: tunaiLaciKasir,
+      mandiriSales: mandiriTotal,
+      arthaSales: arthaGrahaTotal,
+      pettyExpenses: selectedDatePettyExpenses,
       expectedCash: expectedSystemCash,
       physicalCash: inputCashNumber,
       variance: cashVariance,
+      arthaQRIS: arthaGrahaQRIS,
+      arthaTF: arthaGrahaTransfer,
+      arthaEDC: arthaGrahaEDC,
+      mandiriQRIS: mandiriQRIS,
+      mandiriTF: mandiriTransfer,
+      mandiriEDC: mandiriEDC,
       notes: closingNotes.trim() || 'Tutup buku harian normal.'
     };
 
     onExecuteDailyClosing(record);
     showToast(
       'Daily Closing Selesai',
-      `Tutup buku harian tanggal ${APP_TODAY} telah dikunci dan diverifikasi.`,
+      `Tutup buku harian tanggal ${closingDate} telah dikunci dan diverifikasi.`,
       'success'
     );
+  };
+
+  // Handle Clean Print of Daily Closing
+  const handlePrintReport = () => {
+    setIsClosingPrintOpen(true);
+    setTimeout(() => {
+      window.print();
+    }, 150);
+  };
+
+  // Handle Export of Daily Closing to CSV
+  const handleDownloadCSV = () => {
+    const escapeCsv = (val: string | number | undefined | null) => {
+      if (val === undefined || val === null) return '""';
+      const str = String(val).replace(/"/g, '""');
+      return `"${str}"`;
+    };
+
+    const lines: string[] = [];
+
+    // Metadata Header
+    lines.push('GYMPRO ERP ENTERPRISE - LAPORAN TUTUP BUKU HARIAN KASIR (DAILY CLOSING)');
+    lines.push(`Tanggal Operasional,${escapeCsv(closingDate)},${escapeCsv(formatDateIndo(closingDate))}`);
+    lines.push(`Kasir Bertugas,${escapeCsv(currentUser?.name || 'Kasir')}`);
+    lines.push(`Waktu Export,${escapeCsv(getTimestamp())}`);
+    lines.push(`Status Closing,${escapeCsv(isSelectedDateClosed ? 'TERKUNCI' : 'SHIFT BERJALAN')}`);
+    lines.push('');
+
+    // Section I: Ringkasan Transaksi Finansial
+    lines.push('--- I. RINGKASAN TRANSAKSI FINANSIAL ---');
+    lines.push('Metrik,Nominal / Nilai,Keterangan');
+    lines.push(`TOTAL OMSET,${totalOmset},Total uang masuk tunai dan non-tunai`);
+    lines.push(`TOTAL TRANSAKSI SUKSES,${totalTrxCount},Jumlah transaksi non-void`);
+    lines.push(`TUNAI LACI KASIR,${tunaiLaciKasir},Penerimaan fisik tunai ke laci`);
+    lines.push(`NON-TUNAI MASUK,${nonTunaiMasuk},Penerimaan perbankan (Bank Artha Graha + Bank Mandiri)`);
+    lines.push('');
+
+    // Section II: Breakdown Penerimaan Bank
+    lines.push('--- II. RINCIAN PENERIMAAN NON-TUNAI PER BANK ---');
+    lines.push('Bank,Metode,Nominal');
+    lines.push(`Bank Artha Graha,TOTAL,${arthaGrahaTotal}`);
+    lines.push(`Bank Artha Graha,QRIS,${arthaGrahaQRIS}`);
+    lines.push(`Bank Artha Graha,Transfer,${arthaGrahaTransfer}`);
+    lines.push(`Bank Artha Graha,EDC / Debit,${arthaGrahaEDC}`);
+    lines.push(`Bank Mandiri,TOTAL,${mandiriTotal}`);
+    lines.push(`Bank Mandiri,QRIS,${mandiriQRIS}`);
+    lines.push(`Bank Mandiri,Transfer,${mandiriTransfer}`);
+    lines.push(`Bank Mandiri,EDC / Debit,${mandiriEDC}`);
+    lines.push('');
+
+    // Section III: Rekonsiliasi Kas Laci
+    lines.push('--- III. REKONSILIASI KAS LACI (CASH DRAWER) ---');
+    lines.push('Komponen Rekonsiliasi,Nominal,Keterangan');
+    lines.push(`Modal Awal Laci,${openingDrawerCash},Saldo float modal laci awal`);
+    lines.push(`Total Penerimaan Tunai,${tunaiLaciKasir},Penjualan tunai + DP cash + pelunasan tunai`);
+    lines.push(`Pengeluaran Kas Kecil (Petty Cash),${selectedDatePettyExpenses},Pengeluaran operasional hari ini`);
+    lines.push(`Kas Fisik Diharapkan Sistem,${expectedSystemCash},Modal Awal + Tunai Masuk - Kas Kecil`);
+    if (physicalCashInput) {
+      lines.push(`Kas Fisik Aktual di Laci,${inputCashNumber},Hasil hitung fisik kasir`);
+      lines.push(`Selisih Kas (Variance),${cashVariance},${cashVariance === 0 ? 'COCOK (0)' : cashVariance > 0 ? 'LEBIH' : 'KURANG'}`);
+    }
+    if (closingNotes.trim()) {
+      lines.push(`Catatan Closing,${escapeCsv(closingNotes.trim())}`);
+    }
+    lines.push('');
+
+    // Section IV: Detail Transaksi Harian
+    lines.push('--- IV. DETAIL TRANSAKSI HARIAN ---');
+    lines.push('No Trx,Jam,Pelanggan,Kategori,Deskripsi,Metode,Bank Tujuan,Nominal Masuk,Status');
+    targetClosingTrx.forEach((trx) => {
+      lines.push(
+        [
+          escapeCsv(trx.id),
+          escapeCsv(trx.time || '-'),
+          escapeCsv(trx.customer),
+          escapeCsv(trx.type),
+          escapeCsv(trx.desc || trx.type),
+          escapeCsv(trx.method),
+          escapeCsv(trx.bankDest || '-'),
+          getTrxInflow(trx),
+          escapeCsv(trx.status)
+        ].join(',')
+      );
+    });
+    lines.push('');
+
+    // Section V: Detail Kas Kecil
+    const targetPettyList = pettyCashList.filter(
+      (p) =>
+        p.date === closingDate ||
+        p.date.includes(closingDate) ||
+        (p.created_at && p.created_at.startsWith(closingDate))
+    );
+    if (targetPettyList.length > 0) {
+      lines.push('--- V. DETAIL PENGELUARAN KAS KECIL (PETTY CASH) ---');
+      lines.push('ID,Jam,Kategori,Deskripsi,Nominal,PIC');
+      targetPettyList.forEach((pc) => {
+        const nominal = pc.total_expense !== undefined ? pc.total_expense : pc.amount || 0;
+        lines.push(
+          [
+            escapeCsv(pc.id),
+            escapeCsv(pc.time || pc.created_at || '-'),
+            escapeCsv(pc.category || '-'),
+            escapeCsv(pc.desc || pc.description || '-'),
+            nominal,
+            escapeCsv(pc.submitted_by_name || pc.pic || pc.submitted_by || '-')
+          ].join(',')
+        );
+      });
+    }
+
+    const csvString = '\uFEFF' + lines.join('\r\n');
+    const blob = new Blob([csvString], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `Daily_Closing_${closingDate}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+
+    showToast('Download CSV Berhasil', `Laporan Daily Closing ${closingDate} telah berhasil diunduh.`, 'success');
   };
 
   return (
@@ -1200,63 +1380,264 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
       {/* 4. DAILY CLOSING & REKONSILIASI KASIR */}
       {activeTab === 'closing' && (
         <div className="space-y-6">
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            {/* Calculation Sheet */}
-            <div className="lg:col-span-2 bg-zinc-900/90 border border-zinc-800 rounded-3xl p-6 shadow-sm space-y-5">
-              <div className="flex justify-between items-center border-b border-zinc-800 pb-4">
-                <div>
-                  <h3 className="text-base font-bold text-white">Lembar Tutup Buku Kasir Harian</h3>
-                  <p className="text-xs text-zinc-400 mt-0.5">Tanggal Operasional: {APP_TODAY}</p>
+          <div className="space-y-6 print:hidden no-print">
+            {/* Top Control Bar: Date Selector & Actions */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-zinc-900/90 border border-zinc-800 rounded-3xl p-4 sm:p-5 shadow-sm">
+              <div className="flex flex-wrap items-center gap-3">
+                <div className="flex items-center gap-2">
+                  <Calendar className="w-4 h-4 text-orange-500" />
+                  <span className="text-xs font-bold text-zinc-300">Tanggal Operasional Kas:</span>
                 </div>
-                {isStoreClosed && (
-                  <span className="bg-rose-500/20 text-rose-400 border border-rose-500/30 px-3 py-1 rounded-xl text-xs font-bold flex items-center gap-1.5">
-                    <Lock className="w-3.5 h-3.5" /> Hari Ini Telah Ditutup
-                  </span>
+                <input
+                  type="date"
+                  value={closingDate}
+                  onChange={(e) => setClosingDate(e.target.value)}
+                  className="bg-zinc-950 border border-zinc-700 rounded-xl px-3 py-1.5 text-xs font-bold text-white outline-none focus:border-orange-500"
+                />
+                {closingDate !== APP_TODAY && (
+                  <button
+                    type="button"
+                    onClick={() => setClosingDate(APP_TODAY)}
+                    className="px-2.5 py-1.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs font-bold transition cursor-pointer"
+                  >
+                    Kembali ke Hari Ini
+                  </button>
                 )}
               </div>
 
-              {/* Formula Table */}
-              <div className="space-y-3 text-xs">
-                <div className="flex justify-between items-center py-2 border-b border-zinc-800">
-                  <span className="text-zinc-400 font-medium">1. Saldo Modal Awal Laci Kas:</span>
-                  <span className="font-bold text-white">{formatRp(openingDrawerCash)}</span>
-                </div>
+              <div className="flex flex-wrap items-center gap-2.5">
+                {isSelectedDateClosed ? (
+                  <span className="bg-rose-500/20 text-rose-400 border border-rose-500/30 px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5">
+                    <Lock className="w-3.5 h-3.5" /> Tanggal {closingDate} Telah Ditutup
+                  </span>
+                ) : (
+                  <span className="bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5">
+                    <CheckCircle className="w-3.5 h-3.5" /> Shift Kasir Berjalan
+                  </span>
+                )}
 
-                <div className="flex justify-between items-center py-2 border-b border-zinc-800">
+                <button
+                  type="button"
+                  id="btn-download-closing-csv"
+                  onClick={handleDownloadCSV}
+                  className="bg-zinc-800 hover:bg-zinc-700 text-zinc-200 border border-zinc-700 px-3.5 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-sm active:scale-95"
+                >
+                  <Download className="w-3.5 h-3.5 text-sky-400" />
+                  <span>Download CSV</span>
+                </button>
+
+                <button
+                  type="button"
+                  id="btn-print-closing-report"
+                  onClick={handlePrintReport}
+                  className="bg-orange-500 hover:bg-orange-600 text-white px-3.5 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-sm active:scale-95"
+                >
+                  <Printer className="w-3.5 h-3.5" />
+                  <span>Print Report</span>
+                </button>
+              </div>
+            </div>
+
+            {/* THE REQUESTED FINANCIAL SUMMARY COMPONENT */}
+            <FinancialSummaryCard
+              data={financialSummaryData}
+              title="Ringkasan Transaksi Finansial"
+              subtitle={`Rekap transaksi operasional per tanggal ${formatDateIndo(closingDate)} (${closingDate})`}
+              actionNode={
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    id="btn-card-download-csv"
+                    onClick={handleDownloadCSV}
+                    className="bg-zinc-950 hover:bg-zinc-800 text-zinc-200 border border-zinc-800 px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-xs active:scale-95"
+                  >
+                    <Download className="w-3.5 h-3.5 text-sky-400" />
+                    <span>Download CSV</span>
+                  </button>
+                  <button
+                    type="button"
+                    id="btn-card-print-report"
+                    onClick={handlePrintReport}
+                    className="bg-orange-500 hover:bg-orange-600 text-white px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-xs active:scale-95"
+                  >
+                    <Printer className="w-3.5 h-3.5" />
+                    <span>Print Report</span>
+                  </button>
+                </div>
+              }
+            />
+
+          {/* Calculation Sheet & Physical Verification Drawer Form */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            {/* Calculation Sheet */}
+            <div className="lg:col-span-2 space-y-6">
+              <div className="bg-zinc-900/90 border border-zinc-800 rounded-3xl p-6 shadow-sm space-y-5">
+                <div className="flex justify-between items-center border-b border-zinc-800 pb-4">
                   <div>
-                    <span className="text-zinc-400 font-medium block">2. Penerimaan Kas Tunai Hari Ini:</span>
-                    <span className="text-[10px] text-zinc-500">
-                      (Penjualan POS tunai + DP 50% cash + Pelunasan cicilan tunai)
+                    <h3 className="text-base font-bold text-white">Lembar Rekonsiliasi Kas Laci (Drawer)</h3>
+                    <p className="text-xs text-zinc-400 mt-0.5">Tanggal: {formatDateIndo(closingDate)}</p>
+                  </div>
+                  {isSelectedDateClosed && (
+                    <span className="bg-rose-500/20 text-rose-400 border border-rose-500/30 px-3 py-1 rounded-xl text-xs font-bold flex items-center gap-1.5">
+                      <Lock className="w-3.5 h-3.5" /> Buku Terkunci
                     </span>
-                  </div>
-                  <span className="font-black text-emerald-400">+{formatRp(totalCashIncomeToday)}</span>
+                  )}
                 </div>
 
-                <div className="flex justify-between items-center py-2 border-b border-zinc-800">
+                {/* Formula Table */}
+                <div className="space-y-3 text-xs">
+                  <div className="flex justify-between items-center py-2 border-b border-zinc-800">
+                    <span className="text-zinc-400 font-medium">1. Saldo Modal Awal Laci Kas:</span>
+                    <span className="font-bold text-white font-mono">{formatRp(openingDrawerCash)}</span>
+                  </div>
+
+                  <div className="flex justify-between items-center py-2 border-b border-zinc-800">
+                    <div>
+                      <span className="text-zinc-400 font-medium block">2. Penerimaan Kas Tunai Hari Ini:</span>
+                      <span className="text-[10px] text-zinc-500">
+                        (POS Tunai + Pembayaran Membership/PT Cash + Pelunasan Cicilan Tunai)
+                      </span>
+                    </div>
+                    <span className="font-black text-emerald-400 font-mono">+{formatRp(tunaiLaciKasir)}</span>
+                  </div>
+
+                  <div className="flex justify-between items-center py-2 border-b border-zinc-800">
+                    <div>
+                      <span className="text-zinc-400 font-medium block">3. Pengeluaran Kas Kecil (Petty Cash):</span>
+                      <span className="text-[10px] text-zinc-500">Biaya operasional kas kecil pada tanggal ini</span>
+                    </div>
+                    <span className="font-black text-rose-400 font-mono">-{formatRp(selectedDatePettyExpenses)}</span>
+                  </div>
+
+                  <div className="flex justify-between items-center py-3.5 bg-zinc-950/90 rounded-2xl px-4 border border-zinc-800">
+                    <div>
+                      <span className="text-xs font-bold text-white block">UANG KAS FISIK DIHARAPKAN SISTEM:</span>
+                      <span className="text-[10px] text-zinc-500">Modal Awal (Rp 500rb) + Masuk Tunai - Petty Cash</span>
+                    </div>
+                    <span className="text-xl font-black text-orange-400 font-mono">{formatRp(expectedSystemCash)}</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Detailed Transactions List on Closing Date */}
+              <div className="bg-zinc-900/90 border border-zinc-800 rounded-3xl p-6 shadow-sm space-y-4">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-zinc-800 pb-4">
                   <div>
-                    <span className="text-zinc-400 font-medium block">3. Pengeluaran Kas Kecil (Petty Cash):</span>
-                    <span className="text-[10px] text-zinc-500">Kebutuhan operasional gym hari ini</span>
+                    <h4 className="text-sm font-bold text-white">Detail Transaksi Tanggal {closingDate}</h4>
+                    <p className="text-xs text-zinc-400 mt-0.5">
+                      Daftar rincian transaksi yang membentuk ringkasan finansial di atas.
+                    </p>
                   </div>
-                  <span className="font-black text-rose-400">-{formatRp(todayPettyExpenses)}</span>
+
+                  {/* Filter Subtabs */}
+                  <div className="flex bg-zinc-950 p-1 rounded-xl border border-zinc-800 text-xs">
+                    <button
+                      type="button"
+                      onClick={() => setClosingAuditTab('ALL')}
+                      className={`px-3 py-1 rounded-lg font-bold transition cursor-pointer ${
+                        closingAuditTab === 'ALL' ? 'bg-orange-500 text-white' : 'text-zinc-400 hover:text-white'
+                      }`}
+                    >
+                      Semua ({targetClosingTrx.length})
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setClosingAuditTab('Tunai')}
+                      className={`px-3 py-1 rounded-lg font-bold transition cursor-pointer ${
+                        closingAuditTab === 'Tunai' ? 'bg-emerald-600 text-white' : 'text-zinc-400 hover:text-white'
+                      }`}
+                    >
+                      Tunai ({cashTrxToday.length})
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setClosingAuditTab('Non-Tunai')}
+                      className={`px-3 py-1 rounded-lg font-bold transition cursor-pointer ${
+                        closingAuditTab === 'Non-Tunai' ? 'bg-sky-600 text-white' : 'text-zinc-400 hover:text-white'
+                      }`}
+                    >
+                      Non-Tunai ({nonCashTrxToday.length})
+                    </button>
+                    {targetClosingTrx.filter((t) => t.status === 'VOID').length > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => setClosingAuditTab('VOID')}
+                        className={`px-3 py-1 rounded-lg font-bold transition cursor-pointer ${
+                          closingAuditTab === 'VOID' ? 'bg-rose-600 text-white' : 'text-zinc-400 hover:text-white'
+                        }`}
+                      >
+                        VOID ({targetClosingTrx.filter((t) => t.status === 'VOID').length})
+                      </button>
+                    )}
+                  </div>
                 </div>
 
-                <div className="flex justify-between items-center py-3 bg-zinc-950/80 rounded-2xl px-4 border border-zinc-800">
-                  <div>
-                    <span className="text-xs font-bold text-white block">UANG KAS FISIK DIHARAPKAN SISTEM:</span>
-                    <span className="text-[10px] text-zinc-500">Modal Awal + Masuk Tunai - Petty Cash</span>
-                  </div>
-                  <span className="text-xl font-black text-orange-400">{formatRp(expectedSystemCash)}</span>
-                </div>
-
-                <div className="pt-2 grid grid-cols-2 gap-4">
-                  <div className="bg-zinc-950 p-3.5 rounded-2xl border border-zinc-800">
-                    <span className="text-[10px] font-bold text-zinc-500 uppercase">Non-Tunai Bank Mandiri</span>
-                    <h5 className="text-base font-black text-white mt-1">{formatRp(mandiriIncomeToday)}</h5>
-                  </div>
-                  <div className="bg-zinc-950 p-3.5 rounded-2xl border border-zinc-800">
-                    <span className="text-[10px] font-bold text-zinc-500 uppercase">Non-Tunai Bank Artha Graha</span>
-                    <h5 className="text-base font-black text-white mt-1">{formatRp(arthaGrahaIncomeToday)}</h5>
-                  </div>
+                {/* Table */}
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs text-zinc-300">
+                    <thead>
+                      <tr className="border-b border-zinc-800 text-zinc-500 uppercase tracking-wider text-[10px]">
+                        <th className="py-2.5 px-3">No. Trx</th>
+                        <th className="py-2.5 px-3">Jam</th>
+                        <th className="py-2.5 px-3">Pelanggan</th>
+                        <th className="py-2.5 px-3">Metode & Bank</th>
+                        <th className="py-2.5 px-3 text-right">Nilai Transaksi</th>
+                        <th className="py-2.5 px-3 text-center">Status</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-zinc-800/60 font-sans">
+                      {targetClosingTrx
+                        .filter((t) => {
+                          if (closingAuditTab === 'Tunai') return t.method === 'Tunai' && t.status !== 'VOID';
+                          if (closingAuditTab === 'Non-Tunai') return t.method !== 'Tunai' && t.method !== 'Kasbon' && t.status !== 'VOID';
+                          if (closingAuditTab === 'VOID') return t.status === 'VOID';
+                          return true;
+                        })
+                        .map((trx) => (
+                          <tr key={trx.id} className="hover:bg-zinc-800/30 transition">
+                            <td className="py-2.5 px-3 font-mono font-bold text-white">{trx.id}</td>
+                            <td className="py-2.5 px-3 text-zinc-400">{trx.time || '-'}</td>
+                            <td className="py-2.5 px-3">
+                              <span className="font-medium text-white">{trx.customer}</span>
+                              <span className="text-[10px] text-zinc-500 block">{trx.desc || trx.type}</span>
+                            </td>
+                            <td className="py-2.5 px-3">
+                              <span className="font-bold text-zinc-200">{trx.method}</span>
+                              {trx.bankDest && (
+                                <span className="text-[10px] text-zinc-400 block flex items-center gap-1">
+                                  <Landmark className="w-3 h-3 text-zinc-500 inline" /> {trx.bankDest}
+                                </span>
+                              )}
+                            </td>
+                            <td className="py-2.5 px-3 text-right font-mono font-bold text-white">
+                              {formatRp(getTrxInflow(trx))}
+                            </td>
+                            <td className="py-2.5 px-3 text-center">
+                              {trx.status === 'VOID' ? (
+                                <span className="bg-rose-500/20 text-rose-400 border border-rose-500/30 px-2 py-0.5 rounded-md text-[10px] font-bold">
+                                  VOID
+                                </span>
+                              ) : trx.status === 'DP 50%' ? (
+                                <span className="bg-amber-500/20 text-amber-400 border border-amber-500/30 px-2 py-0.5 rounded-md text-[10px] font-bold">
+                                  DP 50%
+                                </span>
+                              ) : (
+                                <span className="bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 px-2 py-0.5 rounded-md text-[10px] font-bold">
+                                  {trx.status}
+                                </span>
+                              )}
+                            </td>
+                          </tr>
+                        ))}
+                      {targetClosingTrx.length === 0 && (
+                        <tr>
+                          <td colSpan={6} className="py-8 text-center text-zinc-500">
+                            Tidak ada transaksi tercatat pada tanggal {closingDate}.
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
                 </div>
               </div>
             </div>
@@ -1282,7 +1663,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                       onChange={(e) => setPhysicalCashInput(e.target.value)}
                       required
                       placeholder="Masukkan total hitungan fisik..."
-                      className="w-full bg-zinc-950 border border-zinc-700 rounded-xl px-3.5 py-3 text-base font-black text-white outline-none focus:border-orange-500"
+                      className="w-full bg-zinc-950 border border-zinc-700 rounded-xl px-3.5 py-3 text-base font-black text-white outline-none focus:border-orange-500 font-mono"
                     />
                   </div>
 
@@ -1298,7 +1679,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                     >
                       <div className="flex justify-between items-center font-bold">
                         <span>Varian Selisih Kas:</span>
-                        <span className="text-sm font-black">
+                        <span className="text-sm font-black font-mono">
                           {cashVariance === 0 ? 'COCOK (0)' : formatRp(cashVariance)}
                         </span>
                       </div>
@@ -1327,14 +1708,14 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
 
                   <button
                     type="submit"
-                    disabled={isStoreClosed}
-                    className={`w-full py-3.5 rounded-xl font-bold text-xs uppercase tracking-wider shadow-lg transition flex items-center justify-center gap-2 ${
-                      isStoreClosed
+                    disabled={isSelectedDateClosed}
+                    className={`w-full py-3.5 rounded-xl font-bold text-xs uppercase tracking-wider shadow-lg transition flex items-center justify-center gap-2 cursor-pointer ${
+                      isSelectedDateClosed
                         ? 'bg-zinc-800 text-zinc-500 cursor-not-allowed'
-                        : 'bg-orange-500 hover:bg-orange-600 text-white'
+                        : 'bg-orange-500 hover:bg-orange-600 text-white active:scale-98'
                     }`}
                   >
-                    <Lock className="w-4 h-4" /> Kunci Daily Closing Hari Ini
+                    <Lock className="w-4 h-4" /> Kunci Daily Closing Tanggal Ini
                   </button>
                 </form>
               </div>
@@ -1352,7 +1733,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                           <span className="font-bold text-white">{cr.date}</span>
                           <span className="text-[10px] text-zinc-500 block">Oleh: {cr.cashierName}</span>
                         </div>
-                        <div className="text-right">
+                        <div className="text-right font-mono">
                           <span className="font-black text-orange-400">{formatRp(cr.physicalCash)}</span>
                           <span className={`text-[10px] block ${cr.variance === 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
                             {cr.variance === 0 ? 'Match' : `Var: ${formatRp(cr.variance)}`}
@@ -1365,6 +1746,307 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
               )}
             </div>
           </div>
+          </div>
+
+          {/* PRINT MODAL: LAPORAN TUTUP BUKU HARIAN KASIR */}
+          {isClosingPrintOpen && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-xs p-3 sm:p-4 overflow-y-auto print:static print:inset-auto print:z-auto print:p-0 print:m-0 print:bg-white print:overflow-visible">
+              <div
+                id="printable-report-content"
+                className="bg-zinc-900 border border-zinc-800 rounded-3xl shadow-2xl w-full max-w-3xl p-6 my-auto max-h-[95vh] overflow-y-auto print:max-h-none print:overflow-visible print:bg-white print:text-black print:border-none print:shadow-none print:max-w-full print:p-0 print:m-0"
+              >
+                {/* Header */}
+                <div className="flex justify-between items-start border-b border-zinc-800 print:border-zinc-300 pb-4 mb-5">
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <div className="w-8 h-8 rounded-full bg-orange-500 flex items-center justify-center text-white font-black text-xs print:bg-black">
+                        GP
+                      </div>
+                      <div>
+                        <h2 className="text-base font-black text-white print:text-black tracking-tight">
+                          GYMPRO ERP ENTERPRISE
+                        </h2>
+                        <p className="text-xs text-zinc-400 print:text-zinc-600">Laporan Tutup Buku Kasir Harian (Daily Closing)</p>
+                      </div>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setIsClosingPrintOpen(false)}
+                    className="p-1 rounded-lg text-zinc-400 hover:text-white print:hidden cursor-pointer"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
+
+                {/* Metadata */}
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 bg-zinc-950 print:bg-zinc-100 p-3.5 rounded-2xl text-xs mb-5 border border-zinc-800 print:border-zinc-300">
+                  <div>
+                    <span className="text-zinc-500 block text-[10px] uppercase">Tanggal Operasional:</span>
+                    <span className="font-bold text-white print:text-black">{formatDateIndo(closingDate)}</span>
+                  </div>
+                  <div>
+                    <span className="text-zinc-500 block text-[10px] uppercase">Kasir Bertugas:</span>
+                    <span className="font-bold text-white print:text-black">{currentUser?.name || 'Kasir Gym'}</span>
+                  </div>
+                  <div>
+                    <span className="text-zinc-500 block text-[10px] uppercase">Status Buku:</span>
+                    <span className="font-bold text-orange-400 print:text-black">
+                      {isSelectedDateClosed ? 'TERKUNCI' : 'SHIFT AKTIF'}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-zinc-500 block text-[10px] uppercase">Waktu Cetak:</span>
+                    <span className="font-bold text-white print:text-black">{getTimestamp()}</span>
+                  </div>
+                </div>
+
+                {/* Financial Summary inside print report */}
+                <div className="mb-5">
+                  <h4 className="text-xs font-bold text-orange-400 print:text-black uppercase tracking-wider mb-2">
+                    I. Ringkasan Transaksi Finansial
+                  </h4>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-3">
+                    <div className="p-2.5 bg-zinc-950 print:bg-zinc-50 border border-zinc-800 print:border-zinc-300 rounded-xl">
+                      <span className="text-[10px] text-zinc-500 block">TOTAL OMSET</span>
+                      <span className="text-sm font-black text-orange-500 print:text-black font-mono">{formatRp(totalOmset)}</span>
+                    </div>
+                    <div className="p-2.5 bg-zinc-950 print:bg-zinc-50 border border-zinc-800 print:border-zinc-300 rounded-xl">
+                      <span className="text-[10px] text-zinc-500 block">TOTAL TRX</span>
+                      <span className="text-sm font-black text-white print:text-black font-mono">{totalTrxCount}</span>
+                    </div>
+                    <div className="p-2.5 bg-zinc-950 print:bg-zinc-50 border border-zinc-800 print:border-zinc-300 rounded-xl">
+                      <span className="text-[10px] text-zinc-500 block">TUNAI LACI</span>
+                      <span className="text-sm font-black text-emerald-400 print:text-black font-mono">{formatRp(tunaiLaciKasir)}</span>
+                    </div>
+                    <div className="p-2.5 bg-zinc-950 print:bg-zinc-50 border border-zinc-800 print:border-zinc-300 rounded-xl">
+                      <span className="text-[10px] text-zinc-500 block">NON-TUNAI</span>
+                      <span className="text-sm font-black text-sky-400 print:text-black font-mono">{formatRp(nonTunaiMasuk)}</span>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                    <div className="p-3 bg-zinc-950 print:bg-zinc-50 border border-zinc-800 print:border-zinc-300 rounded-xl space-y-1.5">
+                      <div className="flex justify-between font-bold text-sky-400 print:text-black border-b border-zinc-800 print:border-zinc-200 pb-1">
+                        <span>BANK ARTHA GRAHA</span>
+                        <span className="font-mono">{formatRp(arthaGrahaTotal)}</span>
+                      </div>
+                      <div className="flex justify-between text-[11px] text-zinc-400 print:text-zinc-600">
+                        <span>QRIS:</span>
+                        <span className="font-mono font-bold text-white print:text-black">{formatRp(arthaGrahaQRIS)}</span>
+                      </div>
+                      <div className="flex justify-between text-[11px] text-zinc-400 print:text-zinc-600">
+                        <span>Transfer:</span>
+                        <span className="font-mono font-bold text-white print:text-black">{formatRp(arthaGrahaTransfer)}</span>
+                      </div>
+                      <div className="flex justify-between text-[11px] text-zinc-400 print:text-zinc-600">
+                        <span>Debit/EDC:</span>
+                        <span className="font-mono font-bold text-white print:text-black">{formatRp(arthaGrahaEDC)}</span>
+                      </div>
+                    </div>
+
+                    <div className="p-3 bg-zinc-950 print:bg-zinc-50 border border-zinc-800 print:border-zinc-300 rounded-xl space-y-1.5">
+                      <div className="flex justify-between font-bold text-amber-400 print:text-black border-b border-zinc-800 print:border-zinc-200 pb-1">
+                        <span>BANK MANDIRI</span>
+                        <span className="font-mono">{formatRp(mandiriTotal)}</span>
+                      </div>
+                      <div className="flex justify-between text-[11px] text-zinc-400 print:text-zinc-600">
+                        <span>QRIS:</span>
+                        <span className="font-mono font-bold text-white print:text-black">{formatRp(mandiriQRIS)}</span>
+                      </div>
+                      <div className="flex justify-between text-[11px] text-zinc-400 print:text-zinc-600">
+                        <span>Transfer:</span>
+                        <span className="font-mono font-bold text-white print:text-black">{formatRp(mandiriTransfer)}</span>
+                      </div>
+                      <div className="flex justify-between text-[11px] text-zinc-400 print:text-zinc-600">
+                        <span>Debit/EDC:</span>
+                        <span className="font-mono font-bold text-white print:text-black">{formatRp(mandiriEDC)}</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Rekonsiliasi Kas Laci */}
+                <div className="mb-5 text-xs">
+                  <h4 className="font-bold text-orange-400 print:text-black uppercase tracking-wider mb-2">
+                    II. Rekonsiliasi Laci Kasir (Cash Drawer)
+                  </h4>
+                  <div className="bg-zinc-950 print:bg-zinc-50 border border-zinc-800 print:border-zinc-300 rounded-xl p-3 space-y-2">
+                    <div className="flex justify-between">
+                      <span className="text-zinc-400 print:text-zinc-600">Modal Awal Laci Kas:</span>
+                      <span className="font-bold font-mono text-white print:text-black">{formatRp(openingDrawerCash)}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-zinc-400 print:text-zinc-600">Total Uang Tunai Masuk:</span>
+                      <span className="font-bold font-mono text-emerald-400 print:text-black">+{formatRp(tunaiLaciKasir)}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-zinc-400 print:text-zinc-600">Pengeluaran Petty Cash:</span>
+                      <span className="font-bold font-mono text-rose-400 print:text-black">-{formatRp(selectedDatePettyExpenses)}</span>
+                    </div>
+                    <div className="flex justify-between border-t border-zinc-800 print:border-zinc-300 pt-2 font-bold">
+                      <span className="text-white print:text-black">Uang Fisik Diharapkan Sistem:</span>
+                      <span className="font-mono text-orange-400 print:text-black">{formatRp(expectedSystemCash)}</span>
+                    </div>
+                    {physicalCashInput && (
+                      <>
+                        <div className="flex justify-between font-bold">
+                          <span className="text-white print:text-black">Uang Fisik Aktual di Laci:</span>
+                          <span className="font-mono text-white print:text-black">{formatRp(inputCashNumber)}</span>
+                        </div>
+                        <div className="flex justify-between font-bold">
+                          <span className="text-white print:text-black">Selisih / Variance:</span>
+                          <span className={`font-mono ${cashVariance === 0 ? 'text-emerald-400 print:text-black' : 'text-rose-400 print:text-black'}`}>
+                            {cashVariance === 0 ? 'COCOK (0)' : formatRp(cashVariance)}
+                          </span>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                </div>
+
+                {/* III. Rincian Transaksi Harian Table */}
+                <div className="mb-5 text-xs">
+                  <h4 className="font-bold text-orange-400 print:text-black uppercase tracking-wider mb-2">
+                    III. Rincian Transaksi Harian ({targetClosingTrx.length} Transaksi)
+                  </h4>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left text-xs border border-zinc-800 print:border-zinc-300">
+                      <thead>
+                        <tr className="bg-zinc-950 print:bg-zinc-100 text-zinc-400 print:text-black">
+                          <th className="p-2">No. Trx</th>
+                          <th className="p-2">Jam</th>
+                          <th className="p-2">Pelanggan</th>
+                          <th className="p-2">Kategori / Deskripsi</th>
+                          <th className="p-2">Metode / Bank</th>
+                          <th className="p-2 text-right">Nominal Masuk</th>
+                          <th className="p-2 text-center">Status</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-zinc-800 print:divide-zinc-200">
+                        {targetClosingTrx.map((trx) => (
+                          <tr key={trx.id} className="text-zinc-300 print:text-black">
+                            <td className="p-2 font-mono font-bold text-white print:text-black">{trx.id}</td>
+                            <td className="p-2 text-zinc-400 print:text-black">{trx.time || '-'}</td>
+                            <td className="p-2 font-medium text-white print:text-black">{trx.customer}</td>
+                            <td className="p-2 text-zinc-400 print:text-zinc-700">{trx.desc || trx.type}</td>
+                            <td className="p-2">
+                              {trx.method} {trx.bankDest ? `(${trx.bankDest})` : ''}
+                            </td>
+                            <td className="p-2 text-right font-mono font-bold text-white print:text-black">
+                              {formatRp(getTrxInflow(trx))}
+                            </td>
+                            <td className="p-2 text-center font-bold">
+                              {trx.status}
+                            </td>
+                          </tr>
+                        ))}
+                        {targetClosingTrx.length === 0 && (
+                          <tr>
+                            <td colSpan={7} className="p-3 text-center text-zinc-500">
+                              Tidak ada transaksi pada tanggal ini.
+                            </td>
+                          </tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+
+                {/* IV. Rincian Petty Cash (Jika ada) */}
+                {selectedDatePettyExpenses > 0 && (
+                  <div className="mb-5 text-xs">
+                    <h4 className="font-bold text-rose-400 print:text-black uppercase tracking-wider mb-2">
+                      IV. Rincian Pengeluaran Kas Kecil (Petty Cash)
+                    </h4>
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-left text-xs border border-zinc-800 print:border-zinc-300">
+                        <thead>
+                          <tr className="bg-zinc-950 print:bg-zinc-100 text-zinc-400 print:text-black">
+                            <th className="p-2">ID</th>
+                            <th className="p-2">Jam/Waktu</th>
+                            <th className="p-2">Kategori</th>
+                            <th className="p-2">Deskripsi</th>
+                            <th className="p-2 text-right">Nominal</th>
+                            <th className="p-2">PIC</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-zinc-800 print:divide-zinc-200">
+                          {pettyCashList
+                            .filter(
+                              (p) =>
+                                p.date === closingDate ||
+                                p.date.includes(closingDate) ||
+                                (p.created_at && p.created_at.startsWith(closingDate))
+                            )
+                            .map((pc) => (
+                              <tr key={pc.id} className="text-zinc-300 print:text-black">
+                                <td className="p-2 font-mono font-bold text-white print:text-black">{pc.id}</td>
+                                <td className="p-2 text-zinc-400 print:text-black">{pc.time || pc.created_at || '-'}</td>
+                                <td className="p-2">{pc.category || '-'}</td>
+                                <td className="p-2">{pc.desc || pc.description || '-'}</td>
+                                <td className="p-2 text-right font-mono font-bold text-rose-400 print:text-black">
+                                  {formatRp(pc.total_expense !== undefined ? pc.total_expense : pc.amount || 0)}
+                                </td>
+                                <td className="p-2">{pc.submitted_by_name || pc.pic || pc.submitted_by || '-'}</td>
+                              </tr>
+                            ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+
+                {/* Signatures */}
+                <div className="grid grid-cols-3 gap-4 pt-6 border-t border-zinc-800 print:border-zinc-300 text-center text-xs">
+                  <div>
+                    <span className="text-zinc-500 block text-[10px] mb-12 uppercase">Kasir Bertugas</span>
+                    <span className="font-bold text-white print:text-black block border-t border-zinc-700 print:border-zinc-400 pt-1">
+                      ( {currentUser?.name || 'Kasir'} )
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-zinc-500 block text-[10px] mb-12 uppercase">Head Cashier / SPV</span>
+                    <span className="font-bold text-white print:text-black block border-t border-zinc-700 print:border-zinc-400 pt-1">
+                      ( ........................ )
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-zinc-500 block text-[10px] mb-12 uppercase">Finance / Owner</span>
+                    <span className="font-bold text-white print:text-black block border-t border-zinc-700 print:border-zinc-400 pt-1">
+                      ( ........................ )
+                    </span>
+                  </div>
+                </div>
+
+                {/* Print modal buttons */}
+                <div className="mt-6 flex justify-end gap-3 print:hidden">
+                  <button
+                    type="button"
+                    onClick={() => setIsClosingPrintOpen(false)}
+                    className="px-4 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs font-bold transition cursor-pointer"
+                  >
+                    Tutup
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleDownloadCSV}
+                    className="px-4 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs font-bold transition flex items-center gap-1.5 cursor-pointer"
+                  >
+                    <Download className="w-3.5 h-3.5 text-sky-400" />
+                    <span>Download CSV</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => window.print()}
+                    className="px-5 py-2 rounded-xl bg-orange-500 hover:bg-orange-600 text-white text-xs font-bold transition flex items-center gap-2 cursor-pointer shadow-md"
+                  >
+                    <Printer className="w-4 h-4" /> Cetak Sekarang (Print)
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
