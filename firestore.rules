@@ -1,0 +1,118 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // 1. Global Safety Net: Default Deny All
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // 2. Global Helper Functions
+    function isValidId(id) {
+      return id is string && id.size() > 0 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isSignedIn() {
+      return request.auth != null && request.auth.uid != null;
+    }
+
+    function isBootstrappedAdmin() {
+      return isSignedIn() &&
+        request.auth.token.email == "syahmuhammadridwan@gmail.com" &&
+        request.auth.token.email_verified == true;
+    }
+
+    function isAdmin() {
+      return isBootstrappedAdmin() || (
+        isSignedIn() && exists(/databases/$(database)/documents/admins/$(request.auth.uid))
+      );
+    }
+
+    // Validation Blueprint for Member
+    function isValidMember(data) {
+      return data.id is string && isValidId(data.id) &&
+             data.name is string && data.name.size() > 0 && data.name.size() <= 150 &&
+             data.phone is string && data.phone.size() <= 30 &&
+             (!('status' in data) || data.status in ['Aktif', 'Kadaluarsa', 'Cuti', 'Nonaktif', 'Habis', 'AKTIF', 'FREEZE', 'MASA TENGGANG', 'EXPIRED', 'VISIT']);
+    }
+
+    // Validation Blueprint for Transaction
+    function isValidTransaction(data) {
+      return data.id is string && isValidId(data.id) &&
+             data.amount is number && data.amount >= 0 &&
+             data.status is string && data.status.size() <= 50;
+    }
+
+    // Validation Blueprint for Attendance
+    function isValidAttendance(data) {
+      return data.id is string && isValidId(data.id) &&
+             data.date is string && data.date.size() <= 50 &&
+             data.type is string && data.type.size() <= 50;
+    }
+
+    // Validation Blueprint for Lead
+    function isValidLead(data) {
+      return data.id is string && isValidId(data.id) &&
+             data.name is string && data.name.size() <= 150 &&
+             data.phone is string && data.phone.size() <= 30;
+    }
+
+    // Admins Collection
+    match /admins/{adminId} {
+      allow get: if isSignedIn() && (request.auth.uid == adminId || isAdmin());
+      allow list: if isAdmin();
+      allow write: if isBootstrappedAdmin();
+    }
+
+    // Users (Staff) Collection
+    match /users/{userId} {
+      allow get: if isSignedIn() && isValidId(userId);
+      allow list: if isSignedIn();
+      allow create, update, delete: if isAdmin() && isValidId(userId);
+    }
+
+    // Members Collection
+    match /members/{memberId} {
+      allow get: if isSignedIn() && isValidId(memberId);
+      allow list: if isSignedIn();
+      allow create: if isSignedIn() && isValidId(memberId) && isValidMember(incoming());
+      allow update: if isSignedIn() && isValidId(memberId) && isValidMember(incoming());
+      allow delete: if isAdmin() && isValidId(memberId);
+    }
+
+    // Transactions Collection
+    match /transactions/{transactionId} {
+      allow get: if isSignedIn() && isValidId(transactionId);
+      allow list: if isSignedIn();
+      allow create: if isSignedIn() && isValidId(transactionId) && isValidTransaction(incoming());
+      allow update: if (isAdmin() || isSignedIn()) && isValidId(transactionId) && isValidTransaction(incoming());
+      allow delete: if isAdmin() && isValidId(transactionId);
+    }
+
+    // Attendances Collection
+    match /attendances/{attendanceId} {
+      allow get: if isSignedIn() && isValidId(attendanceId);
+      allow list: if isSignedIn();
+      allow create: if isSignedIn() && isValidId(attendanceId) && isValidAttendance(incoming());
+      allow update: if isSignedIn() && isValidId(attendanceId) && isValidAttendance(incoming());
+      allow delete: if isAdmin() && isValidId(attendanceId);
+    }
+
+    // Leads Collection
+    match /leads/{leadId} {
+      allow get: if isSignedIn() && isValidId(leadId);
+      allow list: if isSignedIn();
+      allow create: if isSignedIn() && isValidId(leadId) && isValidLead(incoming());
+      allow update: if isSignedIn() && isValidId(leadId) && isValidLead(incoming());
+      allow delete: if isAdmin() && isValidId(leadId);
+    }
+  }
+}

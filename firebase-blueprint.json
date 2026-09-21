@@ -1,0 +1,115 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "Staff and system user accounts with role-based access",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "name": { "type": "string", "maxLength": 150 },
+        "role": { "type": "string", "enum": ["admin", "kasir", "leader_pt", "pt"] },
+        "roleName": { "type": "string", "maxLength": 100 },
+        "accId": { "type": "string", "maxLength": 64 },
+        "phone": { "type": "string", "maxLength": 30 },
+        "shift": { "type": "string", "maxLength": 50 },
+        "email": { "type": "string", "maxLength": 150 }
+      },
+      "required": ["id", "name", "role"]
+    },
+    "Member": {
+      "title": "Member",
+      "description": "Gym members registered in the system",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "name": { "type": "string", "maxLength": 150 },
+        "phone": { "type": "string", "maxLength": 30 },
+        "email": { "type": "string", "maxLength": 150 },
+        "joinDate": { "type": "string", "maxLength": 50 },
+        "expiryDate": { "type": "string", "maxLength": 50 },
+        "status": { "type": "string", "enum": ["Aktif", "Kadaluarsa", "Cuti", "Nonaktif"] },
+        "passCode": { "type": "string", "maxLength": 32 },
+        "packageType": { "type": "string", "maxLength": 100 },
+        "ptQuota": { "type": "number" },
+        "ptTrainer": { "type": "string", "maxLength": 150 }
+      },
+      "required": ["id", "name", "phone", "status"]
+    },
+    "Transaction": {
+      "title": "Transaction",
+      "description": "Financial sales transactions (POS, membership, PT package)",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "date": { "type": "string", "maxLength": 50 },
+        "memberName": { "type": "string", "maxLength": 150 },
+        "amount": { "type": "number" },
+        "status": { "type": "string", "maxLength": 50 },
+        "method": { "type": "string", "maxLength": 50 },
+        "cashier": { "type": "string", "maxLength": 150 }
+      },
+      "required": ["id", "date", "amount", "status"]
+    },
+    "Attendance": {
+      "title": "Attendance",
+      "description": "Daily check-in/checkout records for members and operational staff",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "date": { "type": "string", "maxLength": 50 },
+        "time": { "type": "string", "maxLength": 50 },
+        "type": { "type": "string", "maxLength": 50 },
+        "status": { "type": "string", "maxLength": 50 }
+      },
+      "required": ["id", "date", "time", "type"]
+    },
+    "Lead": {
+      "title": "Lead",
+      "description": "CRM prospective member records",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "name": { "type": "string", "maxLength": 150 },
+        "phone": { "type": "string", "maxLength": 30 },
+        "status": { "type": "string", "maxLength": 50 }
+      },
+      "required": ["id", "name", "phone", "status"]
+    },
+    "Admin": {
+      "title": "Admin",
+      "description": "System administrator identifiers",
+      "type": "object",
+      "properties": {
+        "email": { "type": "string", "maxLength": 150 },
+        "role": { "type": "string", "maxLength": 50 }
+      },
+      "required": ["email"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "User" },
+      "description": "Staff profile records"
+    },
+    "/members/{memberId}": {
+      "schema": { "$ref": "Member" },
+      "description": "Registered gym members"
+    },
+    "/transactions/{transactionId}": {
+      "schema": { "$ref": "Transaction" },
+      "description": "POS and membership transactions"
+    },
+    "/attendances/{attendanceId}": {
+      "schema": { "$ref": "Attendance" },
+      "description": "Check-in logs"
+    },
+    "/leads/{leadId}": {
+      "schema": { "$ref": "Lead" },
+      "description": "CRM leads pipeline"
+    },
+    "/admins/{adminId}": {
+      "schema": { "$ref": "Admin" },
+      "description": "Verified system administrators"
+    }
+  }
+}

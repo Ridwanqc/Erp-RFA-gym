@@ -1,0 +1,828 @@
+export type UserRole = 'admin' | 'kasir' | 'leader_pt' | 'pt' | 'teknisi' | 'manager';
+
+export interface User {
+  id: string;
+  accId: string;
+  name: string;
+  email?: string;
+  role: UserRole;
+  roleName: string;
+  shift: 'Pagi' | 'Siang';
+  baseSalary: number;
+  password: string;
+  photo?: string;
+  gender?: 'L' | 'P';
+  phone?: string;
+  // Kartu Identitas Resmi Karyawan
+  idType?: 'KTP' | 'SIM' | 'Paspor' | 'Kartu Pelajar';
+  idNumber?: string;
+  idPhoto?: string;
+  address?: string;
+  birthDate?: string;
+  emergencyContact?: string;
+}
+
+export type MembershipStatus = 'AKTIF' | 'FREEZE' | 'MASA TENGGANG' | 'EXPIRED' | 'VISIT';
+
+export interface MemberFreezeRecord {
+  id: string; // e.g. "FRZ-202609-001"
+  memberId: string;
+  memberName: string;
+  memberPhone?: string;
+  memberPhoto?: string;
+  startDate: string; // YYYY-MM-DD
+  plannedEndDate: string; // YYYY-MM-DD
+  actualEndDate?: string; // YYYY-MM-DD saat di-unfreeze
+  plannedDays: number; // Durasi hari rencana freeze
+  freezeDays?: number;
+  actualDays?: number; // Durasi hari aktual freeze
+  previousStatus: MembershipStatus | string; // Status sebelum freeze (e.g. 'AKTIF')
+  previousExpiredDate: string; // Tanggal expired sebelum freeze
+  newAdjustedExpiredDate: string; // Tanggal expired baru yang telah disesuaikan
+  adjustedExpiryDate?: string;
+  reason: string; // 'Sakit / Cedera' | 'Tugas Ke Luar Kota' | 'Hamil / Melahirkan' | 'Liburan / Studi' | 'Lainnya'
+  notes?: string;
+  staffId: string;
+  staffName: string;
+  unfreezeStaffId?: string;
+  unfreezeStaffName?: string;
+  unfreezeNotes?: string;
+  status: 'FREEZE' | 'SELESAI' | 'DIBATALKAN' | 'AKTIF';
+  adminFee?: number; // Biaya administrasi freeze jika ada
+  createdAt: string; // Timestamp ISO / format tanggal
+  unfrozenAt?: string;
+}
+
+export interface Member {
+  id: string;
+  name: string;
+  phone: string;
+  expired: string; // YYYY-MM-DD
+  ptQuota: number;
+  picId: string;
+  picName: string;
+  followUpStatus: string;
+  photo: string;
+  gender?: 'L' | 'P';
+  joinDate?: string;
+  notes?: string;
+  // Freeze Membership state
+  isFrozen?: boolean;
+  status?: MembershipStatus;
+  activeFreezeId?: string;
+  freezeStartDate?: string;
+  freezeEndDate?: string;
+  freezePlannedEndDate?: string;
+  freezeDays?: number;
+  previousStatus?: MembershipStatus;
+  lastFreezeRecordId?: string;
+  freezeReason?: string;
+  freezeStaffName?: string;
+  freezeNotes?: string;
+  membershipType?: 'MEMBER' | 'VISIT';
+  // Kartu Identitas Resmi Member
+  idType?: 'KTP' | 'SIM' | 'Paspor' | 'Kartu Pelajar';
+  idNumber?: string;
+  idPhoto?: string;
+  address?: string;
+  birthDate?: string;
+  emergencyContact?: string;
+}
+
+export interface Product {
+  id: string;
+  cat: 'Mineral' | 'Supplement' | 'Snack' | string;
+  name: string;
+  cost: number;
+  price: number;
+  stock: number;
+  img: string;
+}
+
+export interface PackageItem {
+  id: string;
+  cat: 'Membership' | 'PT';
+  type: 'Personal' | 'Couple' | 'Trio';
+  name: string;
+  price: number;
+  value: number; // days or sessions
+}
+
+export type BundleType =
+  | 'MEMBERSHIP_ONLY'
+  | 'PT_ONLY'
+  | 'MEMBERSHIP_PLUS_PT'
+  | 'MEMBERSHIP_PLUS_PRODUCT'
+  | 'CUSTOM_BUNDLE';
+
+export type BundleItemType = 'MEMBERSHIP' | 'PT' | 'PRODUCT';
+
+export interface BundleItem {
+  bundleItemId: string;
+  bundleId: string;
+  itemType: BundleItemType;
+  membershipPackageId?: string;
+  ptPackageId?: string;
+  productId?: string;
+  productName?: string;
+  productQty?: number;
+  name: string;
+  quantity: number;
+  duration?: number; // in days, e.g. 30 (1 Bulan), 90 (3 Bulan)
+  durationLabel?: string; // e.g. '1 Bulan'
+  sessionCount?: number; // e.g. 2, 4, 8, 16
+  unitPrice?: number;
+  isActive: boolean;
+}
+
+export interface BundlePackage {
+  bundleId: string;
+  bundleCode: string; // e.g. 'BND-VIP-PLUS'
+  bundleName: string; // e.g. 'VIP PLUS'
+  description: string;
+  bundleType: BundleType;
+  price: number;
+  status: 'ACTIVE' | 'INACTIVE';
+  createdDate: string;
+  createdBy: string;
+  participantType: 'Personal' | 'Couple' | 'Trio';
+  maxParticipants: number; // 1, 2, 3
+  durationDays?: number;
+  ptComponentValue: number; // Configurable PT component valuation for trainer commission
+  commissionRate: number; // Commission % for trainer, e.g. 20 (%)
+  trainerCommissionRate?: number;
+  items: BundleItem[];
+  allowDpActivation?: boolean; // If true, benefits activate even when paying DP
+}
+
+export interface MemberMembershipRecord {
+  id: string;
+  membershipRecordId?: string;
+  memberId: string;
+  memberName: string;
+  packageName: string;
+  bundleId?: string;
+  bundleCode?: string;
+  bundleName?: string;
+  bundleTrxId?: string;
+  transactionId?: string;
+  membershipPackageId?: string;
+  startDate: string; // YYYY-MM-DD
+  endDate: string; // YYYY-MM-DD
+  durationDays: number;
+  durationLabel: string;
+  status: 'AKTIF' | 'ACTIVE' | 'EXPIRED' | 'PENDING_LUNAS' | string;
+  createdDate: string;
+  source: 'REGULAR' | 'BUNDLING';
+}
+
+export interface TrainerCommissionRecord {
+  id: string;
+  commissionId?: string;
+  date: string; // YYYY-MM-DD
+  trainerId: string;
+  trainerName: string;
+  memberId: string;
+  memberName: string;
+  bundleId?: string;
+  bundleCode?: string;
+  bundleName: string;
+  trxId?: string;
+  transactionId?: string;
+  sessionId?: string;
+  sessionNumber?: number;
+  ptComponentValue: number;
+  commissionRate: number;
+  commissionAmount: number;
+  paymentStatus: 'LUNAS' | 'BELUM LUNAS' | 'PENDING' | string;
+  validationStatus: 'COMPLETED' | 'WAITING_VALIDATION' | 'PENDING' | string;
+  valStatus?: string;
+  status?: string;
+}
+
+export interface CartItem extends Product {
+  qty: number;
+}
+
+export interface Transaction {
+  id: string;
+  date: string; // YYYY-MM-DD
+  time: string; // e.g. 14:30 WIB
+  type: 'POS' | 'Membership' | 'PT' | 'Pelunasan Cicilan' | 'Bundling';
+  desc: string;
+  customer: string;
+  billName?: string;
+  amount: number;            // Total invoice amount
+  amountPaid: number;        // Cumulative amount paid
+  amountRemaining: number;    // Remaining debt
+  dueDate?: string;          // YYYY-MM-DD
+  cogs?: number;
+  profit?: number;
+  method: 'Tunai' | 'QRIS' | 'Transfer' | 'EDC' | 'Kasbon' | 'Cicilan 2x' | string;
+  status: 'Paid' | 'DP 50%' | 'BELUM LUNAS' | 'VOID';
+  cashier: string;
+  bankDest?: 'Artha Graha' | 'Mandiri' | string;
+  itemsJSON?: string;
+  picId?: string;
+  picIds?: string[];
+  picNames?: string;
+  trxCategory?: string;
+  refTrxId?: string;         // If this is a PAY-* installment payment
+  initialCashPaid?: number;  // Cash or bank inflow that happened specifically on transaction creation date
+  bundleId?: string;
+  bundleCode?: string;
+}
+
+export interface Schedule {
+  id: string;
+  memberName: string;
+  memberId: string;
+  trainer: string;
+  trainerId?: string;
+  date: string; // YYYY-MM-DD
+  time: string; // HH:mm
+  status: 'Menunggu' | 'Selesai' | 'Batal' | 'Reschedule' | 'No-Show' | 'Hangus';
+  sessionStatus?: 'AVAILABLE' | 'BOOKED' | 'RESCHEDULED' | 'COMPLETED' | 'CANCELLED' | 'EXPIRED';
+  valStaf: boolean;
+  valTrainer: boolean;
+  valMember: boolean;
+  note?: string;
+  workoutFocus?: string;
+  workoutLog?: string;
+  bundleId?: string;
+  bundleName?: string;
+  bundleTrxId?: string;
+  purchaseId?: string;
+  sessionNumber?: number;
+  ptComponentValue?: number;
+  commissionAmount?: number;
+}
+
+export interface TrainerWorkoutLog {
+  id: string;
+  scheduleId?: string;
+  trainerId: string;
+  trainerName: string;
+  memberId: string;
+  memberName: string;
+  date: string;
+  focusArea: string;
+  exercisesSummary: string;
+  rpeRate: number; // 1 - 10
+  condition: 'Prima & Bertenaga' | 'Normal' | 'Lelah / Recovery' | 'Nyeri Otot Ringan';
+  coachNotes: string;
+  nextSessionGoal: string;
+}
+
+export interface TrainerAttendanceLog {
+  id: string;
+  trainerId: string;
+  trainerName: string;
+  scheduleId?: string;
+  memberId: string;
+  memberName: string;
+  date: string; // YYYY-MM-DD
+  scheduledTime?: string; // HH:mm
+  checkInTime: string; // HH:mm
+  checkOutTime?: string; // HH:mm
+  durationMinutes?: number;
+  status: 'Checked In' | 'Checked Out' | 'Selesai';
+  punctuality: 'Tepat Waktu' | 'Terlambat' | 'Lebih Awal';
+  trainingFocus: string;
+  roomOrArea: string;
+  intensityRPE?: number; // 1 - 10
+  notes?: string;
+  valTrainer?: boolean;
+  valMember?: boolean;
+  sessionFee?: number;
+}
+
+export interface PTPurchaseRecord {
+  id: string; // PT Purchase ID, e.g. PUR-101
+  date: string; // YYYY-MM-DD
+  memberId: string;
+  memberName: string;
+  trainerId: string;
+  trainerName: string;
+  packageId: string;
+  packageName: string;
+  totalSessions: number;
+  completedSessions: number;
+  price: number;
+  status: 'Active' | 'Completed' | 'Expired' | 'Cancelled';
+  expiryDate?: string;
+  notes?: string;
+  source?: 'REGULAR' | 'BUNDLING';
+  bundleId?: string;
+  bundleCode?: string;
+  bundleTrxId?: string;
+  ptComponentValue?: number;
+  commissionRate?: number;
+}
+
+export interface TrainingSessionDetail {
+  sessionId: string;
+  sessionNumber: number;
+  date: string;
+  time: string;
+  status: 'Selesai' | 'Menunggu' | 'Batal' | 'Reschedule' | 'No-Show' | 'Hangus';
+  note?: string;
+  valStaf?: boolean;
+  valTrainer?: boolean;
+  valMember?: boolean;
+}
+
+export interface StudioClass {
+  id: string;
+  name: string;
+  trainer: string;
+  trainerId?: string;
+  trainerName?: string;
+  date: string; // YYYY-MM-DD
+  time: string; // HH:mm
+  capacity: number;
+  booked: string[]; // member names
+  bookedMembers?: string[];
+  room?: string;
+}
+
+export interface Attendance {
+  id: string;
+  date: string; // YYYY-MM-DD
+  timeIn: string;
+  timeOut?: string;
+  memberId?: string;
+  memberName: string;
+  type: 'Reguler' | 'PT';
+  badge: string;
+}
+
+export interface StaffAttendance {
+  id: string;
+  date: string; // YYYY-MM-DD
+  timeIn: string;
+  timeOut?: string;
+  staffId?: string;
+  staffName: string;
+  shift: 'Pagi' | 'Siang';
+}
+
+export interface Lead {
+  id: string;
+  date?: string;
+  name: string;
+  phone: string;
+  source: 'Instagram' | 'Walk-in' | 'Referral' | string;
+  status: 'Baru' | 'Follow Up' | 'Trial' | 'Member';
+  notes?: string;
+  picId?: string;
+}
+
+export interface FollowUpLog {
+  id?: string;
+  memberId: string;
+  date: string;
+  status: string;
+  notes: string;
+  method?: string;
+}
+
+export interface LeaveRequest {
+  id: string;
+  staffId: string;
+  staffName: string;
+  type: 'Cuti Tahunan' | 'Sakit' | string;
+  start: string;
+  end: string;
+  reason: string;
+  status: 'Pending' | 'Approved' | 'Rejected';
+}
+
+export type PettyCashStatus = 'Draft' | 'Menunggu Persetujuan' | 'Disetujui' | 'Ditolak' | 'Selesai';
+
+export interface PettyCashExpense {
+  id: string;
+  petty_cash_id: string;
+  item_name: string;
+  unit_price: number;
+  quantity: number;
+  amount: number; // unit_price * quantity
+  description?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface PettyCash {
+  id: string;
+  date: string;
+  initial_amount: number;
+  payment_method: 'Transfer' | 'Tunai' | 'Bank' | string;
+  status: PettyCashStatus | string;
+  total_expense: number;
+  remaining_balance: number;
+  created_by: string;
+  approved_by?: string;
+  approved_at?: string;
+  created_at: string;
+  updated_at: string;
+  notes?: string;
+  expenses?: PettyCashExpense[];
+
+  // Legacy / fallback compatibility fields
+  time?: string;
+  desc?: string;
+  amount?: number;
+  staffName?: string;
+  pic?: string;
+  cat?: 'Operasional' | 'ATK' | 'Kebersihan' | 'Maintenance' | 'Konsumsi' | string;
+}
+
+export type PettyCashItem = PettyCash;
+
+export interface DailyClosingRecord {
+  id: string;
+  date: string;
+  closedBy?: string;
+  closedAt?: string;
+  cashierName?: string;
+  time?: string;
+  revenue?: number;
+  trxCount?: number;
+  tunai?: number;
+  nonTunai?: number;
+  pettyCash?: number;
+  systemSaldo?: number;
+  actualCash?: number;
+  physicalCash?: number;
+  difference?: number;
+  variance?: number;
+  bankArtha?: number;
+  bankMandiri?: number;
+  cashSales?: number;
+  mandiriSales?: number;
+  arthaSales?: number;
+  pettyExpenses?: number;
+  expectedCash?: number;
+  arthaQRIS?: number;
+  arthaTF?: number;
+  arthaEDC?: number;
+  mandiriQRIS?: number;
+  mandiriTF?: number;
+  mandiriEDC?: number;
+  notes?: string;
+}
+
+// ============================================================================
+// MODUL INVENTARIS & PEMELIHARAAN ALAT GYM (GYMPRO ERP)
+// ============================================================================
+
+export type AssetCategory =
+  | 'Cardio'
+  | 'Strength'
+  | 'Free Weight'
+  | 'Machine'
+  | 'Bench'
+  | 'Cable Machine'
+  | 'Functional Training'
+  | 'Equipment'
+  | 'Elektronik'
+  | 'Furniture'
+  | 'Lainnya';
+
+export type AssetCondition =
+  | 'Baru'
+  | 'Baik'
+  | 'Cukup'
+  | 'Rusak Ringan'
+  | 'Rusak Berat'
+  | 'Tidak Layak Pakai'
+  | 'BARU'
+  | 'BAIK'
+  | 'CUKUP'
+  | 'RUSAK_RINGAN'
+  | 'RUSAK_BERAT'
+  | 'AFKIR'
+  | 'TIDAK_LAYAK';
+
+export type AssetStatus =
+  | 'Aktif'
+  | 'Maintenance'
+  | 'Rusak'
+  | 'Tidak Digunakan'
+  | 'Dipindahkan'
+  | 'Dijual'
+  | 'Dihapus'
+  | 'OPERASIONAL'
+  | 'DALAM_PERAWATAN'
+  | 'RUSAK'
+  | 'DISPOSAL'
+  | 'NON_AKTIF';
+
+export type MaintenanceScheduleType =
+  | 'Harian'
+  | 'Mingguan'
+  | 'Bulanan'
+  | '3 Bulanan'
+  | '6 Bulanan'
+  | 'Tahunan'
+  | 'Custom';
+
+export type MaintenanceType =
+  | 'Preventive Maintenance'
+  | 'Corrective Maintenance'
+  | 'Repair'
+  | 'Inspection'
+  | 'Cleaning'
+  | 'Replacement'
+  | 'Calibration'
+  | 'Service Berkala'
+  | 'Preventive'
+  | 'Corrective';
+
+export type DamagePriority = 'Rendah' | 'Normal' | 'Tinggi' | 'Darurat';
+
+export type DamageReportStatus =
+  | 'Dilaporkan'
+  | 'Menunggu Pemeriksaan'
+  | 'Menunggu Persetujuan'
+  | 'Dalam Perbaikan'
+  | 'Selesai'
+  | 'Tidak Dapat Diperbaiki';
+
+export type WorkOrderStatus =
+  | 'Open'
+  | 'Approved'
+  | 'In Progress'
+  | 'Pending'
+  | 'Completed'
+  | 'Cancelled'
+  | 'SELESAI';
+
+export type ProcurementStatus =
+  | 'Draft'
+  | 'Pengajuan'
+  | 'Menunggu Approval'
+  | 'Disetujui'
+  | 'Dipesan'
+  | 'Diterima'
+  | 'Selesai'
+  | 'Ditolak'
+  | 'DITERIMA'
+  | 'DISETUJUI_OWNER'
+  | 'DISETUJUI_MANAGER';
+
+export interface GymAsset {
+  id: string;                    // ID Inventaris (e.g. AST-001)
+  assetCode: string;             // Kode Asset (e.g. TM-CRD-01)
+  code?: string;                 // Alias kode aset
+  name: string;                  // Nama Alat
+  category: AssetCategory;       // Kategori Alat
+  brand: string;                 // Brand/Merk
+  model: string;                 // Tipe/Model
+  serialNumber: string;          // Serial Number
+  purchaseYear?: number;         // Tahun Pembelian
+  purchaseDate: string;          // Tanggal Pembelian (YYYY-MM-DD)
+  supplier?: string;             // Supplier/Vendor
+  vendor?: string;               // Alias Supplier/Vendor
+  vendorPhone?: string;          // Nomor Telepon Vendor
+  purchasePrice: number;         // Harga Pembelian
+  warranty?: string;             // Garansi (e.g. '2 Tahun Resmi')
+  warrantyMonths?: number;       // Durasi garansi (bulan)
+  warrantyStart?: string;        // Tanggal Mulai Garansi
+  warrantyEnd?: string;          // Tanggal Berakhir Garansi
+  warrantyExpiry?: string;       // Alias expiry garansi
+  location: string;              // Lokasi
+  photo?: string;                // Foto Alat URL
+  condition: AssetCondition;     // Kondisi
+  status: AssetStatus;           // Status
+  responsiblePerson?: string;    // Penanggung Jawab
+  maintenanceFrequencyMonths?: number;
+  depreciationYears?: number;
+  salvageValue?: number;
+  accumulatedDepreciation?: number;
+  currentBookValue?: number;
+  specifications?: Record<string, string>;
+  notes?: string;                // Keterangan
+  maintenanceSchedule?: MaintenanceScheduleType;
+  lastMaintenanceDate?: string;
+  lastMaintenance?: string;
+  nextMaintenanceDate?: string;
+  nextMaintenance?: string;
+  disposalDetails?: AssetDisposal;
+}
+
+export interface UsedSparepartItem {
+  sparepartId: string;
+  sparepartCode: string;
+  name: string;
+  quantity: number;
+  unitPrice: number;
+  total: number;
+}
+
+export interface AssetMaintenance {
+  id: string;                    // ID Maintenance (e.g. MNT-2026-001)
+  assetId: string;               // ID Asset
+  assetCode: string;
+  assetName: string;
+  title?: string;
+  type?: string;
+  scheduledDate?: string;
+  maintenanceDate: string;       // Tanggal Maintenance
+  maintenanceType: MaintenanceType;
+  technicianId?: string;
+  technicianName: string;        // Teknisi/Vendor
+  vendorName?: string;
+  complaint?: string;            // Keluhan
+  action?: string;               // Tindakan
+  usedSpareparts?: UsedSparepartItem[];
+  serviceCost?: number;          // Biaya Jasa
+  sparepartCost?: number;        // Biaya Sparepart
+  otherCost?: number;            // Biaya Lainnya
+  cost?: number;                 // Alias total biaya
+  totalCost: number;             // Total Biaya (service + sparepart + other)
+  repairWarranty?: string;       // Garansi Perbaikan (misal '30 Hari')
+  nextScheduledDate?: string;
+  nextMaintenanceDate?: string;  // Tanggal Maintenance Berikutnya
+  status: 'Scheduled' | 'In Progress' | 'Completed' | 'Pending Approval' | 'Cancelled' | 'SELESAI';
+  paymentMethod?: 'Tunai' | 'Transfer' | 'QRIS' | 'EDC';
+  bankDest?: 'Mandiri' | 'Artha Graha' | string;
+  notes?: string;                // Catatan
+  photoBefore?: string;          // Foto sebelum
+  photoAfter?: string;           // Foto sesudah
+  invoiceDoc?: string;           // Bukti/Invoice
+  financeTrxId?: string;         // Referensi transaksi Keuangan ERP
+  approvalStatus?: 'Approved' | 'Pending' | 'Rejected';
+  approvedBy?: string;
+}
+
+export interface DamageReport {
+  id: string;                    // Nomor Laporan (e.g. DMG-2026-001)
+  reportDate: string;            // Tanggal
+  assetId: string;               // Asset ID
+  assetCode: string;
+  assetName: string;
+  location?: string;
+  reporter?: string;             // Pelapor
+  reporterRole?: string;
+  damageType?: string;           // Jenis Kerusakan
+  severity?: 'RINGAN' | 'SEDANG' | 'BERAT' | 'TOTAL';
+  damageLevel?: 'Rusak Ringan' | 'Rusak Sedang' | 'Rusak Berat';
+  description?: string;          // Deskripsi Kerusakan
+  issueDescription?: string;     // Alias deskripsi
+  photo?: string;                // Foto Kerusakan
+  estimatedCost: number;         // Estimasi Biaya
+  priority: DamagePriority;      // Prioritas
+  status: DamageReportStatus | 'SELESAI';    // Status
+  workOrderId?: string;
+}
+
+export interface WorkOrder {
+  id: string;                    // Nomor WO (e.g. WO-2026-001)
+  woNumber?: string;             // Alias nomor WO
+  damageReportId?: string;
+  assetId: string;
+  assetCode: string;
+  assetName: string;
+  technician: string;
+  vendor?: string;
+  startDate: string;
+  targetCompletionDate: string;
+  completionDate?: string;
+  estimatedCost: number;
+  actualCost: number;
+  costDifference: number;        // actualCost - estimatedCost
+  usedSpareparts?: UsedSparepartItem[];
+  sparepartCost?: number;
+  serviceCost?: number;
+  sparepartDetails?: string;
+  serviceDetails?: string;
+  notes?: string;
+  status: WorkOrderStatus;
+  paymentMethod?: 'Tunai' | 'Transfer' | 'QRIS' | 'EDC';
+  bankDest?: string;
+  financeTrxId?: string;
+}
+
+export interface Sparepart {
+  id: string;                    // ID Sparepart
+  sparepartCode: string;         // Kode Sparepart
+  code?: string;                 // Alias Kode
+  name: string;                  // Nama Sparepart
+  category: string;              // Kategori
+  supplier?: string;             // Supplier
+  stock: number;                 // Stock
+  unit?: string;                 // Satuan (pcs, set, box)
+  minimumStock: number;          // Minimum Stock
+  unitPrice: number;             // Harga Satuan
+  unitCost?: number;             // Biaya Satuan
+  storageLocation?: string;      // Lokasi Penyimpanan
+  status?: 'Tersedia' | 'Low Stock' | 'Habis';
+}
+
+export interface AssetProcurement {
+  id: string;                    // Nomor Pengadaan (e.g. PRC-2026-001)
+  poNumber?: string;             // Alias PO
+  title?: string;
+  date?: string;                 // Tanggal
+  orderDate?: string;
+  assetName?: string;            // Nama Alat
+  category?: AssetCategory;      // Kategori
+  brand?: string;
+  model?: string;
+  supplier?: string;             // Supplier
+  vendorName?: string;
+  vendorPhone?: string;
+  quantity?: number;             // Quantity
+  unitPrice?: number;            // Harga Satuan
+  discount?: number;             // Diskon
+  tax?: number;                  // Pajak
+  shippingCost?: number;         // Ongkos Kirim
+  totalCost?: number;
+  totalPurchase?: number;        // Total Pembelian
+  fundingSource?: 'Kas Operasional' | 'Rekening Bank Mandiri' | 'Rekening Bank Artha Graha' | 'Modal Pemilik / Investor';
+  paymentMethod?: 'Transfer' | 'Tunai' | 'QRIS' | 'EDC';
+  targetLocation?: string;       // Lokasi
+  pic?: string;                  // PIC
+  status: ProcurementStatus;     // Status Pengadaan
+  invoiceDoc?: string;           // Invoice
+  photo?: string;                // Foto
+  notes?: string;                // Catatan
+  generatedAssetIds?: string[];
+  financeTrxId?: string;
+  items?: Array<{
+    category: AssetCategory;
+    name: string;
+    brand: string;
+    model?: string;
+    serialNumber?: string;
+    estimatedPrice: number;
+    quantity: number;
+  }>;
+}
+
+export interface AssetMovement {
+  id: string;                    // ID Perpindahan
+  assetId: string;
+  assetCode: string;
+  assetName: string;
+  oldLocation: string;
+  newLocation: string;
+  fromLocation?: string;
+  toLocation?: string;
+  originLocation?: string;
+  destinationLocation?: string;
+  date: string;
+  pic: string;
+  reason: string;
+  notes?: string;
+}
+
+export interface AssetDisposal {
+  id: string;                    // ID Disposal
+  assetId: string;
+  assetCode: string;
+  assetName: string;
+  disposalDate: string;
+  date?: string;
+  reason: string;
+  condition: string;
+  method?: string;
+  bookValue?: number;            // Nilai Buku jika tersedia
+  residualValue?: number;
+  saleValue?: number;            // Harga Jual jika dijual
+  recoveryAmount?: number;
+  buyer?: string;                // Pembeli
+  proofDoc?: string;             // Bukti
+  approvedBy: string;            // Approval
+  notes?: string;
+}
+
+export interface InventoryAuditLog {
+  id: string;
+  userName: string;
+  userRole: string;
+  userId?: string;
+  timestamp?: string;
+  date?: string;
+  time?: string;
+  action?: string;
+  targetType?: string;
+  targetId?: string;
+  targetName?: string;
+  assetId?: string;
+  assetCode?: string;
+  assetName?: string;
+  activity?: string;
+  details?: string;
+  costImpact?: number;
+  beforeData?: string;
+  afterData?: string;
+}
+
+export interface ApprovalThresholdConfig {
+  staffMaxAmount: number;        // e.g. 500,000 (Staff/Kasir)
+  adminMaxAmount: number;        // e.g. 2,500,000 (Admin/Manager)
+  requireManagementAbove: number;// e.g. 2,500,000 (Level Management)
+}
+

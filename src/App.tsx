@@ -1,0 +1,2005 @@
+import React, { useState, useEffect } from 'react';
+import {
+  INITIAL_USERS,
+  INITIAL_MEMBERS,
+  INITIAL_PRODUCTS,
+  INITIAL_PACKAGES,
+  INITIAL_TRANSACTIONS,
+  INITIAL_SCHEDULES,
+  INITIAL_STUDIO_CLASSES,
+  INITIAL_LEADS,
+  INITIAL_FOLLOW_UPS,
+  INITIAL_ATTENDANCE,
+  INITIAL_STAFF_ATTENDANCE,
+  INITIAL_PETTY_CASH,
+  INITIAL_CLOSING,
+  INITIAL_PT_PURCHASES
+} from './data/initialData';
+import {
+  User,
+  Member,
+  Product,
+  PackageItem,
+  Transaction,
+  Schedule,
+  StudioClass,
+  Lead,
+  FollowUpLog,
+  Attendance,
+  StaffAttendance,
+  PettyCash,
+  DailyClosingRecord,
+  PTPurchaseRecord,
+  BundlePackage,
+  BundleItem,
+  MemberMembershipRecord,
+  TrainerCommissionRecord,
+  GymAsset,
+  AssetMaintenance,
+  DamageReport,
+  WorkOrder,
+  Sparepart,
+  AssetProcurement,
+  AssetMovement,
+  AssetDisposal,
+  InventoryAuditLog,
+  ApprovalThresholdConfig,
+  MemberFreezeRecord,
+  MembershipStatus
+} from './types';
+import {
+  INITIAL_BUNDLE_PACKAGES,
+  INITIAL_MEMBER_MEMBERSHIPS,
+  INITIAL_TRAINER_COMMISSIONS
+} from './data/bundlingData';
+import {
+  INITIAL_GYM_ASSETS,
+  INITIAL_MAINTENANCES,
+  INITIAL_DAMAGE_REPORTS,
+  INITIAL_WORK_ORDERS,
+  INITIAL_SPAREPARTS,
+  INITIAL_PROCUREMENTS,
+  INITIAL_ASSET_MOVEMENTS,
+  INITIAL_ASSET_DISPOSALS,
+  INITIAL_INVENTORY_AUDIT_LOGS,
+  INITIAL_APPROVAL_CONFIG
+} from './data/inventoryData';
+import { Header } from './components/Header';
+import { Sidebar, ActiveTab } from './components/Sidebar';
+import { DashboardView } from './components/DashboardView';
+import { MembershipView } from './components/MembershipView';
+import { POSView } from './components/POSView';
+import { ProductManagementView } from './components/ProductManagementView';
+import { AttendanceView } from './components/AttendanceView';
+import { JadwalPTView } from './components/JadwalPTView';
+import { CRMView } from './components/CRMView';
+import { MasterDataView } from './components/MasterDataView';
+import { FinanceView } from './components/FinanceView';
+import { HRPayrollView } from './components/HRPayrollView';
+import { LeaderPTDashboardView } from './components/LeaderPTDashboardView';
+import { TrainerPackagePerformanceView } from './components/TrainerPackagePerformanceView';
+import { TrainerPortalView } from './components/TrainerPortalView';
+import { BundlingReportsView } from './components/BundlingReportsView';
+import { InventoryView } from './components/InventoryView';
+import { MembershipFreezeView } from './components/MembershipFreezeView';
+import { INITIAL_FREEZE_RECORDS } from './data/freezeData';
+
+import { ReceiptModal } from './components/ReceiptModal';
+import { IDCardModal } from './components/IDCardModal';
+import { MemberDetailModal } from './components/MemberDetailModal';
+import { SignatureModal } from './components/SignatureModal';
+import { BundlingManagerModal } from './components/BundlingManagerModal';
+import { FreezeMemberModal } from './components/FreezeMemberModal';
+import { UnfreezeMemberModal } from './components/UnfreezeMemberModal';
+import { LoginPage } from './components/LoginPage';
+import { APP_TODAY, formatRp } from './utils/formatters';
+import { testConnection, auth, onAuthStateChanged, logOutFirebase } from './lib/firebase';
+import {
+  saveMemberToFirestore,
+  saveTransactionToFirestore,
+  saveAttendanceToFirestore,
+  saveLeadToFirestore,
+  subscribeMembers,
+  subscribeTransactions,
+  seedInitialFirestoreData
+} from './lib/firestoreService';
+
+export default function App() {
+  // Navigation
+  const [activeTab, setActiveTab] = useState<ActiveTab>('dashboard');
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [firebaseConnected, setFirebaseConnected] = useState(true);
+
+  // State with LocalStorage fallbacks and mock data synchronization
+  const [staffUsers, setStaffUsers] = useState<User[]>(() => {
+    const saved = localStorage.getItem('rfa_staff');
+    if (!saved) return INITIAL_USERS;
+    try {
+      const parsed: User[] = JSON.parse(saved);
+      const existingIds = new Set(parsed.map((u) => u.id));
+      const missing = INITIAL_USERS.filter((u) => !existingIds.has(u.id));
+      return missing.length > 0 ? [...parsed, ...missing] : parsed;
+    } catch {
+      return INITIAL_USERS;
+    }
+  });
+
+  const [currentUser, setCurrentUser] = useState<User | null>(() => {
+    const sessionActive = localStorage.getItem('rfa_session_active');
+    const savedUserId = localStorage.getItem('rfa_current_user_id');
+    if (sessionActive === 'true' && savedUserId) {
+      const saved = localStorage.getItem('rfa_staff');
+      const pool = saved ? JSON.parse(saved) : INITIAL_USERS;
+      const found = pool.find((u: User) => u.id === savedUserId);
+      if (found) return found;
+    }
+    // Default to null so user lands on the newly created Login Page
+    return null;
+  });
+
+  const [members, setMembers] = useState<Member[]>(() => {
+    const saved = localStorage.getItem('rfa_members');
+    if (!saved) return INITIAL_MEMBERS;
+    try {
+      const parsed: Member[] = JSON.parse(saved);
+      const existingIds = new Set(parsed.map((m) => m.id));
+      const missing = INITIAL_MEMBERS.filter((m) => !existingIds.has(m.id));
+      return missing.length > 0 ? [...parsed, ...missing] : parsed;
+    } catch {
+      return INITIAL_MEMBERS;
+    }
+  });
+
+  const [products, setProducts] = useState<Product[]>(() => {
+    const saved = localStorage.getItem('rfa_products');
+    if (!saved) return INITIAL_PRODUCTS;
+    try {
+      const parsed: Product[] = JSON.parse(saved);
+      const existingIds = new Set(parsed.map((p) => p.id));
+      const missing = INITIAL_PRODUCTS.filter((p) => !existingIds.has(p.id));
+      return [...parsed, ...missing];
+    } catch {
+      return INITIAL_PRODUCTS;
+    }
+  });
+
+  const [packages, setPackages] = useState<PackageItem[]>(() => {
+    const saved = localStorage.getItem('rfa_packages');
+    return saved ? JSON.parse(saved) : INITIAL_PACKAGES;
+  });
+
+  const [transactions, setTransactions] = useState<Transaction[]>(() => {
+    const saved = localStorage.getItem('rfa_transactions');
+    if (!saved) return INITIAL_TRANSACTIONS;
+    try {
+      const parsed: Transaction[] = JSON.parse(saved);
+      const existingIds = new Set(parsed.map((t) => t.id));
+      const missing = INITIAL_TRANSACTIONS.filter((t) => !existingIds.has(t.id));
+      return missing.length > 0 ? [...parsed, ...missing] : parsed;
+    } catch {
+      return INITIAL_TRANSACTIONS;
+    }
+  });
+
+  const [targetPiutangTrxId, setTargetPiutangTrxId] = useState<string | null>(null);
+
+  const [schedules, setSchedules] = useState<Schedule[]>(() => {
+    const saved = localStorage.getItem('rfa_schedules');
+    if (!saved) return INITIAL_SCHEDULES;
+    try {
+      const parsed: Schedule[] = JSON.parse(saved);
+      const existingIds = new Set(parsed.map((s) => s.id));
+      const missing = INITIAL_SCHEDULES.filter((s) => !existingIds.has(s.id));
+      return missing.length > 0 ? [...parsed, ...missing] : parsed;
+    } catch {
+      return INITIAL_SCHEDULES;
+    }
+  });
+
+  const [studioClasses, setStudioClasses] = useState<StudioClass[]>(() => {
+    const saved = localStorage.getItem('rfa_studioclasses');
+    return saved ? JSON.parse(saved) : INITIAL_STUDIO_CLASSES;
+  });
+
+  const [leads, setLeads] = useState<Lead[]>(() => {
+    const saved = localStorage.getItem('rfa_leads');
+    return saved ? JSON.parse(saved) : INITIAL_LEADS;
+  });
+
+  const [followUps, setFollowUps] = useState<FollowUpLog[]>(() => {
+    const saved = localStorage.getItem('rfa_followups');
+    return saved ? JSON.parse(saved) : INITIAL_FOLLOW_UPS;
+  });
+
+  const [attendances, setAttendances] = useState<Attendance[]>(() => {
+    const saved = localStorage.getItem('rfa_attendance');
+    return saved ? JSON.parse(saved) : INITIAL_ATTENDANCE;
+  });
+
+  const [staffAttendances, setStaffAttendances] = useState<StaffAttendance[]>(() => {
+    const saved = localStorage.getItem('rfa_staff_att');
+    if (!saved) return INITIAL_STAFF_ATTENDANCE;
+    try {
+      const parsed: StaffAttendance[] = JSON.parse(saved);
+      const existingIds = new Set(parsed.map((sa) => sa.id));
+      const missing = INITIAL_STAFF_ATTENDANCE.filter((sa) => !existingIds.has(sa.id));
+      return missing.length > 0 ? [...parsed, ...missing] : parsed;
+    } catch {
+      return INITIAL_STAFF_ATTENDANCE;
+    }
+  });
+
+  const [pettyCashList, setPettyCashList] = useState<PettyCash[]>(() => {
+    const saved = localStorage.getItem('rfa_pettycash');
+    if (!saved) return INITIAL_PETTY_CASH;
+    try {
+      const parsed: PettyCash[] = JSON.parse(saved);
+      const hasValidFormat = Array.isArray(parsed) && parsed.length > 0 && Array.isArray(parsed[0]?.expenses);
+      if (!hasValidFormat) {
+        return INITIAL_PETTY_CASH;
+      }
+      const existingIds = new Set(parsed.map((p) => p.id));
+      const missing = INITIAL_PETTY_CASH.filter((p) => !existingIds.has(p.id));
+      return missing.length > 0 ? [...parsed, ...missing] : parsed;
+    } catch {
+      return INITIAL_PETTY_CASH;
+    }
+  });
+
+  const [closingRecords, setClosingRecords] = useState<DailyClosingRecord[]>(() => {
+    const saved = localStorage.getItem('rfa_closing');
+    return saved ? JSON.parse(saved) : INITIAL_CLOSING;
+  });
+
+  const [ptPurchases, setPtPurchases] = useState<PTPurchaseRecord[]>(() => {
+    const saved = localStorage.getItem('rfa_pt_purchases');
+    if (!saved) return INITIAL_PT_PURCHASES;
+    try {
+      const parsed: PTPurchaseRecord[] = JSON.parse(saved);
+      const existingIds = new Set(parsed.map((p) => p.id));
+      const missing = INITIAL_PT_PURCHASES.filter((p) => !existingIds.has(p.id));
+      return missing.length > 0 ? [...parsed, ...missing] : parsed;
+    } catch {
+      return INITIAL_PT_PURCHASES;
+    }
+  });
+
+  useEffect(() => {
+    localStorage.setItem('rfa_pt_purchases', JSON.stringify(ptPurchases));
+  }, [ptPurchases]);
+
+  // Bundling Package State & Modals
+  const [bundlePackages, setBundlePackages] = useState<BundlePackage[]>(() => {
+    const saved = localStorage.getItem('rfa_bundle_packages');
+    if (!saved) return INITIAL_BUNDLE_PACKAGES;
+    try {
+      const parsed: BundlePackage[] = JSON.parse(saved);
+      const existingIds = new Set(parsed.map((b) => b.bundleId));
+      const missing = INITIAL_BUNDLE_PACKAGES.filter((b) => !existingIds.has(b.bundleId));
+      return missing.length > 0 ? [...parsed, ...missing] : parsed;
+    } catch {
+      return INITIAL_BUNDLE_PACKAGES;
+    }
+  });
+
+  const [memberMemberships, setMemberMemberships] = useState<MemberMembershipRecord[]>(() => {
+    const saved = localStorage.getItem('rfa_member_memberships');
+    if (!saved) return INITIAL_MEMBER_MEMBERSHIPS;
+    try {
+      const parsed: MemberMembershipRecord[] = JSON.parse(saved);
+      const existingIds = new Set(parsed.map((m) => m.id || m.membershipRecordId));
+      const missing = INITIAL_MEMBER_MEMBERSHIPS.filter((m) => !existingIds.has(m.id || m.membershipRecordId));
+      return missing.length > 0 ? [...parsed, ...missing] : parsed;
+    } catch {
+      return INITIAL_MEMBER_MEMBERSHIPS;
+    }
+  });
+
+  const [trainerCommissions, setTrainerCommissions] = useState<TrainerCommissionRecord[]>(() => {
+    const saved = localStorage.getItem('rfa_trainer_commissions');
+    if (!saved) return INITIAL_TRAINER_COMMISSIONS;
+    try {
+      const parsed: TrainerCommissionRecord[] = JSON.parse(saved);
+      const existingIds = new Set(parsed.map((c) => c.id || c.commissionId));
+      const missing = INITIAL_TRAINER_COMMISSIONS.filter((c) => !existingIds.has(c.id || c.commissionId));
+      return missing.length > 0 ? [...parsed, ...missing] : parsed;
+    } catch {
+      return INITIAL_TRAINER_COMMISSIONS;
+    }
+  });
+
+  const [isBundlingModalOpen, setIsBundlingModalOpen] = useState(false);
+
+  useEffect(() => {
+    localStorage.setItem('rfa_bundle_packages', JSON.stringify(bundlePackages));
+  }, [bundlePackages]);
+
+  useEffect(() => {
+    localStorage.setItem('rfa_member_memberships', JSON.stringify(memberMemberships));
+  }, [memberMemberships]);
+
+  useEffect(() => {
+    localStorage.setItem('rfa_trainer_commissions', JSON.stringify(trainerCommissions));
+  }, [trainerCommissions]);
+
+  // ==================== MEMBERSHIP FREEZE / UNFREEZE STATE ====================
+  const [freezeRecords, setFreezeRecords] = useState<MemberFreezeRecord[]>(() => {
+    const saved = localStorage.getItem('rfa_freeze_records');
+    if (!saved) return INITIAL_FREEZE_RECORDS;
+    try {
+      const parsed: MemberFreezeRecord[] = JSON.parse(saved);
+      const existingIds = new Set(parsed.map((r) => r.id));
+      const missing = INITIAL_FREEZE_RECORDS.filter((r) => !existingIds.has(r.id));
+      return missing.length > 0 ? [...parsed, ...missing] : parsed;
+    } catch {
+      return INITIAL_FREEZE_RECORDS;
+    }
+  });
+
+  const [activeFreezeMember, setActiveFreezeMember] = useState<Member | null>(null);
+  const [activeUnfreezeMember, setActiveUnfreezeMember] = useState<Member | null>(null);
+  const [activeUnfreezeRecord, setActiveUnfreezeRecord] = useState<MemberFreezeRecord | null>(null);
+
+  useEffect(() => {
+    localStorage.setItem('rfa_freeze_records', JSON.stringify(freezeRecords));
+  }, [freezeRecords]);
+
+  // ==================== INVENTARIS & ASET STATE ====================
+  const [gymAssets, setGymAssets] = useState<GymAsset[]>(() => {
+    try {
+      const saved = localStorage.getItem('rfa_gym_assets');
+      return saved ? JSON.parse(saved) : INITIAL_GYM_ASSETS;
+    } catch {
+      return INITIAL_GYM_ASSETS;
+    }
+  });
+
+  const [assetMaintenances, setAssetMaintenances] = useState<AssetMaintenance[]>(() => {
+    try {
+      const saved = localStorage.getItem('rfa_asset_maintenances');
+      return saved ? JSON.parse(saved) : INITIAL_MAINTENANCES;
+    } catch {
+      return INITIAL_MAINTENANCES;
+    }
+  });
+
+  const [damageReports, setDamageReports] = useState<DamageReport[]>(() => {
+    try {
+      const saved = localStorage.getItem('rfa_damage_reports');
+      return saved ? JSON.parse(saved) : INITIAL_DAMAGE_REPORTS;
+    } catch {
+      return INITIAL_DAMAGE_REPORTS;
+    }
+  });
+
+  const [workOrders, setWorkOrders] = useState<WorkOrder[]>(() => {
+    try {
+      const saved = localStorage.getItem('rfa_work_orders');
+      return saved ? JSON.parse(saved) : INITIAL_WORK_ORDERS;
+    } catch {
+      return INITIAL_WORK_ORDERS;
+    }
+  });
+
+  const [spareparts, setSpareparts] = useState<Sparepart[]>(() => {
+    try {
+      const saved = localStorage.getItem('rfa_spareparts');
+      return saved ? JSON.parse(saved) : INITIAL_SPAREPARTS;
+    } catch {
+      return INITIAL_SPAREPARTS;
+    }
+  });
+
+  const [assetProcurements, setAssetProcurements] = useState<AssetProcurement[]>(() => {
+    try {
+      const saved = localStorage.getItem('rfa_asset_procurements');
+      return saved ? JSON.parse(saved) : INITIAL_PROCUREMENTS;
+    } catch {
+      return INITIAL_PROCUREMENTS;
+    }
+  });
+
+  const [assetMovements, setAssetMovements] = useState<AssetMovement[]>(() => {
+    try {
+      const saved = localStorage.getItem('rfa_asset_movements');
+      return saved ? JSON.parse(saved) : INITIAL_ASSET_MOVEMENTS;
+    } catch {
+      return INITIAL_ASSET_MOVEMENTS;
+    }
+  });
+
+  const [assetDisposals, setAssetDisposals] = useState<AssetDisposal[]>(() => {
+    try {
+      const saved = localStorage.getItem('rfa_asset_disposals');
+      return saved ? JSON.parse(saved) : INITIAL_ASSET_DISPOSALS;
+    } catch {
+      return INITIAL_ASSET_DISPOSALS;
+    }
+  });
+
+  const [inventoryAuditLogs, setInventoryAuditLogs] = useState<InventoryAuditLog[]>(() => {
+    try {
+      const saved = localStorage.getItem('rfa_inventory_audit_logs');
+      return saved ? JSON.parse(saved) : INITIAL_INVENTORY_AUDIT_LOGS;
+    } catch {
+      return INITIAL_INVENTORY_AUDIT_LOGS;
+    }
+  });
+
+  const [approvalConfig, setApprovalConfig] = useState<ApprovalThresholdConfig>(() => {
+    try {
+      const saved = localStorage.getItem('rfa_approval_config');
+      return saved ? JSON.parse(saved) : INITIAL_APPROVAL_CONFIG;
+    } catch {
+      return INITIAL_APPROVAL_CONFIG;
+    }
+  });
+
+  // Sync to localStorage
+  useEffect(() => {
+    localStorage.setItem('rfa_gym_assets', JSON.stringify(gymAssets));
+  }, [gymAssets]);
+
+  useEffect(() => {
+    localStorage.setItem('rfa_asset_maintenances', JSON.stringify(assetMaintenances));
+  }, [assetMaintenances]);
+
+  useEffect(() => {
+    localStorage.setItem('rfa_damage_reports', JSON.stringify(damageReports));
+  }, [damageReports]);
+
+  useEffect(() => {
+    localStorage.setItem('rfa_work_orders', JSON.stringify(workOrders));
+  }, [workOrders]);
+
+  useEffect(() => {
+    localStorage.setItem('rfa_spareparts', JSON.stringify(spareparts));
+  }, [spareparts]);
+
+  useEffect(() => {
+    localStorage.setItem('rfa_asset_procurements', JSON.stringify(assetProcurements));
+  }, [assetProcurements]);
+
+  useEffect(() => {
+    localStorage.setItem('rfa_asset_movements', JSON.stringify(assetMovements));
+  }, [assetMovements]);
+
+  useEffect(() => {
+    localStorage.setItem('rfa_asset_disposals', JSON.stringify(assetDisposals));
+  }, [assetDisposals]);
+
+  useEffect(() => {
+    localStorage.setItem('rfa_inventory_audit_logs', JSON.stringify(inventoryAuditLogs));
+  }, [inventoryAuditLogs]);
+
+  useEffect(() => {
+    localStorage.setItem('rfa_approval_config', JSON.stringify(approvalConfig));
+  }, [approvalConfig]);
+
+  // Inventory Helper: Add Audit Log
+  const addInventoryAuditLog = (
+    action: string,
+    targetType: 'ASSET' | 'MAINTENANCE' | 'DAMAGE_REPORT' | 'WORK_ORDER' | 'SPAREPART' | 'PROCUREMENT' | 'MOVEMENT' | 'DISPOSAL',
+    targetId: string,
+    targetName: string,
+    details: string,
+    costImpact: number = 0
+  ) => {
+    const newLog: InventoryAuditLog = {
+      id: 'LOG-' + Math.floor(100000 + Math.random() * 900000),
+      timestamp: new Date().toISOString().replace('T', ' ').substring(0, 19),
+      userId: currentUser?.id || 'U-SYS',
+      userName: currentUser?.name || 'Sistem',
+      userRole: currentUser?.role || 'admin',
+      action,
+      targetType,
+      targetId,
+      targetName,
+      details,
+      costImpact
+    };
+    setInventoryAuditLogs((prev) => [newLog, ...prev]);
+  };
+
+  // Handler: Save Asset
+  const handleSaveAsset = (asset: GymAsset, isNew: boolean) => {
+    if (isNew) {
+      setGymAssets((prev) => [asset, ...prev]);
+      addInventoryAuditLog('TAMBAH_ASET', 'ASSET', asset.id, asset.name, `Aset baru didaftarkan: ${asset.code} (${asset.location})`, asset.purchasePrice);
+      showToast('Aset Tersimpan', `Aset ${asset.name} (${asset.code}) berhasil didaftarkan.`, 'success');
+    } else {
+      setGymAssets((prev) => prev.map((a) => (a.id === asset.id ? asset : a)));
+      addInventoryAuditLog('UPDATE_ASET', 'ASSET', asset.id, asset.name, `Data aset ${asset.code} diperbarui.`);
+      showToast('Aset Diperbarui', `Perubahan data aset ${asset.name} telah disimpan.`, 'success');
+    }
+  };
+
+  // Handler: Save Maintenance
+  const handleSaveMaintenance = (m: AssetMaintenance, isNew: boolean) => {
+    if (isNew) {
+      setAssetMaintenances((prev) => [m, ...prev]);
+      setGymAssets((prev) =>
+        prev.map((a) => {
+          if (a.id === m.assetId) {
+            return {
+              ...a,
+              lastMaintenance: m.scheduledDate,
+              nextMaintenance: m.nextScheduledDate || a.nextMaintenance,
+              condition: m.status === 'SELESAI' ? 'BAIK' : a.condition,
+              status: m.status === 'SELESAI' ? 'OPERASIONAL' : 'DALAM_PERAWATAN'
+            };
+          }
+          return a;
+        })
+      );
+      addInventoryAuditLog('JADWAL_MAINTENANCE', 'MAINTENANCE', m.id, m.assetName, `Perawatan dijadwalkan: ${m.title} (${m.type})`, m.cost || 0);
+      showToast('Jadwal Perawatan Dibuat', `Jadwal perawatan untuk ${m.assetName} berhasil disimpan.`, 'success');
+    } else {
+      setAssetMaintenances((prev) => prev.map((item) => (item.id === m.id ? m : item)));
+      if (m.status === 'SELESAI') {
+        setGymAssets((prev) =>
+          prev.map((a) => (a.id === m.assetId ? { ...a, status: 'OPERASIONAL', condition: 'BAIK' } : a))
+        );
+      }
+      addInventoryAuditLog('UPDATE_MAINTENANCE', 'MAINTENANCE', m.id, m.assetName, `Status perawatan diubah menjadi ${m.status}`, m.cost || 0);
+      showToast('Perawatan Diperbarui', `Data perawatan telah diperbarui.`, 'success');
+    }
+  };
+
+  // Handler: Save Damage Report
+  const handleSaveDamageReport = (report: DamageReport) => {
+    setDamageReports((prev) => {
+      const exists = prev.some((r) => r.id === report.id);
+      if (exists) {
+        return prev.map((r) => (r.id === report.id ? report : r));
+      }
+      return [report, ...prev];
+    });
+
+    setGymAssets((prev) =>
+      prev.map((a) => {
+        if (a.id === report.assetId) {
+          const isHeavy = report.severity === 'BERAT' || report.severity === 'TOTAL';
+          return {
+            ...a,
+            condition: isHeavy ? 'RUSAK_BERAT' : 'RUSAK_RINGAN',
+            status: isHeavy ? 'RUSAK' : a.status
+          };
+        }
+        return a;
+      })
+    );
+
+    addInventoryAuditLog('LAPORAN_KERUSAKAN', 'DAMAGE_REPORT', report.id, report.assetName, `Laporan kerusakan baru (${report.severity}): ${report.issueDescription}`);
+    showToast('Laporan Kerusakan Dibuat', `Laporan kerusakan untuk ${report.assetName} telah dicatat.`, 'warning');
+  };
+
+  // Handler: Save Work Order
+  const handleSaveWorkOrder = (wo: WorkOrder) => {
+    setWorkOrders((prev) => {
+      const exists = prev.some((w) => w.id === wo.id);
+      if (exists) {
+        return prev.map((w) => (w.id === wo.id ? wo : w));
+      }
+      return [wo, ...prev];
+    });
+
+    if (wo.status === 'SELESAI') {
+      setGymAssets((prev) =>
+        prev.map((a) => (a.id === wo.assetId ? { ...a, status: 'OPERASIONAL', condition: 'BAIK' } : a))
+      );
+      if (wo.damageReportId) {
+        setDamageReports((prev) =>
+          prev.map((dr) => (dr.id === wo.damageReportId ? { ...dr, status: 'SELESAI' } : dr))
+        );
+      }
+    }
+
+    addInventoryAuditLog('WORK_ORDER', 'WORK_ORDER', wo.id, wo.woNumber || wo.id, `SPK ${wo.woNumber || wo.id} diupdate (${wo.status}) - Biaya: ${formatRp(wo.actualCost || wo.estimatedCost)}`, wo.actualCost || wo.estimatedCost);
+    showToast('SPK Disimpan', `Surat Perintah Kerja ${wo.woNumber || wo.id} berhasil disimpan.`, 'success');
+  };
+
+  // Handler: Save Procurement
+  const handleSaveProcurement = (proc: AssetProcurement, shouldGenerateAssets: boolean) => {
+    setAssetProcurements((prev) => {
+      const exists = prev.some((p) => p.id === proc.id);
+      if (exists) {
+        return prev.map((p) => (p.id === proc.id ? proc : p));
+      }
+      return [proc, ...prev];
+    });
+
+    if (shouldGenerateAssets && (proc.status === 'DITERIMA' || proc.status === 'DISETUJUI_OWNER' || proc.status === 'DISETUJUI_MANAGER')) {
+      const newAssets: GymAsset[] = (proc.items || []).map((item) => ({
+        id: 'AST-' + Math.floor(100000 + Math.random() * 900000),
+        assetCode: `RFA-AST-${item.category.substring(0, 3).toUpperCase()}-${Math.floor(1000 + Math.random() * 9000)}`,
+        code: `RFA-AST-${item.category.substring(0, 3).toUpperCase()}-${Math.floor(1000 + Math.random() * 9000)}`,
+        name: item.name,
+        category: item.category,
+        brand: item.brand,
+        model: item.model || item.name,
+        serialNumber: item.serialNumber || `SN-${Math.floor(1000000 + Math.random() * 9000000)}`,
+        purchaseDate: proc.orderDate || proc.date || new Date().toISOString().split('T')[0],
+        purchasePrice: item.estimatedPrice,
+        vendor: proc.vendorName || proc.supplier,
+        supplier: proc.vendorName || proc.supplier,
+        vendorPhone: proc.vendorPhone,
+        warrantyMonths: 12,
+        warrantyExpiry: new Date(Date.now() + 365 * 24 * 3600 * 1000).toISOString().split('T')[0],
+        location: proc.targetLocation || 'Main Gym Floor',
+        status: 'OPERASIONAL',
+        condition: 'BARU',
+        maintenanceFrequencyMonths: 1,
+        nextMaintenance: new Date(Date.now() + 30 * 24 * 3600 * 1000).toISOString().split('T')[0],
+        depreciationYears: 5,
+        salvageValue: Math.round(item.estimatedPrice * 0.1),
+        accumulatedDepreciation: 0,
+        currentBookValue: item.estimatedPrice,
+        notes: `Pengadaan: ${proc.poNumber || proc.id} (${proc.title || proc.assetName || ''})`,
+        specifications: { Power: '220V', Capacity: 'Standard' }
+      }));
+      setGymAssets((prev) => [...newAssets, ...prev]);
+    }
+
+    addInventoryAuditLog('PENGADAAN_ASET', 'PROCUREMENT', proc.id, proc.poNumber || proc.id, `Pengadaan ${proc.poNumber || proc.id} (${proc.title || proc.assetName || ''}) - Status: ${proc.status}`, proc.totalCost || proc.totalPurchase);
+    showToast('Pengadaan Tersimpan', `Pengajuan pengadaan ${proc.poNumber || proc.id} berhasil dicatat.`, 'success');
+  };
+
+  // Handler: Save Sparepart
+  const handleSaveSparepart = (sp: Sparepart, isNew: boolean, restockCost?: number) => {
+    if (isNew) {
+      setSpareparts((prev) => [sp, ...prev]);
+      addInventoryAuditLog('TAMBAH_SPAREPART', 'SPAREPART', sp.id, sp.name, `Sparepart ${sp.code || sp.sparepartCode} ditambahkan`, (sp.unitCost || sp.unitPrice || 0) * sp.stock);
+      showToast('Sparepart Ditambahkan', `Suku cadang ${sp.name} berhasil didaftarkan.`, 'success');
+    } else {
+      setSpareparts((prev) => prev.map((s) => (s.id === sp.id ? sp : s)));
+      addInventoryAuditLog('UPDATE_SPAREPART', 'SPAREPART', sp.id, sp.name, `Stok sparepart ${sp.code || sp.sparepartCode} diperbarui: ${sp.stock} ${sp.unit || 'pcs'}`, restockCost || 0);
+      showToast('Sparepart Diperbarui', `Data suku cadang ${sp.name} berhasil disimpan.`, 'success');
+    }
+  };
+
+  // Handler: Save Movement / Mutasi
+  const handleSaveMovement = (mov: AssetMovement) => {
+    const destLoc = mov.toLocation || mov.newLocation || 'Main Gym Floor';
+    setAssetMovements((prev) => [mov, ...prev]);
+    setGymAssets((prev) =>
+      prev.map((a) => (a.id === mov.assetId ? { ...a, location: destLoc } : a))
+    );
+    addInventoryAuditLog('MUTASI_ASET', 'MOVEMENT', mov.id, mov.assetName, `Mutasi dari ${mov.fromLocation || mov.oldLocation} ke ${destLoc}`);
+    showToast('Mutasi Aset Tercatat', `Aset ${mov.assetName} dipindahkan ke ${destLoc}.`, 'info');
+  };
+
+  // Handler: Save Disposal
+  const handleSaveDisposal = (disp: AssetDisposal) => {
+    setAssetDisposals((prev) => [disp, ...prev]);
+    setGymAssets((prev) =>
+      prev.map((a) => (a.id === disp.assetId ? { ...a, status: 'DISPOSAL', condition: 'AFKIR' } : a))
+    );
+    addInventoryAuditLog('DISPOSAL_ASET', 'DISPOSAL', disp.id, disp.assetName, `Penghapusan aset: ${disp.method} - Alasan: ${disp.reason}`, disp.recoveryAmount || 0);
+    showToast('Disposal Aset Dicatat', `Aset ${disp.assetName} telah dicatat dalam arsip penghapusan/disposal.`, 'warning');
+  };
+
+  // Handler: Save Approval Config
+  const handleSaveApprovalConfig = (config: ApprovalThresholdConfig) => {
+    setApprovalConfig(config);
+    addInventoryAuditLog('UPDATE_CONFIG', 'PROCUREMENT', 'CONFIG', 'Batas Nominal Approval', `Batas nominal approval disesuaikan`);
+    showToast('Konfigurasi Disimpan', 'Batas nominal persetujuan pengadaan berhasil diubah.', 'success');
+  };
+
+  // Daily closing status
+  const [isStoreClosed, setIsStoreClosed] = useState<boolean>(() => {
+    return closingRecords.some((c) => c.date === APP_TODAY);
+  });
+
+  // Global Modals
+  const [activeReceipt, setActiveReceipt] = useState<Transaction | null>(null);
+  const [activeIDCardMember, setActiveIDCardMember] = useState<Member | null>(null);
+  const [activeDetailMember, setActiveDetailMember] = useState<Member | null>(null);
+
+  // Digital Signature Modal state for 3-party validation
+  const [sigModal, setSigModal] = useState<{
+    isOpen: boolean;
+    scheduleId: string;
+    role: 'valStaf' | 'valTrainer' | 'valMember' | null;
+    title: string;
+  }>({
+    isOpen: false,
+    scheduleId: '',
+    role: null,
+    title: ''
+  });
+
+  // Toast System
+  const [toast, setToast] = useState<{
+    show: boolean;
+    title: string;
+    message: string;
+    type: 'success' | 'error' | 'warning' | 'info';
+  }>({
+    show: false,
+    title: '',
+    message: '',
+    type: 'info'
+  });
+
+  const showToast = (
+    title: string,
+    message: string,
+    type: 'success' | 'error' | 'warning' | 'info' = 'info'
+  ) => {
+    setToast({ show: true, title, message, type });
+    setTimeout(() => {
+      setToast((prev) => ({ ...prev, show: false }));
+    }, 4000);
+  };
+
+  // Synchronize to localStorage
+  useEffect(() => {
+    localStorage.setItem('rfa_members', JSON.stringify(members));
+  }, [members]);
+
+  useEffect(() => {
+    localStorage.setItem('rfa_products', JSON.stringify(products));
+  }, [products]);
+
+  useEffect(() => {
+    localStorage.setItem('rfa_transactions', JSON.stringify(transactions));
+  }, [transactions]);
+
+  useEffect(() => {
+    localStorage.setItem('rfa_schedules', JSON.stringify(schedules));
+  }, [schedules]);
+
+  useEffect(() => {
+    localStorage.setItem('rfa_pettycash', JSON.stringify(pettyCashList));
+  }, [pettyCashList]);
+
+  useEffect(() => {
+    localStorage.setItem('rfa_closing', JSON.stringify(closingRecords));
+    setIsStoreClosed(closingRecords.some((c) => c.date === APP_TODAY));
+  }, [closingRecords]);
+
+  // Firebase Boot Connectivity Test & Cloud Firestore Synchronization
+  useEffect(() => {
+    // 1. Mandatory connection test
+    testConnection().then((connected) => {
+      setFirebaseConnected(connected);
+    });
+
+    let unsubMembers: (() => void) | undefined;
+    let unsubTrx: (() => void) | undefined;
+
+    // 2. Auth State Listener - Only attach onSnapshot listeners if auth is ready and user is authenticated
+    const unsubscribeAuth = onAuthStateChanged(auth, (fbUser) => {
+      if (fbUser) {
+        setFirebaseConnected(true);
+        // Seed initial mock records if cloud database is empty
+        seedInitialFirestoreData(INITIAL_MEMBERS, INITIAL_TRANSACTIONS).catch(() => {});
+
+        // Clean up previous listeners if any
+        if (unsubMembers) unsubMembers();
+        if (unsubTrx) unsubTrx();
+
+        // 3. Real-Time Cloud Subscribers (merges cloud changes)
+        try {
+          unsubMembers = subscribeMembers(
+            (cloudMembers) => {
+              if (cloudMembers && cloudMembers.length > 0) {
+                setMembers((prev) => {
+                  const map = new Map(prev.map((m) => [m.id, m]));
+                  cloudMembers.forEach((cm) => map.set(cm.id, { ...map.get(cm.id), ...cm }));
+                  return Array.from(map.values());
+                });
+              }
+            },
+            () => {}
+          );
+
+          unsubTrx = subscribeTransactions(
+            (cloudTrx) => {
+              if (cloudTrx && cloudTrx.length > 0) {
+                setTransactions((prev) => {
+                  const map = new Map(prev.map((t) => [t.id, t]));
+                  cloudTrx.forEach((ct) => map.set(ct.id, { ...map.get(ct.id), ...ct }));
+                  return Array.from(map.values());
+                });
+              }
+            },
+            () => {}
+          );
+        } catch (e) {
+          console.warn('Firestore subscription initialized in local fallback mode:', e);
+        }
+      } else {
+        // When user is not authenticated with Firebase Auth, clean up active cloud subscriptions
+        if (unsubMembers) {
+          unsubMembers();
+          unsubMembers = undefined;
+        }
+        if (unsubTrx) {
+          unsubTrx();
+          unsubTrx = undefined;
+        }
+      }
+    });
+
+    return () => {
+      unsubscribeAuth();
+      if (unsubMembers) unsubMembers();
+      if (unsubTrx) unsubTrx();
+    };
+  }, []);
+
+  // Handler: Switch User
+  const handleSwitchUser = (userId: string) => {
+    const found = staffUsers.find((u) => u.id === userId);
+    if (found) {
+      setCurrentUser(found);
+      localStorage.setItem('rfa_current_user_id', found.id);
+      if (found.role === 'leader_pt') {
+        setActiveTab('leader-pt');
+      } else if (found.role === 'pt') {
+        setActiveTab('trainer-portal');
+      }
+      showToast('Ganti Pengguna', `Beralih ke akun ${found.name} (${found.roleName}).`, 'info');
+    }
+  };
+
+  // Handler: Login
+  const handleLogin = (user: User, rememberMe = true) => {
+    if (rememberMe) {
+      localStorage.setItem('rfa_session_active', 'true');
+      localStorage.setItem('rfa_current_user_id', user.id);
+    } else {
+      localStorage.removeItem('rfa_session_active');
+      localStorage.setItem('rfa_current_user_id', user.id);
+    }
+    setCurrentUser(user);
+    if (user.role === 'leader_pt') {
+      setActiveTab('leader-pt');
+    } else if (user.role === 'pt') {
+      setActiveTab('trainer-portal');
+    } else if (user.role === 'kasir') {
+      setActiveTab('pos');
+    } else {
+      setActiveTab('dashboard');
+    }
+    showToast('Login Berhasil', `Selamat datang kembali, ${user.name}! Shift: ${user.shift}`, 'success');
+  };
+
+  // Handler: Logout
+  const handleLogout = () => {
+    localStorage.removeItem('rfa_session_active');
+    localStorage.removeItem('rfa_current_user_id');
+    setCurrentUser(null);
+    logOutFirebase().catch(() => {});
+    showToast('Logout Berhasil', 'Anda telah keluar dari sesi kerja. Silakan login kembali untuk melanjutkan.', 'info');
+  };
+
+  // Handler: Freeze Member (Cuti Sementara)
+  const handleFreezeMember = (record: MemberFreezeRecord) => {
+    setFreezeRecords((prev) => [record, ...prev]);
+
+    setMembers((prev) =>
+      prev.map((m) => {
+        if (m.id === record.memberId) {
+          const updated: Member = {
+            ...m,
+            status: 'FREEZE',
+            isFrozen: true,
+            freezeStartDate: record.startDate,
+            freezePlannedEndDate: record.plannedEndDate,
+            freezeReason: record.reason,
+            freezeDays: record.freezeDays || record.plannedDays,
+            previousStatus: (record.previousStatus as MembershipStatus) || 'AKTIF',
+            expired: record.newAdjustedExpiredDate || record.adjustedExpiryDate || m.expired,
+            lastFreezeRecordId: record.id
+          };
+          saveMemberToFirestore(updated).catch(() => {});
+          return updated;
+        }
+        return m;
+      })
+    );
+
+    const daysCount = record.freezeDays || record.plannedDays;
+    const newExp = record.newAdjustedExpiredDate || record.adjustedExpiryDate || '';
+    showToast(
+      'Membership Dibekukan (Freeze)',
+      `Keanggotaan ${record.memberName} berhasil di-freeze selama ${daysCount} hari hingga ${record.plannedEndDate}. Masa aktif otomatis disesuaikan menjadi ${newExp}.`,
+      'success'
+    );
+  };
+
+  // Handler: Unfreeze Member (Aktifkan Kembali)
+  const handleUnfreezeMember = (
+    memberId: string,
+    unfreezeDate: string,
+    actualDays: number,
+    newExpiredDate: string,
+    notes?: string
+  ) => {
+    const targetMember = members.find((m) => m.id === memberId);
+    if (!targetMember) return;
+
+    setFreezeRecords((prev) =>
+      prev.map((r) => {
+        if (
+          r.memberId === memberId &&
+          (r.status === 'FREEZE' || r.status === 'AKTIF' || r.id === targetMember.lastFreezeRecordId)
+        ) {
+          return {
+            ...r,
+            status: 'SELESAI',
+            actualEndDate: unfreezeDate,
+            actualDays: actualDays,
+            adjustedExpiryDate: newExpiredDate,
+            unfreezeNotes: notes || 'Diaktifkan kembali oleh staf',
+            unfreezeStaffId: currentUser?.id,
+            unfreezeStaffName: currentUser?.name
+          };
+        }
+        return r;
+      })
+    );
+
+    setMembers((prev) =>
+      prev.map((m) => {
+        if (m.id === memberId) {
+          const updated: Member = {
+            ...m,
+            status: 'AKTIF',
+            isFrozen: false,
+            freezeStartDate: undefined,
+            freezePlannedEndDate: undefined,
+            freezeReason: undefined,
+            freezeDays: undefined,
+            expired: newExpiredDate
+          };
+          saveMemberToFirestore(updated).catch(() => {});
+          return updated;
+        }
+        return m;
+      })
+    );
+
+    showToast(
+      'Membership Diaktifkan Kembali (Unfreeze)',
+      `Keanggotaan ${targetMember.name} kini kembali AKTIF. Durasi freeze aktual: ${actualDays} hari. Masa aktif baru: ${newExpiredDate}.`,
+      'success'
+    );
+  };
+
+  // Handler: Purchase Package
+  const handlePurchasePackage = (newTrx: Transaction, updatedMembersList: Member[]) => {
+    setTransactions([newTrx, ...transactions]);
+
+    // Cloud Firestore Sync
+    saveTransactionToFirestore(newTrx).catch(() => {});
+    updatedMembersList.forEach((m) => {
+      saveMemberToFirestore(m).catch(() => {});
+    });
+
+    // If this is a PT package, record it in ptPurchases for performance tracking
+    if (newTrx.type === 'PT') {
+      const matchedPkg = packages.find((p) => newTrx.desc.includes(p.name));
+      const totalSess = matchedPkg ? matchedPkg.value : 10;
+      const trainerObj = staffUsers.find((u) => u.id === newTrx.picId) || currentUser;
+
+      updatedMembersList.forEach((mem) => {
+        const memberTrainer = staffUsers.find((u) => u.id === mem.picId) || trainerObj;
+        const newPurchase: PTPurchaseRecord = {
+          id: 'PUR-' + Math.floor(100000 + Math.random() * 900000),
+          date: newTrx.date || APP_TODAY,
+          memberId: mem.id,
+          memberName: mem.name,
+          trainerId: memberTrainer?.id || mem.picId || 'S03',
+          trainerName: memberTrainer?.name || mem.picName || 'Citra Lestari',
+          packageId: matchedPkg?.id || 'PK09',
+          packageName: matchedPkg?.name || newTrx.desc.replace('Paket ', ''),
+          totalSessions: totalSess,
+          completedSessions: 0,
+          price: Math.round(newTrx.amount / (updatedMembersList.length || 1)),
+          status: 'Active',
+          notes: `Pembelian baru via ${newTrx.method}`
+        };
+        setPtPurchases((prev) => [newPurchase, ...prev]);
+      });
+    }
+
+    // If this is a Bundling package, generate MemberMembershipRecord, PTPurchaseRecord, and TrainerCommission
+    if (newTrx.type === 'Bundling') {
+      const bundle = bundlePackages.find(
+        (b) => b.bundleId === newTrx.bundleId || b.bundleCode === newTrx.bundleCode
+      );
+
+      if (bundle) {
+        // 1. Create MemberMembershipRecord for each participant
+        const membershipItem = bundle.items.find((i) => i.itemType === 'MEMBERSHIP');
+        const newMemberships: MemberMembershipRecord[] = updatedMembersList.map((mem) => ({
+          id: 'MEM-' + Math.floor(100000 + Math.random() * 900000),
+          membershipRecordId: 'MEM-' + Math.floor(100000 + Math.random() * 900000),
+          memberId: mem.id,
+          memberName: mem.name,
+          packageName: bundle.bundleName,
+          bundleId: bundle.bundleId,
+          bundleCode: bundle.bundleCode,
+          bundleName: bundle.bundleName,
+          bundleTrxId: newTrx.id,
+          transactionId: newTrx.id,
+          membershipPackageId: membershipItem?.membershipPackageId || 'PKG-BUNDLE-M',
+          startDate: newTrx.date || APP_TODAY,
+          endDate: mem.expired,
+          durationDays: bundle.durationDays || membershipItem?.duration || 30,
+          durationLabel: membershipItem?.durationLabel || '1 Bulan',
+          status: 'AKTIF',
+          createdDate: newTrx.date || APP_TODAY,
+          source: 'BUNDLING'
+        }));
+        setMemberMemberships((prev) => [...newMemberships, ...prev]);
+
+        // 2. Create PTPurchaseRecord if bundle includes PT
+        const ptItem = bundle.items.find((i) => i.itemType === 'PT');
+        if (ptItem) {
+          const ptSessions = ptItem.sessionCount || 2;
+          const newPtPurchases: PTPurchaseRecord[] = updatedMembersList.map((mem) => {
+            const memberTrainer = staffUsers.find((u) => u.id === mem.picId) || currentUser;
+            return {
+              id: 'PUR-BND-' + Math.floor(100000 + Math.random() * 900000),
+              date: newTrx.date || APP_TODAY,
+              memberId: mem.id,
+              memberName: mem.name,
+              trainerId: memberTrainer?.id || mem.picId || 'S03',
+              trainerName: memberTrainer?.name || mem.picName || 'Citra Lestari',
+              packageId: bundle.bundleId,
+              packageName: `${bundle.bundleName} (${ptSessions} Sesi PT)`,
+              totalSessions: ptSessions,
+              completedSessions: 0,
+              price: Math.round((bundle.ptComponentValue || 300000) / (updatedMembersList.length || 1)),
+              status: 'Active',
+              notes: `Paket Bundling ${bundle.bundleName} (${bundle.bundleCode})`,
+              source: 'BUNDLING',
+              bundleId: bundle.bundleId,
+              bundleCode: bundle.bundleCode,
+              ptComponentValue: bundle.ptComponentValue || 300000
+            };
+          });
+          setPtPurchases((prev) => [...newPtPurchases, ...prev]);
+
+          // 3. Create Trainer Commission record for the assigned trainer(s)
+          const newCommissions: TrainerCommissionRecord[] = updatedMembersList.map((mem) => {
+            const memberTrainer = staffUsers.find((u) => u.id === mem.picId) || currentUser;
+            const ptVal = Math.round((bundle.ptComponentValue || 300000) / (updatedMembersList.length || 1));
+            const rate = bundle.commissionRate || bundle.trainerCommissionRate || 20;
+            const commAmt = Math.round((ptVal * rate) / 100);
+
+            return {
+              id: 'COMM-' + Math.floor(100000 + Math.random() * 900000),
+              commissionId: 'COMM-' + Math.floor(100000 + Math.random() * 900000),
+              trxId: newTrx.id,
+              transactionId: newTrx.id,
+              bundleId: bundle.bundleId,
+              bundleCode: bundle.bundleCode,
+              bundleName: bundle.bundleName,
+              trainerId: memberTrainer?.id || mem.picId || 'S03',
+              trainerName: memberTrainer?.name || mem.picName || 'Trainer',
+              memberId: mem.id,
+              memberName: mem.name,
+              date: newTrx.date || APP_TODAY,
+              ptComponentValue: ptVal,
+              commissionRate: rate,
+              commissionAmount: commAmt,
+              paymentStatus: 'LUNAS',
+              validationStatus: 'PENDING',
+              valStatus: 'PENDING',
+              status: 'ACTIVE'
+            };
+          });
+          setTrainerCommissions((prev) => [...newCommissions, ...prev]);
+        }
+
+        // 4. Reduce stock for bonus product items
+        const productItems = bundle.items.filter((i) => i.itemType === 'PRODUCT' && i.productId);
+        if (productItems.length > 0) {
+          setProducts((prev) =>
+            prev.map((prod) => {
+              const matchedItem = productItems.find((pi) => pi.productId === prod.id);
+              if (matchedItem) {
+                const qtyToDeduct = (matchedItem.productQty || matchedItem.quantity || 1) * (updatedMembersList.length || 1);
+                return {
+                  ...prod,
+                  stock: Math.max(0, prod.stock - qtyToDeduct)
+                };
+              }
+              return prod;
+            })
+          );
+        }
+
+        showToast(
+          'Paket Bundling Diaktifkan',
+          `Membership & PT untuk ${bundle.bundleName} berhasil diaktifkan untuk ${updatedMembersList.map((m) => m.name).join(', ')}.`,
+          'success'
+        );
+      }
+    }
+
+    // Update members list
+    setMembers((prev) =>
+      prev.map((m) => {
+        const found = updatedMembersList.find((u) => u.id === m.id);
+        return found || m;
+      })
+    );
+
+    // Open receipt modal
+    setActiveReceipt(newTrx);
+  };
+
+  // Handler: POS Checkout
+  const handleProcessCheckout = (newTrx: Transaction, updatedProducts: Product[]) => {
+    setTransactions([newTrx, ...transactions]);
+    setProducts(updatedProducts);
+    saveTransactionToFirestore(newTrx).catch(() => {});
+    setActiveReceipt(newTrx);
+  };
+
+  // Handler: Pay Installment
+  // CRITICAL: prevents revenue double-counting!
+  // Updates original transaction's amountRemaining and amountPaid.
+  // Inserts a separate PAY-* transaction for today's cash inflow.
+  const handlePayInstallment = (payTrx: Transaction, originalTrxId: string, paidAmount: number) => {
+    setTransactions((prev) => {
+      const updatedOriginals = prev.map((t) => {
+        if (t.id === originalTrxId) {
+          const newPaid = (t.amountPaid || 0) + paidAmount;
+          const newRemaining = Math.max((t.amountRemaining || 0) - paidAmount, 0);
+          const newStatus = newRemaining <= 0 ? 'Paid' : t.status;
+          const updatedTrx = {
+            ...t,
+            amountPaid: newPaid,
+            amountRemaining: newRemaining,
+            status: newStatus
+          };
+          saveTransactionToFirestore(updatedTrx).catch(() => {});
+          return updatedTrx;
+        }
+        return t;
+      });
+      return [payTrx, ...updatedOriginals];
+    });
+
+    saveTransactionToFirestore(payTrx).catch(() => {});
+    setActiveReceipt(payTrx);
+  };
+
+  // Handler: Void Transaction
+  const handleVoidTransaction = (trxId: string, reason: string) => {
+    setTransactions((prev) =>
+      prev.map((t) => {
+        if (t.id === trxId) {
+          return {
+            ...t,
+            status: 'VOID',
+            desc: `${t.desc} [VOID: ${reason}]`,
+            initialCashPaid: 0,
+            amountRemaining: 0
+          };
+        }
+        return t;
+      })
+    );
+
+    // If POS items were sold in this transaction, restock products automatically
+    const targetTrx = transactions.find((t) => t.id === trxId);
+    if (targetTrx && targetTrx.itemsJSON) {
+      try {
+        const items: { name: string; qty?: number }[] = JSON.parse(targetTrx.itemsJSON);
+        setProducts((prevProd) =>
+          prevProd.map((p) => {
+            const match = items.find((i) => i.name === p.name);
+            if (match && match.qty) {
+              return { ...p, stock: p.stock + match.qty };
+            }
+            return p;
+          })
+        );
+      } catch {
+        // ignore parse error
+      }
+    }
+
+    // If Bundling transaction was voided, cancel commissions and membership records
+    if (targetTrx && targetTrx.type === 'Bundling') {
+      setMemberMemberships((prev) =>
+        prev.map((m) =>
+          m.transactionId === trxId || m.bundleTrxId === trxId ? { ...m, status: 'EXPIRED' } : m
+        )
+      );
+      setPtPurchases((prev) =>
+        prev.map((p) =>
+          p.bundleTrxId === trxId || (p.bundleId === targetTrx.bundleId && p.date === targetTrx.date)
+            ? { ...p, status: 'Cancelled' }
+            : p
+        )
+      );
+      setTrainerCommissions((prev) =>
+        prev.map((c) =>
+          c.transactionId === trxId || c.trxId === trxId
+            ? { ...c, status: 'CANCELLED', valStatus: 'CANCELLED', validationStatus: 'CANCELLED' }
+            : c
+        )
+      );
+    }
+
+    showToast('Transaksi VOID', `Transaksi #${trxId} berhasil dibatalkan (status: VOID). Saldo kas dan rekonsiliasi telah disesuaikan.`, 'warning');
+  };
+
+  // Handlers for Bundling Package Management
+  const handleSaveBundlePackage = (bundle: BundlePackage, isNew?: boolean) => {
+    const shouldAdd = isNew ?? !bundlePackages.some((b) => b.bundleId === bundle.bundleId);
+    if (shouldAdd) {
+      setBundlePackages([bundle, ...bundlePackages.filter((b) => b.bundleId !== bundle.bundleId)]);
+      showToast('Bundling Dibuat', `Paket bundling ${bundle.bundleName} (${bundle.bundleCode}) berhasil disimpan.`, 'success');
+    } else {
+      setBundlePackages(bundlePackages.map((b) => (b.bundleId === bundle.bundleId ? bundle : b)));
+      showToast('Bundling Diperbarui', `Paket bundling ${bundle.bundleName} berhasil diperbarui.`, 'success');
+    }
+  };
+
+  const handleDeleteBundlePackage = (bundleId: string) => {
+    const target = bundlePackages.find((b) => b.bundleId === bundleId);
+    setBundlePackages(bundlePackages.filter((b) => b.bundleId !== bundleId));
+    showToast('Bundling Dihapus', `Paket bundling ${target?.bundleName || ''} telah dihapus.`, 'warning');
+  };
+
+  // Handler: Correct / Update Payment Method
+  const handleUpdatePaymentMethod = (
+    trxId: string,
+    newMethod: 'Tunai' | 'Transfer' | 'QRIS' | 'EDC' | 'Kasbon',
+    newBankDest?: string,
+    reason?: string
+  ) => {
+    setTransactions((prev) =>
+      prev.map((t) => {
+        if (t.id === trxId) {
+          const oldMethodDesc = `${t.method}${t.bankDest ? ` (${t.bankDest})` : ''}`;
+          const newMethodDesc = `${newMethod}${newBankDest ? ` (${newBankDest})` : ''}`;
+          const note = reason
+            ? ` [Koreksi Metode: ${oldMethodDesc} -> ${newMethodDesc} (${reason})]`
+            : ` [Koreksi Metode: ${oldMethodDesc} -> ${newMethodDesc}]`;
+
+          let newInitialCash = t.initialCashPaid;
+          if (newMethod === 'Tunai') {
+            newInitialCash = t.amountPaid || t.amount;
+          } else if (t.method === 'Tunai') {
+            newInitialCash = 0;
+          }
+
+          let newStatus = t.status;
+          let newRemaining = t.amountRemaining;
+          if (newMethod === 'Kasbon' && t.status === 'Paid') {
+            newStatus = 'BELUM LUNAS';
+            newRemaining = t.amount;
+          } else if (t.method === 'Kasbon' && t.status === 'BELUM LUNAS') {
+            newStatus = 'Paid';
+            newRemaining = 0;
+          }
+
+          return {
+            ...t,
+            method: newMethod,
+            bankDest: newBankDest || (newMethod === 'Transfer' ? 'Mandiri' : undefined),
+            desc: `${t.desc}${note}`,
+            initialCashPaid: newInitialCash,
+            status: newStatus,
+            amountRemaining: newRemaining
+          };
+        }
+        return t;
+      })
+    );
+
+    showToast(
+      'Metode Berhasil Diperbarui',
+      `Metode pembayaran transaksi #${trxId} diubah menjadi ${newMethod}${newBankDest ? ` (${newBankDest})` : ''}.`,
+      'success'
+    );
+  };
+
+  // Handler: Daily Closing Execution
+  const handleExecuteDailyClosing = (record: DailyClosingRecord) => {
+    setClosingRecords([record, ...closingRecords]);
+    setIsStoreClosed(true);
+  };
+
+  // Handler: Member Attendance
+  const handleAddAttendance = (newAtt: Attendance, updatedMember?: Member) => {
+    setAttendances([newAtt, ...attendances]);
+    saveAttendanceToFirestore(newAtt).catch(() => {});
+    if (updatedMember) {
+      setMembers((prev) => prev.map((m) => (m.id === updatedMember.id ? updatedMember : m)));
+      saveMemberToFirestore(updatedMember).catch(() => {});
+    }
+  };
+
+  const handleCheckoutMember = (attId: string) => {
+    const timeNow = new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) + ' WIB';
+    setAttendances((prev) =>
+      prev.map((a) => (a.id === attId ? { ...a, timeOut: timeNow } : a))
+    );
+    showToast('Check-Out Berhasil', 'Member telah keluar dari area gym.', 'info');
+  };
+
+  // Handler: Staff Attendance Clock In/Out
+  const handleStaffClock = (record: StaffAttendance) => {
+    setStaffAttendances((prev) => {
+      const idx = prev.findIndex((s) => s.id === record.id);
+      if (idx >= 0) {
+        const copy = [...prev];
+        copy[idx] = record;
+        return copy;
+      }
+      return [record, ...prev];
+    });
+  };
+
+  // Handler: PT 3-Party Digital Signature Flow
+  const handleOpenSignature = (scheduleId: string, targetRole: 'valStaf' | 'valTrainer' | 'valMember') => {
+    const sch = schedules.find((s) => s.id === scheduleId);
+    if (!sch) return;
+
+    const roleName =
+      targetRole === 'valStaf'
+        ? 'Staf Operasional'
+        : targetRole === 'valTrainer'
+        ? `Trainer (${sch.trainer})`
+        : `Member (${sch.memberName})`;
+
+    setSigModal({
+      isOpen: true,
+      scheduleId,
+      role: targetRole,
+      title: `${sch.memberName} - Sesi ${sch.date} (${roleName})`
+    });
+  };
+
+  const handleSaveSignature = () => {
+    if (!sigModal.scheduleId || !sigModal.role) return;
+
+    setSchedules((prev) =>
+      prev.map((s) => {
+        if (s.id === sigModal.scheduleId) {
+          const updated = {
+            ...s,
+            [sigModal.role!]: true
+          };
+
+          // If all 3 parties have signed, complete the session and deduct 1 PT quota
+          if (updated.valStaf && updated.valTrainer && updated.valMember) {
+            updated.status = 'Selesai';
+            // Deduct member quota
+            setMembers((mPrev) =>
+              mPrev.map((m) => {
+                if (m.id === s.memberId || m.name === s.memberName) {
+                  return { ...m, ptQuota: Math.max((m.ptQuota || 0) - 1, 0) };
+                }
+                return m;
+              })
+            );
+            showToast(
+              'Validasi 3 Pihak Lengkap',
+              `Sesi PT ${s.memberName} telah tervalidasi lengkap (Staf, Trainer, Member). Kuota PT berkurang 1 sesi.`,
+              'success'
+            );
+          } else {
+            showToast('Tanda Tangan Tersimpan', 'Tanda tangan digital berhasil diverifikasi.', 'info');
+          }
+
+          return updated;
+        }
+        return s;
+      })
+    );
+
+    setSigModal({ isOpen: false, scheduleId: '', role: null, title: '' });
+  };
+
+  // Handler: Studio Class Booking
+  const handleBookStudioClass = (classId: string, memberName: string) => {
+    setStudioClasses((prev) =>
+      prev.map((c) => {
+        if (c.id === classId) {
+          return {
+            ...c,
+            booked: [...c.booked, memberName]
+          };
+        }
+        return c;
+      })
+    );
+    showToast('Booking Kelas Sukses', `${memberName} berhasil memesan tempat di kelas.`, 'success');
+  };
+
+  // Handler: CRM Convert Lead to Member
+  const handleConvertLeadToMember = (lead: Lead) => {
+    const newMemberId = 'M' + Math.floor(100 + Math.random() * 900);
+    const newMember: Member = {
+      id: newMemberId,
+      name: lead.name,
+      phone: lead.phone,
+      gender: 'L',
+      photo: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=200&auto=format&fit=crop',
+      expired: APP_TODAY,
+      ptQuota: 0,
+      picId: lead.picId || 'S01',
+      picName: staffUsers.find((s) => s.id === lead.picId)?.name || 'Admin',
+      followUpStatus: 'TERDAFTAR MEMBER',
+      joinDate: APP_TODAY
+    };
+
+    setMembers([newMember, ...members]);
+    saveMemberToFirestore(newMember).catch(() => {});
+    showToast(
+      'Member Baru Terdaftar',
+      `Lead ${lead.name} berhasil dikonversi menjadi Member (${newMemberId}).`,
+      'success'
+    );
+  };
+
+  const piutangCount = transactions.filter(
+    (t) => (t.status === 'DP 50%' || t.status === 'BELUM LUNAS') && (t.amountRemaining || 0) > 0
+  ).length;
+
+  const freezeCount = members.filter((m) => m.isFrozen || m.status === 'FREEZE').length;
+
+  // If user is not logged in, render the dedicated Login Page
+  if (!currentUser) {
+    return (
+      <div className="min-h-screen bg-zinc-950 font-sans selection:bg-orange-500 selection:text-white">
+        <LoginPage onLogin={handleLogin} staffUsers={staffUsers} />
+
+        {/* FLOATING TOAST NOTIFICATION */}
+        {toast.show && (
+          <div className="fixed bottom-5 right-5 z-50 animate-in fade-in slide-in-from-bottom-5">
+            <div
+              className={`flex items-start gap-3 p-4 rounded-2xl border shadow-2xl max-w-sm backdrop-blur-md ${
+                toast.type === 'success'
+                  ? 'bg-emerald-950/90 border-emerald-500/50 text-emerald-200'
+                  : toast.type === 'error'
+                  ? 'bg-rose-950/90 border-rose-500/50 text-rose-200'
+                  : toast.type === 'warning'
+                  ? 'bg-amber-950/90 border-amber-500/50 text-amber-200'
+                  : 'bg-zinc-900/90 border-zinc-700 text-zinc-200'
+              }`}
+            >
+              <div>
+                <h5 className="text-xs font-black uppercase tracking-wider">{toast.title}</h5>
+                <p className="text-xs mt-0.5 opacity-90 leading-relaxed">{toast.message}</p>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-zinc-950 text-zinc-100 flex flex-col font-sans selection:bg-orange-500 selection:text-white">
+      {/* Top Header */}
+      <Header
+        currentUser={currentUser}
+        staffUsers={staffUsers}
+        onSwitchUser={handleSwitchUser}
+        onLogout={handleLogout}
+        isStoreClosed={isStoreClosed}
+        firebaseConnected={firebaseConnected}
+        onToggleMobileSidebar={() => setIsSidebarOpen(!isSidebarOpen)}
+      />
+
+      <div className="flex flex-1 overflow-hidden">
+        {/* Navigation Sidebar */}
+        <Sidebar
+          activeTab={activeTab}
+          setActiveTab={(tab) => {
+            setActiveTab(tab);
+            setIsSidebarOpen(false);
+          }}
+          currentUser={currentUser}
+          isOpenMobile={isSidebarOpen}
+          onCloseMobile={() => setIsSidebarOpen(false)}
+          piutangCount={piutangCount}
+          freezeCount={freezeCount}
+          onLogout={handleLogout}
+        />
+
+        {/* Main Content Area */}
+        <main className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8 bg-zinc-950/50 scrollbar-thin scrollbar-thumb-zinc-800">
+          {activeTab === 'dashboard' && (
+            <DashboardView
+              transactions={transactions}
+              attendances={attendances}
+              schedules={schedules}
+              members={members}
+              products={products}
+              onAddStock={(id, qty) =>
+                setProducts(products.map((p) => (p.id === id ? { ...p, stock: p.stock + qty } : p)))
+              }
+              onNavigateTab={(tab) => setActiveTab(tab)}
+              onPayPiutang={(trxId) => {
+                setTargetPiutangTrxId(trxId);
+                setActiveTab('piutang');
+              }}
+            />
+          )}
+
+          {activeTab === 'leader-pt' && (
+            <LeaderPTDashboardView
+              members={members}
+              schedules={schedules}
+              staffUsers={staffUsers}
+              staffAttendances={staffAttendances}
+              attendances={attendances}
+              currentUser={currentUser}
+              onNavigateTab={(tab) => setActiveTab(tab)}
+              onOpenMemberDetail={(m) => setActiveDetailMember(m)}
+              onUpdateSchedule={(upSch) =>
+                setSchedules(schedules.map((s) => (s.id === upSch.id ? upSch : s)))
+              }
+              onAddSchedule={(newSch) => setSchedules([...schedules, newSch])}
+              showToast={showToast}
+            />
+          )}
+
+          {activeTab === 'pt-package-performance' && (
+            <TrainerPackagePerformanceView
+              ptPurchases={ptPurchases}
+              staffUsers={staffUsers}
+              packages={packages}
+              members={members}
+              schedules={schedules}
+              currentUser={currentUser}
+              onNavigateTab={(tab) => setActiveTab(tab)}
+            />
+          )}
+
+          {activeTab === 'trainer-portal' && (
+            <TrainerPortalView
+              currentUser={currentUser}
+              staffUsers={staffUsers}
+              onSwitchUser={handleSwitchUser}
+              schedules={schedules}
+              onAddSchedule={(newSch) => setSchedules([...schedules, newSch])}
+              onUpdateSchedule={(upSch) =>
+                setSchedules(schedules.map((s) => (s.id === upSch.id ? upSch : s)))
+              }
+              members={members}
+              onUpdateMember={(upMem) =>
+                setMembers(members.map((m) => (m.id === upMem.id ? upMem : m)))
+              }
+              ptPurchases={ptPurchases}
+              onOpenSignature={handleOpenSignature}
+              showToast={showToast}
+              onNavigateTab={(tab) => setActiveTab(tab)}
+            />
+          )}
+
+          {activeTab === 'membership' && (
+            <MembershipView
+              packages={packages}
+              bundlePackages={bundlePackages}
+              members={members}
+              staffUsers={staffUsers}
+              currentUser={currentUser}
+              onPurchasePackage={handlePurchasePackage}
+              onAddPackage={(pkg) => setPackages([...packages, pkg])}
+              onOpenBundlingManager={() => setIsBundlingModalOpen(true)}
+              onOpenBundlingReports={() => setActiveTab('bundling-reports')}
+              isStoreClosed={isStoreClosed}
+              showToast={showToast}
+            />
+          )}
+
+          {activeTab === 'bundling-reports' && (
+            <BundlingReportsView
+              bundlePackages={bundlePackages}
+              transactions={transactions}
+              members={members}
+              schedules={schedules}
+              memberMemberships={memberMemberships}
+              ptPurchases={ptPurchases}
+              trainerCommissions={trainerCommissions}
+              staffUsers={staffUsers}
+              showToast={showToast}
+              onNavigateTab={(tab: any) => setActiveTab(tab)}
+              onOpenBundlingManager={() => setIsBundlingModalOpen(true)}
+              onUpdateCommissionStatus={(commissionId: string, newStatus: string) => {
+                setTrainerCommissions((prev) =>
+                  prev.map((c) =>
+                    c.id === commissionId || c.commissionId === commissionId
+                      ? { ...c, valStatus: newStatus, validationStatus: newStatus }
+                      : c
+                  )
+                );
+                showToast('Status Komisi Diperbarui', `Komisi #${commissionId} disetujui/diperbarui.`, 'success');
+              }}
+            />
+          )}
+
+          {activeTab === 'pos' && (
+            <POSView
+              products={products}
+              currentUser={currentUser}
+              onProcessCheckout={handleProcessCheckout}
+              onAddProduct={(prod) => setProducts([...products, prod])}
+              onAddStock={(id, qty) =>
+                setProducts(products.map((p) => (p.id === id ? { ...p, stock: p.stock + qty } : p)))
+              }
+              onNavigateTab={(tab) => setActiveTab(tab)}
+              isStoreClosed={isStoreClosed}
+              showToast={showToast}
+            />
+          )}
+
+          {activeTab === 'products' && (
+            <ProductManagementView
+              products={products}
+              transactions={transactions}
+              onSaveProduct={(updatedProduct, isNew) => {
+                if (isNew) {
+                  setProducts([...products, updatedProduct]);
+                  showToast('Produk Ditambahkan', `${updatedProduct.name} berhasil didaftarkan ke inventaris.`, 'success');
+                } else {
+                  setProducts(products.map((p) => (p.id === updatedProduct.id ? updatedProduct : p)));
+                  showToast('Produk Diperbarui', `Informasi produk ${updatedProduct.name} berhasil disimpan.`, 'success');
+                }
+              }}
+              onDeleteProduct={(productId) => {
+                const target = products.find((p) => p.id === productId);
+                setProducts(products.filter((p) => p.id !== productId));
+                showToast('Produk Dihapus', `${target?.name || 'Produk'} telah dihapus dari katalog inventaris.`, 'warning');
+              }}
+              onAddStock={(productId, qty) => {
+                setProducts(products.map((p) => (p.id === productId ? { ...p, stock: Math.max(0, p.stock + qty) } : p)));
+                const target = products.find((p) => p.id === productId);
+                showToast('Stok Diperbarui', `${qty >= 0 ? '+' : ''}${qty} unit untuk ${target?.name || 'Produk'}.`, 'success');
+              }}
+              onNavigateTab={(tab) => setActiveTab(tab)}
+            />
+          )}
+
+          {activeTab === 'absen' && (
+            <AttendanceView
+              members={members}
+              staffUsers={staffUsers}
+              attendances={attendances}
+              staffAttendances={staffAttendances}
+              onAddAttendance={handleAddAttendance}
+              onCheckoutMember={handleCheckoutMember}
+              onStaffClock={handleStaffClock}
+              showToast={showToast}
+            />
+          )}
+
+          {activeTab === 'jadwal-pt' && (
+            <JadwalPTView
+              schedules={schedules}
+              studioClasses={studioClasses}
+              members={members}
+              trainers={staffUsers.filter((s) => s.role === 'pt' || s.role === 'leader_pt')}
+              currentUser={currentUser}
+              onAddSchedule={(newSch) => setSchedules([...schedules, newSch])}
+              onUpdateSchedule={(upSch) =>
+                setSchedules(schedules.map((s) => (s.id === upSch.id ? upSch : s)))
+              }
+              onAddStudioClass={(newCls) => setStudioClasses([...studioClasses, newCls])}
+              onBookStudioClass={handleBookStudioClass}
+              onOpenSignature={handleOpenSignature}
+              showToast={showToast}
+              onNavigateTab={(tab) => setActiveTab(tab)}
+            />
+          )}
+
+          {activeTab === 'freeze' && (
+            <MembershipFreezeView
+              members={members}
+              freezeRecords={freezeRecords}
+              currentUser={currentUser}
+              staffUsers={staffUsers}
+              onOpenFreezeModal={(member) => {
+                setActiveFreezeMember(member || null);
+              }}
+              onOpenUnfreezeModal={(member, record) => {
+                setActiveUnfreezeMember(member);
+                setActiveUnfreezeRecord(record);
+              }}
+              onSelectMember={(member) => {
+                setActiveDetailMember(member);
+              }}
+            />
+          )}
+
+          {activeTab === 'crm' && (
+            <CRMView
+              leads={leads}
+              members={members}
+              staffUsers={staffUsers}
+              followUps={followUps}
+              transactions={transactions}
+              currentUser={currentUser}
+              onAddLead={(l) => setLeads([...leads, l])}
+              onUpdateLeadStatus={(lid, nStatus) =>
+                setLeads(leads.map((l) => (l.id === lid ? { ...l, status: nStatus } : l)))
+              }
+              onAddFollowUp={(fu) => {
+                setFollowUps([fu, ...followUps]);
+                setMembers(
+                  members.map((m) => (m.id === fu.memberId ? { ...m, followUpStatus: fu.status } : m))
+                );
+              }}
+              onConvertLeadToMember={handleConvertLeadToMember}
+              showToast={showToast}
+            />
+          )}
+
+          {activeTab === 'master-data' && (
+            <MasterDataView
+              members={members}
+              staffUsers={staffUsers}
+              onOpenMemberDetail={(m) => setActiveDetailMember(m)}
+              onOpenIDCard={(m) => setActiveIDCardMember(m)}
+              onSaveMember={(m) => {
+                const idx = members.findIndex((x) => x.id === m.id);
+                if (idx >= 0) {
+                  const copy = [...members];
+                  copy[idx] = m;
+                  setMembers(copy);
+                } else {
+                  setMembers([m, ...members]);
+                }
+              }}
+              onDeleteMember={(mid) => setMembers(members.filter((m) => m.id !== mid))}
+              onSaveStaff={(s) => {
+                const idx = staffUsers.findIndex((x) => x.id === s.id);
+                if (idx >= 0) {
+                  const copy = [...staffUsers];
+                  copy[idx] = s;
+                  setStaffUsers(copy);
+                } else {
+                  setStaffUsers([...staffUsers, s]);
+                }
+              }}
+              onDeleteStaff={(sid) => setStaffUsers(staffUsers.filter((s) => s.id !== sid))}
+              showToast={showToast}
+            />
+          )}
+
+          {activeTab === 'inventaris' && (
+            <InventoryView
+              assets={gymAssets}
+              maintenances={assetMaintenances}
+              damageReports={damageReports}
+              workOrders={workOrders}
+              spareparts={spareparts}
+              procurements={assetProcurements}
+              movements={assetMovements}
+              disposals={assetDisposals}
+              auditLogs={inventoryAuditLogs}
+              approvalConfig={approvalConfig}
+              currentUser={currentUser}
+              onSaveAsset={handleSaveAsset}
+              onSaveMaintenance={handleSaveMaintenance}
+              onSaveDamageReport={handleSaveDamageReport}
+              onSaveWorkOrder={handleSaveWorkOrder}
+              onSaveProcurement={handleSaveProcurement}
+              onSaveSparepart={handleSaveSparepart}
+              onSaveMovement={handleSaveMovement}
+              onSaveDisposal={handleSaveDisposal}
+              onSaveApprovalConfig={handleSaveApprovalConfig}
+            />
+          )}
+
+          {activeTab === 'piutang' && (
+            <FinanceView
+              transactions={transactions}
+              pettyCashList={pettyCashList}
+              closingRecords={closingRecords}
+              currentUser={currentUser}
+              isStoreClosed={isStoreClosed}
+              initialSubTab="piutang"
+              initialSelectedPiutangId={targetPiutangTrxId || undefined}
+              onPayInstallment={(payTrx, origId, amount) => {
+                handlePayInstallment(payTrx, origId, amount);
+                setTargetPiutangTrxId(null);
+              }}
+              onAddPettyCash={(pc) => setPettyCashList([pc, ...pettyCashList])}
+              onUpdatePettyCashList={setPettyCashList}
+              onExecuteDailyClosing={handleExecuteDailyClosing}
+              onVoidTransaction={handleVoidTransaction}
+              onReprintReceipt={(trx) => setActiveReceipt(trx)}
+              onUpdatePaymentMethod={handleUpdatePaymentMethod}
+              showToast={showToast}
+            />
+          )}
+
+          {activeTab === 'laporan' && (
+            <FinanceView
+              transactions={transactions}
+              pettyCashList={pettyCashList}
+              closingRecords={closingRecords}
+              currentUser={currentUser}
+              isStoreClosed={isStoreClosed}
+              initialSubTab="bukubesar"
+              onPayInstallment={handlePayInstallment}
+              onAddPettyCash={(pc) => setPettyCashList([pc, ...pettyCashList])}
+              onUpdatePettyCashList={setPettyCashList}
+              onExecuteDailyClosing={handleExecuteDailyClosing}
+              onVoidTransaction={handleVoidTransaction}
+              onReprintReceipt={(trx) => setActiveReceipt(trx)}
+              onUpdatePaymentMethod={handleUpdatePaymentMethod}
+              showToast={showToast}
+            />
+          )}
+
+          {activeTab === 'tutup-toko' && (
+            <FinanceView
+              transactions={transactions}
+              pettyCashList={pettyCashList}
+              closingRecords={closingRecords}
+              currentUser={currentUser}
+              isStoreClosed={isStoreClosed}
+              initialSubTab="closing"
+              onPayInstallment={handlePayInstallment}
+              onAddPettyCash={(pc) => setPettyCashList([pc, ...pettyCashList])}
+              onUpdatePettyCashList={setPettyCashList}
+              onExecuteDailyClosing={handleExecuteDailyClosing}
+              onVoidTransaction={handleVoidTransaction}
+              onReprintReceipt={(trx) => setActiveReceipt(trx)}
+              onUpdatePaymentMethod={handleUpdatePaymentMethod}
+              showToast={showToast}
+            />
+          )}
+
+          {activeTab === 'hr-payroll' && (
+            <HRPayrollView
+              staffUsers={staffUsers}
+              staffAttendance={staffAttendances}
+              transactions={transactions}
+              schedules={schedules}
+              showToast={showToast}
+            />
+          )}
+        </main>
+      </div>
+
+      {/* GLOBAL MODALS */}
+      {/* 1. Transaction Receipt */}
+      <ReceiptModal
+        isOpen={Boolean(activeReceipt)}
+        transaction={activeReceipt}
+        onClose={() => setActiveReceipt(null)}
+      />
+
+      {/* 2. Digital ID Card Pass */}
+      <IDCardModal
+        isOpen={Boolean(activeIDCardMember)}
+        member={activeIDCardMember}
+        onClose={() => setActiveIDCardMember(null)}
+      />
+
+      {/* 3. Member 360 Detail */}
+      <MemberDetailModal
+        isOpen={Boolean(activeDetailMember)}
+        member={activeDetailMember}
+        attendanceList={attendances}
+        transactionList={transactions}
+        scheduleList={schedules}
+        followUpList={followUps}
+        memberMemberships={memberMemberships}
+        ptPurchases={ptPurchases}
+        freezeRecords={freezeRecords}
+        onClose={() => setActiveDetailMember(null)}
+        onOpenIDCard={(m) => {
+          setActiveIDCardMember(m);
+        }}
+        onOpenPayPiutang={(t) => {
+          setActiveDetailMember(null);
+          setActiveTab('piutang');
+        }}
+        onOpenFreeze={(m) => {
+          setActiveDetailMember(null);
+          setActiveFreezeMember(m);
+        }}
+        onOpenUnfreeze={(m, rec) => {
+          setActiveDetailMember(null);
+          setActiveUnfreezeMember(m);
+          setActiveUnfreezeRecord(rec || null);
+        }}
+      />
+
+      {/* 4. Freeze Membership Modal */}
+      <FreezeMemberModal
+        isOpen={Boolean(activeFreezeMember)}
+        member={activeFreezeMember}
+        allMembers={members}
+        currentUser={currentUser}
+        staffUsers={staffUsers}
+        onClose={() => setActiveFreezeMember(null)}
+        onConfirmFreeze={(record: MemberFreezeRecord) => {
+          handleFreezeMember(record);
+          setActiveFreezeMember(null);
+        }}
+      />
+
+      {/* 5. Unfreeze / Aktifkan Kembali Modal */}
+      <UnfreezeMemberModal
+        isOpen={Boolean(activeUnfreezeMember)}
+        member={activeUnfreezeMember}
+        freezeRecord={
+          activeUnfreezeRecord ||
+          freezeRecords.find((r) => r.memberId === activeUnfreezeMember?.id && r.status === 'FREEZE') ||
+          null
+        }
+        currentUser={currentUser}
+        staffUsers={staffUsers}
+        onClose={() => {
+          setActiveUnfreezeMember(null);
+          setActiveUnfreezeRecord(null);
+        }}
+        onConfirmUnfreeze={(recordId: string, updatedRecord: MemberFreezeRecord, updatedMember: Member) => {
+          handleUnfreezeMember(
+            updatedMember.id,
+            updatedRecord.actualEndDate || APP_TODAY,
+            updatedRecord.actualDays || 0,
+            updatedMember.expired,
+            updatedRecord.unfreezeNotes
+          );
+          setActiveUnfreezeMember(null);
+          setActiveUnfreezeRecord(null);
+        }}
+      />
+
+      {/* 4. Bundling Packages Manager Modal */}
+      <BundlingManagerModal
+        isOpen={isBundlingModalOpen}
+        onClose={() => setIsBundlingModalOpen(false)}
+        bundlePackages={bundlePackages}
+        packages={packages}
+        products={products}
+        onSaveBundle={handleSaveBundlePackage}
+        onDeleteBundle={handleDeleteBundlePackage}
+      />
+
+      {/* 4. 3-Party Digital Signature Modal */}
+      <SignatureModal
+        isOpen={sigModal.isOpen}
+        targetRole={sigModal.role}
+        scheduleTitle={sigModal.title}
+        onClose={() => setSigModal({ isOpen: false, scheduleId: '', role: null, title: '' })}
+        onSave={handleSaveSignature}
+      />
+
+      {/* FLOATING TOAST NOTIFICATION */}
+      {toast.show && (
+        <div className="fixed bottom-5 right-5 z-50 animate-in fade-in slide-in-from-bottom-5">
+          <div
+            className={`flex items-start gap-3 p-4 rounded-2xl border shadow-2xl max-w-sm backdrop-blur-md ${
+              toast.type === 'success'
+                ? 'bg-emerald-950/90 border-emerald-500/50 text-emerald-200'
+                : toast.type === 'error'
+                ? 'bg-rose-950/90 border-rose-500/50 text-rose-200'
+                : toast.type === 'warning'
+                ? 'bg-amber-950/90 border-amber-500/50 text-amber-200'
+                : 'bg-zinc-900/90 border-zinc-700 text-zinc-200'
+            }`}
+          >
+            <div>
+              <h5 className="text-xs font-black uppercase tracking-wider">{toast.title}</h5>
+              <p className="text-xs mt-0.5 opacity-90 leading-relaxed">{toast.message}</p>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
