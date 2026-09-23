@@ -7,7 +7,7 @@ export interface User {
   email?: string;
   role: UserRole;
   roleName: string;
-  shift: 'Pagi' | 'Siang';
+  shift: 'Pagi' | 'Siang' | 'Malam' | string;
   baseSalary: number;
   password: string;
   photo?: string;
@@ -20,6 +20,13 @@ export interface User {
   address?: string;
   birthDate?: string;
   emergencyContact?: string;
+  // HR & Kepegawaian
+  employmentStatus?: 'Tetap' | 'Kontrak' | 'Probation' | 'Part-time';
+  joinDate?: string;
+  allowance?: number;
+  leaveQuota?: number;
+  bankName?: string;
+  bankAccount?: string;
 }
 
 export type MembershipStatus = 'AKTIF' | 'FREEZE' | 'MASA TENGGANG' | 'EXPIRED' | 'VISIT';
@@ -358,6 +365,31 @@ export interface Attendance {
   badge: string;
 }
 
+export type ShiftType = 'Pagi' | 'Siang' | 'Malam' | 'Off';
+
+export interface ShiftDefinition {
+  id: ShiftType;
+  name: string;
+  startTime: string;
+  endTime: string;
+  badgeColor: string;
+  description: string;
+}
+
+export interface WorkSchedule {
+  id: string;
+  staffId: string;
+  staffName: string;
+  role: string;
+  date: string; // YYYY-MM-DD
+  shift: ShiftType;
+  startTime: string; // e.g. "06:00"
+  endTime: string;   // e.g. "14:00"
+  notes?: string;
+  status: 'Scheduled' | 'Completed' | 'Swapped' | 'Off';
+  swappedWith?: string;
+}
+
 export interface StaffAttendance {
   id: string;
   date: string; // YYYY-MM-DD
@@ -365,7 +397,13 @@ export interface StaffAttendance {
   timeOut?: string;
   staffId?: string;
   staffName: string;
-  shift: 'Pagi' | 'Siang';
+  shift: 'Pagi' | 'Siang' | 'Malam' | string;
+  status?: 'Hadir' | 'Terlambat' | 'Izin' | 'Sakit' | 'Cuti' | 'Alpa' | 'Lembur';
+  lateMinutes?: number;
+  overtimeHours?: number;
+  notes?: string;
+  verifiedBy?: string;
+  location?: string;
 }
 
 export interface Lead {
@@ -392,11 +430,15 @@ export interface LeaveRequest {
   id: string;
   staffId: string;
   staffName: string;
-  type: 'Cuti Tahunan' | 'Sakit' | string;
+  type: 'Cuti Tahunan' | 'Sakit' | 'Izin Pribadi' | 'Lembur' | 'Libur Rutin / Day Off' | string;
   start: string;
   end: string;
+  daysCount?: number;
   reason: string;
   status: 'Pending' | 'Approved' | 'Rejected';
+  approvedBy?: string;
+  approvedAt?: string;
+  notes?: string;
 }
 
 export type PettyCashStatus = 'Draft' | 'Menunggu Persetujuan' | 'Disetujui' | 'Ditolak' | 'Selesai';
@@ -432,8 +474,12 @@ export interface PettyCash {
   // Legacy / fallback compatibility fields
   time?: string;
   desc?: string;
+  description?: string;
+  category?: string;
   amount?: number;
   staffName?: string;
+  submitted_by?: string;
+  submitted_by_name?: string;
   pic?: string;
   cat?: 'Operasional' | 'ATK' | 'Kebersihan' | 'Maintenance' | 'Konsumsi' | string;
 }
@@ -825,5 +871,113 @@ export interface ApprovalThresholdConfig {
   staffMaxAmount: number;        // e.g. 500,000 (Staff/Kasir)
   adminMaxAmount: number;        // e.g. 2,500,000 (Admin/Manager)
   requireManagementAbove: number;// e.g. 2,500,000 (Level Management)
+}
+
+// ==========================================
+// SYSTEM SETTINGS & CONFIGURATION INTERFACES
+// ==========================================
+
+export type PrinterPaperWidth = '58mm' | '80mm' | 'a4';
+export type PrinterConnectionType = 'browser' | 'bluetooth' | 'usb' | 'network';
+
+export interface PrinterConfig {
+  paperWidth: PrinterPaperWidth;
+  connectionType: PrinterConnectionType;
+  autoPrintOnPayment: boolean;
+  storeName: string;
+  storeTagline: string;
+  storeAddress: string;
+  storeCity: string;
+  storePhone: string;
+  headerNote: string;
+  footerNote: string;
+  showLogo: boolean;
+  showBarcode: boolean;
+  showCashierName: boolean;
+  fontDensity: 'condensed' | 'normal' | 'large';
+  autoCutPaper: boolean;
+  printerIpAddress?: string;
+  printerPort?: number;
+  bluetoothDeviceName?: string;
+  copiesCount: number;
+}
+
+export interface RoleActionPermissions {
+  view: boolean;
+  create: boolean;
+  edit: boolean;
+  delete: boolean;
+  voidRefund?: boolean;
+  export?: boolean;
+}
+
+export interface RoleModulePermission {
+  moduleId: string;
+  moduleName: string;
+  category: string;
+  description: string;
+  actions: RoleActionPermissions;
+}
+
+export interface RoleDefinition {
+  role: UserRole;
+  roleName: string;
+  description: string;
+  badgeColor: string;
+  isSystemRole: boolean;
+  permissions: Record<string, RoleActionPermissions>;
+}
+
+export interface GymBusinessProfile {
+  gymName: string;
+  tagline: string;
+  branchName: string;
+  address: string;
+  city: string;
+  phone: string;
+  whatsapp: string;
+  email: string;
+  instagram: string;
+  website: string;
+  npwp: string;
+  openHoursWeekday: string;
+  openHoursWeekend: string;
+}
+
+export interface BankAccountConfig {
+  id: string;
+  bankName: string;
+  accountNumber: string;
+  accountHolder: string;
+  isDefault: boolean;
+  notes?: string;
+}
+
+export interface PaymentAndTaxConfig {
+  taxEnabled: boolean;
+  taxRate: number; // e.g. 11 (%)
+  taxLabel: string; // e.g. "PB1 / PPN"
+  serviceChargeEnabled: boolean;
+  serviceChargeRate: number; // e.g. 2 (%)
+  defaultFreezeFee: number; // e.g. 50000
+  bankAccounts: BankAccountConfig[];
+  qrisMerchantName: string;
+  qrisNmid: string;
+  defaultPaymentDueDays: number; // e.g. 14 hari
+}
+
+export interface WhatsAppTemplateConfig {
+  posReceiptTemplate: string;
+  memberWelcomeTemplate: string;
+  piutangReminderTemplate: string;
+  expiryReminderTemplate: string;
+}
+
+export interface SystemSettings {
+  printer: PrinterConfig;
+  profile: GymBusinessProfile;
+  paymentAndTax: PaymentAndTaxConfig;
+  templates: WhatsAppTemplateConfig;
+  updatedAt?: string;
 }
 

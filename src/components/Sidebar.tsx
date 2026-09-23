@@ -26,9 +26,13 @@ import {
   ChevronDown,
   ChevronRight,
   PanelLeftClose,
-  PanelLeftOpen
+  PanelLeftOpen,
+  Palette,
+  Settings
 } from 'lucide-react';
 import { User, UserRole } from '../types';
+import { PWAInstallButton } from './PWAInstallButton';
+import { useTheme } from '../context/ThemeContext';
 
 export type ActiveTab =
   | 'dashboard'
@@ -48,7 +52,13 @@ export type ActiveTab =
   | 'hr-payroll'
   | 'piutang'
   | 'laporan'
-  | 'tutup-toko';
+  | 'tutup-toko'
+  | 'settings'
+  | 'settings-printer'
+  | 'settings-roles'
+  | 'settings-profile'
+  | 'settings-finance'
+  | 'settings-backup';
 
 interface SubItem {
   id: ActiveTab;
@@ -97,6 +107,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   freezeCount = 0
 }) => {
   const role: UserRole = currentUser?.role || 'admin';
+  const { openThemeModal, currentAccent, theme } = useTheme();
 
   const canAccess = (requiredRoles: UserRole[]) => {
     return requiredRoles.includes(role);
@@ -282,9 +293,52 @@ export const Sidebar: React.FC<SidebarProps> = ({
       items: [
         {
           id: 'hr-payroll' as ActiveTab,
-          label: 'HR & Payroll Staf',
+          label: 'HR, Jadwal & Presensi',
           icon: UsersRound,
-          roles: ['admin'] as UserRole[]
+          roles: ['admin', 'manager', 'leader_pt'] as UserRole[]
+        }
+      ]
+    },
+    {
+      group: 'Sistem & Konfigurasi',
+      items: [
+        {
+          id: 'settings-group',
+          label: 'Pengaturan Sistem',
+          icon: Settings,
+          roles: ['admin', 'manager', 'kasir'] as UserRole[],
+          subItems: [
+            {
+              id: 'settings-printer',
+              label: 'Setting Printer & Struk',
+              roles: ['admin', 'manager', 'kasir']
+            },
+            {
+              id: 'settings-roles',
+              label: 'Manajemen Role & Akses',
+              roles: ['admin', 'manager']
+            },
+            {
+              id: 'settings-profile',
+              label: 'Profil Usaha & Cabang',
+              roles: ['admin', 'manager']
+            },
+            {
+              id: 'settings-finance',
+              label: 'Pajak & Rekening Kas',
+              roles: ['admin', 'manager']
+            },
+            {
+              id: 'settings-backup',
+              label: 'Backup & Database',
+              roles: ['admin']
+            },
+            {
+              id: 'settings',
+              label: 'Semua Pengaturan',
+              roles: ['admin', 'manager', 'kasir']
+            }
+          ]
         }
       ]
     }
@@ -592,6 +646,41 @@ export const Sidebar: React.FC<SidebarProps> = ({
             );
           })}
         </nav>
+
+        {/* PWA App Install Action */}
+        <div className="px-3 pt-2 pb-1 border-t border-zinc-800/60 shrink-0">
+          <div className={isCollapsed ? 'lg:hidden' : 'block'}>
+            <PWAInstallButton variant="sidebar" />
+          </div>
+          <div className={`hidden ${isCollapsed ? 'lg:flex lg:justify-center' : ''}`}>
+            <PWAInstallButton variant="compact" />
+          </div>
+        </div>
+
+        {/* Theme Settings Quick Action */}
+        <div className="px-3 py-1 shrink-0">
+          <button
+            type="button"
+            id="btn-sidebar-theme-toggle"
+            onClick={openThemeModal}
+            className={`w-full flex items-center gap-2.5 p-2 rounded-xl text-zinc-400 hover:text-white hover:bg-zinc-800/70 border border-transparent hover:border-zinc-800/80 transition active:scale-98 cursor-pointer ${
+              isCollapsed ? 'lg:justify-center' : ''
+            }`}
+            title={`Pengaturan Tema (${theme.mode} • Aksen ${currentAccent.name})`}
+            aria-label="Buka Pengaturan Tema"
+          >
+            <div className="relative shrink-0">
+              <Palette className="w-4 h-4 text-orange-400" />
+              <span
+                className="absolute -top-0.5 -right-0.5 w-1.5 h-1.5 rounded-full ring-1 ring-zinc-950"
+                style={{ backgroundColor: currentAccent.hex }}
+              />
+            </div>
+            <span className={`text-xs font-bold truncate ${isCollapsed ? 'lg:hidden' : 'block'}`}>
+              Setting Tema
+            </span>
+          </button>
+        </div>
 
         {/* Sidebar Footer: User Profile Card & Quick Logout */}
         <div className="p-3 border-t border-zinc-800 bg-zinc-900/40 shrink-0">

@@ -1,4 +1,4 @@
-import { User, Member, Product, PackageItem, Transaction, Schedule, StudioClass, Attendance, StaffAttendance, Lead, FollowUpLog, LeaveRequest, PettyCash, DailyClosingRecord, PTPurchaseRecord, TrainingSessionDetail } from '../types';
+import { User, Member, Product, PackageItem, Transaction, Schedule, StudioClass, Attendance, StaffAttendance, Lead, FollowUpLog, LeaveRequest, PettyCash, DailyClosingRecord, PTPurchaseRecord, TrainingSessionDetail, WorkSchedule, ShiftDefinition } from '../types';
 import { APP_TODAY } from '../utils/formatters';
 
 export const INITIAL_USERS: User[] = [
@@ -1333,42 +1333,573 @@ export const INITIAL_ATTENDANCE: Attendance[] = [
   }
 ];
 
+export const DEFAULT_SHIFTS: ShiftDefinition[] = [
+  {
+    id: 'Pagi',
+    name: 'Shift Pagi (Opening)',
+    startTime: '06:00',
+    endTime: '14:00',
+    badgeColor: 'emerald',
+    description: 'Buka operasional gym, persiapan area fitness, kelas pagi, & front desk'
+  },
+  {
+    id: 'Siang',
+    name: 'Shift Siang (Middle)',
+    startTime: '10:00',
+    endTime: '18:00',
+    badgeColor: 'blue',
+    description: 'Pendampingan member jam istirahat, sesi PT, operasional kasir jam sibuk siang'
+  },
+  {
+    id: 'Malam',
+    name: 'Shift Malam (Closing)',
+    startTime: '14:00',
+    endTime: '22:00',
+    badgeColor: 'purple',
+    description: 'Sesi peak-hour malam, closing kasir harian, sterilisasi alat gym, tutup gym'
+  },
+  {
+    id: 'Off',
+    name: 'Day Off / Libur Rutin',
+    startTime: '-',
+    endTime: '-',
+    badgeColor: 'zinc',
+    description: 'Jadwal libur mingguan / istirahat karyawan'
+  }
+];
+
+export const INITIAL_WORK_SCHEDULES: WorkSchedule[] = [
+  // Today's Work Roster
+  {
+    id: 'WS-20260918-01',
+    staffId: 'S01',
+    staffName: 'Budi Santoso',
+    role: 'System Admin / Manager',
+    date: APP_TODAY,
+    shift: 'Pagi',
+    startTime: '06:00',
+    endTime: '14:00',
+    status: 'Scheduled',
+    notes: 'Supervisor opening & audit inventaris pagi'
+  },
+  {
+    id: 'WS-20260918-02',
+    staffId: 'S02',
+    staffName: 'Siti Kasir',
+    role: 'Kasir & Front Desk',
+    date: APP_TODAY,
+    shift: 'Siang',
+    startTime: '10:00',
+    endTime: '18:00',
+    status: 'Scheduled',
+    notes: 'POS counter & rekonsiliasi kasbon member'
+  },
+  {
+    id: 'WS-20260918-03',
+    staffId: 'S03',
+    staffName: 'Citra Lestari',
+    role: 'Leader PT',
+    date: APP_TODAY,
+    shift: 'Pagi',
+    startTime: '06:00',
+    endTime: '14:00',
+    status: 'Scheduled',
+    notes: 'Morning functional training & fitness assessment'
+  },
+  {
+    id: 'WS-20260918-04',
+    staffId: 'S04',
+    staffName: 'Reza Pratama',
+    role: 'Pelatih PT',
+    date: APP_TODAY,
+    shift: 'Malam',
+    startTime: '14:00',
+    endTime: '22:00',
+    status: 'Scheduled',
+    notes: 'Prime time PT session & closing workout zone'
+  },
+  {
+    id: 'WS-20260918-05',
+    staffId: 'S05',
+    staffName: 'David Chen',
+    role: 'Pelatih PT',
+    date: APP_TODAY,
+    shift: 'Pagi',
+    startTime: '06:00',
+    endTime: '14:00',
+    status: 'Scheduled',
+    notes: 'Strength & conditioning coaching'
+  },
+  {
+    id: 'WS-20260918-06',
+    staffId: 'S06',
+    staffName: 'Sarah Wijaya',
+    role: 'Front Desk & Kasir',
+    date: APP_TODAY,
+    shift: 'Off',
+    startTime: '-',
+    endTime: '-',
+    status: 'Off',
+    notes: 'Jadwal Day Off Mingguan'
+  },
+  {
+    id: 'WS-20260918-07',
+    staffId: 'S07',
+    staffName: 'Andi Saputra',
+    role: 'Senior PT & Master Coach',
+    date: APP_TODAY,
+    shift: 'Malam',
+    startTime: '14:00',
+    endTime: '22:00',
+    status: 'Scheduled',
+    notes: 'VIP Transformation coaching & konsultasi nutrisi'
+  },
+  {
+    id: 'WS-20260918-08',
+    staffId: 'S08',
+    staffName: 'Bambang Irawan',
+    role: 'Teknisi & Maintenance',
+    date: APP_TODAY,
+    shift: 'Siang',
+    startTime: '10:00',
+    endTime: '18:00',
+    status: 'Scheduled',
+    notes: 'Inspeksi berkala kabel pulley & pelumasan treadmill'
+  },
+  // Yesterday's Roster (2026-09-17)
+  {
+    id: 'WS-20260917-01',
+    staffId: 'S01',
+    staffName: 'Budi Santoso',
+    role: 'System Admin / Manager',
+    date: '2026-09-17',
+    shift: 'Pagi',
+    startTime: '06:00',
+    endTime: '14:00',
+    status: 'Completed',
+    notes: 'Operasional normal'
+  },
+  {
+    id: 'WS-20260917-02',
+    staffId: 'S02',
+    staffName: 'Siti Kasir',
+    role: 'Kasir & Front Desk',
+    date: '2026-09-17',
+    shift: 'Malam',
+    startTime: '14:00',
+    endTime: '22:00',
+    status: 'Completed',
+    notes: 'Closing kas harian'
+  },
+  {
+    id: 'WS-20260917-03',
+    staffId: 'S03',
+    staffName: 'Citra Lestari',
+    role: 'Leader PT',
+    date: '2026-09-17',
+    shift: 'Pagi',
+    startTime: '06:00',
+    endTime: '14:00',
+    status: 'Completed'
+  },
+  {
+    id: 'WS-20260917-04',
+    staffId: 'S04',
+    staffName: 'Reza Pratama',
+    role: 'Pelatih PT',
+    date: '2026-09-17',
+    shift: 'Siang',
+    startTime: '10:00',
+    endTime: '18:00',
+    status: 'Completed'
+  },
+  {
+    id: 'WS-20260917-05',
+    staffId: 'S06',
+    staffName: 'Sarah Wijaya',
+    role: 'Front Desk & Kasir',
+    date: '2026-09-17',
+    shift: 'Pagi',
+    startTime: '06:00',
+    endTime: '14:00',
+    status: 'Completed'
+  }
+];
+
 export const INITIAL_STAFF_ATTENDANCE: StaffAttendance[] = [
   {
     id: 'SA-1',
     date: APP_TODAY,
-    timeIn: '06:45 WIB',
+    timeIn: '05:50 WIB',
     timeOut: '',
     staffId: 'S01',
     staffName: 'Budi Santoso',
-    shift: 'Pagi'
+    shift: 'Pagi',
+    status: 'Hadir',
+    lateMinutes: 0,
+    overtimeHours: 0,
+    notes: 'Hadir 10 menit sebelum jam shift dimulai',
+    location: 'Lobi Utama RFA Gym'
   },
   {
     id: 'SA-2',
     date: APP_TODAY,
-    timeIn: '06:50 WIB',
+    timeIn: '05:55 WIB',
     timeOut: '',
     staffId: 'S03',
     staffName: 'Citra Lestari',
-    shift: 'Pagi'
+    shift: 'Pagi',
+    status: 'Hadir',
+    lateMinutes: 0,
+    overtimeHours: 0,
+    notes: 'Tepat waktu untuk kelas functional',
+    location: 'Fitness Studio & Gym Floor'
   },
   {
     id: 'SA-3',
     date: APP_TODAY,
-    timeIn: '07:05 WIB',
+    timeIn: '06:18 WIB',
     timeOut: '',
-    staffId: 'S04',
-    staffName: 'Reza Pratama',
-    shift: 'Siang'
+    staffId: 'S05',
+    staffName: 'David Chen',
+    shift: 'Pagi',
+    status: 'Terlambat',
+    lateMinutes: 18,
+    overtimeHours: 0,
+    notes: 'Terlambat 18 menit karena kendala lalu lintas',
+    location: 'Area Beban Bebas'
   },
   {
     id: 'SA-4',
     date: APP_TODAY,
-    timeIn: '07:30 WIB',
+    timeIn: '09:50 WIB',
     timeOut: '',
+    staffId: 'S02',
+    staffName: 'Siti Kasir',
+    shift: 'Siang',
+    status: 'Hadir',
+    lateMinutes: 0,
+    overtimeHours: 0,
+    notes: 'Standby di counter kasir POS',
+    location: 'Front Desk & Kasir'
+  },
+  {
+    id: 'SA-5',
+    date: APP_TODAY,
+    timeIn: '09:55 WIB',
+    timeOut: '',
+    staffId: 'S08',
+    staffName: 'Bambang Irawan',
+    shift: 'Siang',
+    status: 'Hadir',
+    lateMinutes: 0,
+    overtimeHours: 0,
+    notes: 'Membawa perlengkapan maintenance alat',
+    location: 'Workshop & Ruang Alat'
+  },
+  // Historical Attendance Records (Kemarin & Hari-hari sebelumnya)
+  {
+    id: 'SA-101',
+    date: '2026-09-17',
+    timeIn: '05:52 WIB',
+    timeOut: '14:15 WIB',
+    staffId: 'S01',
+    staffName: 'Budi Santoso',
+    shift: 'Pagi',
+    status: 'Hadir',
+    lateMinutes: 0,
+    overtimeHours: 0.25,
+    notes: 'Shift selesai tepat waktu'
+  },
+  {
+    id: 'SA-102',
+    date: '2026-09-17',
+    timeIn: '05:58 WIB',
+    timeOut: '14:05 WIB',
+    staffId: 'S03',
+    staffName: 'Citra Lestari',
+    shift: 'Pagi',
+    status: 'Hadir',
+    lateMinutes: 0,
+    overtimeHours: 0,
+    notes: 'Shift pagi lancar'
+  },
+  {
+    id: 'SA-103',
+    date: '2026-09-17',
+    timeIn: '06:00 WIB',
+    timeOut: '14:00 WIB',
+    staffId: 'S06',
+    staffName: 'Sarah Wijaya',
+    shift: 'Pagi',
+    status: 'Hadir',
+    lateMinutes: 0,
+    overtimeHours: 0
+  },
+  {
+    id: 'SA-104',
+    date: '2026-09-17',
+    timeIn: '10:05 WIB',
+    timeOut: '18:10 WIB',
+    staffId: 'S04',
+    staffName: 'Reza Pratama',
+    shift: 'Siang',
+    status: 'Hadir',
+    lateMinutes: 5,
+    overtimeHours: 0
+  },
+  {
+    id: 'SA-105',
+    date: '2026-09-17',
+    timeIn: '13:50 WIB',
+    timeOut: '22:30 WIB',
+    staffId: 'S02',
+    staffName: 'Siti Kasir',
+    shift: 'Malam',
+    status: 'Lembur',
+    lateMinutes: 0,
+    overtimeHours: 0.5,
+    notes: 'Lembur 30 menit menyelesaikan closing kas & audit POS'
+  },
+  {
+    id: 'SA-106',
+    date: '2026-09-17',
+    timeIn: '13:55 WIB',
+    timeOut: '22:15 WIB',
+    staffId: 'S07',
+    staffName: 'Andi Saputra',
+    shift: 'Malam',
+    status: 'Hadir',
+    lateMinutes: 0,
+    overtimeHours: 0.25
+  },
+  {
+    id: 'SA-107',
+    date: '2026-09-16',
+    timeIn: '05:48 WIB',
+    timeOut: '14:05 WIB',
+    staffId: 'S01',
+    staffName: 'Budi Santoso',
+    shift: 'Pagi',
+    status: 'Hadir',
+    lateMinutes: 0,
+    overtimeHours: 0
+  },
+  {
+    id: 'SA-108',
+    date: '2026-09-16',
+    timeIn: '06:22 WIB',
+    timeOut: '14:10 WIB',
+    staffId: 'S04',
+    staffName: 'Reza Pratama',
+    shift: 'Pagi',
+    status: 'Terlambat',
+    lateMinutes: 22,
+    overtimeHours: 0,
+    notes: 'Terlambat 22 menit'
+  },
+  {
+    id: 'SA-109',
+    date: '2026-09-16',
+    timeIn: '09:55 WIB',
+    timeOut: '18:00 WIB',
+    staffId: 'S02',
+    staffName: 'Siti Kasir',
+    shift: 'Siang',
+    status: 'Hadir',
+    lateMinutes: 0,
+    overtimeHours: 0
+  },
+  {
+    id: 'SA-110',
+    date: '2026-09-16',
+    timeIn: '13:50 WIB',
+    timeOut: '23:30 WIB',
+    staffId: 'S07',
+    staffName: 'Andi Saputra',
+    shift: 'Malam',
+    status: 'Lembur',
+    lateMinutes: 0,
+    overtimeHours: 1.5,
+    notes: 'Lembur coaching VIP transformation & program planning'
+  },
+  {
+    id: 'SA-111',
+    date: '2026-09-16',
+    timeIn: '10:00 WIB',
+    timeOut: '21:00 WIB',
+    staffId: 'S08',
+    staffName: 'Bambang Irawan',
+    shift: 'Siang',
+    status: 'Lembur',
+    lateMinutes: 0,
+    overtimeHours: 3.0,
+    notes: 'Lembur overhaul kabel pulley & servis hidrolik leg press'
+  },
+  {
+    id: 'SA-112',
+    date: '2026-09-15',
+    timeIn: '05:50 WIB',
+    timeOut: '14:00 WIB',
+    staffId: 'S01',
+    staffName: 'Budi Santoso',
+    shift: 'Pagi',
+    status: 'Hadir',
+    lateMinutes: 0,
+    overtimeHours: 0
+  },
+  {
+    id: 'SA-113',
+    date: '2026-09-15',
+    timeIn: '05:55 WIB',
+    timeOut: '16:00 WIB',
+    staffId: 'S03',
+    staffName: 'Citra Lestari',
+    shift: 'Pagi',
+    status: 'Lembur',
+    lateMinutes: 0,
+    overtimeHours: 2.0,
+    notes: 'Lembur kelas fitness workshop & briefing trainer'
+  },
+  {
+    id: 'SA-114',
+    date: '2026-09-15',
+    timeIn: '10:00 WIB',
+    timeOut: '18:00 WIB',
+    staffId: 'S06',
+    staffName: 'Sarah Wijaya',
+    shift: 'Siang',
+    status: 'Hadir',
+    lateMinutes: 0,
+    overtimeHours: 0
+  },
+  {
+    id: 'SA-115',
+    date: '2026-09-15',
+    timeIn: '14:05 WIB',
+    timeOut: '23:30 WIB',
+    staffId: 'S04',
+    staffName: 'Reza Pratama',
+    shift: 'Malam',
+    status: 'Lembur',
+    lateMinutes: 5,
+    overtimeHours: 1.5,
+    notes: 'Lembur pendampingan sesi PT member malam'
+  },
+  {
+    id: 'SA-116',
+    date: '2026-09-15',
+    timeIn: '14:00 WIB',
+    timeOut: '23:00 WIB',
     staffId: 'S05',
     staffName: 'David Chen',
-    shift: 'Pagi'
+    shift: 'Malam',
+    status: 'Lembur',
+    lateMinutes: 0,
+    overtimeHours: 1.0,
+    notes: 'Lembur closing gym & sterilisasi area dumbbell'
+  },
+  {
+    id: 'SA-117',
+    date: '2026-09-14',
+    timeIn: '05:45 WIB',
+    timeOut: '16:15 WIB',
+    staffId: 'S01',
+    staffName: 'Budi Santoso',
+    shift: 'Pagi',
+    status: 'Lembur',
+    lateMinutes: 0,
+    overtimeHours: 2.25,
+    notes: 'Lembur audit stock opname awal pekan'
+  },
+  {
+    id: 'SA-118',
+    date: '2026-09-14',
+    timeIn: '06:25 WIB',
+    timeOut: '14:00 WIB',
+    staffId: 'S05',
+    staffName: 'David Chen',
+    shift: 'Pagi',
+    status: 'Terlambat',
+    lateMinutes: 25,
+    overtimeHours: 0,
+    notes: 'Terlambat 25 menit'
+  },
+  {
+    id: 'SA-119',
+    date: '2026-09-14',
+    timeIn: '09:50 WIB',
+    timeOut: '20:30 WIB',
+    staffId: 'S02',
+    staffName: 'Siti Kasir',
+    shift: 'Siang',
+    status: 'Lembur',
+    lateMinutes: 0,
+    overtimeHours: 2.5,
+    notes: 'Lembur closing promo bundling membership + PT'
+  },
+  {
+    id: 'SA-120',
+    date: '2026-09-14',
+    timeIn: '10:00 WIB',
+    timeOut: '19:30 WIB',
+    staffId: 'S08',
+    staffName: 'Bambang Irawan',
+    shift: 'Siang',
+    status: 'Lembur',
+    lateMinutes: 0,
+    overtimeHours: 1.5,
+    notes: 'Lembur perbaikan running belt treadmill #2'
+  },
+  {
+    id: 'SA-121',
+    date: '2026-09-13',
+    timeIn: '06:00 WIB',
+    timeOut: '14:00 WIB',
+    staffId: 'S03',
+    staffName: 'Citra Lestari',
+    shift: 'Pagi',
+    status: 'Hadir',
+    lateMinutes: 0,
+    overtimeHours: 0
+  },
+  {
+    id: 'SA-122',
+    date: '2026-09-13',
+    timeIn: '13:55 WIB',
+    timeOut: '23:00 WIB',
+    staffId: 'S07',
+    staffName: 'Andi Saputra',
+    shift: 'Malam',
+    status: 'Lembur',
+    lateMinutes: 0,
+    overtimeHours: 1.0,
+    notes: 'Lembur weekend transformation challenge'
+  },
+  {
+    id: 'SA-123',
+    date: '2026-09-12',
+    timeIn: '05:50 WIB',
+    timeOut: '14:00 WIB',
+    staffId: 'S06',
+    staffName: 'Sarah Wijaya',
+    shift: 'Pagi',
+    status: 'Hadir',
+    lateMinutes: 0,
+    overtimeHours: 0
+  },
+  {
+    id: 'SA-124',
+    date: '2026-09-12',
+    timeIn: '14:00 WIB',
+    timeOut: '22:45 WIB',
+    staffId: 'S04',
+    staffName: 'Reza Pratama',
+    shift: 'Malam',
+    status: 'Lembur',
+    lateMinutes: 0,
+    overtimeHours: 0.75,
+    notes: 'Lembur 45 menit asistensi member baru'
   }
 ];
 

@@ -10,10 +10,14 @@ import {
   ChevronRight,
   CheckCircle2,
   Calendar as CalendarIcon,
-  Filter
+  Filter,
+  Search,
+  X,
+  RotateCcw,
+  Sparkles
 } from 'lucide-react';
 import { Schedule, StudioClass, Member, User as UserType } from '../types';
-import { APP_TODAY } from '../utils/formatters';
+import { APP_TODAY, formatDateIndo } from '../utils/formatters';
 
 interface JadwalPTViewProps {
   schedules: Schedule[];
@@ -46,6 +50,19 @@ export const JadwalPTView: React.FC<JadwalPTViewProps> = ({
 }) => {
   const [activeSubTab, setActiveSubTab] = useState<'pt' | 'class' | 'calendar'>('pt');
   const [filterTrainer, setFilterTrainer] = useState<string>('all');
+  const [filterStatus, setFilterStatus] = useState<string>('all');
+  const [searchQuery, setSearchQuery] = useState<string>('');
+
+  // Date filter state for PT Schedules
+  const [dateFilterMode, setDateFilterMode] = useState<
+    'all' | 'today' | 'tomorrow' | 'this_week' | 'this_month' | 'custom'
+  >('all');
+  const [customStartDate, setCustomStartDate] = useState<string>('');
+  const [customEndDate, setCustomEndDate] = useState<string>('');
+
+  // Date filter state for Studio Classes
+  const [classDateFilterMode, setClassDateFilterMode] = useState<'all' | 'today' | 'this_week' | 'custom'>('all');
+  const [classCustomDate, setClassCustomDate] = useState<string>('');
 
   // New Schedule Modal state
   const [isAddSchModalOpen, setIsAddSchModalOpen] = useState(false);
@@ -74,10 +91,127 @@ export const JadwalPTView: React.FC<JadwalPTViewProps> = ({
   // Calendar Week Offset
   const [weekOffset, setWeekOffset] = useState(0);
 
+  // Date Calculations Helpers
+  const getTomorrowStr = (base: string = APP_TODAY) => {
+    const d = new Date(base + 'T00:00:00');
+    d.setDate(d.getDate() + 1);
+    return d.toISOString().split('T')[0];
+  };
+
+  const getWeekRange = (base: string = APP_TODAY) => {
+    const d = new Date(base + 'T00:00:00');
+    const day = d.getDay();
+    const diff = d.getDate() - day + (day === 0 ? -6 : 1); // Monday start
+    const monday = new Date(d);
+    monday.setDate(diff);
+    const sunday = new Date(monday);
+    sunday.setDate(monday.getDate() + 6);
+    return {
+      start: monday.toISOString().split('T')[0],
+      end: sunday.toISOString().split('T')[0]
+    };
+  };
+
+  const getMonthRange = (base: string = APP_TODAY) => {
+    const d = new Date(base + 'T00:00:00');
+    const y = d.getFullYear();
+    const m = d.getMonth();
+    const start = new Date(y, m, 1).toISOString().split('T')[0];
+    const end = new Date(y, m + 1, 0).toISOString().split('T')[0];
+    return { start, end };
+  };
+
+  const matchesDateFilter = (itemDate: string) => {
+    if (dateFilterMode === 'all') return true;
+    if (dateFilterMode === 'today') return itemDate === APP_TODAY;
+    if (dateFilterMode === 'tomorrow') return itemDate === getTomorrowStr(APP_TODAY);
+    if (dateFilterMode === 'this_week') {
+      const { start, end } = getWeekRange(APP_TODAY);
+      return itemDate >= start && itemDate <= end;
+    }
+    if (dateFilterMode === 'this_month') {
+      const { start, end } = getMonthRange(APP_TODAY);
+      return itemDate >= start && itemDate <= end;
+    }
+    if (dateFilterMode === 'custom') {
+      if (customStartDate && customEndDate) {
+        return itemDate >= customStartDate && itemDate <= customEndDate;
+      }
+      if (customStartDate) return itemDate >= customStartDate;
+      if (customEndDate) return itemDate <= customEndDate;
+      return true;
+    }
+    return true;
+  };
+
+  const getDateFilterLabel = () => {
+    if (dateFilterMode === 'all') return 'Semua Tanggal';
+    if (dateFilterMode === 'today') return `Hari Ini (${formatDateIndo(APP_TODAY)})`;
+    if (dateFilterMode === 'tomorrow') return `Besok (${formatDateIndo(getTomorrowStr(APP_TODAY))})`;
+    if (dateFilterMode === 'this_week') {
+      const { start, end } = getWeekRange(APP_TODAY);
+      return `Minggu Ini (${formatDateIndo(start)} - ${formatDateIndo(end)})`;
+    }
+    if (dateFilterMode === 'this_month') {
+      const { start, end } = getMonthRange(APP_TODAY);
+      return `Bulan Ini (${formatDateIndo(start)} - ${formatDateIndo(end)})`;
+    }
+    if (dateFilterMode === 'custom') {
+      if (customStartDate && customEndDate) {
+        return `${formatDateIndo(customStartDate)} s/d ${formatDateIndo(customEndDate)}`;
+      }
+      if (customStartDate) return `Mulai ${formatDateIndo(customStartDate)}`;
+      if (customEndDate) return `Hingga ${formatDateIndo(customEndDate)}`;
+      return 'Pilih Rentang Tanggal';
+    }
+    return 'Semua Tanggal';
+  };
+
+  const hasActiveFilter =
+    dateFilterMode !== 'all' ||
+    customStartDate !== '' ||
+    customEndDate !== '' ||
+    filterTrainer !== 'all' ||
+    filterStatus !== 'all' ||
+    searchQuery.trim() !== '';
+
+  const handleResetFilters = () => {
+    setDateFilterMode('all');
+    setCustomStartDate('');
+    setCustomEndDate('');
+    setFilterTrainer('all');
+    setFilterStatus('all');
+    setSearchQuery('');
+  };
+
   // Filter schedules
   const filteredSchedules = schedules.filter((s) => {
     if (currentUser?.role === 'pt' && s.trainer !== currentUser.name) return false;
     if (filterTrainer !== 'all' && s.trainer !== filterTrainer) return false;
+    if (filterStatus !== 'all' && s.status !== filterStatus) return false;
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase();
+      const matchMember = s.memberName.toLowerCase().includes(q);
+      const matchTrainer = s.trainer.toLowerCase().includes(q);
+      const matchBundle = s.bundleName?.toLowerCase().includes(q);
+      if (!matchMember && !matchTrainer && !matchBundle) return false;
+    }
+    if (!matchesDateFilter(s.date)) return false;
+    return true;
+  });
+
+  // Filter studio classes
+  const filteredStudioClasses = studioClasses.filter((cls) => {
+    if (classDateFilterMode === 'all') return true;
+    if (classDateFilterMode === 'today') return cls.date === APP_TODAY;
+    if (classDateFilterMode === 'this_week') {
+      const { start, end } = getWeekRange(APP_TODAY);
+      return cls.date >= start && cls.date <= end;
+    }
+    if (classDateFilterMode === 'custom') {
+      if (classCustomDate) return cls.date === classCustomDate;
+      return true;
+    }
     return true;
   });
 
@@ -253,31 +387,168 @@ export const JadwalPTView: React.FC<JadwalPTViewProps> = ({
       {/* VIEW 1: PT SCHEDULES & 3-PARTY VALIDATION */}
       {activeSubTab === 'pt' && (
         <div className="bg-zinc-900/90 border border-zinc-800 rounded-3xl overflow-hidden shadow-sm flex flex-col">
-          <div className="p-4 sm:p-5 border-b border-zinc-800 flex flex-wrap justify-between items-center gap-3 bg-zinc-950/40">
-            <div className="flex items-center gap-3">
-              <span className="text-xs font-bold text-zinc-400 flex items-center gap-1">
-                <Filter className="w-3.5 h-3.5" /> Filter Trainer:
-              </span>
-              <select
-                value={filterTrainer}
-                onChange={(e) => setFilterTrainer(e.target.value)}
-                className="bg-zinc-900 border border-zinc-700 text-xs font-semibold rounded-xl px-3 py-2 text-white outline-none focus:border-orange-500"
+          {/* Enhanced Filter Controls Bar */}
+          <div className="p-4 sm:p-5 border-b border-zinc-800 space-y-4 bg-zinc-950/50">
+            {/* Top Row: Search, Trainer, Status, and Add Button */}
+            <div className="flex flex-col lg:flex-row justify-between items-stretch lg:items-center gap-3">
+              <div className="flex flex-wrap items-center gap-2.5 flex-1">
+                {/* Search Bar */}
+                <div className="relative flex-1 min-w-[200px] max-w-sm">
+                  <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400" />
+                  <input
+                    type="text"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    placeholder="Cari nama member, trainer, atau paket..."
+                    className="w-full bg-zinc-900 border border-zinc-800 rounded-xl pl-9 pr-3 py-2 text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-orange-500"
+                  />
+                  {searchQuery && (
+                    <button
+                      type="button"
+                      onClick={() => setSearchQuery('')}
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-white"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                </div>
+
+                {/* Filter Trainer */}
+                <div className="flex items-center gap-1.5 shrink-0">
+                  <span className="text-[11px] font-bold text-zinc-400 hidden sm:inline">Trainer:</span>
+                  <select
+                    value={filterTrainer}
+                    onChange={(e) => setFilterTrainer(e.target.value)}
+                    className="bg-zinc-900 border border-zinc-700 text-xs font-semibold rounded-xl px-3 py-2 text-white outline-none focus:border-orange-500 cursor-pointer"
+                  >
+                    <option value="all">Semua Pelatih</option>
+                    {trainers.map((t) => (
+                      <option key={t.id} value={t.name}>
+                        {t.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Filter Status */}
+                <div className="flex items-center gap-1.5 shrink-0">
+                  <span className="text-[11px] font-bold text-zinc-400 hidden sm:inline">Status:</span>
+                  <select
+                    value={filterStatus}
+                    onChange={(e) => setFilterStatus(e.target.value)}
+                    className="bg-zinc-900 border border-zinc-700 text-xs font-semibold rounded-xl px-3 py-2 text-white outline-none focus:border-orange-500 cursor-pointer"
+                  >
+                    <option value="all">Semua Status</option>
+                    <option value="Menunggu">Menunggu</option>
+                    <option value="Selesai">Selesai</option>
+                    <option value="Reschedule">Reschedule</option>
+                    <option value="Batal">Batal</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Action Button */}
+              <button
+                type="button"
+                onClick={() => setIsAddSchModalOpen(true)}
+                className="bg-orange-500 hover:bg-orange-600 text-white font-bold px-4 py-2.5 rounded-xl text-xs shadow-md transition flex items-center justify-center gap-1.5 shrink-0 active:scale-95 cursor-pointer"
               >
-                <option value="all">Semua Pelatih</option>
-                {trainers.map((t) => (
-                  <option key={t.id} value={t.name}>
-                    {t.name}
-                  </option>
-                ))}
-              </select>
+                <Plus className="w-4 h-4" />
+                <span>Buat Jadwal PT Baru</span>
+              </button>
             </div>
 
-            <button
-              onClick={() => setIsAddSchModalOpen(true)}
-              className="bg-orange-500 hover:bg-orange-600 text-white font-bold px-4 py-2 rounded-xl text-xs shadow-md transition flex items-center gap-1.5"
-            >
-              <Plus className="w-4 h-4" /> Buat Jadwal PT Baru
-            </button>
+            {/* Second Row: Date Filter Presets & Custom Date Inputs */}
+            <div className="pt-3 border-t border-zinc-800/80 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="flex flex-wrap items-center gap-1.5">
+                <span className="text-xs font-bold text-zinc-400 flex items-center gap-1 mr-1">
+                  <CalendarIcon className="w-3.5 h-3.5 text-orange-400" />
+                  <span>Filter Tanggal:</span>
+                </span>
+
+                {[
+                  { id: 'all', label: 'Semua Tanggal' },
+                  { id: 'today', label: 'Hari Ini' },
+                  { id: 'tomorrow', label: 'Besok' },
+                  { id: 'this_week', label: 'Minggu Ini' },
+                  { id: 'this_month', label: 'Bulan Ini' },
+                  { id: 'custom', label: 'Rentang Kustom' }
+                ].map((item) => {
+                  const isActive = dateFilterMode === item.id;
+                  return (
+                    <button
+                      key={item.id}
+                      type="button"
+                      onClick={() => setDateFilterMode(item.id as any)}
+                      className={`px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer ${
+                        isActive
+                          ? 'bg-orange-500 text-white shadow-sm shadow-orange-500/30'
+                          : 'bg-zinc-900 hover:bg-zinc-800 text-zinc-400 hover:text-white border border-zinc-800'
+                      }`}
+                    >
+                      {item.label}
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Custom Date Pickers */}
+              {dateFilterMode === 'custom' && (
+                <div className="flex items-center gap-2 bg-zinc-900 border border-zinc-800 p-1.5 rounded-xl text-xs animate-in fade-in">
+                  <span className="text-[11px] text-zinc-400 font-semibold pl-1">Dari:</span>
+                  <input
+                    type="date"
+                    value={customStartDate}
+                    onChange={(e) => setCustomStartDate(e.target.value)}
+                    className="bg-zinc-950 border border-zinc-700 text-white rounded-lg px-2 py-1 text-xs focus:outline-none focus:border-orange-500"
+                  />
+                  <span className="text-[11px] text-zinc-400 font-semibold">s/d</span>
+                  <input
+                    type="date"
+                    value={customEndDate}
+                    onChange={(e) => setCustomEndDate(e.target.value)}
+                    className="bg-zinc-950 border border-zinc-700 text-white rounded-lg px-2 py-1 text-xs focus:outline-none focus:border-orange-500"
+                  />
+                </div>
+              )}
+
+              {/* Reset Filter Button */}
+              {hasActiveFilter && (
+                <button
+                  type="button"
+                  onClick={handleResetFilters}
+                  className="px-2.5 py-1.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs font-bold transition flex items-center gap-1.5 self-start sm:self-auto shrink-0 border border-zinc-700 cursor-pointer"
+                  title="Kembalikan semua filter ke awal"
+                >
+                  <RotateCcw className="w-3 h-3 text-orange-400" />
+                  <span>Reset Filter</span>
+                </button>
+              )}
+            </div>
+
+            {/* Bottom Row: Filter Info & Summary Indicator */}
+            <div className="flex flex-wrap items-center justify-between gap-2 pt-1 text-[11px]">
+              <div className="flex items-center gap-2">
+                <span className="px-2.5 py-1 rounded-lg bg-zinc-900 border border-zinc-800 text-zinc-300 font-medium">
+                  Menampilkan <strong className="text-white font-bold">{filteredSchedules.length}</strong> dari{' '}
+                  {schedules.length} sesi
+                </span>
+                <span className="px-2.5 py-1 rounded-lg bg-orange-500/10 border border-orange-500/20 text-orange-400 font-medium flex items-center gap-1">
+                  <CalendarIcon className="w-3 h-3" />
+                  <span>Periode: <strong>{getDateFilterLabel()}</strong></span>
+                </span>
+              </div>
+
+              {dateFilterMode !== 'today' && (
+                <button
+                  type="button"
+                  onClick={() => setDateFilterMode('today')}
+                  className="text-orange-400 hover:text-orange-300 font-bold hover:underline cursor-pointer flex items-center gap-1"
+                >
+                  Lihat Sesi Hari Ini ({formatDateIndo(APP_TODAY)}) →
+                </button>
+              )}
+            </div>
           </div>
 
           <div className="overflow-x-auto scrollbar-thin scrollbar-thumb-zinc-800">
@@ -294,8 +565,27 @@ export const JadwalPTView: React.FC<JadwalPTViewProps> = ({
               <tbody className="divide-y divide-zinc-800 bg-zinc-950/30 text-xs">
                 {filteredSchedules.length === 0 ? (
                   <tr>
-                    <td colSpan={5} className="py-8 text-center text-zinc-500">
-                      Tidak ada jadwal sesi PT yang sesuai kriteria.
+                    <td colSpan={5} className="py-12 text-center text-zinc-400">
+                      <div className="flex flex-col items-center justify-center gap-2 max-w-sm mx-auto">
+                        <div className="w-12 h-12 rounded-2xl bg-zinc-900 border border-zinc-800 flex items-center justify-center text-zinc-500">
+                          <CalendarIcon className="w-6 h-6" />
+                        </div>
+                        <p className="font-bold text-white text-sm mt-1">Tidak Ada Jadwal Sesi PT</p>
+                        <p className="text-xs text-zinc-500">
+                          Tidak ditemukan sesi untuk periode <span className="text-orange-400 font-semibold">{getDateFilterLabel()}</span>
+                          {filterTrainer !== 'all' ? ` bersama ${filterTrainer}` : ''}.
+                        </p>
+                        {hasActiveFilter && (
+                          <button
+                            type="button"
+                            onClick={handleResetFilters}
+                            className="mt-2 px-3 py-1.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-orange-400 text-xs font-bold transition flex items-center gap-1.5 border border-zinc-700 cursor-pointer"
+                          >
+                            <RotateCcw className="w-3.5 h-3.5" />
+                            <span>Tampilkan Semua Tanggal</span>
+                          </button>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 ) : (
@@ -422,95 +712,150 @@ export const JadwalPTView: React.FC<JadwalPTViewProps> = ({
       {/* VIEW 2: STUDIO CLASSES */}
       {activeSubTab === 'class' && (
         <div className="space-y-4">
-          <div className="flex justify-between items-center">
-            <p className="text-xs text-zinc-400">Jadwal kelas studio zumba, yoga, dan aerobik.</p>
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 bg-zinc-900/90 border border-zinc-800 rounded-2xl p-4">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-xs font-bold text-zinc-400 flex items-center gap-1 mr-1">
+                <CalendarIcon className="w-3.5 h-3.5 text-blue-400" />
+                <span>Filter Tanggal Kelas:</span>
+              </span>
+              {[
+                { id: 'all', label: 'Semua' },
+                { id: 'today', label: 'Hari Ini' },
+                { id: 'this_week', label: 'Minggu Ini' },
+                { id: 'custom', label: 'Pilih Tanggal' }
+              ].map((pill) => {
+                const isActive = classDateFilterMode === pill.id;
+                return (
+                  <button
+                    key={pill.id}
+                    type="button"
+                    onClick={() => setClassDateFilterMode(pill.id as any)}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer ${
+                      isActive
+                        ? 'bg-blue-600 text-white shadow-sm'
+                        : 'bg-zinc-950 text-zinc-400 hover:text-white border border-zinc-800'
+                    }`}
+                  >
+                    {pill.label}
+                  </button>
+                );
+              })}
+
+              {classDateFilterMode === 'custom' && (
+                <input
+                  type="date"
+                  value={classCustomDate}
+                  onChange={(e) => setClassCustomDate(e.target.value)}
+                  className="bg-zinc-950 border border-zinc-700 text-white rounded-xl px-2.5 py-1 text-xs focus:outline-none focus:border-blue-500"
+                />
+              )}
+            </div>
+
             <button
               onClick={() => setIsAddClassModalOpen(true)}
-              className="bg-blue-600 hover:bg-blue-500 text-white font-bold px-4 py-2 rounded-xl text-xs shadow-md transition flex items-center gap-1.5"
+              className="bg-blue-600 hover:bg-blue-500 text-white font-bold px-4 py-2 rounded-xl text-xs shadow-md transition flex items-center gap-1.5 self-end sm:self-auto shrink-0 cursor-pointer"
             >
               <Plus className="w-4 h-4" /> Buat Kelas Baru
             </button>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {studioClasses.map((cls) => {
-              const isFull = cls.booked.length >= cls.capacity;
-              const fillPercent = (cls.booked.length / cls.capacity) * 100;
-
-              return (
-                <div
-                  key={cls.id}
-                  className="bg-zinc-900/90 border border-zinc-800 rounded-3xl p-5 shadow-sm flex flex-col justify-between"
+            {filteredStudioClasses.length === 0 ? (
+              <div className="col-span-full py-12 text-center bg-zinc-900/50 border border-zinc-800 rounded-3xl text-zinc-400">
+                <CalendarIcon className="w-8 h-8 mx-auto text-zinc-600 mb-2" />
+                <p className="font-bold text-white text-sm">Tidak Ada Kelas Studio</p>
+                <p className="text-xs text-zinc-500 mt-1">Tidak ditemukan kelas pada filter tanggal yang dipilih.</p>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setClassDateFilterMode('all');
+                    setClassCustomDate('');
+                  }}
+                  className="mt-3 px-3 py-1.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-blue-400 text-xs font-bold transition border border-zinc-700"
                 >
-                  <div>
-                    <div className="flex justify-between items-start mb-2">
-                      <h4 className="text-base font-bold text-white tracking-tight">{cls.name}</h4>
-                      <span className="bg-orange-500/10 border border-orange-500/20 text-orange-400 text-[10px] font-bold px-2 py-0.5 rounded-lg">
-                        {cls.date}
-                      </span>
-                    </div>
-                    <p className="text-xs text-zinc-400 mb-4 flex items-center gap-2">
-                      <Clock className="w-3.5 h-3.5 text-orange-500" />
-                      <span>{cls.time} WIB</span>
-                      <span>•</span>
-                      <span>Instruktur: <strong className="text-white">{cls.trainer}</strong></span>
-                    </p>
+                  Tampilkan Semua Tanggal
+                </button>
+              </div>
+            ) : (
+              filteredStudioClasses.map((cls) => {
+                const isFull = cls.booked.length >= cls.capacity;
+                const fillPercent = (cls.booked.length / cls.capacity) * 100;
 
-                    {/* Capacity Progress Bar */}
-                    <div className="mb-4">
-                      <div className="flex justify-between text-[11px] font-bold mb-1">
-                        <span className="text-zinc-400 uppercase text-[10px]">Kuota Peserta:</span>
-                        <span className={isFull ? 'text-rose-400' : 'text-blue-400'}>
-                          {cls.booked.length} / {cls.capacity} Orang
+                return (
+                  <div
+                    key={cls.id}
+                    className="bg-zinc-900/90 border border-zinc-800 rounded-3xl p-5 shadow-sm flex flex-col justify-between"
+                  >
+                    <div>
+                      <div className="flex justify-between items-start mb-2">
+                        <h4 className="text-base font-bold text-white tracking-tight">{cls.name}</h4>
+                        <span className="bg-orange-500/10 border border-orange-500/20 text-orange-400 text-[10px] font-bold px-2 py-0.5 rounded-lg">
+                          {cls.date}
                         </span>
                       </div>
-                      <div className="w-full bg-zinc-950 h-2 rounded-full overflow-hidden border border-zinc-800">
-                        <div
-                          className={`h-full transition-all ${isFull ? 'bg-rose-500' : 'bg-blue-500'}`}
-                          style={{ width: `${Math.min(fillPercent, 100)}%` }}
-                        />
+                      <p className="text-xs text-zinc-400 mb-4 flex items-center gap-2">
+                        <Clock className="w-3.5 h-3.5 text-orange-500" />
+                        <span>{cls.time} WIB</span>
+                        <span>•</span>
+                        <span>Instruktur: <strong className="text-white">{cls.trainer}</strong></span>
+                      </p>
+
+                      {/* Capacity Progress Bar */}
+                      <div className="mb-4">
+                        <div className="flex justify-between text-[11px] font-bold mb-1">
+                          <span className="text-zinc-400 uppercase text-[10px]">Kuota Peserta:</span>
+                          <span className={isFull ? 'text-rose-400' : 'text-blue-400'}>
+                            {cls.booked.length} / {cls.capacity} Orang
+                          </span>
+                        </div>
+                        <div className="w-full bg-zinc-950 h-2 rounded-full overflow-hidden border border-zinc-800">
+                          <div
+                            className={`h-full transition-all ${isFull ? 'bg-rose-500' : 'bg-blue-500'}`}
+                            style={{ width: `${Math.min(fillPercent, 100)}%` }}
+                          />
+                        </div>
+                      </div>
+
+                      {/* Participant Names List */}
+                      <div className="bg-zinc-950/60 border border-zinc-800/80 rounded-2xl p-3 mb-4 max-h-[100px] overflow-y-auto scrollbar-thin scrollbar-thumb-zinc-800 text-xs">
+                        <span className="text-[10px] uppercase font-bold text-zinc-500 block mb-1.5">
+                          Peserta Terdaftar ({cls.booked.length}):
+                        </span>
+                        {cls.booked.length === 0 ? (
+                          <p className="text-zinc-600 italic text-[11px]">Belum ada peserta terdaftar.</p>
+                        ) : (
+                          <div className="space-y-1">
+                            {cls.booked.map((name, idx) => (
+                              <div key={idx} className="flex items-center gap-1.5 text-zinc-300 text-[11px]">
+                                <span className="w-4 h-4 rounded-full bg-zinc-800 text-[9px] flex items-center justify-center font-bold text-zinc-400">
+                                  {idx + 1}
+                                </span>
+                                <span>{name}</span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
                       </div>
                     </div>
 
-                    {/* Participant Names List */}
-                    <div className="bg-zinc-950/60 border border-zinc-800/80 rounded-2xl p-3 mb-4 max-h-[100px] overflow-y-auto scrollbar-thin scrollbar-thumb-zinc-800 text-xs">
-                      <span className="text-[10px] uppercase font-bold text-zinc-500 block mb-1.5">
-                        Peserta Terdaftar ({cls.booked.length}):
-                      </span>
-                      {cls.booked.length === 0 ? (
-                        <p className="text-zinc-600 italic text-[11px]">Belum ada peserta terdaftar.</p>
-                      ) : (
-                        <div className="space-y-1">
-                          {cls.booked.map((name, idx) => (
-                            <div key={idx} className="flex items-center gap-1.5 text-zinc-300 text-[11px]">
-                              <span className="w-4 h-4 rounded-full bg-zinc-800 text-[9px] flex items-center justify-center font-bold text-zinc-400">
-                                {idx + 1}
-                              </span>
-                              <span>{name}</span>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </div>
+                    <button
+                      disabled={isFull}
+                      onClick={() => {
+                        setBookingClassTarget(cls);
+                        setBookingMemberId('');
+                      }}
+                      className={`w-full py-2.5 rounded-xl font-bold text-xs transition flex items-center justify-center gap-1.5 ${
+                        isFull
+                          ? 'bg-zinc-800 text-zinc-500 cursor-not-allowed'
+                          : 'bg-blue-600 hover:bg-blue-500 text-white shadow-md'
+                      }`}
+                    >
+                      {isFull ? 'Kelas Sudah Penuh' : '+ Daftarkan Member'}
+                    </button>
                   </div>
-
-                  <button
-                    disabled={isFull}
-                    onClick={() => {
-                      setBookingClassTarget(cls);
-                      setBookingMemberId('');
-                    }}
-                    className={`w-full py-2.5 rounded-xl font-bold text-xs transition flex items-center justify-center gap-1.5 ${
-                      isFull
-                        ? 'bg-zinc-800 text-zinc-500 cursor-not-allowed'
-                        : 'bg-blue-600 hover:bg-blue-500 text-white shadow-md'
-                    }`}
-                  >
-                    {isFull ? 'Kelas Sudah Penuh' : '+ Daftarkan Member'}
-                  </button>
-                </div>
-              );
-            })}
+                );
+              })
+            )}
           </div>
         </div>
       )}

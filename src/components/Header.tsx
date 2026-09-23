@@ -10,10 +10,15 @@ import {
   Shield,
   PanelLeftClose,
   PanelLeftOpen,
+  Palette,
+  Settings,
+  Printer,
   X
 } from 'lucide-react';
 import { User } from '../types';
 import { formatDateIndo, APP_TODAY } from '../utils/formatters';
+import { PWAInstallButton } from './PWAInstallButton';
+import { useTheme } from '../context/ThemeContext';
 
 interface HeaderProps {
   currentUser: User | null;
@@ -26,6 +31,7 @@ interface HeaderProps {
   onSwitchUser?: (userId: string) => void;
   onLogout?: () => void;
   firebaseConnected?: boolean;
+  onOpenSettings?: (subTab?: 'printer' | 'roles' | 'profile' | 'finance' | 'templates' | 'backup') => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -38,10 +44,12 @@ export const Header: React.FC<HeaderProps> = ({
   staffUsers = [],
   onSwitchUser,
   onLogout,
-  firebaseConnected = true
+  firebaseConnected = true,
+  onOpenSettings
 }) => {
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const profileMenuRef = useRef<HTMLDivElement | null>(null);
+  const { openThemeModal, currentAccent, theme } = useTheme();
 
   // Close profile dropdown when clicking outside or pressing Escape
   useEffect(() => {
@@ -125,6 +133,42 @@ export const Header: React.FC<HeaderProps> = ({
           <Calendar className="w-3.5 h-3.5 text-orange-500 mr-2 shrink-0" />
           <span className="whitespace-nowrap">{formatDateIndo(APP_TODAY)}</span>
         </div>
+
+        {/* PWA Install Button (Android / iOS / Desktop) */}
+        <PWAInstallButton variant="compact" />
+
+        {/* Quick Theme Settings Button */}
+        <button
+          type="button"
+          id="btn-header-theme-toggle"
+          onClick={openThemeModal}
+          className="flex items-center gap-1.5 p-2 sm:px-2.5 sm:py-1.5 rounded-xl bg-zinc-900/90 hover:bg-zinc-800 border border-zinc-800 text-zinc-300 hover:text-white transition active:scale-95 min-h-[44px]"
+          title={`Pengaturan Tema (${theme.mode} • Aksen ${currentAccent.name})`}
+          aria-label="Buka Pengaturan Tema"
+        >
+          <Palette className="w-4 h-4 text-orange-400 shrink-0" />
+          <span
+            className="w-2.5 h-2.5 rounded-full shrink-0 shadow-sm"
+            style={{ backgroundColor: currentAccent.hex }}
+            title={`Aksen Aktif: ${currentAccent.name}`}
+          />
+          <span className="hidden xl:inline text-[11px] font-bold">Tema</span>
+        </button>
+
+        {/* Quick System Settings Shortcut */}
+        {onOpenSettings && (
+          <button
+            type="button"
+            id="btn-header-settings-shortcut"
+            onClick={() => onOpenSettings('printer')}
+            className="flex items-center gap-1.5 p-2 sm:px-2.5 sm:py-1.5 rounded-xl bg-zinc-900/90 hover:bg-zinc-800 border border-zinc-800 text-zinc-300 hover:text-white transition active:scale-95 min-h-[44px]"
+            title="Pengaturan Printer & Sistem"
+            aria-label="Buka Pengaturan Printer"
+          >
+            <Printer className="w-4 h-4 text-orange-400 shrink-0" />
+            <span className="hidden xl:inline text-[11px] font-bold">Printer</span>
+          </button>
+        )}
 
         {/* User Profile Trigger & Dropdown */}
         <div className="relative" ref={profileMenuRef}>
@@ -212,6 +256,76 @@ export const Header: React.FC<HeaderProps> = ({
                   </select>
                 </div>
               )}
+
+              {/* Theme Settings Shortcut in Dropdown */}
+              <div className="p-3 border-b border-zinc-800 bg-zinc-950/20 space-y-1">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsProfileOpen(false);
+                    openThemeModal();
+                  }}
+                  className="w-full flex items-center justify-between p-2 rounded-xl hover:bg-zinc-800/80 transition text-left text-zinc-200 cursor-pointer"
+                >
+                  <div className="flex items-center gap-2.5">
+                    <div className="p-1.5 rounded-lg bg-orange-500/10 text-orange-400 border border-orange-500/20">
+                      <Palette className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <span className="text-xs font-bold block text-white">Setting Tema & Tampilan</span>
+                      <span className="text-[10px] text-zinc-400 block">Warna, mode gelap & kepadatan</span>
+                    </div>
+                  </div>
+                  <span className="flex items-center gap-1.5 text-[10px] px-2 py-0.5 rounded-md bg-zinc-800 text-zinc-300 font-mono font-bold">
+                    <span className="w-2 h-2 rounded-full" style={{ backgroundColor: currentAccent.hex }} />
+                    {theme.mode}
+                  </span>
+                </button>
+
+                {onOpenSettings && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsProfileOpen(false);
+                      onOpenSettings('printer');
+                    }}
+                    className="w-full flex items-center justify-between p-2 rounded-xl hover:bg-zinc-800/80 transition text-left text-zinc-200 cursor-pointer"
+                  >
+                    <div className="flex items-center gap-2.5">
+                      <div className="p-1.5 rounded-lg bg-blue-500/10 text-blue-400 border border-blue-500/20">
+                        <Printer className="w-4 h-4" />
+                      </div>
+                      <div>
+                        <span className="text-xs font-bold block text-white">Setting Printer & Struk</span>
+                        <span className="text-[10px] text-zinc-400 block">Thermal 58/80mm & cetak struk</span>
+                      </div>
+                    </div>
+                    <span className="text-[10px] text-zinc-400 font-mono">POS</span>
+                  </button>
+                )}
+
+                {onOpenSettings && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsProfileOpen(false);
+                      onOpenSettings('roles');
+                    }}
+                    className="w-full flex items-center justify-between p-2 rounded-xl hover:bg-zinc-800/80 transition text-left text-zinc-200 cursor-pointer"
+                  >
+                    <div className="flex items-center gap-2.5">
+                      <div className="p-1.5 rounded-lg bg-purple-500/10 text-purple-400 border border-purple-500/20">
+                        <Settings className="w-4 h-4" />
+                      </div>
+                      <div>
+                        <span className="text-xs font-bold block text-white">Manajemen Role & Akses</span>
+                        <span className="text-[10px] text-zinc-400 block">Hak akses modul sistem (RBAC)</span>
+                      </div>
+                    </div>
+                    <span className="text-[10px] text-zinc-400 font-mono">RBAC</span>
+                  </button>
+                )}
+              </div>
 
               {/* Account Quick Info */}
               <div className="p-3 space-y-1 text-xs text-zinc-300">

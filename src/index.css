@@ -1,5 +1,256 @@
 @import "tailwindcss";
 
+/* ==========================================================================
+   GYMPRO ERP DYNAMIC THEME SYSTEM (MODES, ACCENTS & DENSITY)
+   ========================================================================== */
+
+:root {
+  --primary-accent: #f97316;
+  --primary-accent-hover: #ea580c;
+  --primary-accent-rgb: 249, 115, 22;
+  --primary-accent-soft: rgba(249, 115, 22, 0.15);
+}
+
+::selection {
+  background-color: var(--primary-accent) !important;
+  color: #ffffff !important;
+}
+
+/* Base Smooth Transition for Theme Switches */
+body, #root, header, aside, main, div, button, input, select {
+  transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease;
+}
+
+/* --------------------------------------------------------------------------
+   1. ACCENT COLOR OVERRIDES (Applies to all accent classes in the app)
+   -------------------------------------------------------------------------- */
+[data-accent]:not([data-accent="orange"]) .text-orange-500,
+[data-accent]:not([data-accent="orange"]) .text-orange-400,
+[data-accent]:not([data-accent="orange"]) .text-orange-300 {
+  color: var(--primary-accent) !important;
+}
+
+[data-accent]:not([data-accent="orange"]) .bg-orange-500 {
+  background-color: var(--primary-accent) !important;
+}
+
+[data-accent]:not([data-accent="orange"]) .bg-orange-600,
+[data-accent]:not([data-accent="orange"]) .hover\:bg-orange-600:hover,
+[data-accent]:not([data-accent="orange"]) .hover\:bg-orange-500:hover {
+  background-color: var(--primary-accent-hover) !important;
+}
+
+[data-accent]:not([data-accent="orange"]) .border-orange-500 {
+  border-color: var(--primary-accent) !important;
+}
+
+[data-accent]:not([data-accent="orange"]) .border-orange-500\/20 {
+  border-color: rgba(var(--primary-accent-rgb), 0.2) !important;
+}
+
+[data-accent]:not([data-accent="orange"]) .border-orange-500\/30 {
+  border-color: rgba(var(--primary-accent-rgb), 0.3) !important;
+}
+
+[data-accent]:not([data-accent="orange"]) .border-orange-500\/40 {
+  border-color: rgba(var(--primary-accent-rgb), 0.4) !important;
+}
+
+[data-accent]:not([data-accent="orange"]) .border-orange-500\/50 {
+  border-color: rgba(var(--primary-accent-rgb), 0.5) !important;
+}
+
+[data-accent]:not([data-accent="orange"]) .bg-orange-500\/5 {
+  background-color: rgba(var(--primary-accent-rgb), 0.05) !important;
+}
+
+[data-accent]:not([data-accent="orange"]) .bg-orange-500\/10 {
+  background-color: rgba(var(--primary-accent-rgb), 0.1) !important;
+}
+
+[data-accent]:not([data-accent="orange"]) .bg-orange-500\/15 {
+  background-color: rgba(var(--primary-accent-rgb), 0.15) !important;
+}
+
+[data-accent]:not([data-accent="orange"]) .bg-orange-500\/20 {
+  background-color: rgba(var(--primary-accent-rgb), 0.2) !important;
+}
+
+[data-accent]:not([data-accent="orange"]) .focus\:border-orange-500:focus {
+  border-color: var(--primary-accent) !important;
+}
+
+[data-accent]:not([data-accent="orange"]) .focus\:ring-orange-500:focus {
+  --tw-ring-color: var(--primary-accent) !important;
+}
+
+/* --------------------------------------------------------------------------
+   2. THEME MODES
+   -------------------------------------------------------------------------- */
+
+/* Mode: Midnight OLED (100% Pure Black) */
+[data-theme="midnight"] body,
+[data-theme="midnight"] #root,
+[data-theme="midnight"] .bg-zinc-950,
+[data-theme="midnight"] .bg-\[\#09090b\] {
+  background-color: #000000 !important;
+}
+
+[data-theme="midnight"] .bg-zinc-900,
+[data-theme="midnight"] .bg-zinc-900\/90,
+[data-theme="midnight"] .bg-zinc-900\/95,
+[data-theme="midnight"] .bg-zinc-900\/40,
+[data-theme="midnight"] .bg-zinc-900\/60 {
+  background-color: #09090b !important;
+}
+
+[data-theme="midnight"] .bg-zinc-950\/60,
+[data-theme="midnight"] .bg-zinc-950\/30,
+[data-theme="midnight"] .bg-zinc-950\/40 {
+  background-color: #040405 !important;
+}
+
+[data-theme="midnight"] .border-zinc-800,
+[data-theme="midnight"] .border-zinc-800\/80,
+[data-theme="midnight"] .border-zinc-800\/90 {
+  border-color: #17171a !important;
+}
+
+/* Mode: Cyber Slate (Navy Tech Enterprise) */
+[data-theme="slate"] body,
+[data-theme="slate"] #root,
+[data-theme="slate"] .bg-zinc-950,
+[data-theme="slate"] .bg-\[\#09090b\] {
+  background-color: #0b1120 !important;
+}
+
+[data-theme="slate"] .bg-zinc-900,
+[data-theme="slate"] .bg-zinc-900\/90,
+[data-theme="slate"] .bg-zinc-900\/95,
+[data-theme="slate"] .bg-zinc-900\/40,
+[data-theme="slate"] .bg-zinc-900\/60 {
+  background-color: #111827 !important;
+}
+
+[data-theme="slate"] .bg-zinc-950\/60,
+[data-theme="slate"] .bg-zinc-950\/30,
+[data-theme="slate"] .bg-zinc-950\/40 {
+  background-color: #0e1626 !important;
+}
+
+[data-theme="slate"] .border-zinc-800,
+[data-theme="slate"] .border-zinc-800\/80,
+[data-theme="slate"] .border-zinc-800\/90 {
+  border-color: #1e293b !important;
+}
+
+/* Mode: Daylight Clean (Modern Light) */
+[data-theme="light"] body,
+[data-theme="light"] #root,
+[data-theme="light"] .bg-zinc-950,
+[data-theme="light"] .bg-\[\#09090b\] {
+  background-color: #f8fafc !important;
+  color: #0f172a !important;
+}
+
+[data-theme="light"] .bg-zinc-900,
+[data-theme="light"] .bg-zinc-900\/90,
+[data-theme="light"] .bg-zinc-900\/95,
+[data-theme="light"] .bg-zinc-900\/40,
+[data-theme="light"] .bg-zinc-900\/60 {
+  background-color: #ffffff !important;
+  color: #0f172a !important;
+}
+
+[data-theme="light"] .bg-zinc-950\/60,
+[data-theme="light"] .bg-zinc-950\/30,
+[data-theme="light"] .bg-zinc-950\/40 {
+  background-color: #f1f5f9 !important;
+}
+
+[data-theme="light"] .border-zinc-800,
+[data-theme="light"] .border-zinc-800\/80,
+[data-theme="light"] .border-zinc-800\/90,
+[data-theme="light"] .border-zinc-700 {
+  border-color: #e2e8f0 !important;
+}
+
+[data-theme="light"] .text-white {
+  color: #0f172a !important;
+}
+
+[data-theme="light"] .text-zinc-100,
+[data-theme="light"] .text-zinc-200 {
+  color: #1e293b !important;
+}
+
+[data-theme="light"] .text-zinc-300,
+[data-theme="light"] .text-zinc-400 {
+  color: #475569 !important;
+}
+
+[data-theme="light"] .text-zinc-500 {
+  color: #64748b !important;
+}
+
+[data-theme="light"] input,
+[data-theme="light"] select,
+[data-theme="light"] textarea {
+  background-color: #ffffff !important;
+  color: #0f172a !important;
+  border-color: #cbd5e1 !important;
+}
+
+[data-theme="light"] .hover\:bg-zinc-800:hover,
+[data-theme="light"] .hover\:bg-zinc-800\/30:hover,
+[data-theme="light"] .hover\:bg-zinc-800\/50:hover,
+[data-theme="light"] .hover\:bg-zinc-800\/70:hover {
+  background-color: #e2e8f0 !important;
+}
+
+/* --------------------------------------------------------------------------
+   3. BACKGROUND PATTERNS
+   -------------------------------------------------------------------------- */
+[data-pattern="grid"] {
+  background-image: radial-gradient(rgba(255, 255, 255, 0.08) 1px, transparent 1px);
+  background-size: 24px 24px;
+}
+
+[data-theme="light"][data-pattern="grid"] {
+  background-image: radial-gradient(rgba(0, 0, 0, 0.06) 1px, transparent 1px);
+  background-size: 24px 24px;
+}
+
+[data-pattern="dots"] {
+  background-image: radial-gradient(rgba(255, 255, 255, 0.12) 1.5px, transparent 1.5px);
+  background-size: 16px 16px;
+}
+
+[data-theme="light"][data-pattern="dots"] {
+  background-image: radial-gradient(rgba(0, 0, 0, 0.08) 1.5px, transparent 1.5px);
+  background-size: 16px 16px;
+}
+
+/* --------------------------------------------------------------------------
+   4. CONTENT DENSITY
+   -------------------------------------------------------------------------- */
+[data-density="compact"] table th,
+[data-density="compact"] table td {
+  padding-top: 0.4rem !important;
+  padding-bottom: 0.4rem !important;
+}
+
+[data-density="compact"] .p-4 {
+  padding: 0.75rem !important;
+}
+
+[data-density="compact"] .py-3\.5 {
+  padding-top: 0.5rem !important;
+  padding-bottom: 0.5rem !important;
+}
+
+/* ========================================================================== */
+
 @keyframes scan {
   0% {
     top: 0%;

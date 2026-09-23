@@ -13,7 +13,9 @@ import {
   INITIAL_STAFF_ATTENDANCE,
   INITIAL_PETTY_CASH,
   INITIAL_CLOSING,
-  INITIAL_PT_PURCHASES
+  INITIAL_PT_PURCHASES,
+  INITIAL_WORK_SCHEDULES,
+  INITIAL_LEAVES
 } from './data/initialData';
 import {
   User,
@@ -45,7 +47,9 @@ import {
   InventoryAuditLog,
   ApprovalThresholdConfig,
   MemberFreezeRecord,
-  MembershipStatus
+  MembershipStatus,
+  WorkSchedule,
+  LeaveRequest
 } from './types';
 import {
   INITIAL_BUNDLE_PACKAGES,
@@ -91,7 +95,11 @@ import { SignatureModal } from './components/SignatureModal';
 import { BundlingManagerModal } from './components/BundlingManagerModal';
 import { FreezeMemberModal } from './components/FreezeMemberModal';
 import { UnfreezeMemberModal } from './components/UnfreezeMemberModal';
+import { ThemeSettingsModal } from './components/ThemeSettingsModal';
+import { SettingsView } from './components/SettingsView';
+import { useTheme } from './context/ThemeContext';
 import { LoginPage } from './components/LoginPage';
+import { OfflineIndicator } from './components/OfflineIndicator';
 import { APP_TODAY, formatRp } from './utils/formatters';
 import { testConnection, auth, onAuthStateChanged, logOutFirebase } from './lib/firebase';
 import {
@@ -116,6 +124,7 @@ export default function App() {
     }
   });
   const [firebaseConnected, setFirebaseConnected] = useState(true);
+  const { isThemeModalOpen, closeThemeModal } = useTheme();
 
   const handleToggleDesktopSidebar = () => {
     setIsDesktopCollapsed((prev) => {
@@ -245,6 +254,64 @@ export default function App() {
       return INITIAL_STAFF_ATTENDANCE;
     }
   });
+
+  const [workSchedules, setWorkSchedules] = useState<WorkSchedule[]>(() => {
+    const saved = localStorage.getItem('rfa_work_schedules');
+    if (!saved) return INITIAL_WORK_SCHEDULES;
+    try {
+      const parsed: WorkSchedule[] = JSON.parse(saved);
+      const existingIds = new Set(parsed.map((ws) => ws.id));
+      const missing = INITIAL_WORK_SCHEDULES.filter((ws) => !existingIds.has(ws.id));
+      return missing.length > 0 ? [...parsed, ...missing] : parsed;
+    } catch {
+      return INITIAL_WORK_SCHEDULES;
+    }
+  });
+
+  const [leaveRequests, setLeaveRequests] = useState<LeaveRequest[]>(() => {
+    const saved = localStorage.getItem('rfa_leaves');
+    if (!saved) return INITIAL_LEAVES;
+    try {
+      const parsed: LeaveRequest[] = JSON.parse(saved);
+      const existingIds = new Set(parsed.map((l) => l.id));
+      const missing = INITIAL_LEAVES.filter((l) => !existingIds.has(l.id));
+      return missing.length > 0 ? [...parsed, ...missing] : parsed;
+    } catch {
+      return INITIAL_LEAVES;
+    }
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('rfa_staff', JSON.stringify(staffUsers));
+    } catch (e) {
+      console.error(e);
+    }
+  }, [staffUsers]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('rfa_staff_att', JSON.stringify(staffAttendances));
+    } catch (e) {
+      console.error(e);
+    }
+  }, [staffAttendances]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('rfa_work_schedules', JSON.stringify(workSchedules));
+    } catch (e) {
+      console.error(e);
+    }
+  }, [workSchedules]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('rfa_leaves', JSON.stringify(leaveRequests));
+    } catch (e) {
+      console.error(e);
+    }
+  }, [leaveRequests]);
 
   const [pettyCashList, setPettyCashList] = useState<PettyCash[]>(() => {
     const saved = localStorage.getItem('rfa_pettycash');
@@ -1213,6 +1280,52 @@ export default function App() {
     setActiveReceipt(payTrx);
   };
 
+  // Handler: Batch Pay Installments (Multi-Tagihan / Bayar Semua)
+  const handleBatchPayInstallment = (
+    payments: { payTrx: Transaction; originalTrxId: string; paidAmount: number }[]
+  ) => {
+    if (payments.length === 0) return;
+
+    setTransactions((prev) => {
+      const paymentMap = new Map<string, number>();
+      payments.forEach((p) => {
+        paymentMap.set(p.originalTrxId, (paymentMap.get(p.originalTrxId) || 0) + p.paidAmount);
+      });
+
+      const newPayTrxs = payments.map((p) => p.payTrx);
+
+      // Save each new pay transaction to Firestore
+      newPayTrxs.forEach((payTrx) => {
+        saveTransactionToFirestore(payTrx).catch(() => {});
+      });
+
+      const updatedTransactions = prev.map((t) => {
+        if (paymentMap.has(t.id)) {
+          const paidAmount = paymentMap.get(t.id) || 0;
+          const newPaid = (t.amountPaid || 0) + paidAmount;
+          const newRemaining = Math.max((t.amountRemaining || 0) - paidAmount, 0);
+          const newStatus = newRemaining <= 0 ? 'Paid' : t.status;
+          const updatedTrx = {
+            ...t,
+            amountPaid: newPaid,
+            amountRemaining: newRemaining,
+            status: newStatus
+          };
+          saveTransactionToFirestore(updatedTrx).catch(() => {});
+          return updatedTrx;
+        }
+        return t;
+      });
+
+      return [...newPayTrxs, ...updatedTransactions];
+    });
+
+    // Set active receipt to the first payment
+    if (payments.length > 0) {
+      setActiveReceipt(payments[0].payTrx);
+    }
+  };
+
   // Handler: Void Transaction
   const handleVoidTransaction = (trxId: string, reason: string) => {
     setTransactions((prev) =>
@@ -1384,6 +1497,128 @@ export default function App() {
     });
   };
 
+  const handleDeleteStaffAttendance = (id: string) => {
+    setStaffAttendances((prev) => prev.filter((s) => s.id !== id));
+    showToast('Presensi Dihapus', 'Data presensi berhasil dihapus.', 'info');
+  };
+
+  const handleSaveWorkSchedule = (schedule: WorkSchedule, isNew: boolean) => {
+    setWorkSchedules((prev) => {
+      const idx = prev.findIndex((s) => s.id === schedule.id);
+      if (idx >= 0) {
+        const copy = [...prev];
+        copy[idx] = schedule;
+        return copy;
+      }
+      return [schedule, ...prev];
+    });
+    showToast('Jadwal Disimpan', `Jadwal shift ${schedule.staffName} (${schedule.shift}) berhasil diperbarui.`, 'success');
+  };
+
+  const handleDeleteWorkSchedule = (id: string) => {
+    setWorkSchedules((prev) => prev.filter((s) => s.id !== id));
+    showToast('Jadwal Dihapus', 'Jadwal shift staf berhasil dihapus.', 'info');
+  };
+
+  const handleSwapWorkSchedule = (staffId1: string, staffId2: string, date: string) => {
+    const staff1 = staffUsers.find((s) => s.id === staffId1);
+    const staff2 = staffUsers.find((s) => s.id === staffId2);
+    if (!staff1 || !staff2) return;
+
+    setWorkSchedules((prev) => {
+      const sch1 = prev.find((s) => (s.staffId === staffId1 || s.staffName === staff1.name) && s.date === date);
+      const sch2 = prev.find((s) => (s.staffId === staffId2 || s.staffName === staff2.name) && s.date === date);
+
+      const shift1 = sch1 ? sch1.shift : (staff1.shift || 'Pagi');
+      const shift2 = sch2 ? sch2.shift : (staff2.shift || 'Siang');
+
+      const updated = prev.filter(
+        (s) =>
+          !((s.staffId === staffId1 || s.staffName === staff1.name || s.staffId === staffId2 || s.staffName === staff2.name) &&
+            s.date === date)
+      );
+
+      const newSch1: WorkSchedule = {
+        id: sch1?.id || `WS-${date.replace(/-/g, '')}-${staffId1}`,
+        staffId: staffId1,
+        staffName: staff1.name,
+        role: staff1.roleName,
+        date,
+        shift: shift2 as any,
+        startTime: sch2 ? sch2.startTime : '14:00',
+        endTime: sch2 ? sch2.endTime : '22:00',
+        status: shift2 === 'Off' ? 'Off' : 'Scheduled',
+        notes: `Tukar shift dengan ${staff2.name}`
+      };
+
+      const newSch2: WorkSchedule = {
+        id: sch2?.id || `WS-${date.replace(/-/g, '')}-${staffId2}`,
+        staffId: staffId2,
+        staffName: staff2.name,
+        role: staff2.roleName,
+        date,
+        shift: shift1 as any,
+        startTime: sch1 ? sch1.startTime : '06:00',
+        endTime: sch1 ? sch1.endTime : '14:00',
+        status: shift1 === 'Off' ? 'Off' : 'Scheduled',
+        notes: `Tukar shift dengan ${staff1.name}`
+      };
+
+      return [...updated, newSch1, newSch2];
+    });
+
+    showToast('Tukar Shift Berhasil', `Jadwal ${staff1.name} & ${staff2.name} pada ${date} berhasil ditukar.`, 'success');
+  };
+
+  const handleSaveStaff = (user: User, isNew: boolean) => {
+    setStaffUsers((prev) => {
+      const idx = prev.findIndex((u) => u.id === user.id);
+      if (idx >= 0) {
+        const copy = [...prev];
+        copy[idx] = user;
+        return copy;
+      }
+      return [...prev, user];
+    });
+    showToast('Data Karyawan Disimpan', `Profil ${user.name} berhasil disimpan.`, 'success');
+  };
+
+  const handleDeleteStaff = (id: string) => {
+    setStaffUsers((prev) => prev.filter((u) => u.id !== id));
+    showToast('Karyawan Dihapus', 'Data staf berhasil dihapus.', 'info');
+  };
+
+  const handleSaveLeaveRequest = (leave: LeaveRequest, isNew: boolean) => {
+    setLeaveRequests((prev) => [leave, ...prev]);
+  };
+
+  const handleApproveLeaveRequest = (id: string, status: 'Approved' | 'Rejected', notes?: string) => {
+    const targetLeave = leaveRequests.find((l) => l.id === id);
+    setLeaveRequests((prev) =>
+      prev.map((l) =>
+        l.id === id
+          ? {
+              ...l,
+              status,
+              notes: notes || l.notes,
+              approvedAt: new Date().toISOString().substring(0, 10)
+            }
+          : l
+      )
+    );
+
+    if (status === 'Approved' && targetLeave && targetLeave.type === 'Cuti Tahunan') {
+      const days = targetLeave.daysCount || 1;
+      setStaffUsers((prev) =>
+        prev.map((u) =>
+          u.id === targetLeave.staffId || u.name === targetLeave.staffName
+            ? { ...u, leaveQuota: Math.max(0, (u.leaveQuota ?? 12) - days) }
+            : u
+        )
+      );
+    }
+  };
+
   // Handler: PT 3-Party Digital Signature Flow
   const handleOpenSignature = (scheduleId: string, targetRole: 'valStaf' | 'valTrainer' | 'valMember') => {
     const sch = schedules.find((s) => s.id === scheduleId);
@@ -1537,6 +1772,13 @@ export default function App() {
         onToggleSidebar={handleToggleDesktopSidebar}
         onToggleMobileSidebar={() => setIsSidebarOpen(!isSidebarOpen)}
         isSidebarCollapsed={isDesktopCollapsed}
+        onOpenSettings={(subTab) => {
+          if (subTab) {
+            setActiveTab(`settings-${subTab}` as any);
+          } else {
+            setActiveTab('settings');
+          }
+        }}
       />
 
       <div className="flex flex-1 overflow-hidden relative">
@@ -1857,6 +2099,10 @@ export default function App() {
                 handlePayInstallment(payTrx, origId, amount);
                 setTargetPiutangTrxId(null);
               }}
+              onBatchPayInstallment={(payments) => {
+                handleBatchPayInstallment(payments);
+                setTargetPiutangTrxId(null);
+              }}
               onAddPettyCash={(pc) => setPettyCashList([pc, ...pettyCashList])}
               onUpdatePettyCashList={setPettyCashList}
               onExecuteDailyClosing={handleExecuteDailyClosing}
@@ -1876,6 +2122,7 @@ export default function App() {
               isStoreClosed={isStoreClosed}
               initialSubTab="bukubesar"
               onPayInstallment={handlePayInstallment}
+              onBatchPayInstallment={handleBatchPayInstallment}
               onAddPettyCash={(pc) => setPettyCashList([pc, ...pettyCashList])}
               onUpdatePettyCashList={setPettyCashList}
               onExecuteDailyClosing={handleExecuteDailyClosing}
@@ -1895,6 +2142,7 @@ export default function App() {
               isStoreClosed={isStoreClosed}
               initialSubTab="closing"
               onPayInstallment={handlePayInstallment}
+              onBatchPayInstallment={handleBatchPayInstallment}
               onAddPettyCash={(pc) => setPettyCashList([pc, ...pettyCashList])}
               onUpdatePettyCashList={setPettyCashList}
               onExecuteDailyClosing={handleExecuteDailyClosing}
@@ -1911,7 +2159,72 @@ export default function App() {
               staffAttendance={staffAttendances}
               transactions={transactions}
               schedules={schedules}
+              workSchedules={workSchedules}
+              leaveRequests={leaveRequests}
+              onSaveWorkSchedule={handleSaveWorkSchedule}
+              onDeleteWorkSchedule={handleDeleteWorkSchedule}
+              onSwapWorkSchedule={handleSwapWorkSchedule}
+              onStaffClock={handleStaffClock}
+              onDeleteAttendance={handleDeleteStaffAttendance}
+              onSaveStaff={handleSaveStaff}
+              onDeleteStaff={handleDeleteStaff}
+              onSaveLeaveRequest={handleSaveLeaveRequest}
+              onApproveLeaveRequest={handleApproveLeaveRequest}
               showToast={showToast}
+            />
+          )}
+
+          {(activeTab === 'settings' ||
+            activeTab === 'settings-printer' ||
+            activeTab === 'settings-roles' ||
+            activeTab === 'settings-profile' ||
+            activeTab === 'settings-finance' ||
+            activeTab === 'settings-backup') && (
+            <SettingsView
+              currentUser={currentUser}
+              staffUsers={staffUsers}
+              onUpdateStaffRole={(staffId, newRole) => {
+                setStaffUsers((prev) => {
+                  const updated = prev.map((u) => (u.id === staffId ? { ...u, role: newRole } : u));
+                  try {
+                    localStorage.setItem('rfa_staff', JSON.stringify(updated));
+                  } catch {}
+                  return updated;
+                });
+                if (currentUser && currentUser.id === staffId) {
+                  setCurrentUser((prev) => (prev ? { ...prev, role: newRole } : null));
+                }
+              }}
+              allSystemData={{
+                members,
+                transactions,
+                products,
+                staffUsers,
+                staffAttendances,
+                schedules,
+                pettyCashList,
+                closingRecords
+              }}
+              onRestoreSystemData={(imported) => {
+                if (imported.members) setMembers(imported.members);
+                if (imported.transactions) setTransactions(imported.transactions);
+                if (imported.products) setProducts(imported.products);
+                if (imported.staffUsers) setStaffUsers(imported.staffUsers);
+              }}
+              showToast={showToast}
+              initialSubTab={
+                activeTab === 'settings-printer'
+                  ? 'printer'
+                  : activeTab === 'settings-roles'
+                  ? 'roles'
+                  : activeTab === 'settings-profile'
+                  ? 'profile'
+                  : activeTab === 'settings-finance'
+                  ? 'finance'
+                  : activeTab === 'settings-backup'
+                  ? 'backup'
+                  : 'printer'
+              }
             />
           )}
         </main>
@@ -2029,6 +2342,13 @@ export default function App() {
         onSave={handleSaveSignature}
       />
 
+      {/* 5. Theme Settings & Customizer Modal */}
+      <ThemeSettingsModal
+        isOpen={isThemeModalOpen}
+        onClose={closeThemeModal}
+        showToast={showToast}
+      />
+
       {/* FLOATING TOAST NOTIFICATION */}
       {toast.show && (
         <div className="fixed bottom-5 right-5 z-50 animate-in fade-in slide-in-from-bottom-5">
@@ -2050,6 +2370,8 @@ export default function App() {
           </div>
         </div>
       )}
+      {/* PWA OFFLINE CONNECTIVITY INDICATOR */}
+      <OfflineIndicator />
     </div>
   );
 }

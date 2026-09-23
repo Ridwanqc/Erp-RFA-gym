@@ -24,7 +24,12 @@ import {
   AlertTriangle,
   PieChart,
   Landmark,
-  Download
+  Download,
+  CheckSquare,
+  Square,
+  ListChecks,
+  CheckCheck,
+  UserCheck
 } from 'lucide-react';
 import { Transaction, PettyCashItem, DailyClosingRecord, User } from '../types';
 import { formatRp, getTimestamp, APP_TODAY, getDayDiff, formatDateIndo } from '../utils/formatters';
@@ -41,6 +46,7 @@ interface FinanceViewProps {
   initialSubTab?: 'piutang' | 'bukubesar' | 'petty' | 'closing';
   initialSelectedPiutangId?: string;
   onPayInstallment: (payTrx: Transaction, originalTrxId: string, paidAmount: number) => void;
+  onBatchPayInstallment?: (payments: { payTrx: Transaction; originalTrxId: string; paidAmount: number }[]) => void;
   onAddPettyCash: (pc: PettyCashItem) => void;
   onUpdatePettyCashList?: (list: PettyCashItem[]) => void;
   onExecuteDailyClosing: (closing: DailyClosingRecord) => void;
@@ -64,6 +70,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
   initialSubTab = 'piutang',
   initialSelectedPiutangId,
   onPayInstallment,
+  onBatchPayInstallment,
   onAddPettyCash,
   onUpdatePettyCashList,
   onExecuteDailyClosing,
@@ -94,6 +101,15 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
   const [selectedPiutang, setSelectedPiutang] = useState<Transaction | null>(null);
   const [payAmount, setPayAmount] = useState('');
   const [payMethod, setPayMethod] = useState<'Tunai' | 'Transfer' | 'QRIS' | 'EDC'>('Transfer');
+
+  // Batch Pay & Multi-Select states for Cicilan / Piutang
+  const [selectedPiutangIds, setSelectedPiutangIds] = useState<string[]>([]);
+  const [isBatchPayModalOpen, setIsBatchPayModalOpen] = useState(false);
+  const [batchPayTransactions, setBatchPayTransactions] = useState<Transaction[]>([]);
+  const [batchPayAmounts, setBatchPayAmounts] = useState<Record<string, number>>({});
+  const [batchPayMethod, setBatchPayMethod] = useState<'Tunai' | 'Transfer' | 'QRIS' | 'EDC'>('Transfer');
+  const [batchPayBankDest, setBatchPayBankDest] = useState<'Mandiri' | 'Artha Graha'>('Mandiri');
+  const [batchPayNotes, setBatchPayNotes] = useState('');
 
   React.useEffect(() => {
     if (initialSelectedPiutangId) {
@@ -277,6 +293,59 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
   const filteredTotalKontrak = filteredPiutangList.reduce((sum, t) => sum + (t.amount || 0), 0);
   const filteredTotalTerbayar = filteredPiutangList.reduce((sum, t) => sum + (t.amountPaid || 0), 0);
   const filteredTotalSisa = filteredPiutangList.reduce((sum, t) => sum + (t.amountRemaining || 0), 0);
+
+  // Active eligible unpaid piutang within current filter
+  const eligibleUnpaidInFilter = filteredPiutangList.filter(
+    (t) => (t.amountRemaining || 0) > 0 && t.status !== 'VOID'
+  );
+  const isAllEligibleSelected =
+    eligibleUnpaidInFilter.length > 0 &&
+    eligibleUnpaidInFilter.every((t) => selectedPiutangIds.includes(t.id));
+
+  const handleToggleSelectPiutang = (id: string) => {
+    setSelectedPiutangIds((prev) =>
+      prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]
+    );
+  };
+
+  const handleToggleSelectAllEligible = () => {
+    if (isAllEligibleSelected) {
+      const eligibleIds = new Set(eligibleUnpaidInFilter.map((t) => t.id));
+      setSelectedPiutangIds((prev) => prev.filter((id) => !eligibleIds.has(id)));
+    } else {
+      const newSelected = new Set(selectedPiutangIds);
+      eligibleUnpaidInFilter.forEach((t) => newSelected.add(t.id));
+      setSelectedPiutangIds(Array.from(newSelected));
+    }
+  };
+
+  const handleToggleSelectForList = (trxs: Transaction[]) => {
+    const unpaidIds = trxs
+      .filter((t) => (t.amountRemaining || 0) > 0 && t.status !== 'VOID')
+      .map((t) => t.id);
+    if (unpaidIds.length === 0) return;
+    const allSelected = unpaidIds.every((id) => selectedPiutangIds.includes(id));
+    if (allSelected) {
+      const unpaidSet = new Set(unpaidIds);
+      setSelectedPiutangIds((prev) => prev.filter((id) => !unpaidSet.has(id)));
+    } else {
+      const newSelected = new Set(selectedPiutangIds);
+      unpaidIds.forEach((id) => newSelected.add(id));
+      setSelectedPiutangIds(Array.from(newSelected));
+    }
+  };
+
+  const handleClearSelection = () => {
+    setSelectedPiutangIds([]);
+  };
+
+  const selectedPiutangTransactions = transactions.filter(
+    (t) => selectedPiutangIds.includes(t.id) && (t.amountRemaining || 0) > 0 && t.status !== 'VOID'
+  );
+  const selectedTotalSisa = selectedPiutangTransactions.reduce(
+    (sum, t) => sum + (t.amountRemaining || 0),
+    0
+  );
 
   // 2. DAILY CLOSING MATHEMATICAL CALCULATIONS (BASED ON closingDate)
   const targetClosingTrx = transactions.filter((t) => t.date === closingDate);
@@ -527,6 +596,137 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
     );
     setSelectedPiutang(null);
     setPayAmount('');
+  };
+
+  // Open batch pay modal for given transactions or current selection
+  const handleOpenBatchPay = (targetList?: Transaction[]) => {
+    let listToPay: Transaction[] = [];
+    if (targetList && targetList.length > 0) {
+      listToPay = targetList.filter((t) => (t.amountRemaining || 0) > 0 && t.status !== 'VOID');
+    } else {
+      listToPay = selectedPiutangTransactions;
+    }
+
+    if (listToPay.length === 0) {
+      showToast('Peringatan', 'Pilih minimal satu tagihan cicilan yang belum lunas.', 'warning');
+      return;
+    }
+
+    const initAmounts: Record<string, number> = {};
+    listToPay.forEach((t) => {
+      initAmounts[t.id] = t.amountRemaining || 0;
+    });
+
+    setBatchPayTransactions(listToPay);
+    setBatchPayAmounts(initAmounts);
+    const hasPos = listToPay.some((t) => t.type === 'POS');
+    setBatchPayBankDest(hasPos ? 'Artha Graha' : 'Mandiri');
+    setBatchPayMethod('Transfer');
+    setBatchPayNotes('');
+    setIsBatchPayModalOpen(true);
+  };
+
+  const handleBatchAmountChange = (trxId: string, val: number) => {
+    const maxVal = transactions.find((t) => t.id === trxId)?.amountRemaining || 0;
+    const cleanVal = isNaN(val) ? 0 : Math.min(Math.max(val, 0), maxVal);
+    setBatchPayAmounts((prev) => ({
+      ...prev,
+      [trxId]: cleanVal
+    }));
+  };
+
+  const handleSetAllFullAmount = () => {
+    const fullAmounts: Record<string, number> = {};
+    batchPayTransactions.forEach((t) => {
+      fullAmounts[t.id] = t.amountRemaining || 0;
+    });
+    setBatchPayAmounts(fullAmounts);
+  };
+
+  const handleRemoveFromBatch = (trxId: string) => {
+    const updated = batchPayTransactions.filter((t) => t.id !== trxId);
+    if (updated.length === 0) {
+      setIsBatchPayModalOpen(false);
+      return;
+    }
+    setBatchPayTransactions(updated);
+    setBatchPayAmounts((prev) => {
+      const copy = { ...prev };
+      delete copy[trxId];
+      return copy;
+    });
+  };
+
+  const handleConfirmBatchPayment = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (batchPayTransactions.length === 0) return;
+
+    const validPayments = batchPayTransactions
+      .map((t, idx) => {
+        const amt = batchPayAmounts[t.id] !== undefined ? batchPayAmounts[t.id] : (t.amountRemaining || 0);
+        return { t, amt, idx };
+      })
+      .filter((item) => item.amt > 0);
+
+    if (validPayments.length === 0) {
+      showToast('Nominal Kosong', 'Total nominal pembayaran harus lebih besar dari Rp 0.', 'warning');
+      return;
+    }
+
+    for (const item of validPayments) {
+      if (item.amt > (item.t.amountRemaining || 0)) {
+        showToast('Nominal Berlebih', `Nominal bayar untuk ${item.t.id} melebihi sisa piutang.`, 'error');
+        return;
+      }
+    }
+
+    const payments = validPayments.map(({ t, amt, idx }) => {
+      const targetBank = t.type === 'POS' ? 'Artha Graha' : batchPayBankDest;
+      const payTrx: Transaction = {
+        id: `PAY-${Math.floor(100000 + Math.random() * 900000)}-${idx + 1}`,
+        date: APP_TODAY,
+        time: getTimestamp(),
+        type: 'Pelunasan Cicilan',
+        desc: `Pelunasan Cicilan: ${t.desc} (${t.customer})` + (batchPayNotes.trim() ? ` [${batchPayNotes.trim()}]` : ''),
+        customer: t.customer,
+        amount: amt,
+        amountPaid: amt,
+        amountRemaining: 0,
+        dueDate: '-',
+        cogs: 0,
+        profit: amt,
+        method: batchPayMethod,
+        status: 'Paid',
+        cashier: currentUser?.name || 'Kasir',
+        bankDest: targetBank,
+        refTrxId: t.id,
+        initialCashPaid: amt
+      };
+      return { payTrx, originalTrxId: t.id, paidAmount: amt };
+    });
+
+    const totalPaid = payments.reduce((sum, p) => sum + p.paidAmount, 0);
+
+    if (onBatchPayInstallment) {
+      onBatchPayInstallment(payments);
+    } else {
+      payments.forEach((p) => {
+        onPayInstallment(p.payTrx, p.originalTrxId, p.paidAmount);
+      });
+    }
+
+    showToast(
+      'Pelunasan Berhasil',
+      `Sebanyak ${payments.length} tagihan cicilan senilai ${formatRp(totalPaid)} berhasil dibukukan tanpa double counting.`,
+      'success'
+    );
+
+    const paidIds = new Set(payments.map((p) => p.originalTrxId));
+    setSelectedPiutangIds((prev) => prev.filter((id) => !paidIds.has(id)));
+    setIsBatchPayModalOpen(false);
+    setBatchPayTransactions([]);
+    setBatchPayAmounts({});
+    setBatchPayNotes('');
   };
 
   // Handle Execute Daily Closing
@@ -914,12 +1114,124 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                   </button>
                 )}
               </div>
+
+              {/* Smart Bulk Actions Banner when searching a name */}
+              {piutangSearchName.trim() && (
+                <div className="mt-3 bg-gradient-to-r from-orange-500/15 via-amber-500/10 to-zinc-900 border border-orange-500/30 rounded-2xl p-3.5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-md animate-in fade-in slide-in-from-top-2">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-orange-500/20 text-orange-400 flex items-center justify-center shrink-0 border border-orange-500/30 shadow-inner">
+                      <UserCheck className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-xs font-bold text-white">
+                          Pencarian Member / Peminjam: <span className="text-orange-400 font-black">"{piutangSearchName}"</span>
+                        </span>
+                        {eligibleUnpaidInFilter.length > 0 ? (
+                          <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-orange-500/20 text-orange-300 border border-orange-500/30">
+                            {eligibleUnpaidInFilter.length} Tagihan Tertunggak ({formatRp(eligibleUnpaidInFilter.reduce((s, b) => s + (b.amountRemaining || 0), 0))})
+                          </span>
+                        ) : (
+                          <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                            Semua Tagihan Sudah Lunas
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-[11px] text-zinc-400 mt-0.5">
+                        {eligibleUnpaidInFilter.length > 0
+                          ? 'Anda dapat mencentang tagihan yang ingin dibayar, atau klik Bayar Semua untuk melunasi sekaligus.'
+                          : 'Tidak ada tagihan tertunggak yang perlu dilunasi untuk nama ini.'}
+                      </p>
+                    </div>
+                  </div>
+
+                  {eligibleUnpaidInFilter.length > 0 && (
+                    <div className="flex items-center gap-2 shrink-0 w-full sm:w-auto">
+                      <button
+                        type="button"
+                        onClick={() => handleToggleSelectForList(eligibleUnpaidInFilter)}
+                        className="flex-1 sm:flex-initial px-3 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition border border-zinc-700/60"
+                      >
+                        {eligibleUnpaidInFilter.every((b) => selectedPiutangIds.includes(b.id)) ? (
+                          <>
+                            <Square className="w-3.5 h-3.5 text-zinc-400" />
+                            Batal Pilih ({eligibleUnpaidInFilter.length})
+                          </>
+                        ) : (
+                          <>
+                            <CheckSquare className="w-3.5 h-3.5 text-orange-400" />
+                            Pilih Semua ({eligibleUnpaidInFilter.length})
+                          </>
+                        )}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleOpenBatchPay(eligibleUnpaidInFilter)}
+                        className="flex-1 sm:flex-initial px-4 py-2 bg-orange-500 hover:bg-orange-600 text-white rounded-xl text-xs font-black shadow-md flex items-center justify-center gap-1.5 transition"
+                      >
+                        <DollarSign className="w-4 h-4" />
+                        Bayar Semua ({eligibleUnpaidInFilter.length})
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Floating / Sticky Bar when Any Tagihan is Selected */}
+              {selectedPiutangIds.length > 0 && (
+                <div className="mt-3 bg-zinc-900/95 backdrop-blur-md border border-orange-500/40 rounded-2xl p-3 sm:px-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-xl">
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-8 h-8 rounded-lg bg-orange-500 text-white flex items-center justify-center shrink-0 font-black text-xs">
+                      {selectedPiutangIds.length}
+                    </div>
+                    <div>
+                      <div className="text-xs font-bold text-white flex items-center gap-2">
+                        <span>Tagihan Terpilih untuk Pembayaran</span>
+                        <span className="text-[10px] px-2 py-0.5 bg-orange-500/20 text-orange-300 font-mono rounded-md font-bold border border-orange-500/30">
+                          Total Sisa: {formatRp(selectedTotalSisa)}
+                        </span>
+                      </div>
+                      <p className="text-[10px] text-zinc-400">
+                        Pilih satu per satu dengan checkbox atau lunasi sekaligus dalam satu transaksi kasir.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2 w-full sm:w-auto">
+                    <button
+                      type="button"
+                      onClick={handleClearSelection}
+                      className="flex-1 sm:flex-initial px-3 py-1.5 text-xs text-zinc-400 hover:text-zinc-200 bg-zinc-800 hover:bg-zinc-700 rounded-xl font-bold transition"
+                    >
+                      Batal Pilihan
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleOpenBatchPay()}
+                      className="flex-1 sm:flex-initial px-4 py-2 bg-orange-500 hover:bg-orange-600 text-white rounded-xl text-xs font-black shadow-lg flex items-center justify-center gap-1.5 transition"
+                    >
+                      <ListChecks className="w-4 h-4" />
+                      Bayar Terpilih ({selectedPiutangIds.length})
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
 
             <div className="overflow-x-auto scrollbar-thin scrollbar-thumb-zinc-800">
               <table className="w-full text-left whitespace-nowrap min-w-[950px]">
                 <thead className="bg-zinc-950 text-zinc-400 border-b border-zinc-800 text-[10px] uppercase font-bold">
                   <tr>
+                    <th className="py-3 px-3 text-center w-10">
+                      <input
+                        type="checkbox"
+                        checked={isAllEligibleSelected}
+                        onChange={handleToggleSelectAllEligible}
+                        disabled={eligibleUnpaidInFilter.length === 0}
+                        title={isAllEligibleSelected ? 'Batalkan pilihan semua' : 'Pilih semua tagihan belum lunas'}
+                        className="w-4 h-4 rounded border-zinc-700 bg-zinc-900 text-orange-500 focus:ring-orange-500 focus:ring-offset-zinc-950 cursor-pointer disabled:opacity-30"
+                      />
+                    </th>
                     <th className="py-3 px-4">No TRX / Tanggal</th>
                     <th className="py-3 px-4">Nama Peminjam / Member</th>
                     <th className="py-3 px-4">Deskripsi / Jenis</th>
@@ -934,7 +1246,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                 <tbody className="divide-y divide-zinc-800 bg-zinc-950/30 text-xs">
                   {filteredPiutangList.length === 0 ? (
                     <tr>
-                      <td colSpan={9} className="py-8 text-center text-zinc-500">
+                      <td colSpan={10} className="py-8 text-center text-zinc-500">
                         Tidak ada catatan piutang pada filter ini.
                       </td>
                     </tr>
@@ -947,7 +1259,24 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                       const isLunas = (t.amountRemaining || 0) <= 0;
 
                       return (
-                        <tr key={t.id} className="hover:bg-zinc-800/30">
+                        <tr
+                          key={t.id}
+                          className={`hover:bg-zinc-800/30 transition ${
+                            selectedPiutangIds.includes(t.id) ? 'bg-orange-500/5' : ''
+                          }`}
+                        >
+                          <td className="py-3.5 px-3 text-center">
+                            {!isLunas ? (
+                              <input
+                                type="checkbox"
+                                checked={selectedPiutangIds.includes(t.id)}
+                                onChange={() => handleToggleSelectPiutang(t.id)}
+                                className="w-4 h-4 rounded border-zinc-700 bg-zinc-900 text-orange-500 focus:ring-orange-500 focus:ring-offset-zinc-950 cursor-pointer"
+                              />
+                            ) : (
+                              <CheckCircle className="w-4 h-4 text-zinc-600 mx-auto" />
+                            )}
+                          </td>
                           <td className="py-3.5 px-4 font-mono font-bold text-white">
                             {t.id}
                             <span className="block font-sans font-normal text-[10px] text-zinc-500">{t.date}</span>
@@ -965,7 +1294,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                             <span
                               className={`px-2 py-0.5 rounded text-[10px] font-bold ${
                                 isOverdue && !isLunas
-                                  ? 'bg-rose-500/20 text-rose-400 border border-rose-500/30'
+                                    ? 'bg-rose-500/20 text-rose-400 border border-rose-500/30'
                                   : 'text-zinc-400'
                               }`}
                             >
@@ -1003,7 +1332,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                 {filteredPiutangList.length > 0 && (
                   <tfoot className="bg-zinc-950 border-t-2 border-zinc-800 text-xs font-bold text-zinc-300">
                     <tr>
-                      <td colSpan={3} className="py-3.5 px-4 text-right font-bold text-zinc-400">
+                      <td colSpan={4} className="py-3.5 px-4 text-right font-bold text-zinc-400">
                         Total Tersaring ({filteredPiutangList.length} Data):
                       </td>
                       <td className="py-3.5 px-4 text-right font-bold text-white">
@@ -2051,76 +2380,318 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
       )}
 
       {/* MODAL: BAYAR CICILAN PIUTANG */}
-      {selectedPiutang && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-xs p-3 sm:p-4 overflow-y-auto">
-          <div className="bg-zinc-900 border border-zinc-800 rounded-2xl shadow-2xl w-full max-w-md p-4 sm:p-6 my-auto max-h-[92vh] overflow-y-auto animate-in fade-in zoom-in-95">
-            <h3 className="text-base font-bold text-white mb-1">Pembayaran Cicilan Piutang</h3>
-            <p className="text-xs text-zinc-400 mb-4">
-              Nomor: <span className="font-mono text-white">{selectedPiutang.id}</span> ({selectedPiutang.customer})
-            </p>
+      {selectedPiutang && (() => {
+        const memberOtherUnpaidBills = transactions.filter(
+          (t) =>
+            t.id !== selectedPiutang.id &&
+            ((t.customer && t.customer === selectedPiutang.customer) ||
+              (t.billName && t.billName === (selectedPiutang.billName || selectedPiutang.customer))) &&
+            (t.amountRemaining || 0) > 0 &&
+            t.status !== 'VOID'
+        );
+        const memberOtherTotalSisa = memberOtherUnpaidBills.reduce(
+          (sum, t) => sum + (t.amountRemaining || 0),
+          0
+        );
 
-            <form onSubmit={handleConfirmPayment} className="space-y-4">
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-xs p-3 sm:p-4 overflow-y-auto">
+            <div className="bg-zinc-900 border border-zinc-800 rounded-2xl shadow-2xl w-full max-w-md p-4 sm:p-6 my-auto max-h-[92vh] overflow-y-auto animate-in fade-in zoom-in-95">
+              <h3 className="text-base font-bold text-white mb-1">Pembayaran Cicilan Piutang</h3>
+              <p className="text-xs text-zinc-400 mb-4">
+                Nomor: <span className="font-mono text-white">{selectedPiutang.id}</span> ({selectedPiutang.customer})
+              </p>
+
+              <form onSubmit={handleConfirmPayment} className="space-y-4">
+                <div className="bg-zinc-950 p-3.5 rounded-xl border border-zinc-800 text-xs space-y-2">
+                  <div className="flex justify-between">
+                    <span className="text-zinc-400">Total Nilai Tagihan:</span>
+                    <span className="font-bold text-white">{formatRp(selectedPiutang.amount)}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-zinc-400">Telah Dibayar Sebelumnya:</span>
+                    <span className="font-bold text-emerald-400">{formatRp(selectedPiutang.amountPaid || 0)}</span>
+                  </div>
+                  <div className="flex justify-between border-t border-zinc-800 pt-2">
+                    <span className="text-zinc-400">Sisa Tagihan Tertunggak:</span>
+                    <span className="font-black text-orange-400">
+                      {formatRp(selectedPiutang.amountRemaining || 0)}
+                    </span>
+                  </div>
+                </div>
+
+                {memberOtherUnpaidBills.length > 0 && (
+                  <div className="bg-orange-500/10 border border-orange-500/30 rounded-xl p-3 flex flex-col gap-2">
+                    <div className="flex items-start gap-2">
+                      <AlertCircle className="w-4 h-4 text-orange-400 shrink-0 mt-0.5" />
+                      <div className="text-[11px] text-orange-200 leading-tight">
+                        Member ini memiliki <strong className="text-white font-bold">{memberOtherUnpaidBills.length} tagihan lain</strong> yang belum lunas (Total Lain: <strong className="text-orange-300 font-bold">{formatRp(memberOtherTotalSisa)}</strong>).
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const allForMember = [selectedPiutang, ...memberOtherUnpaidBills];
+                        setSelectedPiutang(null);
+                        handleOpenBatchPay(allForMember);
+                      }}
+                      className="w-full py-1.5 bg-orange-500 hover:bg-orange-600 text-white rounded-lg text-xs font-black transition flex items-center justify-center gap-1.5 shadow-sm"
+                    >
+                      <ListChecks className="w-3.5 h-3.5" />
+                      Bayar Semua Tagihan Member Sekaligus ({memberOtherUnpaidBills.length + 1})
+                    </button>
+                  </div>
+                )}
+
+                <div>
+                  <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-wider mb-1.5">
+                    Nominal Pembayaran Sekarang (Rp)
+                  </label>
+                  <input
+                    type="number"
+                    value={payAmount}
+                    onChange={(e) => setPayAmount(e.target.value)}
+                    required
+                    min="1"
+                    max={selectedPiutang.amountRemaining || undefined}
+                    className="w-full bg-zinc-950 border border-zinc-700 rounded-xl px-3.5 py-2.5 text-base font-black text-white outline-none focus:border-orange-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-wider mb-1.5">
+                    Metode Pembayaran
+                  </label>
+                  <select
+                    value={payMethod}
+                    onChange={(e) => setPayMethod(e.target.value as any)}
+                    className="w-full bg-zinc-950 border border-zinc-700 rounded-xl px-3.5 py-2.5 text-xs font-bold text-white outline-none focus:border-orange-500"
+                  >
+                    <option value="Tunai">Tunai / Cash Laci</option>
+                    <option value="Transfer">Transfer Bank (Mandiri / Artha Graha)</option>
+                    <option value="QRIS">QRIS</option>
+                    <option value="EDC">Debit / EDC</option>
+                  </select>
+                </div>
+
+                <div className="flex gap-2 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => setSelectedPiutang(null)}
+                    className="flex-1 py-2.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-xl text-xs font-bold transition"
+                  >
+                    Batal
+                  </button>
+                  <button
+                    type="submit"
+                    className="flex-1 py-2.5 bg-orange-500 hover:bg-orange-600 text-white rounded-xl text-xs font-bold shadow-md transition"
+                  >
+                    Simpan Pembayaran
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* MODAL: BAYAR CICILAN SEKALIGUS / MASSAL */}
+      {isBatchPayModalOpen && batchPayTransactions.length > 0 && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-xs p-3 sm:p-4 overflow-y-auto">
+          <div className="bg-zinc-900 border border-zinc-800 rounded-2xl shadow-2xl w-full max-w-2xl p-4 sm:p-6 my-auto max-h-[94vh] flex flex-col animate-in fade-in zoom-in-95">
+            {/* Header */}
+            <div className="flex items-start justify-between gap-3 pb-3 border-b border-zinc-800">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-orange-500/20 text-orange-400 flex items-center justify-center shrink-0 border border-orange-500/30 shadow-inner">
+                  <ListChecks className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-white">Pelunasan Cicilan Sekaligus (Multi-Tagihan)</h3>
+                  <p className="text-xs text-zinc-400">
+                    {batchPayTransactions.every((t) => t.customer === batchPayTransactions[0].customer) ? (
+                      <>Member: <span className="font-bold text-orange-400">{batchPayTransactions[0].customer}</span> • {batchPayTransactions.length} tagihan dipilih</>
+                    ) : (
+                      <>{batchPayTransactions.length} tagihan dari {new Set(batchPayTransactions.map((t) => t.customer)).size} member berbeda</>
+                    )}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsBatchPayModalOpen(false)}
+                className="p-1.5 text-zinc-400 hover:text-white rounded-lg hover:bg-zinc-800 transition"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Content Form */}
+            <form onSubmit={handleConfirmBatchPayment} className="space-y-4 pt-4 overflow-y-auto pr-1">
+              {/* Table of Bills in Batch */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider">
+                    Daftar Tagihan yang Akan Dibayar ({batchPayTransactions.length})
+                  </span>
+                  <button
+                    type="button"
+                    onClick={handleSetAllFullAmount}
+                    className="text-[11px] text-orange-400 hover:text-orange-300 font-bold transition flex items-center gap-1"
+                  >
+                    <CheckCheck className="w-3.5 h-3.5" />
+                    Set Semua Lunas Penuh
+                  </button>
+                </div>
+
+                <div className="max-h-60 overflow-y-auto border border-zinc-800 rounded-xl divide-y divide-zinc-800/80 bg-zinc-950/60">
+                  {batchPayTransactions.map((t) => {
+                    const currentAmt = batchPayAmounts[t.id] !== undefined ? batchPayAmounts[t.id] : (t.amountRemaining || 0);
+                    const isFull = currentAmt === (t.amountRemaining || 0);
+
+                    return (
+                      <div key={t.id} className="p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs hover:bg-zinc-900/50 transition">
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="font-mono font-bold text-white text-[11px]">{t.id}</span>
+                            <span className="text-[10px] text-zinc-500">({t.date})</span>
+                            <span className="px-2 py-0.5 rounded bg-zinc-800 text-zinc-300 text-[10px] font-bold">
+                              {t.customer}
+                            </span>
+                          </div>
+                          <div className="text-[11px] text-zinc-400 truncate mt-0.5" title={t.desc}>
+                            {t.desc}
+                          </div>
+                          <div className="text-[10px] text-zinc-500 mt-0.5">
+                            Total Kontrak: {formatRp(t.amount)} • Sisa Piutang: <span className="font-bold text-orange-400">{formatRp(t.amountRemaining || 0)}</span>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-2 shrink-0">
+                          <div className="flex flex-col items-end">
+                            <span className="text-[10px] text-zinc-400 mb-0.5">Nominal Bayar (Rp)</span>
+                            <div className="flex items-center gap-1.5">
+                              <input
+                                type="number"
+                                min="1"
+                                max={t.amountRemaining || undefined}
+                                value={currentAmt}
+                                onChange={(e) => handleBatchAmountChange(t.id, Number(e.target.value))}
+                                className="w-28 sm:w-32 bg-zinc-900 border border-zinc-700 rounded-lg px-2.5 py-1 text-xs font-bold text-white text-right outline-none focus:border-orange-500"
+                              />
+                              <button
+                                type="button"
+                                onClick={() => handleBatchAmountChange(t.id, t.amountRemaining || 0)}
+                                className={`px-2 py-1 rounded-lg text-[10px] font-bold border transition ${
+                                  isFull
+                                    ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30'
+                                    : 'bg-zinc-800 text-zinc-400 border-zinc-700 hover:text-white'
+                                }`}
+                                title="Bayar Lunas Penuh"
+                              >
+                                {isFull ? 'Lunas' : 'Full'}
+                              </button>
+                            </div>
+                          </div>
+
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveFromBatch(t.id)}
+                            className="p-1.5 text-zinc-500 hover:text-rose-400 rounded-lg hover:bg-zinc-800 transition"
+                            title="Keluarkan dari daftar bayar"
+                          >
+                            <X className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Total Calculation Card */}
               <div className="bg-zinc-950 p-3.5 rounded-xl border border-zinc-800 text-xs space-y-2">
-                <div className="flex justify-between">
-                  <span className="text-zinc-400">Total Nilai Tagihan:</span>
-                  <span className="font-bold text-white">{formatRp(selectedPiutang.amount)}</span>
+                <div className="flex justify-between items-center">
+                  <span className="text-zinc-400">Total Tagihan Terpilih:</span>
+                  <span className="font-bold text-white">{batchPayTransactions.length} Transaksi</span>
                 </div>
-                <div className="flex justify-between">
-                  <span className="text-zinc-400">Telah Dibayar Sebelumnya:</span>
-                  <span className="font-bold text-emerald-400">{formatRp(selectedPiutang.amountPaid || 0)}</span>
+                <div className="flex justify-between items-center">
+                  <span className="text-zinc-400">Total Akumulasi Sisa Piutang:</span>
+                  <span className="font-bold text-zinc-300">
+                    {formatRp(batchPayTransactions.reduce((sum, t) => sum + (t.amountRemaining || 0), 0))}
+                  </span>
                 </div>
-                <div className="flex justify-between border-t border-zinc-800 pt-2">
-                  <span className="text-zinc-400">Sisa Tagihan Tertunggak:</span>
-                  <span className="font-black text-orange-400">
-                    {formatRp(selectedPiutang.amountRemaining || 0)}
+                <div className="flex justify-between items-center border-t border-zinc-800 pt-2">
+                  <span className="text-xs font-bold text-zinc-200">Total yang Akan Dibayarkan Sekarang:</span>
+                  <span className="text-base font-black text-emerald-400">
+                    {formatRp(batchPayTransactions.reduce((sum, t) => sum + (batchPayAmounts[t.id] !== undefined ? batchPayAmounts[t.id] : (t.amountRemaining || 0)), 0))}
                   </span>
                 </div>
               </div>
 
+              {/* Payment Method & Bank Destination */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-wider mb-1.5">
+                    Metode Pembayaran
+                  </label>
+                  <select
+                    value={batchPayMethod}
+                    onChange={(e) => setBatchPayMethod(e.target.value as any)}
+                    className="w-full bg-zinc-950 border border-zinc-700 rounded-xl px-3 py-2 text-xs font-bold text-white outline-none focus:border-orange-500"
+                  >
+                    <option value="Tunai">Tunai / Cash Laci</option>
+                    <option value="Transfer">Transfer Bank</option>
+                    <option value="QRIS">QRIS</option>
+                    <option value="EDC">Debit / EDC</option>
+                  </select>
+                </div>
+
+                {batchPayMethod === 'Transfer' && (
+                  <div>
+                    <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-wider mb-1.5">
+                      Bank Tujuan
+                    </label>
+                    <select
+                      value={batchPayBankDest}
+                      onChange={(e) => setBatchPayBankDest(e.target.value as any)}
+                      className="w-full bg-zinc-950 border border-zinc-700 rounded-xl px-3 py-2 text-xs font-bold text-white outline-none focus:border-orange-500"
+                    >
+                      <option value="Mandiri">Bank Mandiri (Gym / Membership)</option>
+                      <option value="Artha Graha">Bank Artha Graha (Cafe / POS)</option>
+                    </select>
+                  </div>
+                )}
+              </div>
+
+              {/* Notes */}
               <div>
                 <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-wider mb-1.5">
-                  Nominal Pembayaran Sekarang (Rp)
+                  Catatan Pembayaran (Opsional)
                 </label>
                 <input
-                  type="number"
-                  value={payAmount}
-                  onChange={(e) => setPayAmount(e.target.value)}
-                  required
-                  min="1"
-                  max={selectedPiutang.amountRemaining || undefined}
-                  className="w-full bg-zinc-950 border border-zinc-700 rounded-xl px-3.5 py-2.5 text-base font-black text-white outline-none focus:border-orange-500"
+                  type="text"
+                  placeholder="Contoh: Pelunasan multi-cicilan member"
+                  value={batchPayNotes}
+                  onChange={(e) => setBatchPayNotes(e.target.value)}
+                  className="w-full bg-zinc-950 border border-zinc-700 rounded-xl px-3.5 py-2 text-xs text-white outline-none focus:border-orange-500"
                 />
               </div>
 
-              <div>
-                <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-wider mb-1.5">
-                  Metode Pembayaran
-                </label>
-                <select
-                  value={payMethod}
-                  onChange={(e) => setPayMethod(e.target.value as any)}
-                  className="w-full bg-zinc-950 border border-zinc-700 rounded-xl px-3.5 py-2.5 text-xs font-bold text-white outline-none focus:border-orange-500"
-                >
-                  <option value="Tunai">Tunai / Cash Laci</option>
-                  <option value="Transfer">Transfer Bank (Mandiri / Artha Graha)</option>
-                  <option value="QRIS">QRIS</option>
-                  <option value="EDC">Debit / EDC</option>
-                </select>
-              </div>
-
-              <div className="flex gap-2 pt-2">
+              {/* Actions */}
+              <div className="flex gap-2.5 pt-2 border-t border-zinc-800">
                 <button
                   type="button"
-                  onClick={() => setSelectedPiutang(null)}
+                  onClick={() => setIsBatchPayModalOpen(false)}
                   className="flex-1 py-2.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-xl text-xs font-bold transition"
                 >
                   Batal
                 </button>
                 <button
                   type="submit"
-                  className="flex-1 py-2.5 bg-orange-500 hover:bg-orange-600 text-white rounded-xl text-xs font-bold shadow-md transition"
+                  className="flex-1 py-2.5 bg-orange-500 hover:bg-orange-600 text-white rounded-xl text-xs font-bold shadow-md transition flex items-center justify-center gap-1.5"
                 >
-                  Simpan Pembayaran
+                  <DollarSign className="w-4 h-4" />
+                  Konfirmasi & Bayar Semua ({formatRp(batchPayTransactions.reduce((sum, t) => sum + (batchPayAmounts[t.id] !== undefined ? batchPayAmounts[t.id] : (t.amountRemaining || 0)), 0))})
                 </button>
               </div>
             </form>

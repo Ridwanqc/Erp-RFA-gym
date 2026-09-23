@@ -1,6 +1,6 @@
 {
   "name": "GymPro ERP Enterprise",
-  "description": "Sistem ERP Fitness & Gym terpadu dengan Manajemen Inventaris & Servis Alat Gym, Jadwal Maintenance & SPK Teknisi, Pengadaan & Sparepart, Paket Bundling Membership + PT, Kasir POS, dan Laporan Keuangan.",
+  "description": "Sistem ERP Fitness & Gym terpadu dengan Manajemen HR & Jadwal Kerja Shift Karyawan, Presensi Real-Time, Pengajuan Cuti & Lembur, Slip Gaji Otomatis, Inventaris & Servis Alat, Kasir POS, dan Laporan Keuangan.",
   "requestFramePermissions": [
     "camera"
   ],

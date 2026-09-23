@@ -2,6 +2,7 @@ import React from 'react';
 import { Printer, X, CheckCircle2 } from 'lucide-react';
 import { Transaction, DailyClosingRecord } from '../types';
 import { formatRp } from '../utils/formatters';
+import { useSettings } from '../context/SettingsContext';
 
 interface ReceiptModalProps {
   isOpen: boolean;
@@ -16,6 +17,9 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({
   transaction,
   closingRecord
 }) => {
+  const { settings } = useSettings();
+  const printer = settings?.printer;
+
   if (!isOpen || (!transaction && !closingRecord)) return null;
 
   const handlePrint = () => {
@@ -31,6 +35,8 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({
     }
   }
 
+  const is58mm = printer?.paperWidth === '58mm';
+
   return (
     <div
       id="receipt-modal-container"
@@ -38,16 +44,31 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({
     >
       <div
         id="receipt-content"
-        className="bg-white text-zinc-900 rounded-2xl shadow-2xl w-full max-w-sm p-4 sm:p-6 flex flex-col font-sans border border-zinc-200 animate-in fade-in zoom-in-95 duration-200 max-h-[90vh] overflow-y-auto"
+        className={`bg-white text-zinc-900 rounded-2xl shadow-2xl w-full p-4 sm:p-6 flex flex-col font-sans border border-zinc-200 animate-in fade-in zoom-in-95 duration-200 max-h-[90vh] overflow-y-auto ${
+          is58mm ? 'max-w-[300px] text-[11px]' : 'max-w-sm text-xs'
+        }`}
       >
         {/* Header */}
         <div className="text-center pb-4 border-b border-dashed border-zinc-300 relative">
-          <div className="w-10 h-10 bg-orange-600 rounded-xl mx-auto flex items-center justify-center text-white font-black italic text-lg shadow-sm mb-2">
-            R
-          </div>
-          <h2 className="text-lg font-black tracking-tight text-zinc-900 leading-none">RFA GYM ENTERPRISE</h2>
-          <p className="text-[10px] uppercase font-bold text-orange-600 tracking-wider mt-1">
-            {closingRecord ? 'REKAP LAPORAN DAILY CLOSING' : 'OFFICIAL FITNESS RECEIPT'}
+          {printer?.showLogo !== false && (
+            <div className="w-10 h-10 bg-orange-600 rounded-xl mx-auto flex items-center justify-center text-white font-black italic text-lg shadow-sm mb-2">
+              R
+            </div>
+          )}
+          <h2 className="text-lg font-black tracking-tight text-zinc-900 leading-none uppercase">
+            {printer?.storeName || 'RFA GYM ENTERPRISE'}
+          </h2>
+          {printer?.storeTagline && (
+            <p className="text-[10px] text-zinc-500 mt-0.5">{printer.storeTagline}</p>
+          )}
+          {printer?.storeAddress && (
+            <p className="text-[9px] text-zinc-600 mt-1">{printer.storeAddress} {printer.storeCity ? `• ${printer.storeCity}` : ''}</p>
+          )}
+          {printer?.storePhone && (
+            <p className="text-[9px] text-zinc-600">Telp/WA: {printer.storePhone}</p>
+          )}
+          <p className="text-[10px] uppercase font-bold text-orange-600 tracking-wider mt-2">
+            {closingRecord ? 'REKAP LAPORAN DAILY CLOSING' : (printer?.headerNote || 'OFFICIAL FITNESS RECEIPT')}
           </p>
           {transaction?.status === 'VOID' && (
             <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
@@ -186,10 +207,17 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({
           </div>
         )}
 
+        {/* Barcode */}
+        {printer?.showBarcode !== false && (
+          <div className="py-2 text-center border-t border-dashed border-zinc-300 mt-2">
+            <div className="text-[13px] tracking-widest font-black">||||| | |||| || ||| | |||</div>
+            <span className="text-[9px] text-zinc-500 font-mono">*{transaction ? transaction.id : (closingRecord?.id || 'RECEIPT')}*</span>
+          </div>
+        )}
+
         {/* Footer */}
-        <div className="pt-4 pb-2 text-center text-[10px] text-zinc-500 font-medium">
-          <p>Terima kasih atas kunjungan Anda di RFA GYM.</p>
-          <p className="mt-0.5">Simpan struk ini sebagai bukti pembayaran yang sah.</p>
+        <div className="pt-2 pb-2 text-center text-[10px] text-zinc-500 font-medium leading-relaxed">
+          <p>{printer?.footerNote || 'Terima kasih atas kunjungan Anda. Simpan struk ini sebagai bukti pembayaran yang sah.'}</p>
         </div>
 
         {/* Action Buttons (Hidden on Print) */}

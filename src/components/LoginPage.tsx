@@ -19,11 +19,13 @@ import {
   Dumbbell,
   CreditCard,
   Award,
-  Flame
+  Flame,
+  Palette
 } from 'lucide-react';
 import { User, UserRole } from '../types';
 import { formatDateIndo, APP_TODAY } from '../utils/formatters';
 import { signInWithGoogle } from '../lib/firebase';
+import { useTheme } from '../context/ThemeContext';
 
 interface LoginPageProps {
   onLogin: (user: User, rememberMe: boolean) => void;
@@ -31,6 +33,7 @@ interface LoginPageProps {
 }
 
 export const LoginPage: React.FC<LoginPageProps> = ({ onLogin, staffUsers }) => {
+  const { openThemeModal, currentAccent, theme } = useTheme();
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -224,6 +227,18 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin, staffUsers }) => 
             <Calendar className="w-3.5 h-3.5 text-orange-500" />
             <span>{formatDateIndo(APP_TODAY)}</span>
           </div>
+
+          <button
+            type="button"
+            onClick={openThemeModal}
+            className="text-xs text-zinc-400 hover:text-white flex items-center gap-1.5 px-3 py-1.5 rounded-xl hover:bg-zinc-900 border border-transparent hover:border-zinc-800 transition cursor-pointer"
+            title={`Tema: ${theme.mode} • Aksen: ${currentAccent.name}`}
+          >
+            <Palette className="w-3.5 h-3.5 text-orange-400" />
+            <span className="w-2 h-2 rounded-full" style={{ backgroundColor: currentAccent.hex }} />
+            <span className="hidden sm:inline">Tema</span>
+          </button>
+
           <button
             type="button"
             onClick={() => setShowHelpModal(true)}
