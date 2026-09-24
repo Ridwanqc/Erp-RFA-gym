@@ -566,17 +566,17 @@ export const INITIAL_MEMBERS: Member[] = [
 ];
 
 export const INITIAL_PACKAGES: PackageItem[] = [
-  { id: 'PK01', cat: 'Membership', type: 'Personal', name: '1 Bulan Akses Reguler', price: 200000, value: 30 },
-  { id: 'PK02', cat: 'Membership', type: 'Personal', name: '6 Bulan Gym Pro (Eligible Cicilan)', price: 900000, value: 180 },
-  { id: 'PK03', cat: 'Membership', type: 'Personal', name: '1 Tahun VIP Unlimited (Eligible Cicilan)', price: 1600000, value: 365 },
-  { id: 'PK04', cat: 'Membership', type: 'Couple', name: 'Couple Duo 6 Bulan (2 Org)', price: 1600000, value: 180 },
-  { id: 'PK05', cat: 'Membership', type: 'Trio', name: 'Trio Squad 6 Bulan (3 Org)', price: 2200000, value: 180 },
-  { id: 'PK06', cat: 'PT', type: 'Personal', name: 'Paket PT 4 Sesi', price: 400000, value: 4 },
-  { id: 'PK07', cat: 'PT', type: 'Personal', name: 'Paket PT 8 Sesi Intensive', price: 750000, value: 8 },
-  { id: 'PK08', cat: 'PT', type: 'Personal', name: 'Paket PT 16 Sesi Transformation', price: 1400000, value: 16 },
-  { id: 'PK09', cat: 'PT', type: 'Personal', name: 'PT Personal 10 Session', price: 900000, value: 10 },
-  { id: 'PK010', cat: 'PT', type: 'Personal', name: 'PT Personal 20 Session', price: 1700000, value: 20 },
-  { id: 'PK011', cat: 'PT', type: 'Personal', name: 'PT Personal 30 Session', price: 2400000, value: 30 }
+  { id: 'PK01', cat: 'Membership', type: 'Personal', name: '1 Bulan Akses Reguler', price: 200000, value: 30, commissionType: 'PERCENT', salesCommissionRate: 5, salesCommissionNominal: 10000, trainerCommissionRate: 0, trainerCommissionNominal: 0, commissionNotes: 'Komisi sales closing 5% (Rp 10.000) untuk kasir/consultant' },
+  { id: 'PK02', cat: 'Membership', type: 'Personal', name: '6 Bulan Gym Pro (Eligible Cicilan)', price: 900000, value: 180, commissionType: 'PERCENT', salesCommissionRate: 4, salesCommissionNominal: 36000, trainerCommissionRate: 0, trainerCommissionNominal: 0, commissionNotes: 'Komisi sales 4% (Rp 36.000) per transaksi closing' },
+  { id: 'PK03', cat: 'Membership', type: 'Personal', name: '1 Tahun VIP Unlimited (Eligible Cicilan)', price: 1600000, value: 365, commissionType: 'PERCENT', salesCommissionRate: 4, salesCommissionNominal: 64000, trainerCommissionRate: 0, trainerCommissionNominal: 0, commissionNotes: 'Komisi sales 4% (Rp 64.000) per transaksi closing' },
+  { id: 'PK04', cat: 'Membership', type: 'Couple', name: 'Couple Duo 6 Bulan (2 Org)', price: 1600000, value: 180, commissionType: 'PERCENT', salesCommissionRate: 4, salesCommissionNominal: 64000, trainerCommissionRate: 0, trainerCommissionNominal: 0, commissionNotes: 'Komisi sales 4% dibagi rata tim penjualan' },
+  { id: 'PK05', cat: 'Membership', type: 'Trio', name: 'Trio Squad 6 Bulan (3 Org)', price: 2200000, value: 180, commissionType: 'PERCENT', salesCommissionRate: 4, salesCommissionNominal: 88000, trainerCommissionRate: 0, trainerCommissionNominal: 0, commissionNotes: 'Komisi sales 4% dibagi rata tim penjualan' },
+  { id: 'PK06', cat: 'PT', type: 'Personal', name: 'Paket PT 4 Sesi', price: 400000, value: 4, commissionType: 'PERCENT', salesCommissionRate: 3, salesCommissionNominal: 12000, trainerCommissionRate: 40, trainerCommissionNominal: 160000, trainerCommissionPerSession: 40000, commissionNotes: 'Trainer 40% (Rp 40.000/sesi), Sales kasir 3% (Rp 12.000)' },
+  { id: 'PK07', cat: 'PT', type: 'Personal', name: 'Paket PT 8 Sesi Intensive', price: 750000, value: 8, commissionType: 'PERCENT', salesCommissionRate: 3, salesCommissionNominal: 22500, trainerCommissionRate: 40, trainerCommissionNominal: 300000, trainerCommissionPerSession: 37500, commissionNotes: 'Trainer 40% (Rp 37.500/sesi), Sales kasir 3% (Rp 22.500)' },
+  { id: 'PK08', cat: 'PT', type: 'Personal', name: 'Paket PT 16 Sesi Transformation', price: 1400000, value: 16, commissionType: 'PERCENT', salesCommissionRate: 3, salesCommissionNominal: 42000, trainerCommissionRate: 42, trainerCommissionNominal: 588000, trainerCommissionPerSession: 36750, commissionNotes: 'Trainer 42% (Rp 36.750/sesi), Sales kasir 3% (Rp 42.000)' },
+  { id: 'PK09', cat: 'PT', type: 'Personal', name: 'PT Personal 10 Session', price: 900000, value: 10, commissionType: 'PERCENT', salesCommissionRate: 3, salesCommissionNominal: 27000, trainerCommissionRate: 40, trainerCommissionNominal: 360000, trainerCommissionPerSession: 36000, commissionNotes: 'Trainer 40% (Rp 36.000/sesi), Sales kasir 3% (Rp 27.000)' },
+  { id: 'PK010', cat: 'PT', type: 'Personal', name: 'PT Personal 20 Session', price: 1700000, value: 20, commissionType: 'PERCENT', salesCommissionRate: 3.5, salesCommissionNominal: 59500, trainerCommissionRate: 42, trainerCommissionNominal: 714000, trainerCommissionPerSession: 35700, commissionNotes: 'Trainer 42% (Rp 35.700/sesi), Sales kasir 3.5% (Rp 59.500)' },
+  { id: 'PK011', cat: 'PT', type: 'Personal', name: 'PT Personal 30 Session', price: 2400000, value: 30, commissionType: 'PERCENT', salesCommissionRate: 4, salesCommissionNominal: 96000, trainerCommissionRate: 45, trainerCommissionNominal: 1080000, trainerCommissionPerSession: 36000, commissionNotes: 'Trainer 45% (Rp 36.000/sesi), Sales kasir 4% (Rp 96.000)' }
 ];
 
 export const INITIAL_PRODUCTS: Product[] = [

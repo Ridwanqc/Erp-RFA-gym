@@ -12,7 +12,7 @@ import {
   Calendar,
   AlertCircle
 } from 'lucide-react';
-import { User, Schedule, Transaction, StaffAttendance } from '../../types';
+import { User, Schedule, Transaction, StaffAttendance, PackageItem, TrainerCommissionRecord, SalesCommissionRecord } from '../../types';
 import { formatRp, APP_TODAY } from '../../utils/formatters';
 
 interface PayrollTabProps {
@@ -20,6 +20,9 @@ interface PayrollTabProps {
   schedules: Schedule[];
   transactions: Transaction[];
   staffAttendance: StaffAttendance[];
+  packages?: PackageItem[];
+  trainerCommissions?: TrainerCommissionRecord[];
+  salesCommissions?: SalesCommissionRecord[];
   showToast: (title: string, message: string, type: 'success' | 'error' | 'warning' | 'info') => void;
 }
 
@@ -28,6 +31,9 @@ export const PayrollTab: React.FC<PayrollTabProps> = ({
   schedules,
   transactions,
   staffAttendance,
+  packages = [],
+  trainerCommissions = [],
+  salesCommissions = [],
   showToast
 }) => {
   const [selectedStaffForSlip, setSelectedStaffForSlip] = useState<any | null>(null);
@@ -44,15 +50,43 @@ export const PayrollTab: React.FC<PayrollTabProps> = ({
           s.valTrainer &&
           s.valStaf
       );
-      const ptCommission = ptDone.length * 40000;
 
-      // 2. Sales PIC Bonus (5% of transactions where this staff is PIC)
+      // PT Commission from recorded package commissions or session-based rates
+      let ptCommission = 0;
+      const staffPtComms = trainerCommissions.filter(
+        (tc) => (tc.trainerId === staff.id || tc.trainerName === staff.name) && tc.status !== 'CANCELLED'
+      );
+      if (staffPtComms.length > 0) {
+        ptCommission = staffPtComms.reduce((acc, curr) => acc + (curr.commissionAmount || 0), 0);
+      } else {
+        // Fallback: per-session standard 40.000 or average session rate
+        ptCommission = ptDone.length * 40000;
+      }
+
+      // 2. Sales PIC Bonus (based on package sales commission rates or recorded salesCommissions)
       const sales = transactions.filter((t) => {
         const pids = t.picIds && t.picIds.length > 0 ? t.picIds : (t.picId ? [t.picId] : []);
         return pids.includes(staff.id) && t.status !== 'VOID';
       });
       const totalSalesAmount = sales.reduce((acc, curr) => acc + (curr.amountPaid || curr.amount || 0), 0);
-      const salesBonus = Math.round(totalSalesAmount * 0.05);
+
+      let salesBonus = 0;
+      const staffSalesRecs = salesCommissions.filter((sc) => sc.staffId === staff.id);
+      if (staffSalesRecs.length > 0) {
+        salesBonus = staffSalesRecs.reduce((acc, curr) => acc + (curr.commissionAmount || 0), 0);
+      } else {
+        // Calculate based on package salesCommissionRate if available
+        salesBonus = sales.reduce((acc, curr) => {
+          const matchedPkg = packages.find((p) => curr.desc.includes(p.name));
+          const sRate = matchedPkg?.salesCommissionRate ?? (curr.type === 'Membership' ? 4 : 3);
+          const pids = curr.picIds && curr.picIds.length > 0 ? curr.picIds : (curr.picId ? [curr.picId] : []);
+          const share = pids.length > 0 ? 1 / pids.length : 1;
+          const comm = matchedPkg?.salesCommissionNominal
+            ? Math.round(matchedPkg.salesCommissionNominal * share)
+            : Math.round((curr.amountPaid || curr.amount || 0) * (sRate / 100) * share);
+          return acc + comm;
+        }, 0);
+      }
 
       // 3. Overtime pay: Rp 25.000 / hour from staff attendance records
       const staffAtt = staffAttendance.filter((a) => a.staffId === staff.id || a.staffName === staff.name);
@@ -93,7 +127,7 @@ export const PayrollTab: React.FC<PayrollTabProps> = ({
         netSalary
       };
     });
-  }, [staffUsers, schedules, transactions, staffAttendance]);
+  }, [staffUsers, schedules, transactions, staffAttendance, packages, trainerCommissions, salesCommissions]);
 
   // Overall totals
   const totalPayrollBudget = useMemo(() => {

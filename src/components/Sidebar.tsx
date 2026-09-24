@@ -28,7 +28,8 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
   Palette,
-  Settings
+  Settings,
+  FileSpreadsheet
 } from 'lucide-react';
 import { User, UserRole } from '../types';
 import { PWAInstallButton } from './PWAInstallButton';
@@ -52,10 +53,13 @@ export type ActiveTab =
   | 'hr-payroll'
   | 'piutang'
   | 'laporan'
+  | 'laporan-bulanan'
   | 'tutup-toko'
+  | 'google-sheets'
   | 'settings'
   | 'settings-printer'
   | 'settings-roles'
+  | 'settings-branches'
   | 'settings-profile'
   | 'settings-finance'
   | 'settings-backup';
@@ -280,9 +284,19 @@ export const Sidebar: React.FC<SidebarProps> = ({
               roles: ['admin', 'kasir']
             },
             {
+              id: 'laporan-bulanan',
+              label: 'Laporan Penjualan Bulanan',
+              roles: ['admin', 'kasir', 'manager', 'leader_pt']
+            },
+            {
               id: 'tutup-toko',
               label: 'Daily Closing Kas',
               roles: ['admin', 'kasir']
+            },
+            {
+              id: 'google-sheets',
+              label: 'Google Sheets Sync',
+              roles: ['admin', 'manager', 'kasir']
             }
           ]
         }
@@ -303,6 +317,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
       group: 'Sistem & Konfigurasi',
       items: [
         {
+          id: 'google-sheets' as ActiveTab,
+          label: 'Google Sheets & Drive',
+          icon: FileSpreadsheet,
+          roles: ['admin', 'manager', 'kasir'] as UserRole[]
+        },
+        {
           id: 'settings-group',
           label: 'Pengaturan Sistem',
           icon: Settings,
@@ -319,8 +339,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
               roles: ['admin', 'manager']
             },
             {
+              id: 'settings-branches',
+              label: 'Kelola Cabang & Outlet',
+              roles: ['admin', 'manager']
+            },
+            {
               id: 'settings-profile',
-              label: 'Profil Usaha & Cabang',
+              label: 'Profil Usaha',
               roles: ['admin', 'manager']
             },
             {

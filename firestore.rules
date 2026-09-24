@@ -114,5 +114,21 @@ service cloud.firestore {
       allow update: if isSignedIn() && isValidId(leadId) && isValidLead(incoming());
       allow delete: if isAdmin() && isValidId(leadId);
     }
+
+    // Branches Collection
+    match /branches/{branchId} {
+      allow get: if isSignedIn() && isValidId(branchId);
+      allow list: if isSignedIn();
+      allow create, update: if isSignedIn() && isValidId(branchId);
+      allow delete: if isAdmin() && isValidId(branchId);
+    }
+
+    // Settings Collection
+    match /settings/{settingId} {
+      allow get: if isSignedIn() && isValidId(settingId);
+      allow list: if isSignedIn();
+      allow create, update: if isSignedIn() && isValidId(settingId);
+      allow delete: if isAdmin() && isValidId(settingId);
+    }
   }
 }

@@ -25,7 +25,16 @@ import {
   Filter,
   ArrowUpRight,
   AlertCircle,
-  Award
+  Award,
+  Package,
+  Layers,
+  Send,
+  Share2,
+  UserPlus,
+  Phone,
+  ExternalLink,
+  FileText,
+  X
 } from 'lucide-react';
 import {
   ResponsiveContainer,
@@ -42,8 +51,9 @@ import {
   Line,
   CartesianGrid
 } from 'recharts';
-import { Member, Schedule, User, StaffAttendance, Attendance } from '../types';
-import { APP_TODAY, formatDateIndo, getDayDiff } from '../utils/formatters';
+import { Member, Schedule, User, StaffAttendance, Attendance, PTPurchaseRecord, BundlePackage, Transaction, TrainerCommissionRecord } from '../types';
+import { APP_TODAY, formatDateIndo, getDayDiff, formatRp } from '../utils/formatters';
+import { TrainerCommissionPieChart } from './TrainerCommissionPieChart';
 
 interface LeaderPTDashboardViewProps {
   members: Member[];
@@ -52,6 +62,12 @@ interface LeaderPTDashboardViewProps {
   staffAttendances: StaffAttendance[];
   attendances: Attendance[];
   currentUser: User | null;
+  ptPurchases?: PTPurchaseRecord[];
+  bundlePackages?: BundlePackage[];
+  transactions?: Transaction[];
+  trainerCommissions?: TrainerCommissionRecord[];
+  onUpdateMember?: (updatedMember: Member) => void;
+  onUpdatePTPurchase?: (purchase: PTPurchaseRecord) => void;
   onNavigateTab: (tab: any) => void;
   onOpenMemberDetail?: (member: Member) => void;
   onUpdateSchedule: (schedule: Schedule) => void;
@@ -66,6 +82,12 @@ export const LeaderPTDashboardView: React.FC<LeaderPTDashboardViewProps> = ({
   staffAttendances,
   attendances,
   currentUser,
+  ptPurchases = [],
+  bundlePackages = [],
+  transactions = [],
+  trainerCommissions = [],
+  onUpdateMember,
+  onUpdatePTPurchase,
   onNavigateTab,
   onOpenMemberDetail,
   onUpdateSchedule,
@@ -73,9 +95,35 @@ export const LeaderPTDashboardView: React.FC<LeaderPTDashboardViewProps> = ({
   showToast
 }) => {
   // Active Filter / Tab state
-  const [activeTableTab, setActiveTableTab] = useState<'members' | 'schedules' | 'trainers'>('members');
+  const [activeTableTab, setActiveTableTab] = useState<'members' | 'new_packages' | 'schedules' | 'trainers'>('members');
   const [selectedCohortFilter, setSelectedCohortFilter] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState('');
+
+  // Assign Trainer Modal state
+  const [assignModal, setAssignModal] = useState<{
+    item: {
+      purchaseId?: string;
+      memberId: string;
+      memberName: string;
+      memberPhone: string;
+      memberPhoto?: string;
+      packageType: 'PT' | 'BUNDLING';
+      packageName: string;
+      sessions: number;
+      sessionsRemaining: number;
+      purchaseDate: string;
+      price: number;
+      currentTrainerName?: string;
+      currentTrainerId?: string;
+      notes?: string;
+    };
+    selectedTrainerId: string;
+    selectedTrainerName: string;
+    scheduleFirstSession: boolean;
+    firstDate: string;
+    firstTime: string;
+    notes: string;
+  } | null>(null);
 
   // Conflict Resolution Modal
   const [resolvingClash, setResolvingClash] = useState<{
@@ -527,8 +575,230 @@ export const LeaderPTDashboardView: React.FC<LeaderPTDashboardViewProps> = ({
   }, [schedules, selectedCohortFilter, scheduleMetrics, searchQuery]);
 
   // --------------------------------------------------------------------------
+  // LIST OF NEW PT & BUNDLING PURCHASES FOR TRAINER ASSIGNMENT
+  // --------------------------------------------------------------------------
+  const newPackagePurchases = useMemo(() => {
+    const list: Array<{
+      purchaseId?: string;
+      memberId: string;
+      memberName: string;
+      memberPhone: string;
+      memberPhoto?: string;
+      packageType: 'PT' | 'BUNDLING';
+      packageName: string;
+      sessions: number;
+      sessionsRemaining: number;
+      purchaseDate: string;
+      price: number;
+      currentTrainerName?: string;
+      currentTrainerId?: string;
+      isAssigned: boolean;
+      notes?: string;
+    }> = [];
+
+    const processedMemberIds = new Set<string>();
+
+    // 1. From ptPurchases
+    ptPurchases.forEach((p) => {
+      const mem = members.find((m) => m.id === p.memberId || m.name === p.memberName);
+      const isBundling = p.source === 'BUNDLING' || Boolean(p.bundleId) || (p.packageName || '').toLowerCase().includes('bundling');
+      const assignedTrainerName = (p.trainerName && p.trainerName !== '-' && p.trainerName !== 'Belum Ditugaskan')
+        ? p.trainerName
+        : mem?.picName && mem.picName !== 'Belum Ditugaskan' && mem.picName !== '-'
+        ? mem.picName
+        : undefined;
+
+      const isAssigned = Boolean(assignedTrainerName && assignedTrainerName !== '-');
+
+      list.push({
+        purchaseId: p.id,
+        memberId: p.memberId || mem?.id || 'MEM-GEN',
+        memberName: p.memberName || mem?.name || 'Member PT',
+        memberPhone: mem?.phone || '-',
+        memberPhoto: mem?.photo,
+        packageType: isBundling ? 'BUNDLING' : 'PT',
+        packageName: p.packageName || (isBundling ? 'Paket Bundling' : 'Paket Personal Trainer'),
+        sessions: p.totalSessions || mem?.ptQuota || 12,
+        sessionsRemaining: (p.totalSessions ?? 12) - (p.completedSessions ?? 0),
+        purchaseDate: p.date || APP_TODAY,
+        price: p.price || 0,
+        currentTrainerName: assignedTrainerName,
+        currentTrainerId: p.trainerId || mem?.picId,
+        isAssigned,
+        notes: p.notes || mem?.notes
+      });
+
+      if (p.memberId) processedMemberIds.add(p.memberId);
+      if (mem?.id) processedMemberIds.add(mem.id);
+    });
+
+    // 2. From members who have PT quota or bundling package but not yet in ptPurchases
+    members.forEach((m) => {
+      if (processedMemberIds.has(m.id)) return;
+      const hasPtQuota = (m.ptQuota || 0) > 0;
+      const isBundlingMember = (m.membershipType || '').toLowerCase().includes('bundl') || (m.notes || '').toLowerCase().includes('bundl');
+      const isPtMember = (m.membershipType || '').toLowerCase().includes('pt') || (m.notes || '').toLowerCase().includes('pt');
+
+      if (hasPtQuota || isBundlingMember || isPtMember) {
+        const isAssigned = Boolean(m.picName && m.picName !== 'Belum Ditugaskan' && m.picName !== '-');
+        list.push({
+          purchaseId: 'PUR-' + m.id,
+          memberId: m.id,
+          memberName: m.name,
+          memberPhone: m.phone || '-',
+          memberPhoto: m.photo,
+          packageType: isBundlingMember ? 'BUNDLING' : 'PT',
+          packageName: m.membershipType || (isBundlingMember ? 'Paket Bundling Gym + PT' : `Paket PT ${m.ptQuota || 12} Sesi`),
+          sessions: m.ptQuota || 12,
+          sessionsRemaining: m.ptQuota || 12,
+          purchaseDate: m.joinDate || APP_TODAY,
+          price: 0,
+          currentTrainerName: isAssigned ? m.picName : undefined,
+          currentTrainerId: m.picId,
+          isAssigned,
+          notes: m.notes
+        });
+      }
+    });
+
+    // Sort: unassigned first, then by date descending
+    return list.sort((a, b) => {
+      if (a.isAssigned !== b.isAssigned) {
+        return a.isAssigned ? 1 : -1;
+      }
+      return (b.purchaseDate || '').localeCompare(a.purchaseDate || '');
+    });
+  }, [ptPurchases, members]);
+
+  // Count unassigned packages
+  const unassignedCount = useMemo(() => {
+    return newPackagePurchases.filter((p) => !p.isAssigned).length;
+  }, [newPackagePurchases]);
+
+  // Filtered new packages
+  const filteredNewPackages = useMemo(() => {
+    let list = newPackagePurchases;
+    if (selectedCohortFilter === 'unassigned') {
+      list = list.filter((p) => !p.isAssigned);
+    } else if (selectedCohortFilter === 'assigned') {
+      list = list.filter((p) => p.isAssigned);
+    } else if (selectedCohortFilter === 'bundling') {
+      list = list.filter((p) => p.packageType === 'BUNDLING');
+    } else if (selectedCohortFilter === 'pt') {
+      list = list.filter((p) => p.packageType === 'PT');
+    }
+
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase();
+      list = list.filter(
+        (p) =>
+          p.memberName.toLowerCase().includes(q) ||
+          p.packageName.toLowerCase().includes(q) ||
+          p.memberPhone.includes(q) ||
+          (p.currentTrainerName || '').toLowerCase().includes(q)
+      );
+    }
+    return list;
+  }, [newPackagePurchases, selectedCohortFilter, searchQuery]);
+
+  // --------------------------------------------------------------------------
   // ACTIONS & HANDLERS
   // --------------------------------------------------------------------------
+  const handleOpenAssignModal = (item: any) => {
+    setAssignModal({
+      item,
+      selectedTrainerId: item.currentTrainerId || trainers[0]?.id || '',
+      selectedTrainerName: item.currentTrainerName || trainers[0]?.name || '',
+      scheduleFirstSession: false,
+      firstDate: APP_TODAY,
+      firstTime: '15:00',
+      notes: ''
+    });
+  };
+
+  const handleSaveAssignment = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!assignModal) return;
+    const { item, selectedTrainerId, selectedTrainerName, scheduleFirstSession, firstDate, firstTime, notes } = assignModal;
+
+    const chosenTrainer = trainers.find((t) => t.id === selectedTrainerId || t.name === selectedTrainerName) || {
+      id: selectedTrainerId,
+      name: selectedTrainerName
+    };
+
+    if (!chosenTrainer.name) {
+      showToast('Pilih Trainer', 'Harap pilih pelatih/trainer yang akan ditugaskan.', 'warning');
+      return;
+    }
+
+    // 1. Update member
+    const targetMember = members.find((m) => m.id === item.memberId);
+    if (targetMember && onUpdateMember) {
+      const updatedMem: Member = {
+        ...targetMember,
+        picId: chosenTrainer.id,
+        picName: chosenTrainer.name,
+        notes: (targetMember.notes ? targetMember.notes + ' | ' : '') + `Ditugaskan ke Coach ${chosenTrainer.name} oleh Leader`
+      };
+      onUpdateMember(updatedMem);
+    }
+
+    // 2. Update ptPurchase if available
+    if (item.purchaseId && onUpdatePTPurchase) {
+      const existingPurchase = ptPurchases.find((p) => p.id === item.purchaseId);
+      if (existingPurchase) {
+        onUpdatePTPurchase({
+          ...existingPurchase,
+          trainerId: chosenTrainer.id,
+          trainerName: chosenTrainer.name,
+          notes: notes ? (existingPurchase.notes ? existingPurchase.notes + '; ' + notes : notes) : existingPurchase.notes
+        });
+      }
+    }
+
+    // 3. Create first session schedule if requested
+    if (scheduleFirstSession) {
+      const newSch: Schedule = {
+        id: 'SCH-' + Date.now(),
+        memberName: item.memberName,
+        memberId: item.memberId,
+        trainer: chosenTrainer.name,
+        trainerId: chosenTrainer.id,
+        date: firstDate,
+        time: firstTime,
+        status: 'Menunggu',
+        valStaf: false,
+        valTrainer: false,
+        valMember: false,
+        note: `Sesi Perdana Paket ${item.packageName}${notes ? ' - ' + notes : ''}`
+      };
+      onAddSchedule(newSch);
+    }
+
+    showToast(
+      'Penugasan Berhasil',
+      `Member ${item.memberName} (${item.packageName}) berhasil ditugaskan ke Coach ${chosenTrainer.name}.`,
+      'success'
+    );
+
+    setAssignModal(null);
+  };
+
+  const handleSendWhatsAppTask = (trainerPhone: string, trainerName: string, item: any, notes: string) => {
+    const cleanPhone = (trainerPhone || '').replace(/\D/g, '');
+    const finalPhone = cleanPhone.startsWith('0') ? '62' + cleanPhone.slice(1) : cleanPhone || '6281234567890';
+    const msg = encodeURIComponent(
+      `Halo Coach ${trainerName}! 💪\n\n` +
+      `Ada penugasan member baru dari Leader Personal Trainer:\n` +
+      `• Member: ${item.memberName}\n` +
+      `• No. HP: ${item.memberPhone}\n` +
+      `• Paket: ${item.packageName} (${item.packageType === 'BUNDLING' ? 'Paket Bundling' : 'Paket PT'})\n` +
+      `• Kuota Sesi: ${item.sessions} Sesi\n` +
+      (notes ? `• Catatan / Goal: ${notes}\n` : '') +
+      `\nHarap segera hubungi member untuk koordinasi jadwal latihan perdana. Semangat melatih!`
+    );
+    window.open(`https://wa.me/${finalPhone}?text=${msg}`, '_blank');
+  };
   const handleQuickValidateSignature = (sch: Schedule, role: 'valStaf' | 'valTrainer' | 'valMember') => {
     const updated: Schedule = {
       ...sch,
@@ -641,6 +911,43 @@ export const LeaderPTDashboardView: React.FC<LeaderPTDashboardViewProps> = ({
           </button>
         </div>
       </div>
+
+      {/* ALERT BANNER: UNASSIGNED MEMBERS FROM PT / BUNDLING PURCHASES */}
+      {unassignedCount > 0 && (
+        <div className="bg-gradient-to-r from-amber-950/40 via-zinc-900 to-zinc-900 border border-amber-500/40 rounded-2xl p-4 sm:p-5 flex flex-col md:flex-row md:items-center justify-between gap-4 shadow-lg shadow-amber-950/20">
+          <div className="flex items-start sm:items-center gap-3.5">
+            <div className="w-11 h-11 rounded-2xl bg-amber-500/20 text-amber-400 flex items-center justify-center shrink-0 border border-amber-500/30">
+              <Package className="w-5 h-5 animate-bounce" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <h3 className="text-sm sm:text-base font-black text-white">
+                  Ada {unassignedCount} Member Baru Beli Paket PT & Bundling
+                </h3>
+                <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-rose-500/20 text-rose-400 border border-rose-500/30 animate-pulse">
+                  Perlu Penugasan Trainer
+                </span>
+              </div>
+              <p className="text-xs text-zinc-400 mt-1">
+                Leader dapat segera menugaskan Coach Personal Trainer yang tersedia serta menjadwalkan sesi screening awal/perdana.
+              </p>
+            </div>
+          </div>
+
+          <button
+            type="button"
+            onClick={() => {
+              setActiveTableTab('new_packages');
+              setSelectedCohortFilter('unassigned');
+            }}
+            className="px-4 py-2.5 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white font-bold text-xs rounded-xl transition flex items-center gap-2 shadow-md shadow-amber-500/20 whitespace-nowrap self-start md:self-auto cursor-pointer active:scale-95"
+          >
+            <UserPlus className="w-4 h-4" />
+            <span>Tugaskan Trainer Sekarang ({unassignedCount})</span>
+            <ChevronRight className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      )}
 
       {/* 2. RADAR JADWAL BENTROK ALERT (HIGH VISIBILITY) */}
       {scheduleMetrics.bentrok > 0 && (
@@ -1156,9 +1463,20 @@ export const LeaderPTDashboardView: React.FC<LeaderPTDashboardViewProps> = ({
       </div>
 
       {/* 4. VISUAL CHARTS (RECHARTS) */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Chart 1: 7-Day Schedule Trend */}
-        <div className="lg:col-span-2 bg-zinc-900/60 p-5 rounded-2xl border border-zinc-800 shadow-sm flex flex-col justify-between">
+      <div className="space-y-6">
+        {/* NEW COMPONENT: Perbandingan Total Komisi Setiap Trainer per Periode Bulan (Pie Chart Recharts) */}
+        <TrainerCommissionPieChart
+          trainers={trainers}
+          trainerCommissions={trainerCommissions}
+          schedules={schedules}
+          onSelectTrainer={(trainerId) => {
+            setActiveTableTab('trainers');
+          }}
+        />
+
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* Chart 1: 7-Day Schedule Trend */}
+          <div className="lg:col-span-2 bg-zinc-900/60 p-5 rounded-2xl border border-zinc-800 shadow-sm flex flex-col justify-between">
           <div>
             <div className="flex items-center justify-between mb-2">
               <h4 className="text-sm font-bold text-white flex items-center gap-2">
@@ -1241,6 +1559,7 @@ export const LeaderPTDashboardView: React.FC<LeaderPTDashboardViewProps> = ({
           </div>
         </div>
       </div>
+    </div>
 
       {/* 5. INTERACTIVE OPERATIONAL TABLE WITH TABS */}
       <div className="bg-zinc-900/60 rounded-2xl border border-zinc-800 shadow-sm overflow-hidden">
@@ -1261,6 +1580,26 @@ export const LeaderPTDashboardView: React.FC<LeaderPTDashboardViewProps> = ({
               >
                 <Users className="w-3.5 h-3.5" />
                 Member PT ({filteredMembers.length})
+              </button>
+
+              <button
+                onClick={() => {
+                  setActiveTableTab('new_packages');
+                  setSelectedCohortFilter('all');
+                }}
+                className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 ${
+                  activeTableTab === 'new_packages'
+                    ? 'bg-orange-500 text-white shadow-sm'
+                    : 'text-zinc-400 hover:text-white'
+                }`}
+              >
+                <Package className="w-3.5 h-3.5" />
+                <span>Paket PT & Bundling Baru ({filteredNewPackages.length})</span>
+                {unassignedCount > 0 && (
+                  <span className="px-1.5 py-0.2 rounded-full text-[10px] font-bold bg-rose-500 text-white">
+                    {unassignedCount}
+                  </span>
+                )}
               </button>
 
               <button
@@ -1317,6 +1656,202 @@ export const LeaderPTDashboardView: React.FC<LeaderPTDashboardViewProps> = ({
             </div>
           </div>
         </div>
+
+        {/* SUB-FILTER BAR FOR NEW PACKAGES */}
+        {activeTableTab === 'new_packages' && (
+          <div className="px-5 py-2.5 bg-zinc-950/60 border-b border-zinc-800 flex items-center gap-2 overflow-x-auto text-xs">
+            <span className="text-[11px] text-zinc-500 font-bold uppercase tracking-wider mr-1">Filter Paket:</span>
+            <button
+              onClick={() => setSelectedCohortFilter('all')}
+              className={`px-2.5 py-1 rounded-lg font-bold text-xs transition ${
+                selectedCohortFilter === 'all'
+                  ? 'bg-zinc-800 text-white border border-zinc-700'
+                  : 'text-zinc-400 hover:text-white'
+              }`}
+            >
+              Semua ({newPackagePurchases.length})
+            </button>
+            <button
+              onClick={() => setSelectedCohortFilter('unassigned')}
+              className={`px-2.5 py-1 rounded-lg font-bold text-xs transition flex items-center gap-1 ${
+                selectedCohortFilter === 'unassigned'
+                  ? 'bg-rose-500/20 text-rose-300 border border-rose-500/40'
+                  : 'text-rose-400/80 hover:text-rose-300'
+              }`}
+            >
+              Belum Ditugaskan ({unassignedCount})
+            </button>
+            <button
+              onClick={() => setSelectedCohortFilter('assigned')}
+              className={`px-2.5 py-1 rounded-lg font-bold text-xs transition ${
+                selectedCohortFilter === 'assigned'
+                  ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
+                  : 'text-zinc-400 hover:text-white'
+              }`}
+            >
+              Sudah Ditugaskan ({newPackagePurchases.length - unassignedCount})
+            </button>
+            <button
+              onClick={() => setSelectedCohortFilter('bundling')}
+              className={`px-2.5 py-1 rounded-lg font-bold text-xs transition ${
+                selectedCohortFilter === 'bundling'
+                  ? 'bg-sky-500/20 text-sky-300 border border-sky-500/40'
+                  : 'text-zinc-400 hover:text-white'
+              }`}
+            >
+              Paket Bundling
+            </button>
+            <button
+              onClick={() => setSelectedCohortFilter('pt')}
+              className={`px-2.5 py-1 rounded-lg font-bold text-xs transition ${
+                selectedCohortFilter === 'pt'
+                  ? 'bg-purple-500/20 text-purple-300 border border-purple-500/40'
+                  : 'text-zinc-400 hover:text-white'
+              }`}
+            >
+              Paket PT Murni
+            </button>
+          </div>
+        )}
+
+        {/* TAB 0.5: DAFTAR MEMBER BARU BELI PAKET PT & BUNDLING */}
+        {activeTableTab === 'new_packages' && (
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-xs text-zinc-300">
+              <thead className="bg-zinc-950/60 text-zinc-400 uppercase text-[10px] font-bold border-b border-zinc-800">
+                <tr>
+                  <th className="px-5 py-3">Member & Kontak</th>
+                  <th className="px-4 py-3">Paket Pembelian</th>
+                  <th className="px-4 py-3">Kuota Sesi</th>
+                  <th className="px-4 py-3">Tgl Beli</th>
+                  <th className="px-4 py-3">Status Penugasan Trainer</th>
+                  <th className="px-4 py-3">Catatan / Sasaran</th>
+                  <th className="px-4 py-3 text-right">Tindakan Leader</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-zinc-800/60">
+                {filteredNewPackages.length === 0 ? (
+                  <tr>
+                    <td colSpan={7} className="px-5 py-10 text-center text-zinc-500">
+                      <div className="max-w-sm mx-auto space-y-2">
+                        <Package className="w-8 h-8 text-zinc-600 mx-auto" />
+                        <p className="font-semibold text-zinc-400">Tidak ada paket yang cocok dengan filter saat ini.</p>
+                      </div>
+                    </td>
+                  </tr>
+                ) : (
+                  filteredNewPackages.map((pkg, idx) => {
+                    const matchedMem = members.find((m) => m.id === pkg.memberId);
+                    return (
+                      <tr key={pkg.purchaseId || idx} className="hover:bg-zinc-800/30 transition">
+                        <td className="px-5 py-3.5">
+                          <div className="flex items-center gap-3">
+                            <img
+                              src={pkg.memberPhoto || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=200&auto=format&fit=crop'}
+                              alt={pkg.memberName}
+                              className="w-9 h-9 rounded-full object-cover border border-zinc-700 shrink-0"
+                            />
+                            <div>
+                              <div className="font-bold text-white flex items-center gap-1.5">
+                                {pkg.memberName}
+                                {pkg.purchaseDate >= '2026-08-25' && (
+                                  <span className="text-[9px] bg-violet-500/20 text-violet-400 border border-violet-500/30 px-1.5 py-0.2 rounded font-extrabold">
+                                    BARU
+                                  </span>
+                                )}
+                              </div>
+                              <div className="text-[11px] text-zinc-400 flex items-center gap-1 mt-0.5">
+                                <Phone className="w-3 h-3 text-zinc-500" />
+                                <span>{pkg.memberPhone}</span>
+                              </div>
+                            </div>
+                          </div>
+                        </td>
+
+                        <td className="px-4 py-3.5">
+                          <div className="space-y-1">
+                            <span
+                              className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${
+                                pkg.packageType === 'BUNDLING'
+                                  ? 'bg-sky-500/20 text-sky-300 border border-sky-500/30'
+                                  : 'bg-purple-500/20 text-purple-300 border border-purple-500/30'
+                              }`}
+                            >
+                              {pkg.packageType === 'BUNDLING' ? <Layers className="w-3 h-3" /> : <Dumbbell className="w-3 h-3" />}
+                              {pkg.packageType === 'BUNDLING' ? 'Paket Bundling' : 'Paket PT'}
+                            </span>
+                            <div className="font-bold text-white text-xs">{pkg.packageName}</div>
+                            {pkg.price > 0 && (
+                              <div className="text-[11px] font-mono text-zinc-400">{formatRp(pkg.price)}</div>
+                            )}
+                          </div>
+                        </td>
+
+                        <td className="px-4 py-3.5">
+                          <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-black bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
+                            {pkg.sessions} Sesi
+                          </span>
+                        </td>
+
+                        <td className="px-4 py-3.5 text-zinc-300 font-medium">
+                          {formatDateIndo(pkg.purchaseDate)}
+                        </td>
+
+                        <td className="px-4 py-3.5">
+                          {pkg.isAssigned ? (
+                            <div className="space-y-1">
+                              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                                <CheckCircle2 className="w-3.5 h-3.5" />
+                                <span>Coach {pkg.currentTrainerName}</span>
+                              </span>
+                            </div>
+                          ) : (
+                            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold bg-rose-500/20 text-rose-400 border border-rose-500/30 animate-pulse">
+                              <AlertCircle className="w-3.5 h-3.5" />
+                              <span>Belum Ditugaskan</span>
+                            </span>
+                          )}
+                        </td>
+
+                        <td className="px-4 py-3.5 text-zinc-400 text-xs max-w-xs truncate">
+                          {pkg.notes || '-'}
+                        </td>
+
+                        <td className="px-4 py-3.5 text-right">
+                          <div className="flex items-center justify-end gap-1.5">
+                            <button
+                              type="button"
+                              onClick={() => handleOpenAssignModal(pkg)}
+                              className={`px-3 py-1.5 rounded-xl font-bold text-xs transition flex items-center gap-1 shadow-sm cursor-pointer ${
+                                !pkg.isAssigned
+                                  ? 'bg-orange-500 hover:bg-orange-600 text-white shadow-orange-500/20 active:scale-95'
+                                  : 'bg-zinc-800 hover:bg-zinc-700 text-zinc-200 border border-zinc-700 active:scale-95'
+                              }`}
+                            >
+                              <UserPlus className="w-3.5 h-3.5" />
+                              <span>{pkg.isAssigned ? 'Ganti Trainer' : 'Tugaskan Trainer'}</span>
+                            </button>
+
+                            {matchedMem && onOpenMemberDetail && (
+                              <button
+                                type="button"
+                                onClick={() => onOpenMemberDetail(matchedMem)}
+                                className="p-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-white border border-zinc-700 transition"
+                                title="Detail Member 360"
+                              >
+                                <ExternalLink className="w-3.5 h-3.5" />
+                              </button>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
+        )}
 
         {/* TAB 1: MEMBERS TABLE */}
         {activeTableTab === 'members' && (
@@ -1958,6 +2493,177 @@ export const LeaderPTDashboardView: React.FC<LeaderPTDashboardViewProps> = ({
                 >
                   Jadwalkan Sesi PT
                 </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: TUGASKAN TRAINER UNTUK MEMBER BARU BELI PAKET PT & BUNDLING */}
+      {assignModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in">
+          <div className="bg-zinc-900 border border-zinc-800 rounded-3xl p-6 w-full max-w-lg shadow-2xl relative">
+            <div className="flex items-center justify-between pb-4 border-b border-zinc-800">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-orange-500/20 text-orange-400 flex items-center justify-center border border-orange-500/30">
+                  <UserPlus className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-black text-white">Penugasan Personal Trainer</h3>
+                  <p className="text-xs text-zinc-400">Tentukan pelatih dan instruksi latihan untuk member</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setAssignModal(null)}
+                className="text-zinc-500 hover:text-white p-1 rounded-lg transition"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveAssignment} className="space-y-4 pt-4">
+              {/* Member & Package Summary Card */}
+              <div className="bg-zinc-950 p-4 rounded-2xl border border-zinc-800 space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-zinc-400 font-mono uppercase">Member</span>
+                  <span className="text-xs font-bold text-white">{assignModal.item.memberName}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-zinc-400 font-mono uppercase">Paket Dibeli</span>
+                  <span className="text-xs font-bold text-orange-400">
+                    {assignModal.item.packageName} ({assignModal.item.sessions} Sesi)
+                  </span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-zinc-400 font-mono uppercase">No. Telepon / WA</span>
+                  <span className="text-xs font-mono text-zinc-300">{assignModal.item.memberPhone}</span>
+                </div>
+                {assignModal.item.currentTrainerName && (
+                  <div className="flex items-center justify-between text-xs pt-1 border-t border-zinc-800/80">
+                    <span className="text-zinc-400">Trainer Saat Ini</span>
+                    <span className="font-bold text-emerald-400">{assignModal.item.currentTrainerName}</span>
+                  </div>
+                )}
+              </div>
+
+              {/* Select Trainer Dropdown */}
+              <div>
+                <label className="block text-xs font-bold text-zinc-200 mb-1.5">
+                  Pilih Personal Trainer (Coach) *
+                </label>
+                <select
+                  required
+                  value={assignModal.selectedTrainerId}
+                  onChange={(e) => {
+                    const selId = e.target.value;
+                    const found = trainers.find((t) => t.id === selId);
+                    setAssignModal({
+                      ...assignModal,
+                      selectedTrainerId: selId,
+                      selectedTrainerName: found?.name || ''
+                    });
+                  }}
+                  className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2.5 text-xs text-white font-medium focus:outline-none focus:border-orange-500"
+                >
+                  <option value="">-- Pilih Trainer Tersedia --</option>
+                  {trainers.map((t) => (
+                    <option key={t.id} value={t.id}>
+                      {t.name} ({t.roleName || 'Personal Trainer'})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Leader Briefing / Notes */}
+              <div>
+                <label className="block text-xs font-bold text-zinc-200 mb-1.5">
+                  Catatan Tugas & Sasaran Latihan
+                </label>
+                <textarea
+                  rows={2}
+                  value={assignModal.notes}
+                  onChange={(e) => setAssignModal({ ...assignModal, notes: e.target.value })}
+                  placeholder="Misal: Member fokus penurunan berat badan, latihan hari Senin & Rabu malam..."
+                  className="w-full bg-zinc-950 border border-zinc-800 rounded-xl p-3 text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-orange-500"
+                />
+              </div>
+
+              {/* Checkbox: Jadwalkan Sesi Perdana */}
+              <div className="bg-zinc-950/60 p-3.5 rounded-2xl border border-zinc-800 space-y-3">
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={assignModal.scheduleFirstSession}
+                    onChange={(e) =>
+                      setAssignModal({ ...assignModal, scheduleFirstSession: e.target.checked })
+                    }
+                    className="rounded border-zinc-700 text-orange-500 focus:ring-0"
+                  />
+                  <span className="text-xs font-bold text-zinc-200">
+                    Jadwalkan Sesi Konsultasi / Screening Perdana Langsung
+                  </span>
+                </label>
+
+                {assignModal.scheduleFirstSession && (
+                  <div className="grid grid-cols-2 gap-2 pt-2 border-t border-zinc-800">
+                    <div>
+                      <label className="block text-[11px] text-zinc-400 mb-1">Tanggal Sesi</label>
+                      <input
+                        type="date"
+                        value={assignModal.firstDate}
+                        onChange={(e) => setAssignModal({ ...assignModal, firstDate: e.target.value })}
+                        className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-2.5 py-1.5 text-xs text-white"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] text-zinc-400 mb-1">Jam Sesi</label>
+                      <input
+                        type="time"
+                        value={assignModal.firstTime}
+                        onChange={(e) => setAssignModal({ ...assignModal, firstTime: e.target.value })}
+                        className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-2.5 py-1.5 text-xs text-white"
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Modal Buttons */}
+              <div className="flex items-center justify-between pt-3 border-t border-zinc-800 gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const chosen = trainers.find((t) => t.id === assignModal.selectedTrainerId);
+                    handleSendWhatsAppTask(
+                      chosen?.phone || '',
+                      assignModal.selectedTrainerName,
+                      assignModal.item,
+                      assignModal.notes
+                    );
+                  }}
+                  disabled={!assignModal.selectedTrainerName}
+                  className="px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white font-bold text-xs transition flex items-center gap-1.5 cursor-pointer"
+                >
+                  <Send className="w-3.5 h-3.5" />
+                  <span>Kirim WA ke Trainer</span>
+                </button>
+
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setAssignModal(null)}
+                    className="px-4 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 font-bold text-xs transition"
+                  >
+                    Batal
+                  </button>
+                  <button
+                    type="submit"
+                    className="px-4 py-2 rounded-xl bg-orange-600 hover:bg-orange-500 text-white font-bold text-xs transition shadow-md shadow-orange-600/30"
+                  >
+                    Simpan Penugasan
+                  </button>
+                </div>
               </div>
             </form>
           </div>

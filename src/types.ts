@@ -113,6 +113,20 @@ export interface PackageItem {
   name: string;
   price: number;
   value: number; // days or sessions
+  // Pengaturan Komisi Produk Member & Personal Trainer
+  commissionType?: 'PERCENT' | 'NOMINAL'; // 'PERCENT' (default) atau 'NOMINAL'
+  // 1. Komisi Penjualan untuk Kasir / Sales Consultant yang closing produk member / PT
+  salesCommissionRate?: number; // Cth: 3% atau 5%
+  salesCommissionNominal?: number; // Cth: Rp 25.000
+  // 2. Komisi Personal Trainer (Coach / Pelatih)
+  trainerCommissionRate?: number; // Cth: 40% dari harga paket PT
+  trainerCommissionNominal?: number; // Cth: Rp 360.000 total
+  trainerCommissionPerSession?: number; // Cth: Rp 45.000 / sesi latihan
+  // 3. Insentif Tambahan / Bonus Produk
+  productBonusNominal?: number;
+  // Catatan Kebijakan & Saran
+  commissionNotes?: string;
+  presetApplied?: string;
 }
 
 export type BundleType =
@@ -158,8 +172,29 @@ export interface BundlePackage {
   ptComponentValue: number; // Configurable PT component valuation for trainer commission
   commissionRate: number; // Commission % for trainer, e.g. 20 (%)
   trainerCommissionRate?: number;
+  trainerCommissionPerSession?: number;
+  salesCommissionRate?: number; // % Komisi Penjualan Kasir/Sales
+  salesCommissionNominal?: number; // Rp Komisi Penjualan Kasir/Sales
   items: BundleItem[];
   allowDpActivation?: boolean; // If true, benefits activate even when paying DP
+}
+
+export interface SalesCommissionRecord {
+  id: string;
+  date: string; // YYYY-MM-DD
+  staffId: string;
+  staffName: string;
+  memberId?: string;
+  memberName: string;
+  packageId?: string;
+  packageName: string;
+  packageCat: 'Membership' | 'PT' | 'Bundling' | 'POS' | string;
+  packagePrice: number;
+  commissionRate?: number;
+  commissionAmount: number;
+  trxId: string;
+  paymentStatus: 'LUNAS' | 'PENDING' | string;
+  notes?: string;
 }
 
 export interface MemberMembershipRecord {
@@ -194,6 +229,9 @@ export interface TrainerCommissionRecord {
   bundleId?: string;
   bundleCode?: string;
   bundleName: string;
+  packageId?: string;
+  packageName?: string;
+  packageType?: 'Membership' | 'PT' | 'Bundling' | string;
   trxId?: string;
   transactionId?: string;
   sessionId?: string;
@@ -201,10 +239,13 @@ export interface TrainerCommissionRecord {
   ptComponentValue: number;
   commissionRate: number;
   commissionAmount: number;
+  commissionPerSession?: number;
+  totalSessions?: number;
   paymentStatus: 'LUNAS' | 'BELUM LUNAS' | 'PENDING' | string;
   validationStatus: 'COMPLETED' | 'WAITING_VALIDATION' | 'PENDING' | string;
   valStatus?: string;
   status?: string;
+  notes?: string;
 }
 
 export interface CartItem extends Product {
@@ -926,6 +967,29 @@ export interface RoleDefinition {
   badgeColor: string;
   isSystemRole: boolean;
   permissions: Record<string, RoleActionPermissions>;
+}
+
+export interface GymBranch {
+  id: string; // e.g. "BR-001"
+  name: string; // e.g. "GymPro Flagship Kelapa Gading"
+  code: string; // e.g. "KGD"
+  address: string;
+  city: string;
+  phone: string;
+  whatsapp: string;
+  email: string;
+  managerName?: string;
+  managerPhone?: string;
+  openHoursWeekday: string;
+  openHoursWeekend: string;
+  status: 'Aktif' | 'Nonaktif' | 'Renovasi';
+  isMainBranch: boolean;
+  facilities: string[];
+  capacity?: number;
+  totalMembers?: number;
+  photo?: string;
+  createdAt: string;
+  notes?: string;
 }
 
 export interface GymBusinessProfile {

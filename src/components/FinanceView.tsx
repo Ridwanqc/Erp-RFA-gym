@@ -29,13 +29,15 @@ import {
   Square,
   ListChecks,
   CheckCheck,
-  UserCheck
+  UserCheck,
+  BarChart3
 } from 'lucide-react';
 import { Transaction, PettyCashItem, DailyClosingRecord, User } from '../types';
 import { formatRp, getTimestamp, APP_TODAY, getDayDiff, formatDateIndo } from '../utils/formatters';
 import { FinanceRevenueChart } from './FinanceRevenueChart';
 import { PettyCashManagementView } from './PettyCashManagementView';
 import { FinancialSummaryCard, FinancialSummaryData } from './FinancialSummaryCard';
+import { MonthlySalesReportView } from './MonthlySalesReportView';
 
 interface FinanceViewProps {
   transactions: Transaction[];
@@ -43,7 +45,7 @@ interface FinanceViewProps {
   closingRecords: DailyClosingRecord[];
   currentUser: User | null;
   isStoreClosed: boolean;
-  initialSubTab?: 'piutang' | 'bukubesar' | 'petty' | 'closing';
+  initialSubTab?: 'piutang' | 'bukubesar' | 'petty' | 'closing' | 'bulanan';
   initialSelectedPiutangId?: string;
   onPayInstallment: (payTrx: Transaction, originalTrxId: string, paidAmount: number) => void;
   onBatchPayInstallment?: (payments: { payTrx: Transaction; originalTrxId: string; paidAmount: number }[]) => void;
@@ -79,7 +81,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
   onUpdatePaymentMethod,
   showToast
 }) => {
-  const [activeTab, setActiveTab] = useState<'piutang' | 'bukubesar' | 'petty' | 'closing'>(initialSubTab);
+  const [activeTab, setActiveTab] = useState<'piutang' | 'bukubesar' | 'petty' | 'closing' | 'bulanan'>(initialSubTab);
 
   const handleUpdatePettyCash = (newList: PettyCashItem[]) => {
     if (onUpdatePettyCashList) {
@@ -939,11 +941,25 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
           >
             Daily Closing Kasir
           </button>
+          <button
+            onClick={() => setActiveTab('bulanan')}
+            className={`px-4 py-2 rounded-xl text-xs font-bold transition whitespace-nowrap flex items-center gap-1.5 ${
+              activeTab === 'bulanan' ? 'bg-orange-500 text-white shadow-md' : 'text-zinc-400 hover:text-white'
+            }`}
+          >
+            <BarChart3 className="w-3.5 h-3.5" />
+            <span>Laporan Penjualan Bulanan</span>
+          </button>
         </div>
       </div>
 
       {/* 7-Day Revenue Trends Chart: Total Payments vs New Installment Income */}
-      <FinanceRevenueChart transactions={transactions} />
+      {activeTab !== 'bulanan' && <FinanceRevenueChart transactions={transactions} />}
+
+      {/* 0. LAPORAN PENJUALAN BULANAN (RECHARTS BAR CHART & ANALYTICS) */}
+      {activeTab === 'bulanan' && (
+        <MonthlySalesReportView transactions={transactions} showToast={showToast} />
+      )}
 
       {/* 1. BUKU PIUTANG & CICILAN */}
       {activeTab === 'piutang' && (

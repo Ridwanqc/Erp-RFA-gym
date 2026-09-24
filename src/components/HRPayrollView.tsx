@@ -16,7 +16,10 @@ import {
   Transaction,
   Schedule,
   WorkSchedule,
-  LeaveRequest
+  LeaveRequest,
+  PackageItem,
+  TrainerCommissionRecord,
+  SalesCommissionRecord
 } from '../types';
 import { HRAttendanceDashboard } from './hr/HRAttendanceDashboard';
 import { WorkScheduleTab } from './hr/WorkScheduleTab';
@@ -33,6 +36,9 @@ interface HRPayrollViewProps {
   schedules: Schedule[];
   workSchedules: WorkSchedule[];
   leaveRequests: LeaveRequest[];
+  packages?: PackageItem[];
+  trainerCommissions?: TrainerCommissionRecord[];
+  salesCommissions?: SalesCommissionRecord[];
   onSaveWorkSchedule: (schedule: WorkSchedule, isNew: boolean) => void;
   onDeleteWorkSchedule: (id: string) => void;
   onSwapWorkSchedule: (staffId1: string, staffId2: string, date: string) => void;
@@ -54,6 +60,9 @@ export const HRPayrollView: React.FC<HRPayrollViewProps> = ({
   schedules,
   workSchedules,
   leaveRequests,
+  packages = [],
+  trainerCommissions = [],
+  salesCommissions = [],
   onSaveWorkSchedule,
   onDeleteWorkSchedule,
   onSwapWorkSchedule,
@@ -234,6 +243,9 @@ export const HRPayrollView: React.FC<HRPayrollViewProps> = ({
           schedules={schedules}
           transactions={transactions}
           staffAttendance={staffAttendance}
+          packages={packages}
+          trainerCommissions={trainerCommissions}
+          salesCommissions={salesCommissions}
           showToast={showToast}
         />
       )}

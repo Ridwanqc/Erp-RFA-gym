@@ -6,17 +6,40 @@ import firebaseConfig from '../../firebase-applet-config.json';
 // Initialize Firebase App singleton
 export const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
 
-// Initialize Firestore with specific databaseId as mandated by configuration
-export const db = getFirestore(app, firebaseConfig.firestoreDatabaseId);
+// Initialize Firestore with explicit databaseId if configured (e.g. named Firestore databases)
+export const db = firebaseConfig.firestoreDatabaseId
+  ? getFirestore(app, firebaseConfig.firestoreDatabaseId)
+  : getFirestore(app);
 
 // Initialize Firebase Auth
 export const auth = getAuth(app);
 
-// Google Auth Provider configured for popups
+// Google Auth Provider configured for popups with Workspace Scopes
+export const WORKSPACE_SCOPES = [
+  'https://www.googleapis.com/auth/drive',
+  'https://www.googleapis.com/auth/drive.file',
+  'https://www.googleapis.com/auth/drive.readonly',
+  'https://www.googleapis.com/auth/spreadsheets',
+  'https://www.googleapis.com/auth/spreadsheets.readonly'
+];
+
 export const googleProvider = new GoogleAuthProvider();
 googleProvider.setCustomParameters({
   prompt: 'select_account'
 });
+WORKSPACE_SCOPES.forEach((scope) => googleProvider.addScope(scope));
+
+// In-memory caching for the access token (per Skill requirement: NEVER save to localStorage/sessionStorage)
+let cachedAccessToken: string | null = null;
+let isSigningIn = false;
+
+export const getAccessToken = async (): Promise<string | null> => {
+  return cachedAccessToken;
+};
+
+export const setCachedAccessToken = (token: string | null) => {
+  cachedAccessToken = token;
+};
 
 export enum OperationType {
   CREATE = 'create',
@@ -81,13 +104,20 @@ export async function testConnection(): Promise<boolean> {
 }
 
 // Google Sign In Popup helper
-export async function signInWithGoogle() {
+export async function signInWithGoogle(): Promise<{ user: FirebaseUser; accessToken: string }> {
   try {
+    isSigningIn = true;
     const result = await signInWithPopup(auth, googleProvider);
-    return result.user;
+    const credential = GoogleAuthProvider.credentialFromResult(result);
+    if (credential?.accessToken) {
+      cachedAccessToken = credential.accessToken;
+    }
+    return { user: result.user, accessToken: cachedAccessToken || '' };
   } catch (error) {
     console.error('Google Sign-In Error:', error);
     throw error;
+  } finally {
+    isSigningIn = false;
   }
 }
 
@@ -95,6 +125,7 @@ export async function signInWithGoogle() {
 export async function logOutFirebase() {
   try {
     await signOut(auth);
+    cachedAccessToken = null;
   } catch (error) {
     console.error('Firebase Sign-Out Error:', error);
   }

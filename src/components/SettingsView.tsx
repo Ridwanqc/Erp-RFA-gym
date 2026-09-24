@@ -30,7 +30,8 @@ import {
   UserCheck,
   PhoneCall,
   Clock,
-  Sparkles
+  Sparkles,
+  FileSpreadsheet
 } from 'lucide-react';
 import {
   User,
@@ -43,6 +44,7 @@ import {
 import { useSettings } from '../context/SettingsContext';
 import { SYSTEM_MODULES } from '../data/settingsData';
 import { formatRp } from '../utils/formatters';
+import { BranchManagementView } from './BranchManagementView';
 
 interface SettingsViewProps {
   currentUser: User | null;
@@ -51,10 +53,11 @@ interface SettingsViewProps {
   allSystemData?: any;
   onRestoreSystemData?: (data: any) => void;
   showToast?: (title: string, message: string, type: 'success' | 'info' | 'warning' | 'error') => void;
-  initialSubTab?: 'printer' | 'roles' | 'profile' | 'finance' | 'templates' | 'backup';
+  initialSubTab?: 'printer' | 'roles' | 'profile' | 'branches' | 'finance' | 'templates' | 'backup';
+  onNavigateToGoogleSheets?: () => void;
 }
 
-type SettingsSubTab = 'printer' | 'roles' | 'profile' | 'finance' | 'templates' | 'backup';
+type SettingsSubTab = 'printer' | 'roles' | 'profile' | 'branches' | 'finance' | 'templates' | 'backup';
 
 export const SettingsView: React.FC<SettingsViewProps> = ({
   currentUser,
@@ -63,11 +66,15 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   allSystemData,
   onRestoreSystemData,
   showToast,
-  initialSubTab = 'printer'
+  initialSubTab = 'printer',
+  onNavigateToGoogleSheets
 }) => {
   const {
     settings,
     roles,
+    branches,
+    activeBranchId,
+    activeBranch,
     updatePrinterConfig,
     updateProfileConfig,
     updatePaymentAndTaxConfig,
@@ -337,7 +344,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
           {[
             { id: 'printer', label: 'Printer & Struk POS', icon: Printer, badge: settings.printer.paperWidth },
             { id: 'roles', label: 'Manajemen Role & Akses', icon: ShieldCheck, badge: 'RBAC' },
-            { id: 'profile', label: 'Profil Usaha & Cabang', icon: Building2 },
+            { id: 'branches', label: 'Kelola Cabang & Outlet', icon: Building2, badge: `${branches.length} Outlet` },
+            { id: 'profile', label: 'Profil Usaha', icon: Sliders },
             { id: 'finance', label: 'Pajak & Rekening Kas', icon: CreditCard },
             { id: 'templates', label: 'Template Pesan WA', icon: MessageSquare },
             { id: 'backup', label: 'Backup & Database', icon: Database }
@@ -1052,29 +1060,65 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
       )}
 
       {/* ========================================================================= */}
+      {/* 2.5 SUB-TAB: KELOLA CABANG & OUTLET MULTI-BRANCH                         */}
+      {/* ========================================================================= */}
+      {activeTab === 'branches' && (
+        <BranchManagementView currentUser={currentUser} showToast={showToast} />
+      )}
+
+      {/* ========================================================================= */}
       {/* 3. SUB-TAB: PROFIL USAHA & CABANG                                         */}
       {/* ========================================================================= */}
       {activeTab === 'profile' && (
-        <div className="bg-zinc-900 border border-zinc-800 rounded-3xl p-5 sm:p-7 space-y-6">
-          <div className="flex items-center justify-between border-b border-zinc-800 pb-4">
-            <div>
-              <h3 className="text-sm font-bold uppercase tracking-wider text-white flex items-center gap-2">
-                <Building2 className="w-4 h-4 text-orange-400" />
-                Identitas Pusat Kebugaran & Outlet Cabang
-              </h3>
-              <p className="text-xs text-zinc-400 mt-0.5">
-                Informasi ini digunakan pada kartu digital member, invoice bukti bayar, dan laporan manajerial.
-              </p>
+        <div className="space-y-6">
+          {/* Active Branch Callout Banner */}
+          <div className="p-4.5 rounded-3xl bg-emerald-950/40 border border-emerald-500/30 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-2xl bg-emerald-500/20 border border-emerald-500/30 flex items-center justify-center text-emerald-400 shrink-0">
+                <Building2 className="w-5 h-5" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-bold text-white">Cabang Aktif Saat Ini:</span>
+                  <span className="px-2 py-0.5 rounded-full text-[10px] font-black uppercase bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
+                    {activeBranch?.code || 'PST'}
+                  </span>
+                </div>
+                <p className="text-xs text-emerald-300 font-semibold mt-0.5">
+                  {activeBranch?.name || 'Cabang Utama'} • {activeBranch?.city || 'Jakarta'}
+                </p>
+              </div>
             </div>
+
             <button
               type="button"
-              onClick={() => notifySuccess('Profil Disimpan', 'Data profil usaha dan cabang berhasil disimpan.')}
-              className="px-4 py-2 bg-orange-500 hover:bg-orange-600 text-white rounded-xl text-xs font-bold transition flex items-center gap-2 shadow-md cursor-pointer"
+              onClick={() => setActiveTab('branches')}
+              className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold transition flex items-center gap-1.5 shadow-md shadow-emerald-600/20 cursor-pointer shrink-0"
             >
-              <Save className="w-4 h-4" />
-              <span>Simpan Profil</span>
+              <span>Kelola & Tambah Cabang Lain →</span>
             </button>
           </div>
+
+          <div className="bg-zinc-900 border border-zinc-800 rounded-3xl p-5 sm:p-7 space-y-6">
+            <div className="flex items-center justify-between border-b border-zinc-800 pb-4">
+              <div>
+                <h3 className="text-sm font-bold uppercase tracking-wider text-white flex items-center gap-2">
+                  <Building2 className="w-4 h-4 text-orange-400" />
+                  Identitas Pusat Kebugaran & Profil Legal
+                </h3>
+                <p className="text-xs text-zinc-400 mt-0.5">
+                  Informasi ini digunakan pada kartu digital member, invoice bukti bayar, dan laporan manajerial.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => notifySuccess('Profil Disimpan', 'Data profil usaha dan cabang berhasil disimpan.')}
+                className="px-4 py-2 bg-orange-500 hover:bg-orange-600 text-white rounded-xl text-xs font-bold transition flex items-center gap-2 shadow-md cursor-pointer"
+              >
+                <Save className="w-4 h-4" />
+                <span>Simpan Profil</span>
+              </button>
+            </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             <div>
@@ -1207,6 +1251,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
               />
             </div>
           </div>
+        </div>
         </div>
       )}
 
@@ -1602,6 +1647,37 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                 />
               </label>
             </div>
+          </div>
+
+          {/* Google Sheets Cloud Sync Card */}
+          <div className="bg-gradient-to-r from-emerald-950/40 via-zinc-900 to-zinc-900 border border-emerald-500/30 rounded-3xl p-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-sm">
+            <div className="flex items-start gap-3">
+              <div className="p-3 rounded-2xl bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 shrink-0">
+                <FileSpreadsheet className="w-6 h-6" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <h4 className="text-sm font-bold text-white">Sinkronisasi Cloud ke Google Sheets & Drive</h4>
+                  <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
+                    Workspace Ready
+                  </span>
+                </div>
+                <p className="text-xs text-zinc-400 mt-1 max-w-xl leading-relaxed">
+                  Ekspor database member, presensi sesi PT, transaksi POS, dan stok produk langsung ke spreadsheet di Google Drive Anda secara aman.
+                </p>
+              </div>
+            </div>
+
+            {onNavigateToGoogleSheets && (
+              <button
+                type="button"
+                onClick={onNavigateToGoogleSheets}
+                className="px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold transition shrink-0 cursor-pointer shadow-md flex items-center gap-2"
+              >
+                <FileSpreadsheet className="w-4 h-4" />
+                <span>Buka Google Sheets Sync</span>
+              </button>
+            )}
           </div>
 
           {/* Reset Factory Settings */}

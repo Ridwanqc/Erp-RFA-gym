@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { Crown, Sparkles, Check, AlertCircle, Plus, DollarSign, Info, CreditCard, Wallet, QrCode, Building2, CheckCircle2, CalendarClock, Users, UserCheck, Copy, Gift, Layers, BarChart3, Settings } from 'lucide-react';
+import React, { useState, useMemo } from 'react';
+import { Crown, Sparkles, Check, AlertCircle, Plus, DollarSign, Info, CreditCard, Wallet, QrCode, Building2, CheckCircle2, CalendarClock, Users, UserCheck, Copy, Gift, Layers, BarChart3, Settings, Percent, TrendingUp, Dumbbell, Search, Trash2, Edit3, HelpCircle, Lightbulb, Zap, ArrowRight, ShieldCheck } from 'lucide-react';
 import { PackageItem, Member, User, Transaction, BundlePackage } from '../types';
 import { formatRp, getTimestamp, APP_TODAY } from '../utils/formatters';
 import { SearchableMemberSelect } from './SearchableMemberSelect';
@@ -14,6 +14,8 @@ interface MembershipViewProps {
   onOpenBundlingReports?: () => void;
   onPurchasePackage: (trx: Transaction, updatedMembers: Member[]) => void;
   onAddPackage: (pkg: PackageItem) => void;
+  onUpdatePackage?: (pkg: PackageItem) => void;
+  onDeletePackage?: (id: string) => void;
   isStoreClosed?: boolean;
   showToast: (title: string, message: string, type: 'success' | 'error' | 'warning' | 'info') => void;
 }
@@ -28,6 +30,8 @@ export const MembershipView: React.FC<MembershipViewProps> = ({
   onOpenBundlingReports,
   onPurchasePackage,
   onAddPackage,
+  onUpdatePackage,
+  onDeletePackage,
   isStoreClosed,
   showToast
 }) => {
@@ -59,13 +63,29 @@ export const MembershipView: React.FC<MembershipViewProps> = ({
   const [dpPercent, setDpPercent] = useState<number>(50);
   const [customDpAmount, setCustomDpAmount] = useState<string>('');
 
-  // Master package modal
+  // Master package modal & commission state
   const [isPkgModalOpen, setIsPkgModalOpen] = useState(false);
+  const [pkgModalTab, setPkgModalTab] = useState<'form' | 'list'>('form');
+  const [editingPkgId, setEditingPkgId] = useState<string | null>(null);
+  const [pkgSearch, setPkgSearch] = useState('');
+  const [pkgFilterCat, setPkgFilterCat] = useState<'ALL' | 'Membership' | 'PT'>('ALL');
+
+  // Form Fields
   const [newPkgCat, setNewPkgCat] = useState<'Membership' | 'PT'>('Membership');
   const [newPkgType, setNewPkgType] = useState<'Personal' | 'Couple' | 'Trio'>('Personal');
   const [newPkgName, setNewPkgName] = useState('');
   const [newPkgPrice, setNewPkgPrice] = useState('');
   const [newPkgValue, setNewPkgValue] = useState('');
+
+  // Commission configurations
+  const [commissionType, setCommissionType] = useState<'PERCENT' | 'NOMINAL'>('PERCENT');
+  const [salesCommissionRate, setSalesCommissionRate] = useState<string>('4');
+  const [salesCommissionNominal, setSalesCommissionNominal] = useState<string>('20000');
+  const [trainerCommissionRate, setTrainerCommissionRate] = useState<string>('40');
+  const [trainerCommissionNominal, setTrainerCommissionNominal] = useState<string>('160000');
+  const [trainerCommissionPerSession, setTrainerCommissionPerSession] = useState<string>('40000');
+  const [productBonusNominal, setProductBonusNominal] = useState<string>('0');
+  const [commissionNotes, setCommissionNotes] = useState<string>('');
 
   const filteredPackages = packages.filter((p) => p.cat === cat && p.type === type);
   const currentPackage = filteredPackages[selectedPkgIndex] || filteredPackages[0];
@@ -135,6 +155,35 @@ export const MembershipView: React.FC<MembershipViewProps> = ({
     }
   }
   const sisaCicilan = isCicilan ? Math.max(netTotal - downPayment, 0) : 0;
+
+  // Real-time Commission Estimates for Checkout Review
+  const salesCommEstimate = useMemo(() => {
+    if (cat === 'Bundling' && currentBundle) {
+      if (currentBundle.salesCommissionNominal) return currentBundle.salesCommissionNominal;
+      const rate = currentBundle.salesCommissionRate || 4;
+      return Math.round((netTotal * rate) / 100);
+    }
+    if (currentPackage) {
+      if (currentPackage.salesCommissionNominal) return currentPackage.salesCommissionNominal;
+      const rate = currentPackage.salesCommissionRate || (currentPackage.cat === 'Membership' ? 4 : 3);
+      return Math.round((netTotal * rate) / 100);
+    }
+    return 0;
+  }, [cat, currentBundle, currentPackage, netTotal]);
+
+  const trainerCommEstimate = useMemo(() => {
+    if (cat === 'Bundling' && currentBundle) {
+      const ptVal = currentBundle.ptComponentValue || 0;
+      const rate = currentBundle.commissionRate || currentBundle.trainerCommissionRate || 20;
+      return Math.round((ptVal * rate) / 100);
+    }
+    if (currentPackage && currentPackage.cat === 'PT') {
+      if (currentPackage.trainerCommissionNominal) return currentPackage.trainerCommissionNominal;
+      const rate = currentPackage.trainerCommissionRate || 40;
+      return Math.round((netTotal * rate) / 100);
+    }
+    return 0;
+  }, [cat, currentBundle, currentPackage, netTotal]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -354,25 +403,196 @@ export const MembershipView: React.FC<MembershipViewProps> = ({
     setCustomDpAmount('');
   };
 
-  const handleSaveMasterPackage = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newPkgName || !newPkgPrice || !newPkgValue) return;
+  const handleEditPackage = (pkg: PackageItem) => {
+    setEditingPkgId(pkg.id);
+    setNewPkgCat(pkg.cat);
+    setNewPkgType(pkg.type);
+    setNewPkgName(pkg.name);
+    setNewPkgPrice(String(pkg.price));
+    setNewPkgValue(String(pkg.value));
+    setCommissionType(pkg.commissionType || 'PERCENT');
+    setSalesCommissionRate(String(pkg.salesCommissionRate ?? (pkg.cat === 'Membership' ? 4 : 3)));
+    setSalesCommissionNominal(String(pkg.salesCommissionNominal ?? (pkg.cat === 'Membership' ? Math.round(pkg.price * 0.04) : Math.round(pkg.price * 0.03))));
+    setTrainerCommissionRate(String(pkg.trainerCommissionRate ?? (pkg.cat === 'PT' ? 40 : 0)));
+    setTrainerCommissionNominal(String(pkg.trainerCommissionNominal ?? (pkg.cat === 'PT' ? Math.round(pkg.price * 0.4) : 0)));
+    setTrainerCommissionPerSession(String(pkg.trainerCommissionPerSession ?? (pkg.cat === 'PT' && pkg.value ? Math.round((pkg.price * 0.4) / pkg.value) : 0)));
+    setProductBonusNominal(String(pkg.productBonusNominal || 0));
+    setCommissionNotes(pkg.commissionNotes || '');
+    setPkgModalTab('form');
+  };
 
-    const newPkg: PackageItem = {
-      id: 'PKG-' + Date.now(),
-      cat: newPkgCat,
-      type: newPkgType,
-      name: newPkgName,
-      price: Number(newPkgPrice),
-      value: Number(newPkgValue)
-    };
-
-    onAddPackage(newPkg);
-    showToast('Paket Dibuat', `Master paket ${newPkgName} berhasil ditambahkan.`, 'success');
-    setIsPkgModalOpen(false);
+  const handleResetPackageForm = () => {
+    setEditingPkgId(null);
+    setNewPkgCat('Membership');
+    setNewPkgType('Personal');
     setNewPkgName('');
     setNewPkgPrice('');
     setNewPkgValue('');
+    setCommissionType('PERCENT');
+    setSalesCommissionRate('4');
+    setSalesCommissionNominal('20000');
+    setTrainerCommissionRate('0');
+    setTrainerCommissionNominal('0');
+    setTrainerCommissionPerSession('0');
+    setProductBonusNominal('0');
+    setCommissionNotes('');
+  };
+
+  // Smart Commission Advisor Presets
+  const applyCommissionPreset = (presetKey: 'industry' | 'high_incentive' | 'flat_session' | 'member_only' | 'low_margin') => {
+    const priceNum = Number(newPkgPrice) || 600000;
+    const valueNum = Number(newPkgValue) || 10;
+    const isPT = newPkgCat === 'PT';
+
+    if (presetKey === 'industry') {
+      if (isPT) {
+        setCommissionType('PERCENT');
+        setTrainerCommissionRate('40');
+        const totalTrainer = Math.round(priceNum * 0.4);
+        setTrainerCommissionNominal(String(totalTrainer));
+        setTrainerCommissionPerSession(String(Math.round(totalTrainer / (valueNum || 1))));
+        setSalesCommissionRate('3');
+        setSalesCommissionNominal(String(Math.round(priceNum * 0.03)));
+        setCommissionNotes('Standar Industri: Trainer 40% (fee sesi), Sales 3% (closing deal), Margin Gym 57%');
+      } else {
+        setCommissionType('PERCENT');
+        setTrainerCommissionRate('0');
+        setTrainerCommissionNominal('0');
+        setTrainerCommissionPerSession('0');
+        setSalesCommissionRate('4');
+        setSalesCommissionNominal(String(Math.round(priceNum * 0.04)));
+        setCommissionNotes('Standar Industri Membership: Sales 4% per closing, Trainer 0%, Margin Gym 96%');
+      }
+      showToast('Saran Diterapkan', 'Preset Rekomendasi Standar Industri berhasil diterapkan.', 'info');
+    } else if (presetKey === 'high_incentive') {
+      if (isPT) {
+        setCommissionType('PERCENT');
+        setTrainerCommissionRate('45');
+        const totalTrainer = Math.round(priceNum * 0.45);
+        setTrainerCommissionNominal(String(totalTrainer));
+        setTrainerCommissionPerSession(String(Math.round(totalTrainer / (valueNum || 1))));
+        setSalesCommissionRate('5');
+        setSalesCommissionNominal(String(Math.round(priceNum * 0.05)));
+        setCommissionNotes('Insentif Booster: Trainer 45%, Sales 5%, Margin Gym 50% (Sangat memacu closing agresif)');
+      } else {
+        setCommissionType('PERCENT');
+        setTrainerCommissionRate('0');
+        setTrainerCommissionNominal('0');
+        setTrainerCommissionPerSession('0');
+        setSalesCommissionRate('6');
+        setSalesCommissionNominal(String(Math.round(priceNum * 0.06)));
+        setCommissionNotes('Insentif Booster: Sales 6% per closing untuk memacu akuisisi member baru');
+      }
+      showToast('Saran Diterapkan', 'Preset Insentif Tinggi / Booster berhasil diterapkan.', 'info');
+    } else if (presetKey === 'flat_session') {
+      if (isPT) {
+        setCommissionType('NOMINAL');
+        const perSess = 45000;
+        const totalTrainer = perSess * valueNum;
+        setTrainerCommissionPerSession(String(perSess));
+        setTrainerCommissionNominal(String(totalTrainer));
+        setTrainerCommissionRate(String(Math.round((totalTrainer / (priceNum || 1)) * 100)));
+        setSalesCommissionNominal('25000');
+        setSalesCommissionRate(String(Math.round((25000 / (priceNum || 1)) * 100)));
+        setCommissionNotes('Flat Per Sesi: Trainer Rp 45.000 / sesi, Sales Rp 25.000 flat per paket');
+      } else {
+        setCommissionType('NOMINAL');
+        setTrainerCommissionRate('0');
+        setTrainerCommissionNominal('0');
+        setTrainerCommissionPerSession('0');
+        setSalesCommissionNominal('30000');
+        setSalesCommissionRate(String(Math.round((30000 / (priceNum || 1)) * 100)));
+        setCommissionNotes('Flat Membership: Kasir/Sales Rp 30.000 pasti per transaksi');
+      }
+      showToast('Saran Diterapkan', 'Preset Komisi Flat Sederhana berhasil diterapkan.', 'info');
+    } else if (presetKey === 'low_margin') {
+      if (isPT) {
+        setCommissionType('PERCENT');
+        setTrainerCommissionRate('30');
+        const totalTrainer = Math.round(priceNum * 0.3);
+        setTrainerCommissionNominal(String(totalTrainer));
+        setTrainerCommissionPerSession(String(Math.round(totalTrainer / (valueNum || 1))));
+        setSalesCommissionRate('2');
+        setSalesCommissionNominal(String(Math.round(priceNum * 0.02)));
+        setCommissionNotes('Paket Promo / Low Margin: Trainer 30%, Sales 2%, Margin Gym 68%');
+      } else {
+        setCommissionType('PERCENT');
+        setTrainerCommissionRate('0');
+        setTrainerCommissionNominal('0');
+        setTrainerCommissionPerSession('0');
+        setSalesCommissionRate('2');
+        setSalesCommissionNominal(String(Math.round(priceNum * 0.02)));
+        setCommissionNotes('Paket Promo Diskon: Sales 2% per closing');
+      }
+      showToast('Saran Diterapkan', 'Preset Paket Promo / Low Margin berhasil diterapkan.', 'info');
+    } else if (presetKey === 'member_only') {
+      setNewPkgCat('Membership');
+      setCommissionType('PERCENT');
+      setTrainerCommissionRate('0');
+      setTrainerCommissionNominal('0');
+      setTrainerCommissionPerSession('0');
+      setSalesCommissionRate('5');
+      setSalesCommissionNominal(String(Math.round(priceNum * 0.05)));
+      setCommissionNotes('Akses Mandiri: Komisi Sales 5%, Tanpa Komisi Trainer (Margin Gym 95%)');
+      showToast('Saran Diterapkan', 'Preset Khusus Membership Mandiri berhasil diterapkan.', 'info');
+    }
+  };
+
+  const handleSaveMasterPackage = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newPkgName || !newPkgPrice || !newPkgValue) {
+      showToast('Data Tidak Lengkap', 'Mohon lengkapi Nama Paket, Harga, dan Value.', 'warning');
+      return;
+    }
+
+    const priceNum = Number(newPkgPrice);
+    const valueNum = Number(newPkgValue);
+    const sRate = Number(salesCommissionRate) || 0;
+    const sNom = Number(salesCommissionNominal) || Math.round((priceNum * sRate) / 100);
+    const tRate = Number(trainerCommissionRate) || 0;
+    const tNom = Number(trainerCommissionNominal) || Math.round((priceNum * tRate) / 100);
+    const tPerSess = Number(trainerCommissionPerSession) || (newPkgCat === 'PT' && valueNum ? Math.round(tNom / valueNum) : 0);
+
+    const savedPkg: PackageItem = {
+      id: editingPkgId || ('PKG-' + Date.now()),
+      cat: newPkgCat,
+      type: newPkgType,
+      name: newPkgName.trim(),
+      price: priceNum,
+      value: valueNum,
+      commissionType,
+      salesCommissionRate: sRate,
+      salesCommissionNominal: sNom,
+      trainerCommissionRate: tRate,
+      trainerCommissionNominal: tNom,
+      trainerCommissionPerSession: tPerSess,
+      productBonusNominal: Number(productBonusNominal) || 0,
+      commissionNotes: commissionNotes.trim()
+    };
+
+    if (editingPkgId && onUpdatePackage) {
+      onUpdatePackage(savedPkg);
+      showToast('Paket Diperbarui', `Master paket ${savedPkg.name} berhasil diperbarui beserta skema komisinya.`, 'success');
+    } else {
+      onAddPackage(savedPkg);
+      showToast('Paket Dibuat', `Master paket ${savedPkg.name} berhasil ditambahkan dengan skema komisi.`, 'success');
+    }
+
+    handleResetPackageForm();
+    setIsPkgModalOpen(false);
+  };
+
+  const handleDeletePackageConfirm = (pkg: PackageItem) => {
+    if (packages.length <= 1) {
+      showToast('Gagal Menghapus', 'Minimal harus ada 1 paket master dalam sistem.', 'warning');
+      return;
+    }
+    if (confirm(`Yakin ingin menghapus master paket "${pkg.name}"?`)) {
+      if (onDeletePackage) {
+        onDeletePackage(pkg.id);
+        showToast('Paket Dihapus', `Paket ${pkg.name} berhasil dihapus.`, 'info');
+      }
+    }
   };
 
   return (
@@ -407,10 +627,15 @@ export const MembershipView: React.FC<MembershipViewProps> = ({
             </button>
           )}
           <button
-            onClick={() => setIsPkgModalOpen(true)}
-            className="bg-zinc-800 hover:bg-zinc-700 text-white text-xs font-bold px-4 py-2.5 rounded-xl border border-zinc-700 transition flex items-center gap-1.5"
+            type="button"
+            onClick={() => {
+              handleResetPackageForm();
+              setPkgModalTab('form');
+              setIsPkgModalOpen(true);
+            }}
+            className="bg-orange-500/10 hover:bg-orange-500/20 text-orange-300 text-xs font-bold px-3.5 py-2.5 rounded-xl border border-orange-500/30 transition flex items-center gap-1.5 shadow-sm"
           >
-            <Plus className="w-4 h-4" /> Master Paket Reguler
+            <Settings className="w-4 h-4 text-orange-400" /> Master Paket & Komisi
           </button>
         </div>
       </div>
@@ -542,10 +767,26 @@ export const MembershipView: React.FC<MembershipViewProps> = ({
                 )}
               </div>
             ) : (
-              <div>
-                <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-wider mb-1.5 ml-1">
-                  Pilih Paket
-                </label>
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-wider ml-1">
+                    Pilih Paket
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (currentPackage) {
+                        handleEditPackage(currentPackage);
+                      } else {
+                        handleResetPackageForm();
+                      }
+                      setIsPkgModalOpen(true);
+                    }}
+                    className="text-xs text-orange-400 hover:text-orange-300 font-bold flex items-center gap-1 transition"
+                  >
+                    <Settings className="w-3.5 h-3.5" /> Atur Komisi Paket
+                  </button>
+                </div>
                 <select
                   value={selectedPkgIndex}
                   onChange={(e) => {
@@ -559,6 +800,73 @@ export const MembershipView: React.FC<MembershipViewProps> = ({
                     </option>
                   ))}
                 </select>
+
+                {/* Live Commission Breakdown for selected package */}
+                {currentPackage && (
+                  <div className="bg-gradient-to-br from-zinc-950 via-zinc-900 to-zinc-950 border border-zinc-800 rounded-2xl p-3.5 space-y-2.5 text-xs">
+                    <div className="flex items-center justify-between">
+                      <span className="font-bold text-zinc-200 flex items-center gap-1.5 text-[11px]">
+                        <Percent className="w-3.5 h-3.5 text-orange-400" />
+                        Alokasi Komisi: <strong className="text-white">{currentPackage.name}</strong>
+                      </span>
+                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-zinc-800 text-zinc-300 font-semibold border border-zinc-700">
+                        {currentPackage.cat === 'PT' ? `${currentPackage.value} Sesi PT` : `${currentPackage.value} Hari Akses`}
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                      <div className="bg-zinc-900/90 rounded-xl p-2.5 border border-zinc-800">
+                        <span className="text-[10px] text-zinc-400 block font-semibold flex items-center gap-1">
+                          <UserCheck className="w-3 h-3 text-emerald-400" /> Komisi Sales Kasir
+                        </span>
+                        <span className="text-xs font-bold text-emerald-400 mt-0.5 block">
+                          {currentPackage.salesCommissionNominal
+                            ? formatRp(currentPackage.salesCommissionNominal)
+                            : `${currentPackage.salesCommissionRate || (currentPackage.cat === 'Membership' ? 4 : 3)}% (${formatRp(Math.round(currentPackage.price * ((currentPackage.salesCommissionRate || (currentPackage.cat === 'Membership' ? 4 : 3)) / 100)))})`}
+                        </span>
+                        <span className="text-[9px] text-zinc-500">Closing sales reward</span>
+                      </div>
+
+                      <div className="bg-zinc-900/90 rounded-xl p-2.5 border border-zinc-800">
+                        <span className="text-[10px] text-zinc-400 block font-semibold flex items-center gap-1">
+                          <Dumbbell className="w-3 h-3 text-orange-400" /> Komisi Trainer (PT)
+                        </span>
+                        <span className="text-xs font-bold text-orange-400 mt-0.5 block">
+                          {currentPackage.cat === 'PT'
+                            ? currentPackage.trainerCommissionNominal
+                              ? `${formatRp(currentPackage.trainerCommissionNominal)} (${formatRp(currentPackage.trainerCommissionPerSession || Math.round(currentPackage.trainerCommissionNominal / (currentPackage.value || 1)))}/sesi)`
+                              : `${currentPackage.trainerCommissionRate || 40}% (${formatRp(Math.round(currentPackage.price * ((currentPackage.trainerCommissionRate || 40) / 100)))})`
+                            : '0% (Akses Mandiri)'}
+                        </span>
+                        <span className="text-[9px] text-zinc-500">
+                          {currentPackage.cat === 'PT' ? 'Fee sesi pelatih' : 'Tanpa trainer'}
+                        </span>
+                      </div>
+
+                      <div className="bg-zinc-900/90 rounded-xl p-2.5 border border-zinc-800">
+                        <span className="text-[10px] text-zinc-400 block font-semibold flex items-center gap-1">
+                          <TrendingUp className="w-3 h-3 text-sky-400" /> Estimasi Margin Gym
+                        </span>
+                        <span className="text-xs font-bold text-sky-400 mt-0.5 block">
+                          {(() => {
+                            const sComm = currentPackage.salesCommissionNominal || Math.round(currentPackage.price * ((currentPackage.salesCommissionRate || (currentPackage.cat === 'Membership' ? 4 : 3)) / 100));
+                            const tComm = currentPackage.cat === 'PT' ? (currentPackage.trainerCommissionNominal || Math.round(currentPackage.price * ((currentPackage.trainerCommissionRate || 40) / 100))) : 0;
+                            const netGym = Math.max(0, currentPackage.price - sComm - tComm);
+                            const netPct = Math.round((netGym / currentPackage.price) * 100);
+                            return `${formatRp(netGym)} (${netPct}%)`;
+                          })()}
+                        </span>
+                        <span className="text-[9px] text-zinc-500">Margin operasional gym</span>
+                      </div>
+                    </div>
+
+                    {currentPackage.commissionNotes && (
+                      <p className="text-[10px] text-zinc-400 italic bg-zinc-900/50 rounded-lg p-2 border border-zinc-800/60">
+                        💡 Catatan: {currentPackage.commissionNotes}
+                      </p>
+                    )}
+                  </div>
+                )}
               </div>
             )}
 
@@ -1379,6 +1687,48 @@ export const MembershipView: React.FC<MembershipViewProps> = ({
                             .join(' + ') || (p1Id ? 'Sedang memilih PIC...' : '-')}
                     </p>
                   </div>
+
+                  {/* Alokasi Komisi Transaksi */}
+                  <div className="mt-3 p-3 rounded-2xl bg-zinc-950 border border-zinc-800 space-y-2 text-xs">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider flex items-center gap-1.5">
+                        <Percent className="w-3.5 h-3.5 text-orange-400" /> Alokasi Komisi Transaksi Ini
+                      </span>
+                      <span className="text-[9px] font-semibold text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-md border border-emerald-500/20">
+                        Otomatis ke Payroll
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-2 text-[11px]">
+                      <div className="bg-zinc-900 rounded-xl p-2 border border-zinc-800/80">
+                        <span className="text-[9px] font-bold text-emerald-400 block uppercase">Komisi Kasir / Sales</span>
+                        <span className="text-xs font-black text-emerald-300">
+                          {formatRp(salesCommEstimate)}
+                        </span>
+                        <span className="text-[9px] text-zinc-500 block truncate">
+                          {type === 'Personal'
+                            ? (staffUsers.find((s) => s.id === (picSalesId || p1PicId))?.name || 'Kasir/Staff')
+                            : `${[p1PicId, p2PicId, type === 'Trio' ? p3PicId : null].filter(Boolean).length} Staff Penjual`}
+                        </span>
+                      </div>
+
+                      <div className="bg-zinc-900 rounded-xl p-2 border border-zinc-800/80">
+                        <span className="text-[9px] font-bold text-orange-400 block uppercase">Komisi Trainer (PT)</span>
+                        <span className="text-xs font-black text-orange-300">
+                          {cat === 'PT' || (cat === 'Bundling' && currentBundle?.ptComponentValue)
+                            ? formatRp(trainerCommEstimate)
+                            : 'Rp 0 (Mandiri)'}
+                        </span>
+                        <span className="text-[9px] text-zinc-500 block truncate">
+                          {cat === 'PT'
+                            ? `${currentPackage?.value || 0} Sesi Pelatih`
+                            : cat === 'Bundling'
+                            ? `${currentBundle?.items.find((i) => i.itemType === 'PT')?.sessionCount || 0} Sesi Bundling`
+                            : 'Akses Gym Mandiri'}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
                 </div>
               </div>
             ) : null}
@@ -1396,103 +1746,857 @@ export const MembershipView: React.FC<MembershipViewProps> = ({
         </div>
       </div>
 
-      {/* MODAL: MASTER PAKET BARU */}
+      {/* MODAL: MASTER PAKET & PENGATURAN KOMISI (DENGAN SMART ADVISOR & SIMULATOR) */}
       {isPkgModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-xs p-3 sm:p-4 overflow-y-auto">
-          <div className="bg-zinc-900 border border-zinc-800 rounded-2xl shadow-2xl w-full max-w-md p-4 sm:p-6 my-auto max-h-[92vh] overflow-y-auto animate-in fade-in zoom-in-95">
-            <h3 className="text-base font-bold text-white mb-4">Buat Master Paket Baru</h3>
-            <form onSubmit={handleSaveMasterPackage} className="space-y-4">
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-wider mb-1.5">
-                    Kategori
-                  </label>
-                  <select
-                    value={newPkgCat}
-                    onChange={(e) => setNewPkgCat(e.target.value as any)}
-                    className="w-full bg-zinc-950 border border-zinc-700 rounded-xl px-3 py-2 text-xs text-white outline-none focus:border-orange-500"
-                  >
-                    <option value="Membership">Membership</option>
-                    <option value="PT">Sesi PT</option>
-                  </select>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-sm p-3 sm:p-4 overflow-y-auto">
+          <div className="bg-zinc-900 border border-zinc-800 rounded-3xl shadow-2xl w-full max-w-4xl p-5 sm:p-7 my-auto max-h-[94vh] overflow-y-auto animate-in fade-in zoom-in-95">
+            {/* Modal Header */}
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 pb-4 border-b border-zinc-800">
+              <div className="flex items-center gap-3">
+                <div className="p-2.5 bg-orange-500/10 border border-orange-500/20 rounded-2xl text-orange-400">
+                  <Crown className="w-6 h-6" />
                 </div>
-
                 <div>
-                  <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-wider mb-1.5">
-                    Tipe Peserta
-                  </label>
-                  <select
-                    value={newPkgType}
-                    onChange={(e) => setNewPkgType(e.target.value as any)}
-                    className="w-full bg-zinc-950 border border-zinc-700 rounded-xl px-3 py-2 text-xs text-white outline-none focus:border-orange-500"
-                  >
-                    <option value="Personal">Personal (1 Org)</option>
-                    <option value="Couple">Couple (2 Org)</option>
-                    <option value="Trio">Trio (3 Org)</option>
-                  </select>
+                  <h3 className="text-lg font-black text-white tracking-tight flex items-center gap-2">
+                    Master Paket & Pengaturan Komisi
+                    {editingPkgId && (
+                      <span className="text-[10px] bg-amber-500/20 text-amber-300 px-2 py-0.5 rounded-full border border-amber-500/30 uppercase font-black">
+                        Mode Edit
+                      </span>
+                    )}
+                  </h3>
+                  <p className="text-xs text-zinc-400 mt-0.5">
+                    Konfigurasi harga, durasi, dan skema komisi otomatis untuk penjualan member dan pelatih personal trainer.
+                  </p>
                 </div>
               </div>
 
-              <div>
-                <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-wider mb-1.5">
-                  Nama Paket
-                </label>
-                <input
-                  type="text"
-                  value={newPkgName}
-                  onChange={(e) => setNewPkgName(e.target.value)}
-                  placeholder="Cth: 3 Bulan Fit & Tone"
-                  required
-                  className="w-full bg-zinc-950 border border-zinc-700 rounded-xl px-3.5 py-2.5 text-xs text-white outline-none focus:border-orange-500"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-wider mb-1.5">
-                    Harga (Rp)
-                  </label>
-                  <input
-                    type="number"
-                    value={newPkgPrice}
-                    onChange={(e) => setNewPkgPrice(e.target.value)}
-                    required
-                    min="0"
-                    className="w-full bg-zinc-950 border border-zinc-700 rounded-xl px-3 py-2.5 text-xs text-white outline-none focus:border-orange-500"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-wider mb-1.5">
-                    Value (Hari / Sesi)
-                  </label>
-                  <input
-                    type="number"
-                    value={newPkgValue}
-                    onChange={(e) => setNewPkgValue(e.target.value)}
-                    required
-                    min="1"
-                    className="w-full bg-zinc-950 border border-zinc-700 rounded-xl px-3 py-2.5 text-xs text-white outline-none focus:border-orange-500"
-                  />
-                </div>
-              </div>
-
-              <div className="flex gap-2 pt-2">
+              {/* Tab Navigation */}
+              <div className="flex items-center bg-zinc-950 p-1 rounded-xl border border-zinc-800 text-xs">
                 <button
                   type="button"
-                  onClick={() => setIsPkgModalOpen(false)}
-                  className="flex-1 py-2.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-xl text-xs font-bold transition"
+                  onClick={() => setPkgModalTab('form')}
+                  className={`px-3 py-1.5 rounded-lg font-bold transition flex items-center gap-1.5 ${
+                    pkgModalTab === 'form'
+                      ? 'bg-orange-500 text-white shadow-sm'
+                      : 'text-zinc-400 hover:text-white'
+                  }`}
                 >
-                  Batal
+                  <Settings className="w-3.5 h-3.5" /> Form Pengaturan
                 </button>
                 <button
-                  type="submit"
-                  className="flex-1 py-2.5 bg-orange-500 hover:bg-orange-600 text-white rounded-xl text-xs font-bold shadow-md transition"
+                  type="button"
+                  onClick={() => setPkgModalTab('list')}
+                  className={`px-3 py-1.5 rounded-lg font-bold transition flex items-center gap-1.5 ${
+                    pkgModalTab === 'list'
+                      ? 'bg-orange-500 text-white shadow-sm'
+                      : 'text-zinc-400 hover:text-white'
+                  }`}
                 >
-                  Simpan Master Paket
+                  <Layers className="w-3.5 h-3.5" /> Daftar Paket ({packages.length})
                 </button>
               </div>
-            </form>
+            </div>
+
+            {pkgModalTab === 'form' ? (
+              <form onSubmit={handleSaveMasterPackage} className="mt-5 space-y-6">
+                {/* Editing Notification Banner */}
+                {editingPkgId && (
+                  <div className="flex items-center justify-between p-3 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs">
+                    <span className="flex items-center gap-2 font-medium">
+                      <Edit3 className="w-4 h-4 text-amber-400 shrink-0" />
+                      Sedang mengubah data master paket: <strong>{newPkgName || editingPkgId}</strong>
+                    </span>
+                    <button
+                      type="button"
+                      onClick={handleResetPackageForm}
+                      className="px-2.5 py-1 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 rounded-lg font-bold text-[11px] transition"
+                    >
+                      Batal Edit / Buat Baru
+                    </button>
+                  </div>
+                )}
+
+                {/* Section 1: Data Pokok Paket */}
+                <div className="bg-zinc-950/80 border border-zinc-800/80 rounded-2xl p-4 sm:p-5 space-y-4">
+                  <div className="flex items-center justify-between border-b border-zinc-800/80 pb-2.5">
+                    <span className="text-xs font-bold text-zinc-300 uppercase tracking-wider flex items-center gap-1.5">
+                      <Crown className="w-4 h-4 text-orange-400" /> 1. Data Pokok Paket
+                    </span>
+                    <span className="text-[10px] text-zinc-500">Kategori, tipe peserta, harga & kuota</span>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-wider mb-1.5">
+                        Kategori Paket
+                      </label>
+                      <select
+                        value={newPkgCat}
+                        onChange={(e) => {
+                          const nextCat = e.target.value as any;
+                          setNewPkgCat(nextCat);
+                          if (nextCat === 'PT') {
+                            setTrainerCommissionRate('40');
+                            setSalesCommissionRate('3');
+                          } else {
+                            setTrainerCommissionRate('0');
+                            setSalesCommissionRate('4');
+                          }
+                        }}
+                        className="w-full bg-zinc-900 border border-zinc-700 rounded-xl px-3.5 py-2.5 text-xs font-semibold text-white outline-none focus:border-orange-500"
+                      >
+                        <option value="Membership">Membership (Akses Gym Mandiri)</option>
+                        <option value="PT">Personal Trainer (Pendampingan Sesi PT)</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-wider mb-1.5">
+                        Tipe Peserta
+                      </label>
+                      <select
+                        value={newPkgType}
+                        onChange={(e) => setNewPkgType(e.target.value as any)}
+                        className="w-full bg-zinc-900 border border-zinc-700 rounded-xl px-3.5 py-2.5 text-xs font-semibold text-white outline-none focus:border-orange-500"
+                      >
+                        <option value="Personal">Personal (1 Orang)</option>
+                        <option value="Couple">Couple (2 Orang)</option>
+                        <option value="Trio">Trio (3 Orang)</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-wider mb-1.5">
+                      Nama Paket
+                    </label>
+                    <input
+                      type="text"
+                      value={newPkgName}
+                      onChange={(e) => setNewPkgName(e.target.value)}
+                      placeholder="Cth: Paket PT 12 Sesi Intensive atau 1 Bulan Solo Unlimited"
+                      required
+                      className="w-full bg-zinc-900 border border-zinc-700 rounded-xl px-3.5 py-2.5 text-xs font-medium text-white outline-none focus:border-orange-500"
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-wider mb-1.5">
+                        Harga Jual Paket (Rp)
+                      </label>
+                      <input
+                        type="number"
+                        value={newPkgPrice}
+                        onChange={(e) => {
+                          const pVal = e.target.value;
+                          setNewPkgPrice(pVal);
+                          // Auto update nominal if in PERCENT mode
+                          const pNum = Number(pVal) || 0;
+                          const sR = Number(salesCommissionRate) || 0;
+                          const tR = Number(trainerCommissionRate) || 0;
+                          const vN = Number(newPkgValue) || 1;
+                          setSalesCommissionNominal(String(Math.round((pNum * sR) / 100)));
+                          const tNom = Math.round((pNum * tR) / 100);
+                          setTrainerCommissionNominal(String(tNom));
+                          setTrainerCommissionPerSession(String(Math.round(tNom / vN)));
+                        }}
+                        placeholder="Cth: 1500000"
+                        required
+                        min="0"
+                        className="w-full bg-zinc-900 border border-zinc-700 rounded-xl px-3.5 py-2.5 text-xs font-bold text-white outline-none focus:border-orange-500"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-wider mb-1.5">
+                        Kuota Value ({newPkgCat === 'Membership' ? 'Durasi Hari Akses' : 'Jumlah Sesi PT'})
+                      </label>
+                      <div className="relative">
+                        <input
+                          type="number"
+                          value={newPkgValue}
+                          onChange={(e) => {
+                            const vVal = e.target.value;
+                            setNewPkgValue(vVal);
+                            const vNum = Number(vVal) || 1;
+                            const tNom = Number(trainerCommissionNominal) || 0;
+                            setTrainerCommissionPerSession(String(Math.round(tNom / vNum)));
+                          }}
+                          placeholder={newPkgCat === 'Membership' ? 'Cth: 30 (hari)' : 'Cth: 12 (sesi)'}
+                          required
+                          min="1"
+                          className="w-full bg-zinc-900 border border-zinc-700 rounded-xl px-3.5 py-2.5 text-xs font-bold text-white outline-none focus:border-orange-500"
+                        />
+                        <span className="absolute right-3.5 top-2.5 text-[10px] font-bold text-zinc-500 uppercase">
+                          {newPkgCat === 'Membership' ? 'Hari' : 'Sesi'}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Section 2: Konfigurasi Komisi Penjualan Member & Trainer */}
+                <div className="bg-zinc-950/80 border border-zinc-800/80 rounded-2xl p-4 sm:p-5 space-y-4">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-zinc-800/80 pb-3">
+                    <div>
+                      <span className="text-xs font-bold text-zinc-300 uppercase tracking-wider flex items-center gap-1.5">
+                        <Percent className="w-4 h-4 text-emerald-400" /> 2. Skema Komisi Produk Member & Trainer
+                      </span>
+                      <p className="text-[11px] text-zinc-500 mt-0.5">
+                        Tentukan pembagian komisi untuk staf kasir/sales dan instruktur personal trainer.
+                      </p>
+                    </div>
+
+                    {/* Mode Toggle */}
+                    <div className="flex items-center bg-zinc-900 p-1 rounded-xl border border-zinc-700/80 text-[11px]">
+                      <button
+                        type="button"
+                        onClick={() => setCommissionType('PERCENT')}
+                        className={`px-3 py-1 rounded-lg font-bold transition ${
+                          commissionType === 'PERCENT'
+                            ? 'bg-emerald-600 text-white shadow-xs'
+                            : 'text-zinc-400 hover:text-white'
+                        }`}
+                      >
+                        Persentase (%)
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setCommissionType('NOMINAL')}
+                        className={`px-3 py-1 rounded-lg font-bold transition ${
+                          commissionType === 'NOMINAL'
+                            ? 'bg-emerald-600 text-white shadow-xs'
+                            : 'text-zinc-400 hover:text-white'
+                        }`}
+                      >
+                        Nominal Flat (Rp)
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {/* Komisi Sales / Kasir */}
+                    <div className="bg-zinc-900/90 border border-zinc-800 rounded-2xl p-4 space-y-3">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-bold text-emerald-400 flex items-center gap-1.5">
+                          <UserCheck className="w-4 h-4" /> Komisi Sales / Kasir
+                        </span>
+                        <span className="text-[10px] text-zinc-400 font-semibold">Reward Closing Transaksi</span>
+                      </div>
+                      <p className="text-[11px] text-zinc-400 leading-snug">
+                        Diberikan kepada kasir atau sales consult yang berhasil melayani dan menyelesaikan transaksi member ini.
+                      </p>
+
+                      {commissionType === 'PERCENT' ? (
+                        <div>
+                          <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-wider mb-1">
+                            Persentase Komisi Sales (%)
+                          </label>
+                          <div className="relative">
+                            <input
+                              type="number"
+                              value={salesCommissionRate}
+                              onChange={(e) => {
+                                setSalesCommissionRate(e.target.value);
+                                const p = Number(newPkgPrice) || 0;
+                                const r = Number(e.target.value) || 0;
+                                setSalesCommissionNominal(String(Math.round((p * r) / 100)));
+                              }}
+                              min="0"
+                              max="100"
+                              step="0.5"
+                              className="w-full bg-zinc-950 border border-zinc-700 rounded-xl px-3.5 py-2 text-xs font-bold text-emerald-400 outline-none focus:border-emerald-500"
+                            />
+                            <span className="absolute right-3.5 top-2 text-xs font-bold text-zinc-500">%</span>
+                          </div>
+                        </div>
+                      ) : (
+                        <div>
+                          <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-wider mb-1">
+                            Nominal Komisi Sales Flat (Rp)
+                          </label>
+                          <input
+                            type="number"
+                            value={salesCommissionNominal}
+                            onChange={(e) => {
+                              setSalesCommissionNominal(e.target.value);
+                              const p = Number(newPkgPrice) || 0;
+                              const nom = Number(e.target.value) || 0;
+                              setSalesCommissionRate(String(p > 0 ? Math.round((nom / p) * 100) : 0));
+                            }}
+                            min="0"
+                            className="w-full bg-zinc-950 border border-zinc-700 rounded-xl px-3.5 py-2 text-xs font-bold text-emerald-400 outline-none focus:border-emerald-500"
+                          />
+                        </div>
+                      )}
+
+                      <div className="p-2.5 rounded-xl bg-emerald-950/30 border border-emerald-800/40 text-[11px] flex justify-between items-center">
+                        <span className="text-zinc-400 font-medium">Estimasi Kasir Terima:</span>
+                        <strong className="text-emerald-300 font-bold">
+                          {formatRp(
+                            commissionType === 'PERCENT'
+                              ? Math.round(((Number(newPkgPrice) || 0) * (Number(salesCommissionRate) || 0)) / 100)
+                              : Number(salesCommissionNominal) || 0
+                          )}
+                          <span className="text-[10px] text-zinc-400 font-normal ml-1">/ transaksi</span>
+                        </strong>
+                      </div>
+                    </div>
+
+                    {/* Komisi Personal Trainer */}
+                    <div className="bg-zinc-900/90 border border-zinc-800 rounded-2xl p-4 space-y-3">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-bold text-orange-400 flex items-center gap-1.5">
+                          <Dumbbell className="w-4 h-4" /> Komisi Personal Trainer (PT)
+                        </span>
+                        <span className="text-[10px] text-zinc-400 font-semibold">Fee Sesi Pendampingan</span>
+                      </div>
+                      <p className="text-[11px] text-zinc-400 leading-snug">
+                        {newPkgCat === 'PT'
+                          ? 'Diberikan kepada pelatih yang ditugaskan membimbing latihan member sampai sesi selesai.'
+                          : 'Paket Membership akses gym mandiri (tanpa instruktur). Komisi trainer disarankan 0%.'}
+                      </p>
+
+                      {newPkgCat === 'PT' ? (
+                        <>
+                          {commissionType === 'PERCENT' ? (
+                            <div>
+                              <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-wider mb-1">
+                                Persentase Komisi Trainer (%)
+                              </label>
+                              <div className="relative">
+                                <input
+                                  type="number"
+                                  value={trainerCommissionRate}
+                                  onChange={(e) => {
+                                    setTrainerCommissionRate(e.target.value);
+                                    const p = Number(newPkgPrice) || 0;
+                                    const r = Number(e.target.value) || 0;
+                                    const v = Number(newPkgValue) || 1;
+                                    const nom = Math.round((p * r) / 100);
+                                    setTrainerCommissionNominal(String(nom));
+                                    setTrainerCommissionPerSession(String(Math.round(nom / v)));
+                                  }}
+                                  min="0"
+                                  max="100"
+                                  step="0.5"
+                                  className="w-full bg-zinc-950 border border-zinc-700 rounded-xl px-3.5 py-2 text-xs font-bold text-orange-400 outline-none focus:border-orange-500"
+                                />
+                                <span className="absolute right-3.5 top-2 text-xs font-bold text-zinc-500">%</span>
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="grid grid-cols-2 gap-2">
+                              <div>
+                                <label className="block text-[9px] font-bold text-zinc-400 uppercase tracking-wider mb-1">
+                                  Fee Per Sesi (Rp)
+                                </label>
+                                <input
+                                  type="number"
+                                  value={trainerCommissionPerSession}
+                                  onChange={(e) => {
+                                    const perSess = Number(e.target.value) || 0;
+                                    setTrainerCommissionPerSession(e.target.value);
+                                    const v = Number(newPkgValue) || 1;
+                                    const total = perSess * v;
+                                    setTrainerCommissionNominal(String(total));
+                                    const p = Number(newPkgPrice) || 0;
+                                    setTrainerCommissionRate(String(p > 0 ? Math.round((total / p) * 100) : 0));
+                                  }}
+                                  min="0"
+                                  className="w-full bg-zinc-950 border border-zinc-700 rounded-xl px-2.5 py-2 text-xs font-bold text-orange-400 outline-none focus:border-orange-500"
+                                />
+                              </div>
+                              <div>
+                                <label className="block text-[9px] font-bold text-zinc-400 uppercase tracking-wider mb-1">
+                                  Total Fee Paket (Rp)
+                                </label>
+                                <input
+                                  type="number"
+                                  value={trainerCommissionNominal}
+                                  onChange={(e) => {
+                                    const total = Number(e.target.value) || 0;
+                                    setTrainerCommissionNominal(e.target.value);
+                                    const v = Number(newPkgValue) || 1;
+                                    setTrainerCommissionPerSession(String(Math.round(total / v)));
+                                    const p = Number(newPkgPrice) || 0;
+                                    setTrainerCommissionRate(String(p > 0 ? Math.round((total / p) * 100) : 0));
+                                  }}
+                                  min="0"
+                                  className="w-full bg-zinc-950 border border-zinc-700 rounded-xl px-2.5 py-2 text-xs font-bold text-orange-400 outline-none focus:border-orange-500"
+                                />
+                              </div>
+                            </div>
+                          )}
+
+                          <div className="p-2.5 rounded-xl bg-orange-950/30 border border-orange-800/40 text-[11px] flex justify-between items-center">
+                            <span className="text-zinc-400 font-medium">Estimasi Fee Trainer:</span>
+                            <div className="text-right">
+                              <strong className="text-orange-300 font-bold block">
+                                {formatRp(
+                                  commissionType === 'PERCENT'
+                                    ? Math.round(((Number(newPkgPrice) || 0) * (Number(trainerCommissionRate) || 0)) / 100)
+                                    : Number(trainerCommissionNominal) || 0
+                                )}
+                              </strong>
+                              <span className="text-[10px] text-zinc-400 font-normal">
+                                (~{formatRp(
+                                  Math.round(
+                                    (commissionType === 'PERCENT'
+                                      ? Math.round(((Number(newPkgPrice) || 0) * (Number(trainerCommissionRate) || 0)) / 100)
+                                      : Number(trainerCommissionNominal) || 0) / (Number(newPkgValue) || 1)
+                                  )
+                                )} / sesi)
+                              </span>
+                            </div>
+                          </div>
+                        </>
+                      ) : (
+                        <div className="p-3 rounded-xl bg-zinc-950 border border-zinc-800 text-[11px] text-zinc-400 flex items-center gap-2">
+                          <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                          <span>
+                            Paket Membership mandiri dialokasikan 100% untuk fasilitas gym (Komisi Trainer = Rp 0).
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Bonus Retail / Produk Tambahan */}
+                  <div>
+                    <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-wider mb-1.5">
+                      Bonus Penjualan Suplemen / FnB / Merchandise (Opsional Rp)
+                    </label>
+                    <input
+                      type="number"
+                      value={productBonusNominal}
+                      onChange={(e) => setProductBonusNominal(e.target.value)}
+                      placeholder="Cth: 10000 jika paket menyertakan bonus suplemen/minuman"
+                      min="0"
+                      className="w-full bg-zinc-900 border border-zinc-700 rounded-xl px-3.5 py-2.5 text-xs text-white outline-none focus:border-orange-500"
+                    />
+                  </div>
+                </div>
+
+                {/* Section 3: PANEL SARAN & REKOMENDASI CERDAS (SMART COMMISSION ADVISOR) */}
+                <div className="bg-gradient-to-br from-amber-950/30 via-zinc-950 to-orange-950/30 border border-orange-500/30 rounded-2xl p-4 sm:p-5 space-y-4">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-orange-500/20 pb-3">
+                    <div className="flex items-center gap-2">
+                      <div className="p-1.5 bg-orange-500/20 text-orange-400 rounded-lg">
+                        <Sparkles className="w-4 h-4" />
+                      </div>
+                      <div>
+                        <h4 className="text-xs font-bold text-orange-300 uppercase tracking-wider">
+                          Saran & Rekomendasi Cerdas Pengaturan Komisi
+                        </h4>
+                        <span className="text-[11px] text-zinc-400">
+                          Panduan acuan standar industri kebugaran Indonesia untuk menjaga profitabilitas gym & motivasi tim
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Dinamis Advice Card */}
+                  <div className="bg-zinc-900/90 border border-zinc-800 rounded-xl p-3.5 text-xs space-y-2">
+                    <div className="flex items-start gap-2">
+                      <Lightbulb className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+                      <div className="space-y-1">
+                        <strong className="text-white block font-bold">
+                          {newPkgCat === 'PT'
+                            ? 'Rekomendasi Paket PT: Komisi Trainer 35% - 45% & Komisi Sales 2% - 4%'
+                            : 'Rekomendasi Paket Membership: Komisi Sales 3% - 5% & Trainer 0%'}
+                        </strong>
+                        <p className="text-zinc-400 leading-relaxed text-[11px]">
+                          {newPkgCat === 'PT'
+                            ? 'Pada paket PT, pelatih adalah penentu utama retensi & kepuasan member. Fee Rp 35.000 - Rp 65.000 / sesi (35-45% dari harga jual) memastikan pelatih berdedikasi tinggi, sementara alokasi 2-4% memacu kasir/sales untuk aktif closing member gym ke program PT. Margin gym tetap terjaga sehat di kisaran 50% - 60%.'
+                            : 'Pada membership fasilitas, member menikmati gym secara mandiri. Berikan komisi 3-5% (atau flat Rp 20.000 - Rp 50.000) bagi staf penjualan/kasir untuk mendorong renewal tepat waktu dan akuisisi member baru. Margin operasional gym terjaga maksimal di atas 95%.'}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* 1-Click Presets */}
+                  <div>
+                    <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider block mb-2">
+                      ⚡ Terapkan Saran Cepat (1-Klik Presets):
+                    </span>
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
+                      <button
+                        type="button"
+                        onClick={() => applyCommissionPreset('industry')}
+                        className="p-2.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-zinc-700/80 text-left transition hover:border-orange-500/50 group"
+                      >
+                        <span className="font-bold text-white text-[11px] block group-hover:text-orange-400 flex items-center gap-1">
+                          🎯 Standar Industri
+                        </span>
+                        <span className="text-[10px] text-zinc-400 block mt-0.5">
+                          {newPkgCat === 'PT' ? 'Trainer 40%, Sales 3%' : 'Sales 4%, Gym 96%'}
+                        </span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => applyCommissionPreset('high_incentive')}
+                        className="p-2.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-zinc-700/80 text-left transition hover:border-emerald-500/50 group"
+                      >
+                        <span className="font-bold text-white text-[11px] block group-hover:text-emerald-400 flex items-center gap-1">
+                          🚀 Insentif Booster
+                        </span>
+                        <span className="text-[10px] text-zinc-400 block mt-0.5">
+                          {newPkgCat === 'PT' ? 'Trainer 45%, Sales 5%' : 'Sales 6% (Target Cepat)'}
+                        </span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => applyCommissionPreset('flat_session')}
+                        className="p-2.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-zinc-700/80 text-left transition hover:border-amber-500/50 group"
+                      >
+                        <span className="font-bold text-white text-[11px] block group-hover:text-amber-400 flex items-center gap-1">
+                          💵 Flat Fee Sesi
+                        </span>
+                        <span className="text-[10px] text-zinc-400 block mt-0.5">
+                          {newPkgCat === 'PT' ? 'Rp 45.000 / sesi PT' : 'Sales Rp 30.000 flat'}
+                        </span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => applyCommissionPreset('low_margin')}
+                        className="p-2.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-zinc-700/80 text-left transition hover:border-sky-500/50 group"
+                      >
+                        <span className="font-bold text-white text-[11px] block group-hover:text-sky-400 flex items-center gap-1">
+                          ⚖️ Paket Promo
+                        </span>
+                        <span className="text-[10px] text-zinc-400 block mt-0.5">
+                          {newPkgCat === 'PT' ? 'Trainer 30%, Sales 2%' : 'Sales 2% (Promo Murah)'}
+                        </span>
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Simulator Margin Keuntungan Gym */}
+                  <div className="bg-zinc-950 border border-zinc-800 rounded-xl p-4 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[11px] font-bold text-zinc-300 uppercase tracking-wider flex items-center gap-1.5">
+                        <TrendingUp className="w-3.5 h-3.5 text-sky-400" /> Simulator Pembagian & Margin Bersih Gym
+                      </span>
+                      {(() => {
+                        const pNum = Number(newPkgPrice) || 0;
+                        const sComm = commissionType === 'PERCENT'
+                          ? Math.round((pNum * (Number(salesCommissionRate) || 0)) / 100)
+                          : Number(salesCommissionNominal) || 0;
+                        const tComm = newPkgCat === 'PT'
+                          ? commissionType === 'PERCENT'
+                            ? Math.round((pNum * (Number(trainerCommissionRate) || 0)) / 100)
+                            : Number(trainerCommissionNominal) || 0
+                          : 0;
+                        const netGym = Math.max(0, pNum - sComm - tComm);
+                        const netPct = pNum > 0 ? Math.round((netGym / pNum) * 100) : 100;
+
+                        if (netPct >= 50) {
+                          return (
+                            <span className="text-[10px] font-bold text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-md border border-emerald-500/20">
+                              🟢 Margin Gym Sangat Sehat ({netPct}%)
+                            </span>
+                          );
+                        } else if (netPct >= 35) {
+                          return (
+                            <span className="text-[10px] font-bold text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded-md border border-amber-500/20">
+                              🟡 Margin Operasional Standar ({netPct}%)
+                            </span>
+                          );
+                        } else {
+                          return (
+                            <span className="text-[10px] font-bold text-red-400 bg-red-500/10 px-2 py-0.5 rounded-md border border-red-500/20">
+                              🔴 Perhatian: Margin Terlalu Tipis ({netPct}%)
+                            </span>
+                          );
+                        }
+                      })()}
+                    </div>
+
+                    {/* Progress Bar 3 Segmen */}
+                    {(() => {
+                      const pNum = Number(newPkgPrice) || 0;
+                      const sComm = commissionType === 'PERCENT'
+                        ? Math.round((pNum * (Number(salesCommissionRate) || 0)) / 100)
+                        : Number(salesCommissionNominal) || 0;
+                      const tComm = newPkgCat === 'PT'
+                        ? commissionType === 'PERCENT'
+                          ? Math.round((pNum * (Number(trainerCommissionRate) || 0)) / 100)
+                          : Number(trainerCommissionNominal) || 0
+                        : 0;
+                      const netGym = Math.max(0, pNum - sComm - tComm);
+                      const sPct = pNum > 0 ? Math.round((sComm / pNum) * 100) : 0;
+                      const tPct = pNum > 0 ? Math.round((tComm / pNum) * 100) : 0;
+                      const gPct = pNum > 0 ? Math.max(0, 100 - sPct - tPct) : 100;
+
+                      return (
+                        <div className="space-y-2">
+                          <div className="h-3 w-full bg-zinc-900 rounded-full overflow-hidden flex">
+                            {tPct > 0 && (
+                              <div
+                                style={{ width: `${tPct}%` }}
+                                className="bg-orange-500 transition-all duration-300"
+                                title={`Trainer: ${tPct}%`}
+                              />
+                            )}
+                            {sPct > 0 && (
+                              <div
+                                style={{ width: `${sPct}%` }}
+                                className="bg-emerald-500 transition-all duration-300"
+                                title={`Sales: ${sPct}%`}
+                              />
+                            )}
+                            <div
+                              style={{ width: `${gPct}%` }}
+                              className="bg-sky-500 transition-all duration-300"
+                              title={`Margin Gym: ${gPct}%`}
+                            />
+                          </div>
+
+                          <div className="grid grid-cols-3 gap-2 text-[11px] pt-1">
+                            <div className="p-2 rounded-lg bg-zinc-900 border border-zinc-800">
+                              <span className="text-[10px] text-orange-400 font-semibold flex items-center gap-1">
+                                <span className="w-2 h-2 rounded-full bg-orange-500 inline-block" /> Trainer PT
+                              </span>
+                              <strong className="text-white block mt-0.5">{formatRp(tComm)}</strong>
+                              <span className="text-[9px] text-zinc-500">Porsi {tPct}%</span>
+                            </div>
+
+                            <div className="p-2 rounded-lg bg-zinc-900 border border-zinc-800">
+                              <span className="text-[10px] text-emerald-400 font-semibold flex items-center gap-1">
+                                <span className="w-2 h-2 rounded-full bg-emerald-500 inline-block" /> Sales Kasir
+                              </span>
+                              <strong className="text-white block mt-0.5">{formatRp(sComm)}</strong>
+                              <span className="text-[9px] text-zinc-500">Porsi {sPct}%</span>
+                            </div>
+
+                            <div className="p-2 rounded-lg bg-zinc-900 border border-zinc-800">
+                              <span className="text-[10px] text-sky-400 font-semibold flex items-center gap-1">
+                                <span className="w-2 h-2 rounded-full bg-sky-500 inline-block" /> Net Margin Gym
+                              </span>
+                              <strong className="text-white block mt-0.5">{formatRp(netGym)}</strong>
+                              <span className="text-[9px] text-zinc-500">Porsi {gPct}%</span>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })()}
+                  </div>
+
+                  {/* Catatan Kebijakan Komisi */}
+                  <div>
+                    <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-wider mb-1">
+                      Catatan Kebijakan Komisi (Opsional)
+                    </label>
+                    <input
+                      type="text"
+                      value={commissionNotes}
+                      onChange={(e) => setCommissionNotes(e.target.value)}
+                      placeholder="Cth: Komisi PT dicairkan setelah member menandatangani validasi sesi latihan"
+                      className="w-full bg-zinc-900 border border-zinc-700 rounded-xl px-3 py-2 text-xs text-zinc-300 outline-none focus:border-orange-500"
+                    />
+                  </div>
+                </div>
+
+                {/* Form Action Buttons */}
+                <div className="flex flex-col sm:flex-row gap-3 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      handleResetPackageForm();
+                      setIsPkgModalOpen(false);
+                    }}
+                    className="sm:w-1/3 py-3 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5"
+                  >
+                    Batal
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={handleResetPackageForm}
+                    className="sm:w-1/3 py-3 bg-zinc-950 hover:bg-zinc-800 border border-zinc-700 text-zinc-300 rounded-xl text-xs font-bold transition"
+                  >
+                    Reset Form
+                  </button>
+
+                  <button
+                    type="submit"
+                    className="sm:w-1/3 py-3 bg-orange-500 hover:bg-orange-600 text-white rounded-xl text-xs font-bold shadow-lg shadow-orange-500/20 transition flex items-center justify-center gap-1.5"
+                  >
+                    <Check className="w-4 h-4" />
+                    {editingPkgId ? 'Perbarui Paket & Komisi' : 'Simpan Master Paket Baru'}
+                  </button>
+                </div>
+              </form>
+            ) : (
+              /* TAB 2: DAFTAR MASTER PAKET & KOMISI */
+              <div className="mt-5 space-y-4">
+                <div className="flex flex-col sm:flex-row justify-between items-stretch sm:items-center gap-3">
+                  <div className="relative flex-1">
+                    <Search className="w-4 h-4 text-zinc-400 absolute left-3.5 top-3" />
+                    <input
+                      type="text"
+                      value={pkgSearch}
+                      onChange={(e) => setPkgSearch(e.target.value)}
+                      placeholder="Cari master paket atau kode..."
+                      className="w-full bg-zinc-950 border border-zinc-800 rounded-xl pl-10 pr-4 py-2.5 text-xs text-white outline-none focus:border-orange-500"
+                    />
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <div className="flex bg-zinc-950 p-1 rounded-xl border border-zinc-800 text-xs">
+                      {(['ALL', 'Membership', 'PT'] as const).map((cKey) => (
+                        <button
+                          key={cKey}
+                          type="button"
+                          onClick={() => setPkgFilterCat(cKey)}
+                          className={`px-3 py-1.5 rounded-lg font-bold transition ${
+                            pkgFilterCat === cKey
+                              ? 'bg-orange-500 text-white'
+                              : 'text-zinc-400 hover:text-white'
+                          }`}
+                        >
+                          {cKey === 'ALL' ? 'Semua' : cKey}
+                        </button>
+                      ))}
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        handleResetPackageForm();
+                        setPkgModalTab('form');
+                      }}
+                      className="px-3.5 py-2.5 bg-orange-500/10 hover:bg-orange-500/20 text-orange-400 rounded-xl border border-orange-500/30 text-xs font-bold transition flex items-center gap-1 shrink-0"
+                    >
+                      <Plus className="w-4 h-4" /> Paket Baru
+                    </button>
+                  </div>
+                </div>
+
+                {/* Table of Master Packages */}
+                <div className="border border-zinc-800 rounded-2xl overflow-hidden bg-zinc-950/70">
+                  <div className="overflow-x-auto max-h-[55vh]">
+                    <table className="w-full text-left text-xs border-collapse">
+                      <thead className="bg-zinc-900/90 text-zinc-400 font-bold uppercase text-[10px] tracking-wider border-b border-zinc-800 sticky top-0 z-10 backdrop-blur-xs">
+                        <tr>
+                          <th className="py-3 px-3.5">Paket</th>
+                          <th className="py-3 px-3">Kategori</th>
+                          <th className="py-3 px-3">Harga</th>
+                          <th className="py-3 px-3">Kuota</th>
+                          <th className="py-3 px-3">Komisi Sales</th>
+                          <th className="py-3 px-3">Komisi Trainer (PT)</th>
+                          <th className="py-3 px-3">Margin Gym</th>
+                          <th className="py-3 px-3 text-center">Aksi</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-zinc-800/60 text-zinc-300">
+                        {packages
+                          .filter((p) => {
+                            const matchCat = pkgFilterCat === 'ALL' || p.cat === pkgFilterCat;
+                            const matchSearch =
+                              !pkgSearch ||
+                              p.name.toLowerCase().includes(pkgSearch.toLowerCase()) ||
+                              p.id.toLowerCase().includes(pkgSearch.toLowerCase());
+                            return matchCat && matchSearch;
+                          })
+                          .map((pkg) => {
+                            const sComm = pkg.salesCommissionNominal ?? Math.round((pkg.price * (pkg.salesCommissionRate ?? (pkg.cat === 'Membership' ? 4 : 3))) / 100);
+                            const tComm = pkg.cat === 'PT'
+                              ? (pkg.trainerCommissionNominal ?? Math.round((pkg.price * (pkg.trainerCommissionRate ?? 40)) / 100))
+                              : 0;
+                            const netMargin = Math.max(0, pkg.price - sComm - tComm);
+                            const marginPct = pkg.price > 0 ? Math.round((netMargin / pkg.price) * 100) : 0;
+
+                            return (
+                              <tr key={pkg.id} className="hover:bg-zinc-900/50 transition">
+                                <td className="py-3 px-3.5">
+                                  <div className="font-bold text-white">{pkg.name}</div>
+                                  <span className="text-[10px] text-zinc-500 font-mono">{pkg.id} • {pkg.type}</span>
+                                </td>
+                                <td className="py-3 px-3">
+                                  <span
+                                    className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${
+                                      pkg.cat === 'PT'
+                                        ? 'bg-orange-500/10 text-orange-400 border-orange-500/20'
+                                        : 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
+                                    }`}
+                                  >
+                                    {pkg.cat}
+                                  </span>
+                                </td>
+                                <td className="py-3 px-3 font-bold text-zinc-100">
+                                  {formatRp(pkg.price)}
+                                </td>
+                                <td className="py-3 px-3 font-semibold text-zinc-400">
+                                  {pkg.value} {pkg.cat === 'Membership' ? 'Hari' : 'Sesi'}
+                                </td>
+                                <td className="py-3 px-3">
+                                  <div className="font-bold text-emerald-400">{formatRp(sComm)}</div>
+                                  <span className="text-[10px] text-zinc-500">
+                                    {pkg.salesCommissionRate ?? (pkg.cat === 'Membership' ? 4 : 3)}% closing
+                                  </span>
+                                </td>
+                                <td className="py-3 px-3">
+                                  {pkg.cat === 'PT' ? (
+                                    <>
+                                      <div className="font-bold text-orange-400">{formatRp(tComm)}</div>
+                                      <span className="text-[10px] text-zinc-500">
+                                        ~{formatRp(pkg.trainerCommissionPerSession || Math.round(tComm / (pkg.value || 1)))}/sesi
+                                      </span>
+                                    </>
+                                  ) : (
+                                    <span className="text-zinc-500 text-[11px]">- (Mandiri)</span>
+                                  )}
+                                </td>
+                                <td className="py-3 px-3">
+                                  <div className="font-bold text-sky-400">{formatRp(netMargin)}</div>
+                                  <span className="text-[10px] text-zinc-500 font-semibold">{marginPct}%</span>
+                                </td>
+                                <td className="py-3 px-3 text-center">
+                                  <div className="flex items-center justify-center gap-1.5">
+                                    <button
+                                      type="button"
+                                      onClick={() => handleEditPackage(pkg)}
+                                      title="Edit Paket & Komisi"
+                                      className="p-1.5 bg-zinc-800 hover:bg-orange-500 hover:text-white text-zinc-300 rounded-lg transition"
+                                    >
+                                      <Edit3 className="w-3.5 h-3.5" />
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleDeletePackageConfirm(pkg)}
+                                      title="Hapus Master Paket"
+                                      className="p-1.5 bg-zinc-800 hover:bg-red-500 hover:text-white text-zinc-400 rounded-lg transition"
+                                    >
+                                      <Trash2 className="w-3.5 h-3.5" />
+                                    </button>
+                                  </div>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+
+                <div className="flex justify-end pt-2">
+                  <button
+                    type="button"
+                    onClick={() => setIsPkgModalOpen(false)}
+                    className="px-5 py-2.5 bg-zinc-800 hover:bg-zinc-700 text-white rounded-xl text-xs font-bold transition"
+                  >
+                    Tutup
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}

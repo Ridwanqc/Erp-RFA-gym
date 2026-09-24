@@ -1,6 +1,7 @@
 import {
   PrinterConfig,
   GymBusinessProfile,
+  GymBranch,
   RoleDefinition,
   RoleModulePermission,
   PaymentAndTaxConfig,
@@ -46,6 +47,93 @@ export const DEFAULT_GYM_PROFILE: GymBusinessProfile = {
   openHoursWeekday: '06:00 - 22:00 WIB',
   openHoursWeekend: '07:00 - 20:00 WIB'
 };
+
+export const DEFAULT_BRANCHES: GymBranch[] = [
+  {
+    id: 'BR-001',
+    name: 'GymPro Flagship Kelapa Gading',
+    code: 'KGD',
+    address: 'Jl. Boulevard Artha Gading Blok A-3 No. 88, Kelapa Gading',
+    city: 'Jakarta Utara, DKI Jakarta 14240',
+    phone: '(021) 4587-9900',
+    whatsapp: '0812-9876-5432',
+    email: 'kelapagading@gympro.id',
+    managerName: 'Hendra Wijaya, S.Or',
+    managerPhone: '0811-2233-4455',
+    openHoursWeekday: '06:00 - 22:00 WIB',
+    openHoursWeekend: '07:00 - 20:00 WIB',
+    status: 'Aktif',
+    isMainBranch: true,
+    facilities: [
+      'Locker Room & Sauna',
+      'Free Weights & Olympic Racks',
+      'Cardio Theater',
+      'Studio Aerobik/Zumba',
+      'Juice & Protein Bar',
+      'Private PT Studio'
+    ],
+    capacity: 250,
+    totalMembers: 480,
+    photo: 'https://images.unsplash.com/photo-1534438327276-14e5300c3a48?w=800&auto=format&fit=crop&q=80',
+    createdAt: '2024-01-15',
+    notes: 'Cabang Kantor Pusat & Pusat Pelatihan Utama'
+  },
+  {
+    id: 'BR-002',
+    name: 'GymPro Hub Senopati Lifestyle',
+    code: 'SNP',
+    address: 'Jl. Senopati Raya No. 42, Kebayoran Baru',
+    city: 'Jakarta Selatan, DKI Jakarta 12190',
+    phone: '(021) 7234-8899',
+    whatsapp: '0813-8899-7766',
+    email: 'senopati@gympro.id',
+    managerName: 'Jessica Anastasia, CPT',
+    managerPhone: '0812-3344-5566',
+    openHoursWeekday: '05:30 - 22:30 WIB',
+    openHoursWeekend: '06:30 - 21:00 WIB',
+    status: 'Aktif',
+    isMainBranch: false,
+    facilities: [
+      'VIP Shower & Lockers',
+      'Hammer Strength Equipment',
+      'Pilates & Yoga Studio',
+      'Recovery Cold Plunge',
+      'Whey Cafe'
+    ],
+    capacity: 180,
+    totalMembers: 320,
+    photo: 'https://images.unsplash.com/photo-1540497077202-7c8a3999166f?w=800&auto=format&fit=crop&q=80',
+    createdAt: '2025-03-10',
+    notes: 'Cabang Premium Lifestyle Jakarta Selatan'
+  },
+  {
+    id: 'BR-003',
+    name: 'GymPro Express BSD City',
+    code: 'BSD',
+    address: 'Ruko Foresta Business Loft 5 No. 12, BSD City',
+    city: 'Tangerang Selatan, Banten 15339',
+    phone: '(021) 5316-7788',
+    whatsapp: '0815-7766-5544',
+    email: 'bsd@gympro.id',
+    managerName: 'Bima Pratama, S.Si',
+    managerPhone: '0817-6655-4433',
+    openHoursWeekday: '06:00 - 22:00 WIB',
+    openHoursWeekend: '07:00 - 20:00 WIB',
+    status: 'Aktif',
+    isMainBranch: false,
+    facilities: [
+      'Powerlifting Platform',
+      'Cardio Deck',
+      'Functional Rig',
+      'Shower & Lockers'
+    ],
+    capacity: 150,
+    totalMembers: 210,
+    photo: 'https://images.unsplash.com/photo-1571902943202-507ec2618e8f?w=800&auto=format&fit=crop&q=80',
+    createdAt: '2025-09-01',
+    notes: 'Cabang Urban Express Tangerang'
+  }
+];
 
 export const SYSTEM_MODULES: { id: string; name: string; category: string; desc: string }[] = [
   { id: 'dashboard', name: 'Dashboard Eksekutif', category: 'Overview', desc: 'Melihat ringkasan omset, grafik kehadiran, dan statistik penting' },

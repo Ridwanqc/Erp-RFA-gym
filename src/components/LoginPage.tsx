@@ -98,11 +98,12 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin, staffUsers }) => 
     setErrorMsg(null);
     setIsLoading(true);
     try {
-      const fbUser = await signInWithGoogle();
-      if (!fbUser) {
+      const authResult = await signInWithGoogle();
+      if (!authResult) {
         setIsLoading(false);
         return;
       }
+      const fbUser = authResult.user;
       const userEmail = fbUser.email || '';
       // Check if user is known staff by email or bootstrapped admin
       const matched = staffUsers.find((u) => u.email?.toLowerCase() === userEmail.toLowerCase()) ||

@@ -1,8 +1,10 @@
-import React, { useState } from 'react';
-import { X, Calendar, CreditCard, Dumbbell, History, Phone, ShieldCheck, AlertCircle, Clock, UserCheck, IdCard, Crown, Sparkles, CheckCircle2, Snowflake, PlayCircle, ArrowRight } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { X, Calendar, CreditCard, Dumbbell, History, Phone, ShieldCheck, AlertCircle, Clock, UserCheck, IdCard, Crown, Sparkles, CheckCircle2, Snowflake, PlayCircle, ArrowRight, Camera, QrCode } from 'lucide-react';
 import { Member, Attendance, Transaction, Schedule, FollowUpLog, MemberMembershipRecord, PTPurchaseRecord, MemberFreezeRecord } from '../types';
 import { formatRp, APP_TODAY, formatDateIndo } from '../utils/formatters';
 import { getMemberStatus } from '../utils/memberStatus';
+import { MemberCameraCaptureModal } from './MemberCameraCaptureModal';
+import { MemberQRCodeModal } from './MemberQRCodeModal';
 
 interface MemberDetailModalProps {
   isOpen: boolean;
@@ -19,6 +21,9 @@ interface MemberDetailModalProps {
   onOpenIDCard?: (member: Member) => void;
   onOpenFreeze?: (member: Member) => void;
   onOpenUnfreeze?: (member: Member, record?: MemberFreezeRecord) => void;
+  onUpdateMember?: (updatedMember: Member) => void;
+  onUpdatePhoto?: (memberId: string, newPhotoUrl: string) => void;
+  showToast?: (title: string, message: string, type: 'success' | 'error' | 'warning' | 'info') => void;
 }
 
 export const MemberDetailModal: React.FC<MemberDetailModalProps> = ({
@@ -35,11 +40,44 @@ export const MemberDetailModal: React.FC<MemberDetailModalProps> = ({
   onOpenPayPiutang,
   onOpenIDCard,
   onOpenFreeze,
-  onOpenUnfreeze
+  onOpenUnfreeze,
+  onUpdateMember,
+  onUpdatePhoto,
+  showToast
 }) => {
   const [activeSubTab, setActiveSubTab] = useState<'info' | 'absen' | 'trx' | 'pt' | 'fu' | 'freeze'>('info');
+  const [isCameraModalOpen, setIsCameraModalOpen] = useState(false);
+  const [isQRCodeModalOpen, setIsQRCodeModalOpen] = useState(false);
+  const [localPhoto, setLocalPhoto] = useState(member?.photo || '');
+
+  useEffect(() => {
+    if (member) {
+      setLocalPhoto(member.photo);
+    }
+  }, [member?.photo, member?.id]);
 
   if (!isOpen || !member) return null;
+
+  const handleSaveCapturedPhoto = (newPhotoUrl: string) => {
+    setLocalPhoto(newPhotoUrl);
+    const updatedMember: Member = {
+      ...member,
+      photo: newPhotoUrl
+    };
+    if (onUpdateMember) {
+      onUpdateMember(updatedMember);
+    }
+    if (onUpdatePhoto) {
+      onUpdatePhoto(member.id, newPhotoUrl);
+    }
+    if (showToast) {
+      showToast(
+        'Foto Profil Diperbarui',
+        `Foto profil untuk ${member.name} (${member.id}) berhasil diperbarui melalui kamera dan disimpan.`,
+        'success'
+      );
+    }
+  };
 
   const currentStatus = getMemberStatus(member);
   const isExpired = currentStatus.status === 'EXPIRED';
@@ -76,11 +114,21 @@ export const MemberDetailModal: React.FC<MemberDetailModalProps> = ({
         {/* Modal Top Profile Header */}
         <div className="p-4 sm:p-6 border-b border-zinc-800 bg-zinc-950 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 shrink-0">
           <div className="flex items-center gap-3 sm:gap-4 min-w-0">
-            <img
-              src={member.photo}
-              alt={member.name}
-              className="w-14 h-14 sm:w-20 sm:h-20 rounded-2xl object-cover border-2 border-zinc-700 shadow-md shrink-0"
-            />
+            <div className="relative group shrink-0">
+              <img
+                src={localPhoto || member.photo}
+                alt={member.name}
+                className="w-14 h-14 sm:w-20 sm:h-20 rounded-2xl object-cover border-2 border-zinc-700 group-hover:border-orange-500 shadow-md shrink-0 transition-colors"
+              />
+              <button
+                type="button"
+                onClick={() => setIsCameraModalOpen(true)}
+                className="absolute -bottom-1 -right-1 w-6 h-6 sm:w-7 sm:h-7 rounded-xl bg-orange-500 hover:bg-orange-400 text-white flex items-center justify-center shadow-lg transition-transform hover:scale-110 cursor-pointer border-2 border-zinc-950"
+                title="Ambil foto profil langsung dari kamera"
+              >
+                <Camera className="w-3.5 h-3.5" />
+              </button>
+            </div>
             <div className="space-y-1 min-w-0">
               <div className="flex items-center gap-2 flex-wrap">
                 <h2 className="text-lg sm:text-2xl font-black text-white tracking-tight truncate">{member.name}</h2>
@@ -103,6 +151,17 @@ export const MemberDetailModal: React.FC<MemberDetailModalProps> = ({
             </div>
           </div>
           <div className="flex items-center gap-2 flex-wrap justify-end self-end sm:self-auto shrink-0">
+            {/* Action Button: Live Camera Capture */}
+            <button
+              type="button"
+              onClick={() => setIsCameraModalOpen(true)}
+              className="px-3 py-2 bg-orange-500/10 hover:bg-orange-500/20 text-orange-400 border border-orange-500/30 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-sm"
+              title="Ambil / Ganti Foto Profil Member Menggunakan Kamera Langsung"
+            >
+              <Camera className="w-4 h-4" />
+              <span className="hidden sm:inline">Kamera Foto</span>
+            </button>
+
             {/* Action Button: Freeze / Unfreeze Member */}
             {member.isFrozen && onOpenUnfreeze && (
               <button
@@ -126,10 +185,21 @@ export const MemberDetailModal: React.FC<MemberDetailModalProps> = ({
               </button>
             )}
 
+            {/* Action Button: QR Code Akses Gym Generator */}
+            <button
+              type="button"
+              onClick={() => setIsQRCodeModalOpen(true)}
+              className="px-3 py-2 bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border border-amber-500/30 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-sm"
+              title="Tampilkan QR Code Akses Masuk Area Gym"
+            >
+              <QrCode className="w-4 h-4" />
+              <span className="hidden sm:inline">QR Akses</span>
+            </button>
+
             {onOpenIDCard && (
               <button
                 onClick={() => onOpenIDCard(member)}
-                className="px-3 py-2 bg-orange-500/10 hover:bg-orange-500/20 text-orange-400 border border-orange-500/30 rounded-xl text-xs font-bold transition flex items-center gap-1.5"
+                className="px-3 py-2 bg-orange-500/10 hover:bg-orange-500/20 text-orange-400 border border-orange-500/30 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer"
                 title="Buka Digital Member Pass RFA GYM"
               >
                 <IdCard className="w-4 h-4" />
@@ -375,6 +445,57 @@ export const MemberDetailModal: React.FC<MemberDetailModalProps> = ({
                     </div>
                   </div>
                 </div>
+              </div>
+
+              {/* Photo & Identity Quick Actions Banner */}
+              <div className="bg-zinc-950/90 border border-zinc-800 p-4 rounded-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-orange-500/20 text-orange-400 flex items-center justify-center border border-orange-500/30 shrink-0">
+                    <Camera className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h5 className="text-xs font-bold text-white">Foto Profil Member & Verifikasi Visual</h5>
+                    <p className="text-[11px] text-zinc-400">
+                      Gunakan kamera webcam / HP untuk mengambil langsung foto profil terbaru {member.name}.
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setIsCameraModalOpen(true)}
+                  className="px-3.5 py-2 rounded-xl bg-orange-500 hover:bg-orange-400 text-white font-bold text-xs transition flex items-center gap-1.5 shrink-0 shadow-md shadow-orange-500/20 cursor-pointer"
+                >
+                  <Camera className="w-3.5 h-3.5" />
+                  <span>Buka Kamera Sekarang</span>
+                </button>
+              </div>
+
+              {/* QR Code Generator Akses Gym Card */}
+              <div className="bg-gradient-to-r from-zinc-950 via-zinc-900 to-zinc-950 border border-amber-500/30 p-4 rounded-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-lg">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-amber-500/20 text-amber-400 flex items-center justify-center border border-amber-500/30 shrink-0">
+                    <QrCode className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <h5 className="text-xs font-bold text-white">QR Code Akses Masuk Area Gym</h5>
+                      <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-amber-500/20 text-amber-400 border border-amber-500/30">
+                        SCANNER READY
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-zinc-400">
+                      QR Code unik member untuk scan check-in di scanner meja resepsionis atau turnstile gate masuk.
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setIsQRCodeModalOpen(true)}
+                  className="px-3.5 py-2 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-zinc-950 font-black text-xs transition flex items-center gap-1.5 shrink-0 shadow-md shadow-amber-500/20 cursor-pointer"
+                >
+                  <QrCode className="w-3.5 h-3.5" />
+                  <span>Buka QR Code Akses</span>
+                </button>
               </div>
 
               {/* Data Dokumen Kartu Identitas Resmi */}
@@ -725,15 +846,55 @@ export const MemberDetailModal: React.FC<MemberDetailModalProps> = ({
         </div>
 
         {/* Modal Footer */}
-        <div className="p-4 bg-zinc-950 border-t border-zinc-800 flex justify-end shrink-0">
+        <div className="p-4 bg-zinc-950 border-t border-zinc-800 flex flex-wrap items-center justify-between gap-3 shrink-0">
+          <div className="flex items-center gap-2 flex-wrap">
+            <button
+              type="button"
+              onClick={() => setIsQRCodeModalOpen(true)}
+              className="px-3.5 py-2.5 rounded-xl bg-amber-500/15 hover:bg-amber-500/25 text-amber-400 border border-amber-500/30 text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-sm"
+              title="Tampilkan QR Code Akses Masuk Gym"
+            >
+              <QrCode className="w-4 h-4" />
+              <span>QR Code Akses Gym</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setIsCameraModalOpen(true)}
+              className="px-3.5 py-2.5 rounded-xl bg-orange-500/15 hover:bg-orange-500/25 text-orange-400 border border-orange-500/30 text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-sm"
+              title="Buka Kamera untuk Mengambil Foto Profil Baru"
+            >
+              <Camera className="w-4 h-4" />
+              <span>Ambil Foto Member (Kamera)</span>
+            </button>
+          </div>
           <button
             onClick={onClose}
-            className="px-5 py-2.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-white text-xs font-bold transition"
+            className="px-5 py-2.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-white text-xs font-bold transition cursor-pointer"
           >
             Tutup
           </button>
         </div>
       </div>
+
+      {/* Live Member Camera Capture Modal */}
+      {isCameraModalOpen && (
+        <MemberCameraCaptureModal
+          isOpen={isCameraModalOpen}
+          onClose={() => setIsCameraModalOpen(false)}
+          member={member}
+          onSavePhoto={handleSaveCapturedPhoto}
+        />
+      )}
+
+      {/* Member Access QR Code Generator Modal */}
+      {isQRCodeModalOpen && (
+        <MemberQRCodeModal
+          isOpen={isQRCodeModalOpen}
+          onClose={() => setIsQRCodeModalOpen(false)}
+          member={member}
+          onOpenDigitalPass={onOpenIDCard}
+        />
+      )}
     </div>
   );
 };

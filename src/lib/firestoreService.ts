@@ -9,7 +9,7 @@ import {
   limit
 } from 'firebase/firestore';
 import { db, handleFirestoreError, OperationType, auth } from './firebase';
-import { Member, Transaction, Attendance, Lead } from '../types';
+import { Member, Transaction, Attendance, Lead, GymBranch } from '../types';
 
 // Collections constants
 export const COLLECTIONS = {
@@ -18,7 +18,9 @@ export const COLLECTIONS = {
   TRANSACTIONS: 'transactions',
   ATTENDANCES: 'attendances',
   LEADS: 'leads',
-  ADMINS: 'admins'
+  ADMINS: 'admins',
+  BRANCHES: 'branches',
+  SETTINGS: 'settings'
 };
 
 // 1. Members Cloud Operations
@@ -217,7 +219,55 @@ export async function saveLeadToFirestore(lead: Lead): Promise<void> {
   }
 }
 
-// 5. Initial Data Cloud Sync
+// 5. Branches Cloud Operations
+export async function saveBranchToFirestore(branch: GymBranch): Promise<void> {
+  if (!auth.currentUser) return;
+  const path = `${COLLECTIONS.BRANCHES}/${branch.id}`;
+  try {
+    await setDoc(doc(db, COLLECTIONS.BRANCHES, branch.id), branch, { merge: true });
+  } catch (error) {
+    handleFirestoreError(error, OperationType.WRITE, path);
+  }
+}
+
+export async function deleteBranchFromFirestore(branchId: string): Promise<void> {
+  if (!auth.currentUser) return;
+  const path = `${COLLECTIONS.BRANCHES}/${branchId}`;
+  try {
+    await deleteDoc(doc(db, COLLECTIONS.BRANCHES, branchId));
+  } catch (error) {
+    handleFirestoreError(error, OperationType.DELETE, path);
+  }
+}
+
+export function subscribeBranches(
+  onData: (branches: GymBranch[]) => void,
+  onError?: (err: unknown) => void
+): () => void {
+  if (!auth.currentUser) {
+    return () => {};
+  }
+  const path = COLLECTIONS.BRANCHES;
+  return onSnapshot(
+    collection(db, path),
+    (snapshot) => {
+      const items: GymBranch[] = [];
+      snapshot.forEach((d) => {
+        items.push(d.data() as GymBranch);
+      });
+      if (items.length > 0) {
+        onData(items);
+      }
+    },
+    (error) => {
+      console.warn('Firestore Branches Subscribe Notice:', error.message);
+      if (onError) onError(error);
+      handleFirestoreError(error, OperationType.LIST, path);
+    }
+  );
+}
+
+// 6. Initial Data Cloud Sync
 export async function seedInitialFirestoreData(
   initialMembers: Member[],
   initialTransactions: Transaction[]

@@ -3,6 +3,7 @@ import {
   SystemSettings,
   PrinterConfig,
   GymBusinessProfile,
+  GymBranch,
   PaymentAndTaxConfig,
   WhatsAppTemplateConfig,
   RoleDefinition,
@@ -13,18 +14,30 @@ import {
   DEFAULT_SYSTEM_SETTINGS,
   DEFAULT_PRINTER_CONFIG,
   DEFAULT_GYM_PROFILE,
+  DEFAULT_BRANCHES,
   DEFAULT_PAYMENT_AND_TAX,
   DEFAULT_WHATSAPP_TEMPLATES,
   DEFAULT_ROLE_DEFINITIONS,
   SYSTEM_MODULES
 } from '../data/settingsData';
+import {
+  saveBranchToFirestore,
+  deleteBranchFromFirestore,
+  subscribeBranches
+} from '../lib/firestoreService';
+import { auth, onAuthStateChanged } from '../lib/firebase';
 
 const SETTINGS_STORAGE_KEY = 'gympro_system_settings';
 const ROLES_STORAGE_KEY = 'gympro_role_definitions';
+const BRANCHES_STORAGE_KEY = 'gympro_branches';
+const ACTIVE_BRANCH_STORAGE_KEY = 'gympro_active_branch_id';
 
 interface SettingsContextType {
   settings: SystemSettings;
   roles: Record<UserRole, RoleDefinition>;
+  branches: GymBranch[];
+  activeBranchId: string;
+  activeBranch: GymBranch;
   updatePrinterConfig: (newPrinter: Partial<PrinterConfig>) => void;
   updateProfileConfig: (newProfile: Partial<GymBusinessProfile>) => void;
   updatePaymentAndTaxConfig: (newConfig: Partial<PaymentAndTaxConfig>) => void;
@@ -43,6 +56,12 @@ interface SettingsContextType {
     action?: keyof RoleActionPermissions
   ) => boolean;
   executeTestPrint: () => void;
+  // Multi-branch actions
+  addBranch: (newBranch: Omit<GymBranch, 'id' | 'createdAt'> & { id?: string }) => GymBranch;
+  updateBranch: (id: string, updatedData: Partial<GymBranch>) => void;
+  deleteBranch: (id: string) => { success: boolean; message: string };
+  setActiveBranchId: (id: string) => void;
+  setMainBranch: (id: string) => void;
 }
 
 const SettingsContext = createContext<SettingsContextType | null>(null);
@@ -66,6 +85,33 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       console.warn('Gagal memuat system settings dari storage:', e);
     }
     return DEFAULT_SYSTEM_SETTINGS;
+  });
+
+  // Load Branches
+  const [branches, setBranches] = useState<GymBranch[]>(() => {
+    try {
+      const saved = localStorage.getItem(BRANCHES_STORAGE_KEY);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          return parsed;
+        }
+      }
+    } catch (e) {
+      console.warn('Gagal memuat cabang dari storage:', e);
+    }
+    return DEFAULT_BRANCHES;
+  });
+
+  // Load Active Branch ID
+  const [activeBranchId, setActiveBranchIdState] = useState<string>(() => {
+    try {
+      const saved = localStorage.getItem(ACTIVE_BRANCH_STORAGE_KEY);
+      if (saved) {
+        return saved;
+      }
+    } catch (e) {}
+    return 'BR-001';
   });
 
   // Load Role Definitions
@@ -99,6 +145,211 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       console.warn('Gagal menyimpan roles:', e);
     }
   }, [roles]);
+
+  // Persist Branches
+  useEffect(() => {
+    try {
+      localStorage.setItem(BRANCHES_STORAGE_KEY, JSON.stringify(branches));
+    } catch (e) {
+      console.warn('Gagal menyimpan branches:', e);
+    }
+  }, [branches]);
+
+  // Subscribe to Branches in Firestore if user is authenticated
+  useEffect(() => {
+    let unsubscribeBranchListener: (() => void) | undefined;
+    const unsubAuth = onAuthStateChanged(auth, (fbUser) => {
+      if (fbUser) {
+        try {
+          unsubscribeBranchListener = subscribeBranches((cloudBranches) => {
+            if (cloudBranches && cloudBranches.length > 0) {
+              setBranches((prev) => {
+                const map = new Map(prev.map((b) => [b.id, b]));
+                cloudBranches.forEach((cb) => map.set(cb.id, { ...map.get(cb.id), ...cb }));
+                return Array.from(map.values());
+              });
+            }
+          });
+        } catch (e) {
+          console.warn('Branches subscription error:', e);
+        }
+      } else if (unsubscribeBranchListener) {
+        unsubscribeBranchListener();
+        unsubscribeBranchListener = undefined;
+      }
+    });
+
+    return () => {
+      unsubAuth();
+      if (unsubscribeBranchListener) unsubscribeBranchListener();
+    };
+  }, []);
+
+  // Persist Active Branch ID
+  useEffect(() => {
+    try {
+      localStorage.setItem(ACTIVE_BRANCH_STORAGE_KEY, activeBranchId);
+    } catch (e) {
+      console.warn('Gagal menyimpan active branch id:', e);
+    }
+  }, [activeBranchId]);
+
+  // Current active branch object
+  const activeBranch: GymBranch =
+    branches.find((b) => b.id === activeBranchId) || branches[0] || DEFAULT_BRANCHES[0];
+
+  const setActiveBranchId = (id: string) => {
+    const targetBranch = branches.find((b) => b.id === id);
+    if (!targetBranch) return;
+
+    setActiveBranchIdState(id);
+    // Keep gym profile and POS receipt in sync with active branch
+    setSettings((prev) => ({
+      ...prev,
+      profile: {
+        ...prev.profile,
+        branchName: targetBranch.name,
+        address: targetBranch.address,
+        city: targetBranch.city,
+        phone: targetBranch.phone,
+        whatsapp: targetBranch.whatsapp,
+        email: targetBranch.email,
+        openHoursWeekday: targetBranch.openHoursWeekday,
+        openHoursWeekend: targetBranch.openHoursWeekend
+      },
+      printer: {
+        ...prev.printer,
+        storeAddress: targetBranch.address,
+        storeCity: targetBranch.city,
+        storePhone: targetBranch.phone
+      },
+      updatedAt: new Date().toISOString()
+    }));
+  };
+
+  const addBranch = (newBranchData: Omit<GymBranch, 'id' | 'createdAt'> & { id?: string }): GymBranch => {
+    const nextNumber = branches.length + 1;
+    const generatedId = newBranchData.id || `BR-${String(nextNumber).padStart(3, '0')}`;
+    const todayStr = new Date().toISOString().split('T')[0];
+
+    const branchToCreate: GymBranch = {
+      ...newBranchData,
+      id: generatedId,
+      createdAt: todayStr,
+      facilities: newBranchData.facilities || ['Locker Room', 'Cardio Area', 'Free Weights'],
+      capacity: newBranchData.capacity || 100,
+      totalMembers: newBranchData.totalMembers || 0,
+      status: newBranchData.status || 'Aktif',
+      isMainBranch: Boolean(newBranchData.isMainBranch)
+    };
+
+    setBranches((prev) => {
+      let updated = [...prev];
+      if (branchToCreate.isMainBranch) {
+        updated = updated.map((b) => ({ ...b, isMainBranch: false }));
+      }
+      return [...updated, branchToCreate];
+    });
+
+    // Cloud Firestore synchronization (non-blocking)
+    saveBranchToFirestore(branchToCreate).catch((err) => {
+      console.warn('Cloud save branch notice:', err);
+    });
+
+    return branchToCreate;
+  };
+
+  const updateBranch = (id: string, updatedData: Partial<GymBranch>) => {
+    let fullUpdatedBranch: GymBranch | undefined;
+    setBranches((prev) => {
+      let updated = prev.map((b) => {
+        if (b.id === id) {
+          fullUpdatedBranch = { ...b, ...updatedData };
+          return fullUpdatedBranch;
+        }
+        if (updatedData.isMainBranch) {
+          return { ...b, isMainBranch: false };
+        }
+        return b;
+      });
+      return updated;
+    });
+
+    if (fullUpdatedBranch) {
+      saveBranchToFirestore(fullUpdatedBranch).catch((err) => {
+        console.warn('Cloud update branch notice:', err);
+      });
+    }
+
+    // If active branch was updated, sync profile
+    if (id === activeBranchId) {
+      setSettings((prev) => ({
+        ...prev,
+        profile: {
+          ...prev.profile,
+          ...(updatedData.name ? { branchName: updatedData.name } : {}),
+          ...(updatedData.address ? { address: updatedData.address } : {}),
+          ...(updatedData.city ? { city: updatedData.city } : {}),
+          ...(updatedData.phone ? { phone: updatedData.phone } : {}),
+          ...(updatedData.whatsapp ? { whatsapp: updatedData.whatsapp } : {}),
+          ...(updatedData.email ? { email: updatedData.email } : {}),
+          ...(updatedData.openHoursWeekday ? { openHoursWeekday: updatedData.openHoursWeekday } : {}),
+          ...(updatedData.openHoursWeekend ? { openHoursWeekend: updatedData.openHoursWeekend } : {})
+        },
+        printer: {
+          ...prev.printer,
+          ...(updatedData.address ? { storeAddress: updatedData.address } : {}),
+          ...(updatedData.city ? { storeCity: updatedData.city } : {}),
+          ...(updatedData.phone ? { storePhone: updatedData.phone } : {})
+        },
+        updatedAt: new Date().toISOString()
+      }));
+    }
+  };
+
+  const deleteBranch = (id: string): { success: boolean; message: string } => {
+    if (branches.length <= 1) {
+      return {
+        success: false,
+        message: 'Tidak dapat menghapus cabang terakhir. Sistem membutuhkan minimal satu cabang operasional.'
+      };
+    }
+
+    const target = branches.find((b) => b.id === id);
+    if (target?.isMainBranch) {
+      return {
+        success: false,
+        message: 'Cabang Utama tidak dapat dihapus langsung. Tetapkan cabang lain sebagai Cabang Utama terlebih dahulu.'
+      };
+    }
+
+    const remaining = branches.filter((b) => b.id !== id);
+    setBranches(remaining);
+
+    // Delete from Firestore (non-blocking)
+    deleteBranchFromFirestore(id).catch((err) => {
+      console.warn('Cloud delete branch notice:', err);
+    });
+
+    if (activeBranchId === id) {
+      const nextActiveId = remaining[0]?.id || 'BR-001';
+      setActiveBranchId(nextActiveId);
+    }
+
+    return {
+      success: true,
+      message: `Cabang ${target?.name || id} berhasil dihapus dari sistem.`
+    };
+  };
+
+  const setMainBranch = (id: string) => {
+    setBranches((prev) =>
+      prev.map((b) => ({
+        ...b,
+        isMainBranch: b.id === id
+      }))
+    );
+  };
 
   const updatePrinterConfig = (newPrinter: Partial<PrinterConfig>) => {
     setSettings((prev) => ({
@@ -361,6 +612,9 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       value={{
         settings,
         roles,
+        branches,
+        activeBranchId,
+        activeBranch,
         updatePrinterConfig,
         updateProfileConfig,
         updatePaymentAndTaxConfig,
@@ -369,7 +623,12 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         resetRolePermissionsToDefault,
         resetSettingsToDefault,
         hasPermission,
-        executeTestPrint
+        executeTestPrint,
+        addBranch,
+        updateBranch,
+        deleteBranch,
+        setActiveBranchId,
+        setMainBranch
       }}
     >
       {children}

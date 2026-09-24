@@ -36,6 +36,7 @@ import {
   BundleItem,
   MemberMembershipRecord,
   TrainerCommissionRecord,
+  SalesCommissionRecord,
   GymAsset,
   AssetMaintenance,
   DamageReport,
@@ -97,7 +98,10 @@ import { FreezeMemberModal } from './components/FreezeMemberModal';
 import { UnfreezeMemberModal } from './components/UnfreezeMemberModal';
 import { ThemeSettingsModal } from './components/ThemeSettingsModal';
 import { SettingsView } from './components/SettingsView';
+import { GoogleSheetsSyncView } from './components/GoogleSheetsSyncView';
+import { AddBranchModal } from './components/AddBranchModal';
 import { useTheme } from './context/ThemeContext';
+import { useSettings } from './context/SettingsContext';
 import { LoginPage } from './components/LoginPage';
 import { OfflineIndicator } from './components/OfflineIndicator';
 import { APP_TODAY, formatRp } from './utils/formatters';
@@ -125,6 +129,8 @@ export default function App() {
   });
   const [firebaseConnected, setFirebaseConnected] = useState(true);
   const { isThemeModalOpen, closeThemeModal } = useTheme();
+  const { addBranch } = useSettings();
+  const [isAddBranchModalOpen, setIsAddBranchModalOpen] = useState(false);
 
   const handleToggleDesktopSidebar = () => {
     setIsDesktopCollapsed((prev) => {
@@ -405,6 +411,19 @@ export default function App() {
   useEffect(() => {
     localStorage.setItem('rfa_trainer_commissions', JSON.stringify(trainerCommissions));
   }, [trainerCommissions]);
+
+  const [salesCommissions, setSalesCommissions] = useState<SalesCommissionRecord[]>(() => {
+    const saved = localStorage.getItem('rfa_sales_commissions');
+    return saved ? JSON.parse(saved) : [];
+  });
+
+  useEffect(() => {
+    localStorage.setItem('rfa_sales_commissions', JSON.stringify(salesCommissions));
+  }, [salesCommissions]);
+
+  useEffect(() => {
+    localStorage.setItem('rfa_packages', JSON.stringify(packages));
+  }, [packages]);
 
   // ==================== MEMBERSHIP FREEZE / UNFREEZE STATE ====================
   const [freezeRecords, setFreezeRecords] = useState<MemberFreezeRecord[]>(() => {
@@ -1087,14 +1106,17 @@ export default function App() {
       saveMemberToFirestore(m).catch(() => {});
     });
 
-    // If this is a PT package, record it in ptPurchases for performance tracking
+    // If this is a PT package, record it in ptPurchases for performance tracking & generate trainer commissions
     if (newTrx.type === 'PT') {
       const matchedPkg = packages.find((p) => newTrx.desc.includes(p.name));
       const totalSess = matchedPkg ? matchedPkg.value : 10;
       const trainerObj = staffUsers.find((u) => u.id === newTrx.picId) || currentUser;
 
+      const newPtCommissions: TrainerCommissionRecord[] = [];
+
       updatedMembersList.forEach((mem) => {
         const memberTrainer = staffUsers.find((u) => u.id === mem.picId) || trainerObj;
+        const participantPrice = Math.round(newTrx.amount / (updatedMembersList.length || 1));
         const newPurchase: PTPurchaseRecord = {
           id: 'PUR-' + Math.floor(100000 + Math.random() * 900000),
           date: newTrx.date || APP_TODAY,
@@ -1106,12 +1128,48 @@ export default function App() {
           packageName: matchedPkg?.name || newTrx.desc.replace('Paket ', ''),
           totalSessions: totalSess,
           completedSessions: 0,
-          price: Math.round(newTrx.amount / (updatedMembersList.length || 1)),
+          price: participantPrice,
           status: 'Active',
           notes: `Pembelian baru via ${newTrx.method}`
         };
         setPtPurchases((prev) => [newPurchase, ...prev]);
+
+        // Generate Trainer Commission record from package configuration
+        const commRate = matchedPkg?.trainerCommissionRate ?? 40;
+        const commAmt = matchedPkg?.trainerCommissionNominal
+          ? Math.round(matchedPkg.trainerCommissionNominal / (updatedMembersList.length || 1))
+          : Math.round((participantPrice * commRate) / 100);
+        const perSessAmt = matchedPkg?.trainerCommissionPerSession || Math.round(commAmt / (totalSess || 1));
+
+        newPtCommissions.push({
+          id: 'COMM-' + Math.floor(100000 + Math.random() * 900000),
+          commissionId: 'COMM-' + Math.floor(100000 + Math.random() * 900000),
+          trxId: newTrx.id,
+          transactionId: newTrx.id,
+          bundleId: matchedPkg?.id || 'PKG-PT',
+          bundleCode: matchedPkg?.id || 'PT',
+          bundleName: matchedPkg?.name || newTrx.desc,
+          trainerId: memberTrainer?.id || mem.picId || 'S03',
+          trainerName: memberTrainer?.name || mem.picName || 'Citra Lestari',
+          memberId: mem.id,
+          memberName: mem.name,
+          date: newTrx.date || APP_TODAY,
+          ptComponentValue: participantPrice,
+          commissionRate: commRate,
+          commissionAmount: commAmt,
+          commissionPerSession: perSessAmt,
+          totalSessions: totalSess,
+          paymentStatus: 'LUNAS',
+          validationStatus: 'PENDING',
+          valStatus: 'PENDING',
+          status: 'ACTIVE',
+          notes: `Komisi PT dari paket ${matchedPkg?.name || newTrx.desc}`
+        });
       });
+
+      if (newPtCommissions.length > 0) {
+        setTrainerCommissions((prev) => [...newPtCommissions, ...prev]);
+      }
     }
 
     // If this is a Bundling package, generate MemberMembershipRecord, PTPurchaseRecord, and TrainerCommission
@@ -1229,6 +1287,58 @@ export default function App() {
           'success'
         );
       }
+    }
+
+    // 5. Generate Sales Commission records for Closing PIC(s)
+    const fallbackStaffId = currentUser?.id || 'S01';
+    const closingPicIds = (newTrx.picIds && newTrx.picIds.length > 0)
+      ? newTrx.picIds
+      : [newTrx.picId || fallbackStaffId];
+
+    let totalSalesCommission = 0;
+    let pkgSourceLabel = newTrx.desc;
+
+    if (newTrx.type === 'Bundling') {
+      const bundle = bundlePackages.find((b) => b.bundleId === newTrx.bundleId || b.bundleCode === newTrx.bundleCode);
+      const bRate = bundle?.salesCommissionRate || 4;
+      totalSalesCommission = bundle?.salesCommissionNominal
+        ? bundle.salesCommissionNominal
+        : Math.round((newTrx.amount * bRate) / 100);
+      pkgSourceLabel = bundle?.bundleName || newTrx.desc;
+    } else {
+      const matchedPkg = packages.find((p) => newTrx.desc.includes(p.name));
+      const sRate = matchedPkg?.salesCommissionRate || (newTrx.type === 'Membership' ? 4 : 3);
+      totalSalesCommission = matchedPkg?.salesCommissionNominal
+        ? matchedPkg.salesCommissionNominal
+        : Math.round((newTrx.amount * sRate) / 100);
+      pkgSourceLabel = matchedPkg?.name || newTrx.desc;
+    }
+
+    if (totalSalesCommission > 0 && closingPicIds.length > 0) {
+      const perStaffComm = Math.round(totalSalesCommission / closingPicIds.length);
+      const firstMemberName = updatedMembersList.map((m) => m.name).join(', ') || newTrx.customer || 'Member';
+      const firstMemberId = updatedMembersList[0]?.id || newTrx.memberId;
+      const newSalesRecords: SalesCommissionRecord[] = closingPicIds.map((sId) => {
+        const staffObj = staffUsers.find((u) => u.id === sId) || currentUser;
+        return {
+          id: 'SCOMM-' + Math.floor(100000 + Math.random() * 900000),
+          trxId: newTrx.id,
+          date: newTrx.date || APP_TODAY,
+          staffId: sId,
+          staffName: staffObj?.name || 'Staff Kasir',
+          memberId: firstMemberId,
+          memberName: firstMemberName,
+          packageId: newTrx.bundleId || 'PKG',
+          packageName: pkgSourceLabel,
+          packageCat: (newTrx.type as any) || 'Membership',
+          packagePrice: newTrx.amount,
+          commissionRate: 0,
+          commissionAmount: perStaffComm,
+          paymentStatus: 'LUNAS',
+          notes: `Komisi penjualan ${pkgSourceLabel} (${closingPicIds.length > 1 ? 'Bagi Tim' : 'Solo'})`
+        };
+      });
+      setSalesCommissions((prev) => [...newSalesRecords, ...prev]);
     }
 
     // Update members list
@@ -1772,6 +1882,7 @@ export default function App() {
         onToggleSidebar={handleToggleDesktopSidebar}
         onToggleMobileSidebar={() => setIsSidebarOpen(!isSidebarOpen)}
         isSidebarCollapsed={isDesktopCollapsed}
+        onOpenAddBranchModal={() => setIsAddBranchModalOpen(true)}
         onOpenSettings={(subTab) => {
           if (subTab) {
             setActiveTab(`settings-${subTab}` as any);
@@ -1827,6 +1938,17 @@ export default function App() {
               staffAttendances={staffAttendances}
               attendances={attendances}
               currentUser={currentUser}
+              ptPurchases={ptPurchases}
+              bundlePackages={bundlePackages}
+              transactions={transactions}
+              trainerCommissions={trainerCommissions}
+              onUpdateMember={(upMem) => {
+                setMembers((prev) => prev.map((m) => (m.id === upMem.id ? upMem : m)));
+                saveMemberToFirestore(upMem).catch(console.error);
+              }}
+              onUpdatePTPurchase={(upP) => {
+                setPtPurchases((prev) => prev.map((p) => (p.id === upP.id ? upP : p)));
+              }}
               onNavigateTab={(tab) => setActiveTab(tab)}
               onOpenMemberDetail={(m) => setActiveDetailMember(m)}
               onUpdateSchedule={(upSch) =>
@@ -1879,6 +2001,8 @@ export default function App() {
               currentUser={currentUser}
               onPurchasePackage={handlePurchasePackage}
               onAddPackage={(pkg) => setPackages([...packages, pkg])}
+              onUpdatePackage={(pkg) => setPackages((prev) => prev.map((p) => (p.id === pkg.id ? pkg : p)))}
+              onDeletePackage={(pkgId) => setPackages((prev) => prev.filter((p) => p.id !== pkgId))}
               onOpenBundlingManager={() => setIsBundlingModalOpen(true)}
               onOpenBundlingReports={() => setActiveTab('bundling-reports')}
               isStoreClosed={isStoreClosed}
@@ -2133,6 +2257,26 @@ export default function App() {
             />
           )}
 
+          {activeTab === 'laporan-bulanan' && (
+            <FinanceView
+              transactions={transactions}
+              pettyCashList={pettyCashList}
+              closingRecords={closingRecords}
+              currentUser={currentUser}
+              isStoreClosed={isStoreClosed}
+              initialSubTab="bulanan"
+              onPayInstallment={handlePayInstallment}
+              onBatchPayInstallment={handleBatchPayInstallment}
+              onAddPettyCash={(pc) => setPettyCashList([pc, ...pettyCashList])}
+              onUpdatePettyCashList={setPettyCashList}
+              onExecuteDailyClosing={handleExecuteDailyClosing}
+              onVoidTransaction={handleVoidTransaction}
+              onReprintReceipt={(trx) => setActiveReceipt(trx)}
+              onUpdatePaymentMethod={handleUpdatePaymentMethod}
+              showToast={showToast}
+            />
+          )}
+
           {activeTab === 'tutup-toko' && (
             <FinanceView
               transactions={transactions}
@@ -2170,6 +2314,31 @@ export default function App() {
               onDeleteStaff={handleDeleteStaff}
               onSaveLeaveRequest={handleSaveLeaveRequest}
               onApproveLeaveRequest={handleApproveLeaveRequest}
+              packages={packages}
+              trainerCommissions={trainerCommissions}
+              salesCommissions={salesCommissions}
+              showToast={showToast}
+            />
+          )}
+
+          {activeTab === 'google-sheets' && (
+            <GoogleSheetsSyncView
+              currentUser={currentUser}
+              members={members}
+              transactions={transactions}
+              products={products}
+              schedules={schedules}
+              onImportMembers={(importedMembers) => {
+                setMembers((prev) => {
+                  const existingIds = new Set(prev.map((m) => m.id));
+                  const newOnes = importedMembers.filter((im) => !existingIds.has(im.id));
+                  const updated = [...prev, ...newOnes];
+                  try {
+                    localStorage.setItem('rfa_members', JSON.stringify(updated));
+                  } catch {}
+                  return updated;
+                });
+              }}
               showToast={showToast}
             />
           )}
@@ -2177,6 +2346,7 @@ export default function App() {
           {(activeTab === 'settings' ||
             activeTab === 'settings-printer' ||
             activeTab === 'settings-roles' ||
+            activeTab === 'settings-branches' ||
             activeTab === 'settings-profile' ||
             activeTab === 'settings-finance' ||
             activeTab === 'settings-backup') && (
@@ -2212,11 +2382,14 @@ export default function App() {
                 if (imported.staffUsers) setStaffUsers(imported.staffUsers);
               }}
               showToast={showToast}
+              onNavigateToGoogleSheets={() => setActiveTab('google-sheets')}
               initialSubTab={
                 activeTab === 'settings-printer'
                   ? 'printer'
                   : activeTab === 'settings-roles'
                   ? 'roles'
+                  : activeTab === 'settings-branches'
+                  ? 'branches'
                   : activeTab === 'settings-profile'
                   ? 'profile'
                   : activeTab === 'settings-finance'
@@ -2274,6 +2447,19 @@ export default function App() {
           setActiveUnfreezeMember(m);
           setActiveUnfreezeRecord(rec || null);
         }}
+        onUpdateMember={(updatedMember) => {
+          setMembers((prev) => prev.map((m) => (m.id === updatedMember.id ? updatedMember : m)));
+          setActiveDetailMember(updatedMember);
+          saveMemberToFirestore(updatedMember).catch((err) => {
+            console.warn('Firestore update member photo notice:', err);
+          });
+          showToast(
+            'Foto Profil Tersimpan',
+            `Foto profil ${updatedMember.name} (${updatedMember.id}) berhasil diperbarui melalui kamera dan disinkronkan ke Cloud Firestore.`,
+            'success'
+          );
+        }}
+        showToast={showToast}
       />
 
       {/* 4. Freeze Membership Modal */}
@@ -2347,6 +2533,20 @@ export default function App() {
         isOpen={isThemeModalOpen}
         onClose={closeThemeModal}
         showToast={showToast}
+      />
+
+      {/* 6. Add Branch Global Modal */}
+      <AddBranchModal
+        isOpen={isAddBranchModalOpen}
+        onClose={() => setIsAddBranchModalOpen(false)}
+        onSave={(branchData) => {
+          const created = addBranch(branchData);
+          showToast(
+            'Cabang Baru Ditambahkan',
+            `Cabang ${created.name} (${created.code}) telah terdaftar dalam sistem.`,
+            'success'
+          );
+        }}
       />
 
       {/* FLOATING TOAST NOTIFICATION */}
