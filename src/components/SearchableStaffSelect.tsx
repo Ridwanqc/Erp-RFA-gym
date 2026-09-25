@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
-import { Search, ChevronDown, ChevronUp, Check, X, User, CheckCircle2 } from 'lucide-react';
+import { Search, ChevronDown, ChevronUp, Check, X, User, CheckCircle2, Lock, Unlock } from 'lucide-react';
 import { User as StaffUser, StaffAttendance } from '../types';
 import { APP_TODAY } from '../utils/formatters';
 
@@ -11,6 +11,9 @@ interface SearchableStaffSelectProps {
   placeholder?: string;
   label?: string;
   disabled?: boolean;
+  locked?: boolean;
+  onToggleLock?: (locked: boolean) => void;
+  lockBadgeText?: string;
 }
 
 export const SearchableStaffSelect: React.FC<SearchableStaffSelectProps> = ({
@@ -20,7 +23,10 @@ export const SearchableStaffSelect: React.FC<SearchableStaffSelectProps> = ({
   staffAttendances = [],
   placeholder = 'Pilih atau cari nama / role staf...',
   label = 'Pilih Staf',
-  disabled = false
+  disabled = false,
+  locked = false,
+  onToggleLock,
+  lockBadgeText = 'PIC Terkunci'
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -100,21 +106,39 @@ export const SearchableStaffSelect: React.FC<SearchableStaffSelectProps> = ({
           <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">
             {label}
           </label>
-          <span className="text-[10px] text-zinc-500 font-medium">Searchable Select</span>
+          <div className="flex items-center gap-1.5">
+            {locked && selectedStaff && (
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/15 text-amber-400 border border-amber-500/30">
+                <Lock className="w-3 h-3 text-amber-400" /> {lockBadgeText}
+              </span>
+            )}
+            {onToggleLock && selectedStaff && (
+              <button
+                type="button"
+                onClick={() => onToggleLock(!locked)}
+                className="text-[10px] text-zinc-400 hover:text-amber-400 font-semibold underline transition ml-1"
+              >
+                {locked ? 'Buka Kunci' : 'Kunci PIC'}
+              </button>
+            )}
+            {!locked && <span className="text-[10px] text-zinc-500 font-medium">Searchable Select</span>}
+          </div>
         </div>
       )}
 
       {/* TRIGGER */}
       <div
         role="button"
-        tabIndex={disabled ? -1 : 0}
-        onClick={() => !disabled && setIsOpen((prev) => !prev)}
-        className={`w-full bg-zinc-950 border rounded-2xl p-3 sm:p-3.5 transition flex items-center justify-between gap-3 cursor-pointer select-none text-left ${
-          isOpen
-            ? 'border-orange-500 ring-2 ring-orange-500/20 bg-zinc-950'
+        tabIndex={disabled || locked ? -1 : 0}
+        onClick={() => !disabled && !locked && setIsOpen((prev) => !prev)}
+        className={`w-full bg-zinc-950 border rounded-2xl p-3 sm:p-3.5 transition flex items-center justify-between gap-3 select-none text-left ${
+          locked && selectedStaff
+            ? 'border-amber-500/40 bg-amber-950/15 cursor-not-allowed'
+            : isOpen
+            ? 'border-orange-500 ring-2 ring-orange-500/20 bg-zinc-950 cursor-pointer'
             : selectedStaff
-            ? 'border-zinc-700 hover:border-zinc-600 bg-zinc-950/90'
-            : 'border-zinc-800 hover:border-zinc-700 bg-zinc-950'
+            ? 'border-zinc-700 hover:border-zinc-600 bg-zinc-950/90 cursor-pointer'
+            : 'border-zinc-800 hover:border-zinc-700 bg-zinc-950 cursor-pointer'
         } ${disabled ? 'opacity-50 cursor-not-allowed' : ''}`}
       >
         {selectedStaff ? (
@@ -164,7 +188,7 @@ export const SearchableStaffSelect: React.FC<SearchableStaffSelectProps> = ({
         )}
 
         <div className="flex items-center gap-1 shrink-0">
-          {selectedStaff && (
+          {!locked && selectedStaff && (
             <button
               type="button"
               onClick={handleClear}
@@ -175,7 +199,13 @@ export const SearchableStaffSelect: React.FC<SearchableStaffSelectProps> = ({
             </button>
           )}
           <div className="p-1 text-zinc-400">
-            {isOpen ? <ChevronUp className="w-4 h-4 text-orange-500" /> : <ChevronDown className="w-4 h-4" />}
+            {locked ? (
+              <Lock className="w-4 h-4 text-amber-400" />
+            ) : isOpen ? (
+              <ChevronUp className="w-4 h-4 text-orange-500" />
+            ) : (
+              <ChevronDown className="w-4 h-4" />
+            )}
           </div>
         </div>
       </div>

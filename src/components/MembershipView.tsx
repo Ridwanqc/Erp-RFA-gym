@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { Crown, Sparkles, Check, AlertCircle, Plus, DollarSign, Info, CreditCard, Wallet, QrCode, Building2, CheckCircle2, CalendarClock, Users, UserCheck, Copy, Gift, Layers, BarChart3, Settings, Percent, TrendingUp, Dumbbell, Search, Trash2, Edit3, HelpCircle, Lightbulb, Zap, ArrowRight, ShieldCheck } from 'lucide-react';
+import { Crown, Sparkles, Check, AlertCircle, Plus, DollarSign, Info, CreditCard, Wallet, QrCode, Building2, CheckCircle2, CalendarClock, Users, UserCheck, Copy, Gift, Layers, BarChart3, Settings, Percent, TrendingUp, Dumbbell, Search, Trash2, Edit3, HelpCircle, Lightbulb, Zap, ArrowRight, ShieldCheck, Lock, Unlock } from 'lucide-react';
 import { PackageItem, Member, User, Transaction, BundlePackage } from '../types';
 import { formatRp, getTimestamp, APP_TODAY } from '../utils/formatters';
 import { SearchableMemberSelect } from './SearchableMemberSelect';
@@ -49,10 +49,15 @@ export const MembershipView: React.FC<MembershipViewProps> = ({
   const [p1PicId, setP1PicId] = useState('');
   const [p2PicId, setP2PicId] = useState('');
   const [p3PicId, setP3PicId] = useState('');
+  const [isP1PicLocked, setIsP1PicLocked] = useState<boolean>(true);
+  const [isP2PicLocked, setIsP2PicLocked] = useState<boolean>(true);
+  const [isP3PicLocked, setIsP3PicLocked] = useState<boolean>(true);
 
   // Transaction settings
   const [trxType, setTrxType] = useState<'NEW MEMBERSHIP' | 'RENEWAL' | 'UPGRADE'>('NEW MEMBERSHIP');
   const [picSalesId, setPicSalesId] = useState('');
+  const [customClosingPicId, setCustomClosingPicId] = useState<string>('combined');
+  const [syncMemberPic, setSyncMemberPic] = useState<boolean>(true);
   const [discount, setDiscount] = useState('0');
 
   // Tipe Bayar: 'Lunas' (Penuh) vs 'Cicilan' (DP)
@@ -101,6 +106,7 @@ export const MembershipView: React.FC<MembershipViewProps> = ({
     if (m && m.picId) {
       setP1PicId(m.picId);
       setPicSalesId(m.picId);
+      setIsP1PicLocked(true);
     }
   };
 
@@ -110,8 +116,10 @@ export const MembershipView: React.FC<MembershipViewProps> = ({
     const m = members.find((x) => x.id === memberId);
     if (m && m.picId) {
       setP2PicId(m.picId);
+      setIsP2PicLocked(true);
     } else if (p1PicId && !p2PicId) {
       setP2PicId(p1PicId);
+      setIsP2PicLocked(true);
     }
   };
 
@@ -121,8 +129,10 @@ export const MembershipView: React.FC<MembershipViewProps> = ({
     const m = members.find((x) => x.id === memberId);
     if (m && m.picId) {
       setP3PicId(m.picId);
+      setIsP3PicLocked(true);
     } else if (p1PicId && !p3PicId) {
       setP3PicId(p1PicId);
+      setIsP3PicLocked(true);
     }
   };
 
@@ -223,8 +233,8 @@ export const MembershipView: React.FC<MembershipViewProps> = ({
       return;
     }
 
-    // Effective PIC assignments per participant
-    const effectiveP1Pic = p1PicId || picSalesId || currentUser?.id || '';
+    // Effective PIC assignments per participant (honors explicitly chosen/edited PIC)
+    const effectiveP1Pic = picSalesId || p1PicId || currentUser?.id || 'S01';
     const effectiveP2Pic = p2PicId || effectiveP1Pic;
     const effectiveP3Pic = p3PicId || effectiveP1Pic;
 
@@ -246,8 +256,8 @@ export const MembershipView: React.FC<MembershipViewProps> = ({
 
         let updatedMember: Member = {
           ...existing,
-          picId: assignedPicId || existing.picId,
-          picName: assignedStaff ? assignedStaff.name : (existing.picName || '')
+          picId: syncMemberPic ? (assignedPicId || existing.picId) : existing.picId,
+          picName: syncMemberPic ? (assignedStaff ? assignedStaff.name : (existing.picName || '')) : (existing.picName || '')
         };
 
         if (cat === 'Bundling') {
@@ -315,10 +325,12 @@ export const MembershipView: React.FC<MembershipViewProps> = ({
     });
 
     // Determine closing PICs for sales lead attribution:
-    // If participants > 1 (Couple/Trio), combine all participant PICs automatically (PIC 1, PIC 2, PIC 3)
+    // If participants > 1 (Couple/Trio), user can either combine all participant PICs automatically or select custom closing PIC
     let closingPicIds: string[] = [];
     if (type === 'Personal') {
-      closingPicIds = [picSalesId || effectiveP1Pic || currentUser?.id || 'S01'].filter(Boolean);
+      closingPicIds = [effectiveP1Pic].filter(Boolean);
+    } else if (customClosingPicId && customClosingPicId !== 'combined') {
+      closingPicIds = [customClosingPicId];
     } else if (type === 'Couple') {
       closingPicIds = [effectiveP1Pic, effectiveP2Pic].filter(Boolean);
     } else {
@@ -936,26 +948,85 @@ export const MembershipView: React.FC<MembershipViewProps> = ({
                   excludeMemberIds={[p2Id, p3Id].filter(Boolean)}
                 />
 
-                <div className="pt-2 border-t border-zinc-800/80">
-                  <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider block mb-1.5 ml-1">
-                    PIC / Trainer Khusus Peserta 1 <span className="text-orange-400">*</span>
-                  </label>
-                  <select
-                    value={p1PicId}
-                    onChange={(e) => {
-                      setP1PicId(e.target.value);
-                      if (!picSalesId) setPicSalesId(e.target.value);
-                    }}
-                    required
-                    className="w-full bg-zinc-950 border border-zinc-700 rounded-xl px-3.5 py-2.5 text-xs font-bold text-white outline-none focus:border-orange-500"
-                  >
-                    <option value="">-- Pilih PIC / Trainer Peserta 1 --</option>
-                    {staffUsers.map((s) => (
-                      <option key={s.id} value={s.id}>
-                        {s.name} ({s.roleName} - Shift {s.shift})
-                      </option>
-                    ))}
-                  </select>
+                <div className="pt-2 border-t border-zinc-800/80 space-y-1.5">
+                  <div className="flex items-center justify-between mb-1.5 ml-1">
+                    <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider block">
+                      {cat === 'Membership'
+                        ? 'PIC Penanggung Jawab Member (Front Desk / Sales)'
+                        : cat === 'PT'
+                        ? 'PIC / Trainer Khusus Peserta 1'
+                        : 'PIC Penanggung Jawab & Trainer Peserta 1'}{' '}
+                      <span className="text-orange-400">*</span>
+                    </label>
+                    {p1PicId && (
+                      <div className="flex items-center gap-1.5">
+                        {isP1PicLocked ? (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/15 text-amber-400 border border-amber-500/30">
+                            <Lock className="w-3 h-3 text-amber-400" /> Terkunci
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
+                            <Unlock className="w-3 h-3 text-emerald-400" /> Terbuka
+                          </span>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const next = !isP1PicLocked;
+                            setIsP1PicLocked(next);
+                            if (next) {
+                              showToast('PIC Dikunci 🔒', 'Pilihan PIC Peserta 1 dikunci.', 'info');
+                            } else {
+                              showToast('Kunci PIC Dibuka 🔓', 'Anda dapat memilih staf PIC lain.', 'info');
+                            }
+                          }}
+                          className="text-[10px] text-zinc-400 hover:text-amber-400 font-semibold underline transition ml-1"
+                        >
+                          {isP1PicLocked ? 'Buka Kunci' : 'Kunci PIC'}
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                  <div className="relative">
+                    <select
+                      value={p1PicId}
+                      disabled={isP1PicLocked && Boolean(p1PicId)}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setP1PicId(val);
+                        setPicSalesId(val);
+                        if (val) {
+                          setIsP1PicLocked(true);
+                          const chosen = staffUsers.find((s) => s.id === val);
+                          showToast('PIC Terpilih & Terkunci 🔒', `${chosen?.name || 'Staff'} telah dipilih dan otomatis dikunci.`, 'success');
+                        }
+                      }}
+                      required
+                      className={`w-full rounded-xl px-3.5 py-2.5 text-xs font-bold outline-none transition border ${
+                        isP1PicLocked && p1PicId
+                          ? 'bg-amber-950/20 border-amber-500/40 text-amber-200 cursor-not-allowed opacity-95'
+                          : 'bg-zinc-950 border-zinc-700 text-white focus:border-orange-500'
+                      }`}
+                    >
+                      <option value="">-- Pilih PIC Penanggung Jawab --</option>
+                      {staffUsers.map((s) => (
+                        <option key={s.id} value={s.id}>
+                          {s.name} ({s.roleName} - Shift {s.shift})
+                        </option>
+                      ))}
+                    </select>
+                    {isP1PicLocked && p1PicId && (
+                      <div className="absolute right-8 top-1/2 -translate-y-1/2 pointer-events-none text-amber-400">
+                        <Lock className="w-3.5 h-3.5" />
+                      </div>
+                    )}
+                  </div>
+                  {isP1PicLocked && p1PicId && (
+                    <p className="text-[10px] text-amber-400/90 flex items-center gap-1">
+                      <Lock className="w-3 h-3 shrink-0" />
+                      PIC telah dikunci saat member dipilih agar atribusi aman. Klik <em>Buka Kunci</em> jika ingin mengganti.
+                    </p>
+                  )}
                 </div>
               </div>
 
@@ -985,34 +1056,87 @@ export const MembershipView: React.FC<MembershipViewProps> = ({
                     excludeMemberIds={[p1Id, p3Id].filter(Boolean)}
                   />
 
-                  <div className="pt-2 border-t border-zinc-800/80">
+                  <div className="pt-2 border-t border-zinc-800/80 space-y-1.5">
                     <div className="flex items-center justify-between mb-1.5 ml-1">
                       <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider block">
                         PIC / Trainer Khusus Peserta 2 <span className="text-orange-400">*</span>
                       </label>
-                      {p1PicId && p2PicId !== p1PicId && (
-                        <button
-                          type="button"
-                          onClick={() => setP2PicId(p1PicId)}
-                          className="text-[10px] text-orange-400 hover:text-orange-300 font-bold"
-                        >
-                          Samakan dg PIC Peserta 1
-                        </button>
+                      <div className="flex items-center gap-2">
+                        {p1PicId && p2PicId !== p1PicId && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setP2PicId(p1PicId);
+                              setIsP2PicLocked(true);
+                            }}
+                            className="text-[10px] text-orange-400 hover:text-orange-300 font-bold"
+                          >
+                            Samakan dg PIC Peserta 1
+                          </button>
+                        )}
+                        {p2PicId && (
+                          <div className="flex items-center gap-1.5">
+                            {isP2PicLocked ? (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/15 text-amber-400 border border-amber-500/30">
+                                <Lock className="w-3 h-3 text-amber-400" /> Terkunci
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
+                                <Unlock className="w-3 h-3 text-emerald-400" /> Terbuka
+                              </span>
+                            )}
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const next = !isP2PicLocked;
+                                setIsP2PicLocked(next);
+                                if (next) {
+                                  showToast('PIC Dikunci 🔒', 'Pilihan PIC Peserta 2 dikunci.', 'info');
+                                } else {
+                                  showToast('Kunci PIC Dibuka 🔓', 'Anda dapat memilih staf PIC lain.', 'info');
+                                }
+                              }}
+                              className="text-[10px] text-zinc-400 hover:text-amber-400 font-semibold underline transition ml-1"
+                            >
+                              {isP2PicLocked ? 'Buka Kunci' : 'Kunci PIC'}
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                    <div className="relative">
+                      <select
+                        value={p2PicId}
+                        disabled={isP2PicLocked && Boolean(p2PicId)}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setP2PicId(val);
+                          if (val) {
+                            setIsP2PicLocked(true);
+                            const chosen = staffUsers.find((s) => s.id === val);
+                            showToast('PIC Terpilih & Terkunci 🔒', `${chosen?.name || 'Staff'} telah dipilih dan otomatis dikunci.`, 'success');
+                          }
+                        }}
+                        required
+                        className={`w-full rounded-xl px-3.5 py-2.5 text-xs font-bold outline-none transition border ${
+                          isP2PicLocked && p2PicId
+                            ? 'bg-amber-950/20 border-amber-500/40 text-amber-200 cursor-not-allowed opacity-95'
+                            : 'bg-zinc-950 border-zinc-700 text-white focus:border-orange-500'
+                        }`}
+                      >
+                        <option value="">-- Pilih PIC / Trainer Peserta 2 --</option>
+                        {staffUsers.map((s) => (
+                          <option key={s.id} value={s.id}>
+                            {s.name} ({s.roleName} - Shift {s.shift})
+                          </option>
+                        ))}
+                      </select>
+                      {isP2PicLocked && p2PicId && (
+                        <div className="absolute right-8 top-1/2 -translate-y-1/2 pointer-events-none text-amber-400">
+                          <Lock className="w-3.5 h-3.5" />
+                        </div>
                       )}
                     </div>
-                    <select
-                      value={p2PicId}
-                      onChange={(e) => setP2PicId(e.target.value)}
-                      required
-                      className="w-full bg-zinc-950 border border-zinc-700 rounded-xl px-3.5 py-2.5 text-xs font-bold text-white outline-none focus:border-orange-500"
-                    >
-                      <option value="">-- Pilih PIC / Trainer Peserta 2 --</option>
-                      {staffUsers.map((s) => (
-                        <option key={s.id} value={s.id}>
-                          {s.name} ({s.roleName} - Shift {s.shift})
-                        </option>
-                      ))}
-                    </select>
                   </div>
                 </div>
               )}
@@ -1043,34 +1167,87 @@ export const MembershipView: React.FC<MembershipViewProps> = ({
                     excludeMemberIds={[p1Id, p2Id].filter(Boolean)}
                   />
 
-                  <div className="pt-2 border-t border-zinc-800/80">
+                  <div className="pt-2 border-t border-zinc-800/80 space-y-1.5">
                     <div className="flex items-center justify-between mb-1.5 ml-1">
                       <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider block">
                         PIC / Trainer Khusus Peserta 3 <span className="text-orange-400">*</span>
                       </label>
-                      {p1PicId && p3PicId !== p1PicId && (
-                        <button
-                          type="button"
-                          onClick={() => setP3PicId(p1PicId)}
-                          className="text-[10px] text-orange-400 hover:text-orange-300 font-bold"
-                        >
-                          Samakan dg PIC Peserta 1
-                        </button>
+                      <div className="flex items-center gap-2">
+                        {p1PicId && p3PicId !== p1PicId && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setP3PicId(p1PicId);
+                              setIsP3PicLocked(true);
+                            }}
+                            className="text-[10px] text-orange-400 hover:text-orange-300 font-bold"
+                          >
+                            Samakan dg PIC Peserta 1
+                          </button>
+                        )}
+                        {p3PicId && (
+                          <div className="flex items-center gap-1.5">
+                            {isP3PicLocked ? (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/15 text-amber-400 border border-amber-500/30">
+                                <Lock className="w-3 h-3 text-amber-400" /> Terkunci
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
+                                <Unlock className="w-3 h-3 text-emerald-400" /> Terbuka
+                              </span>
+                            )}
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const next = !isP3PicLocked;
+                                setIsP3PicLocked(next);
+                                if (next) {
+                                  showToast('PIC Dikunci 🔒', 'Pilihan PIC Peserta 3 dikunci.', 'info');
+                                } else {
+                                  showToast('Kunci PIC Dibuka 🔓', 'Anda dapat memilih staf PIC lain.', 'info');
+                                }
+                              }}
+                              className="text-[10px] text-zinc-400 hover:text-amber-400 font-semibold underline transition ml-1"
+                            >
+                              {isP3PicLocked ? 'Buka Kunci' : 'Kunci PIC'}
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                    <div className="relative">
+                      <select
+                        value={p3PicId}
+                        disabled={isP3PicLocked && Boolean(p3PicId)}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setP3PicId(val);
+                          if (val) {
+                            setIsP3PicLocked(true);
+                            const chosen = staffUsers.find((s) => s.id === val);
+                            showToast('PIC Terpilih & Terkunci 🔒', `${chosen?.name || 'Staff'} telah dipilih dan otomatis dikunci.`, 'success');
+                          }
+                        }}
+                        required
+                        className={`w-full rounded-xl px-3.5 py-2.5 text-xs font-bold outline-none transition border ${
+                          isP3PicLocked && p3PicId
+                            ? 'bg-amber-950/20 border-amber-500/40 text-amber-200 cursor-not-allowed opacity-95'
+                            : 'bg-zinc-950 border-zinc-700 text-white focus:border-orange-500'
+                        }`}
+                      >
+                        <option value="">-- Pilih PIC / Trainer Peserta 3 --</option>
+                        {staffUsers.map((s) => (
+                          <option key={s.id} value={s.id}>
+                            {s.name} ({s.roleName} - Shift {s.shift})
+                          </option>
+                        ))}
+                      </select>
+                      {isP3PicLocked && p3PicId && (
+                        <div className="absolute right-8 top-1/2 -translate-y-1/2 pointer-events-none text-amber-400">
+                          <Lock className="w-3.5 h-3.5" />
+                        </div>
                       )}
                     </div>
-                    <select
-                      value={p3PicId}
-                      onChange={(e) => setP3PicId(e.target.value)}
-                      required
-                      className="w-full bg-zinc-950 border border-zinc-700 rounded-xl px-3.5 py-2.5 text-xs font-bold text-white outline-none focus:border-orange-500"
-                    >
-                      <option value="">-- Pilih PIC / Trainer Peserta 3 --</option>
-                      {staffUsers.map((s) => (
-                        <option key={s.id} value={s.id}>
-                          {s.name} ({s.roleName} - Shift {s.shift})
-                        </option>
-                      ))}
-                    </select>
                   </div>
                 </div>
               )}
@@ -1098,43 +1275,109 @@ export const MembershipView: React.FC<MembershipViewProps> = ({
                   <div>
                     <div className="flex items-center justify-between mb-1.5 ml-1">
                       <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider block">
-                        PIC Closing Penjualan (Sales Lead)
+                        PIC Penanggung Jawab / Closing Penjualan <span className="text-orange-400">*</span>
                       </label>
-                      <span className="text-[10px] text-zinc-500">
-                        Atribusi Transaksi
-                      </span>
+                      <div className="flex items-center gap-1.5">
+                        {isP1PicLocked ? (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/15 text-amber-400 border border-amber-500/30">
+                            <Lock className="w-3 h-3 text-amber-400" /> Terkunci
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
+                            <Unlock className="w-3 h-3 text-emerald-400" /> Terbuka
+                          </span>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const next = !isP1PicLocked;
+                            setIsP1PicLocked(next);
+                            if (next) {
+                              showToast('PIC Dikunci 🔒', 'Pilihan PIC dikunci.', 'info');
+                            } else {
+                              showToast('Kunci PIC Dibuka 🔓', 'Anda dapat memilih staf PIC lain.', 'info');
+                            }
+                          }}
+                          className="text-[10px] text-zinc-400 hover:text-amber-400 font-semibold underline transition ml-1"
+                        >
+                          {isP1PicLocked ? 'Buka Kunci' : 'Kunci PIC'}
+                        </button>
+                      </div>
                     </div>
-                    <select
-                      value={picSalesId || p1PicId}
-                      onChange={(e) => setPicSalesId(e.target.value)}
-                      className="w-full bg-zinc-950 border border-zinc-700 rounded-xl px-3.5 py-2.5 text-xs font-bold text-white outline-none focus:border-orange-500"
-                    >
-                      <option value="">-- Pilih PIC Closing --</option>
-                      {staffUsers.map((s) => (
-                        <option key={s.id} value={s.id}>
-                          {s.name} ({s.roleName})
-                        </option>
-                      ))}
-                    </select>
+                    <div className="relative">
+                      <select
+                        value={picSalesId || p1PicId || ''}
+                        disabled={isP1PicLocked && Boolean(picSalesId || p1PicId)}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setPicSalesId(val);
+                          setP1PicId(val);
+                          if (val) {
+                            setIsP1PicLocked(true);
+                          }
+                        }}
+                        className={`w-full border rounded-xl px-3.5 py-2.5 text-xs font-bold outline-none transition ${
+                          isP1PicLocked && Boolean(picSalesId || p1PicId)
+                            ? 'bg-amber-950/20 border-amber-500/40 text-amber-200 cursor-not-allowed opacity-95'
+                            : 'bg-zinc-950 border-zinc-700 text-white focus:border-orange-500'
+                        }`}
+                      >
+                        <option value="">-- Pilih PIC Penanggung Jawab / Closing --</option>
+                        {staffUsers.map((s) => (
+                          <option key={s.id} value={s.id}>
+                            {s.name} ({s.roleName} - Shift {s.shift})
+                          </option>
+                        ))}
+                      </select>
+                      {isP1PicLocked && Boolean(picSalesId || p1PicId) && (
+                        <div className="absolute right-8 top-1/2 -translate-y-1/2 pointer-events-none text-amber-400">
+                          <Lock className="w-3.5 h-3.5" />
+                        </div>
+                      )}
+                    </div>
                   </div>
                 )}
               </div>
 
-              {/* PIC Closing Penjualan untuk Peserta > 1 (Couple & Trio) - Gabung Semua PIC Peserta */}
+              {/* PIC Closing Penjualan untuk Peserta > 1 (Couple & Trio) - Fleksibel Gabung atau Pilih PIC Tertentu */}
               {type !== 'Personal' && (
                 <div className="bg-zinc-950 border border-zinc-800/90 rounded-2xl p-4 space-y-3">
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 pb-2.5 border-b border-zinc-800">
                     <div className="flex items-center gap-2">
                       <span className="text-[10px] font-bold text-zinc-300 uppercase tracking-wider block">
-                        PIC Closing Penjualan (Sales Lead)
+                        PIC Penanggung Jawab / Closing Penjualan
                       </span>
                       <span className="text-[10px] font-bold text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20">
-                        Gabung Semua PIC Peserta ({type === 'Couple' ? '2' : '3'} Orang)
+                        {customClosingPicId === 'combined'
+                          ? `Gabung Semua PIC Peserta (${type === 'Couple' ? '2' : '3'} Orang)`
+                          : 'PIC Khusus Dipilih'}
                       </span>
                     </div>
                     <span className="text-[11px] text-zinc-500">
-                      Otomatis menggabungkan PIC dari setiap peserta
+                      Dapat diedit atau digabung otomatis
                     </span>
+                  </div>
+
+                  <div>
+                    <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider block mb-1.5 ml-1">
+                      Pilihan PIC Closing Transaksi
+                    </label>
+                    <select
+                      value={customClosingPicId}
+                      onChange={(e) => setCustomClosingPicId(e.target.value)}
+                      className="w-full bg-zinc-900 border border-zinc-700 rounded-xl px-3.5 py-2.5 text-xs font-bold text-white outline-none focus:border-orange-500"
+                    >
+                      <option value="combined">
+                        ⚡ Gabung Seluruh PIC Peserta (Komisi & Evaluasi Dibagi Rata)
+                      </option>
+                      <optgroup label="Atau Pilih PIC Tunggal Tertentu:">
+                        {staffUsers.map((s) => (
+                          <option key={s.id} value={s.id}>
+                            {s.name} ({s.roleName} - Shift {s.shift})
+                          </option>
+                        ))}
+                      </optgroup>
+                    </select>
                   </div>
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
@@ -1190,22 +1433,40 @@ export const MembershipView: React.FC<MembershipViewProps> = ({
                     <UserCheck className="w-4 h-4 text-emerald-400 shrink-0" />
                     <div className="leading-snug">
                       <span className="font-bold text-white">
-                        Penanggung Jawab Closing Gabungan:{' '}
+                        Penanggung Jawab Closing Tercatat:{' '}
                       </span>
                       <span>
-                        {[p1PicId, p2PicId, type === 'Trio' ? p3PicId : null]
-                          .filter(Boolean)
-                          .map((pid) => staffUsers.find((s) => s.id === pid)?.name)
-                          .filter(Boolean)
-                          .join(' + ') || 'Semua PIC peserta yang dipilih'}
+                        {customClosingPicId && customClosingPicId !== 'combined'
+                          ? staffUsers.find((s) => s.id === customClosingPicId)?.name || customClosingPicId
+                          : [p1PicId, p2PicId, type === 'Trio' ? p3PicId : null]
+                              .filter(Boolean)
+                              .map((pid) => staffUsers.find((s) => s.id === pid)?.name)
+                              .filter(Boolean)
+                              .join(' + ') || 'Semua PIC peserta yang dipilih'}
                       </span>
                       <p className="text-[11px] text-zinc-400 mt-0.5">
-                        Closing transaksi akan tercatat untuk seluruh PIC yang mendampingi peserta, dengan atribusi dan evaluasi komisi yang terbagi rata.
+                        {customClosingPicId && customClosingPicId !== 'combined'
+                          ? 'Closing transaksi dialokasikan ke staf khusus yang dipilih di atas.'
+                          : 'Closing transaksi akan tercatat untuk seluruh PIC yang mendampingi peserta, dengan atribusi dan evaluasi komisi yang terbagi rata.'}
                       </p>
                     </div>
                   </div>
                 </div>
               )}
+
+              {/* Sync Member PIC Option */}
+              <div className="flex items-center gap-2.5 p-3 rounded-xl bg-zinc-900/60 border border-zinc-800 text-xs">
+                <input
+                  type="checkbox"
+                  id="syncMemberPic"
+                  checked={syncMemberPic}
+                  onChange={(e) => setSyncMemberPic(e.target.checked)}
+                  className="w-4 h-4 rounded text-orange-500 bg-zinc-950 border-zinc-700 focus:ring-orange-500 accent-orange-500 cursor-pointer"
+                />
+                <label htmlFor="syncMemberPic" className="text-zinc-300 font-medium cursor-pointer">
+                  Perbarui PIC penanggung jawab di profil member sesuai pilihan di formulir ini
+                </label>
+              </div>
             </div>
 
             {/* Discount Section */}

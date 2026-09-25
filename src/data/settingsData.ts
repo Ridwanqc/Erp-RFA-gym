@@ -138,6 +138,7 @@ export const DEFAULT_BRANCHES: GymBranch[] = [
 export const SYSTEM_MODULES: { id: string; name: string; category: string; desc: string }[] = [
   { id: 'dashboard', name: 'Dashboard Eksekutif', category: 'Overview', desc: 'Melihat ringkasan omset, grafik kehadiran, dan statistik penting' },
   { id: 'absen', name: 'Absensi Staf & Member', category: 'Overview', desc: 'Pencatatan check-in gate member dan presensi kehadiran staf' },
+  { id: 'front-desk-portal', name: 'Portal Kasir & Front Desk', category: 'Membership', desc: 'Pusat operasional member terpadu, check-in gate, renewal cepat, dan saran asisten pintar' },
   { id: 'membership', name: 'Keanggotaan & Paket', category: 'Membership', desc: 'Pendaftaran member baru, upgrade paket, dan perpanjangan langganan' },
   { id: 'freeze', name: 'Freeze / Cuti Member', category: 'Membership', desc: 'Pengajuan freeze, unfreeze, dan perpanjangan masa berlaku kartu' },
   { id: 'master-data', name: 'Direktori Member 360', category: 'Membership', desc: 'Akses riwayat 360, detail profil, dan kartu digital member' },
@@ -194,7 +195,7 @@ export const DEFAULT_ROLE_DEFINITIONS: Record<UserRole, RoleDefinition> = {
     badgeColor: 'bg-blue-500/20 text-blue-400 border-blue-500/30',
     isSystemRole: true,
     permissions: SYSTEM_MODULES.reduce((acc, m) => {
-      const allowed = ['absen', 'membership', 'freeze', 'master-data', 'bundling', 'crm', 'pos', 'products', 'piutang', 'laporan', 'tutup-toko'];
+      const allowed = ['absen', 'front-desk-portal', 'membership', 'freeze', 'master-data', 'bundling', 'crm', 'pos', 'products', 'piutang', 'laporan', 'tutup-toko'];
       const canAccess = allowed.includes(m.id);
       acc[m.id] = {
         view: canAccess || m.id === 'inventaris',

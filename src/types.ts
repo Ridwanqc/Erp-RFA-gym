@@ -68,6 +68,7 @@ export interface Member {
   ptQuota: number;
   picId: string;
   picName: string;
+  isPicLocked?: boolean;
   followUpStatus: string;
   photo: string;
   gender?: 'L' | 'P';
@@ -395,6 +396,21 @@ export interface StudioClass {
   room?: string;
 }
 
+export interface LockerSlot {
+  number: number;
+  label?: string; // e.g. "L-01", "P-01", "W-05"
+  gender: 'Pria' | 'Wanita' | 'Semua';
+  isOccupied: boolean;
+  memberId?: string;
+  memberName?: string;
+  timeIn?: string;
+  hasTowel?: boolean;
+  status?: 'Tersedia' | 'Terpakai' | 'Perbaikan' | 'VIP';
+  location?: string;
+  notes?: string;
+  depositItem?: string;
+}
+
 export interface Attendance {
   id: string;
   date: string; // YYYY-MM-DD
@@ -404,6 +420,11 @@ export interface Attendance {
   memberName: string;
   type: 'Reguler' | 'PT';
   badge: string;
+  lockerNumber?: number | string;
+  lockerGender?: 'Pria' | 'Wanita';
+  hasTowel?: boolean;
+  lockerReturned?: boolean;
+  notes?: string;
 }
 
 export type ShiftType = 'Pagi' | 'Siang' | 'Malam' | 'Off';
@@ -447,15 +468,52 @@ export interface StaffAttendance {
   location?: string;
 }
 
+export interface LeadFollowUpRecord {
+  id: string;
+  date: string;
+  time?: string;
+  picId: string;
+  picName: string;
+  picRole?: string;
+  method: 'WhatsApp' | 'Telepon' | 'Tatap Muka' | 'Instagram DM' | string;
+  result: string;
+  notes: string;
+}
+
+export interface LeadHandoverRecord {
+  id: string;
+  date: string;
+  time?: string;
+  fromPicId: string;
+  fromPicName: string;
+  toPicId: string;
+  toPicName: string;
+  reason: string;
+}
+
 export interface Lead {
   id: string;
   date?: string;
   name: string;
   phone: string;
-  source: 'Instagram' | 'Walk-in' | 'Referral' | string;
-  status: 'Baru' | 'Follow Up' | 'Trial' | 'Member';
+  source: 'Instagram' | 'Walk-in' | 'Referral' | 'Google / Website' | 'TikTok' | 'Event / Expo' | string;
+  status: 'Baru' | 'Follow Up' | 'Trial' | 'Member' | 'Lost' | string;
   notes?: string;
   picId?: string;
+  picName?: string;
+  picRole?: string;
+  picShift?: string;
+  assignedAt?: string;
+  assignedBy?: string;
+  priority?: 'Tinggi' | 'Sedang' | 'Rendah';
+  interest?: string;
+  estimatedValue?: number;
+  lastFollowUpDate?: string;
+  nextFollowUpDate?: string;
+  followUpHistory?: LeadFollowUpRecord[];
+  handoverHistory?: LeadHandoverRecord[];
+  lostReason?: string;
+  tags?: string[];
 }
 
 export interface FollowUpLog {

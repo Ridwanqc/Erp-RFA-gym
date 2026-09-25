@@ -15,15 +15,20 @@ import {
   CheckCircle2,
   Eye,
   Mail,
-  MapPin
+  MapPin,
+  Download,
+  Upload
 } from 'lucide-react';
 import { User, ShiftType } from '../../types';
 import { formatRp, APP_TODAY } from '../../utils/formatters';
+import { DataImportModal } from '../DataImportModal';
+import { DataExportModal } from '../DataExportModal';
 
 interface StaffDirectoryTabProps {
   staffUsers: User[];
   onSaveStaff: (user: User, isNew: boolean) => void;
   onDeleteStaff: (id: string) => void;
+  onImportStaff?: (staff: User[], mode: 'merge' | 'skip_existing' | 'generate_new') => void;
   showToast: (title: string, message: string, type: 'success' | 'error' | 'warning' | 'info') => void;
 }
 
@@ -31,6 +36,7 @@ export const StaffDirectoryTab: React.FC<StaffDirectoryTabProps> = ({
   staffUsers,
   onSaveStaff,
   onDeleteStaff,
+  onImportStaff,
   showToast
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
@@ -41,6 +47,8 @@ export const StaffDirectoryTab: React.FC<StaffDirectoryTabProps> = ({
   // Modal states
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingStaff, setEditingStaff] = useState<User | null>(null);
+  const [isImportModalOpen, setIsImportModalOpen] = useState(false);
+  const [isExportModalOpen, setIsExportModalOpen] = useState(false);
 
   // Form states
   const [formId, setFormId] = useState('');
@@ -268,6 +276,22 @@ export const StaffDirectoryTab: React.FC<StaffDirectoryTabProps> = ({
               List
             </button>
           </div>
+
+          <button
+            onClick={() => setIsExportModalOpen(true)}
+            className="px-3.5 py-2 bg-zinc-950 hover:bg-zinc-800 text-zinc-300 hover:text-white font-bold rounded-xl text-xs transition flex items-center gap-1.5 border border-zinc-800 shadow-sm"
+            title="Export Data Karyawan (Excel / CSV)"
+          >
+            <Download className="w-3.5 h-3.5 text-emerald-400" /> Export Karyawan
+          </button>
+
+          <button
+            onClick={() => setIsImportModalOpen(true)}
+            className="px-3.5 py-2 bg-zinc-950 hover:bg-zinc-800 text-zinc-300 hover:text-white font-bold rounded-xl text-xs transition flex items-center gap-1.5 border border-zinc-800 shadow-sm"
+            title="Import Data Karyawan (Excel / CSV)"
+          >
+            <Upload className="w-3.5 h-3.5 text-orange-400" /> Import Karyawan
+          </button>
 
           <button
             onClick={handleOpenAdd}
@@ -738,6 +762,34 @@ export const StaffDirectoryTab: React.FC<StaffDirectoryTabProps> = ({
           </div>
         </div>
       )}
+      {/* MODAL: IMPORT KARYAWAN (EXCEL & CSV) */}
+      <DataImportModal
+        isOpen={isImportModalOpen}
+        onClose={() => setIsImportModalOpen(false)}
+        type="staff"
+        existingMembers={[]}
+        existingStaff={staffUsers}
+        onImportComplete={(importedItems, mode) => {
+          if (onImportStaff) {
+            onImportStaff(importedItems as User[], mode);
+          } else {
+            (importedItems as User[]).forEach((s) => onSaveStaff(s, true));
+            showToast('Import Selesai', `Berhasil mengimpor ${importedItems.length} data karyawan.`, 'success');
+          }
+        }}
+        showToast={showToast}
+      />
+
+      {/* MODAL: EXPORT KARYAWAN (EXCEL & CSV) */}
+      <DataExportModal
+        isOpen={isExportModalOpen}
+        onClose={() => setIsExportModalOpen(false)}
+        type="staff"
+        allItems={staffUsers}
+        filteredItems={filteredStaff}
+        filterLabel={`${filterRole !== 'all' ? `Role: ${filterRole} ` : ''}${searchQuery ? `Pencarian: "${searchQuery}"` : ''}`}
+        showToast={showToast}
+      />
     </div>
   );
 };

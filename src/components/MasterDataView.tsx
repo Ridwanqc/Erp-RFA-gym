@@ -1,8 +1,10 @@
 import React, { useState, useMemo } from 'react';
-import { Users, Plus, IdCard, Eye, PenTool, Trash2, Camera, ShieldCheck, FileText, CheckCircle2, Upload, X, Search, Filter, ArrowUpDown, RotateCcw } from 'lucide-react';
+import { Users, Plus, IdCard, Eye, PenTool, Trash2, Camera, ShieldCheck, FileText, CheckCircle2, Upload, Download, X, Search, Filter, ArrowUpDown, RotateCcw, FileSpreadsheet, Lock, Unlock } from 'lucide-react';
 import { Member, User, UserRole } from '../types';
 import { APP_TODAY } from '../utils/formatters';
 import { IdentityCardModal } from './IdentityCardModal';
+import { DataImportModal } from './DataImportModal';
+import { DataExportModal } from './DataExportModal';
 
 interface MasterDataViewProps {
   members: Member[];
@@ -13,6 +15,8 @@ interface MasterDataViewProps {
   onDeleteMember: (memberId: string) => void;
   onSaveStaff: (staff: User) => void;
   onDeleteStaff: (staffId: string) => void;
+  onImportMembers?: (members: Member[], mode: 'merge' | 'skip_existing' | 'generate_new') => void;
+  onImportStaff?: (staff: User[], mode: 'merge' | 'skip_existing' | 'generate_new') => void;
   showToast: (title: string, message: string, type: 'success' | 'error' | 'warning' | 'info') => void;
 }
 
@@ -25,9 +29,16 @@ export const MasterDataView: React.FC<MasterDataViewProps> = ({
   onDeleteMember,
   onSaveStaff,
   onDeleteStaff,
+  onImportMembers,
+  onImportStaff,
   showToast
 }) => {
   const [activeTab, setActiveTab] = useState<'member' | 'staff'>('member');
+
+  // Import & Export Modal State
+  const [isImportModalOpen, setIsImportModalOpen] = useState(false);
+  const [isExportModalOpen, setIsExportModalOpen] = useState(false);
+  const [importExportTarget, setImportExportTarget] = useState<'member' | 'staff'>('member');
 
   // Search & Filter State
   const [memberSearchQuery, setMemberSearchQuery] = useState('');
@@ -68,6 +79,7 @@ export const MasterDataView: React.FC<MasterDataViewProps> = ({
 
   // Member specific
   const [memberPicId, setMemberPicId] = useState('');
+  const [isPicLocked, setIsPicLocked] = useState(false);
 
   const openAddModal = () => {
     setIsEditMode(false);
@@ -85,7 +97,8 @@ export const MasterDataView: React.FC<MasterDataViewProps> = ({
     setAccId('');
     setPassword('123');
     setStaffRole('kasir');
-    setMemberPicId(staffUsers[0]?.id || 'S01');
+    setMemberPicId('');
+    setIsPicLocked(false);
     setIsModalOpen(true);
   };
 
@@ -111,6 +124,7 @@ export const MasterDataView: React.FC<MasterDataViewProps> = ({
     } else {
       // Member
       setMemberPicId(item.picId);
+      setIsPicLocked(Boolean(item.picId));
     }
     setIsModalOpen(true);
   };
@@ -144,6 +158,10 @@ export const MasterDataView: React.FC<MasterDataViewProps> = ({
       `https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=200&auto=format&fit=crop`;
 
     if (activeTab === 'member') {
+      if (!memberPicId) {
+        showToast('Peringatan', 'Silakan pilih staf PIC penanggung jawab member terlebih dahulu.', 'warning');
+        return;
+      }
       const picObj = staffUsers.find((s) => s.id === memberPicId);
       const memberData: Member = {
         id: targetId,
@@ -157,6 +175,7 @@ export const MasterDataView: React.FC<MasterDataViewProps> = ({
         ptQuota: isEditMode ? members.find((m) => m.id === targetId)?.ptQuota || 0 : 0,
         picId: picObj ? picObj.id : 'S01',
         picName: picObj ? picObj.name : 'Admin',
+        isPicLocked: true,
         followUpStatus: isEditMode
           ? members.find((m) => m.id === targetId)?.followUpStatus || 'BELUM DIHUBUNGI'
           : 'BELUM DIHUBUNGI',
@@ -314,12 +333,34 @@ export const MasterDataView: React.FC<MasterDataViewProps> = ({
             </button>
           </div>
 
-          <button
-            onClick={openAddModal}
-            className="bg-orange-500 hover:bg-orange-600 text-white font-bold px-4 py-2.5 rounded-xl text-xs shadow-md transition flex items-center gap-1.5"
-          >
-            <Plus className="w-4 h-4" /> Registrasi {activeTab === 'member' ? 'Member' : 'Staf'}
-          </button>
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              onClick={() => {
+                setImportExportTarget(activeTab);
+                setIsExportModalOpen(true);
+              }}
+              className="px-3.5 py-2.5 bg-zinc-900 hover:bg-zinc-800 text-zinc-300 hover:text-white font-bold rounded-2xl text-xs transition flex items-center gap-1.5 border border-zinc-700/80 shadow-sm"
+              title={`Export Data ${activeTab === 'member' ? 'Member' : 'Karyawan'} (Excel / CSV)`}
+            >
+              <Download className="w-3.5 h-3.5 text-emerald-400" /> Export {activeTab === 'member' ? 'Member' : 'Karyawan'}
+            </button>
+            <button
+              onClick={() => {
+                setImportExportTarget(activeTab);
+                setIsImportModalOpen(true);
+              }}
+              className="px-3.5 py-2.5 bg-zinc-900 hover:bg-zinc-800 text-zinc-300 hover:text-white font-bold rounded-2xl text-xs transition flex items-center gap-1.5 border border-zinc-700/80 shadow-sm"
+              title={`Import Data ${activeTab === 'member' ? 'Member' : 'Karyawan'} (Excel / CSV)`}
+            >
+              <Upload className="w-3.5 h-3.5 text-orange-400" /> Import {activeTab === 'member' ? 'Member' : 'Karyawan'}
+            </button>
+            <button
+              onClick={openAddModal}
+              className="bg-orange-500 hover:bg-orange-600 text-white font-bold px-4 py-2.5 rounded-2xl text-xs shadow-md transition flex items-center gap-1.5"
+            >
+              <Plus className="w-4 h-4" /> Registrasi {activeTab === 'member' ? 'Member' : 'Staf'}
+            </button>
+          </div>
         </div>
       </div>
 
@@ -609,7 +650,106 @@ export const MasterDataView: React.FC<MasterDataViewProps> = ({
 
       {/* VIEW 2: STAFF TABLE */}
       {activeTab === 'staff' && (
-        <div className="bg-zinc-900/90 border border-zinc-800 rounded-3xl overflow-hidden shadow-sm">
+        <div className="space-y-4">
+          {/* SEARCH & FILTER BAR UNTUK STAF */}
+          <div className="bg-zinc-900/90 border border-zinc-800 rounded-3xl p-4 sm:p-5 space-y-3.5 shadow-md">
+            <div className="flex flex-col sm:flex-row gap-3 items-stretch sm:items-center justify-between">
+              {/* Search Input */}
+              <div className="relative flex-1">
+                <Search className="w-4 h-4 text-zinc-500 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                <input
+                  type="text"
+                  value={staffSearchQuery}
+                  onChange={(e) => setStaffSearchQuery(e.target.value)}
+                  placeholder="Cari karyawan: nama lengkap, ID (S..), role, no. HP/WhatsApp, username..."
+                  className="w-full bg-zinc-950 border border-zinc-700/80 rounded-2xl pl-10 pr-9 py-2.5 text-xs sm:text-sm text-white placeholder:text-zinc-500 outline-none focus:border-orange-500 transition"
+                />
+                {staffSearchQuery && (
+                  <button
+                    type="button"
+                    onClick={() => setStaffSearchQuery('')}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-white p-0.5 rounded-lg transition"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                )}
+              </div>
+
+              {/* Role Dropdown Filter */}
+              <div className="flex items-center bg-zinc-950 border border-zinc-700/80 rounded-2xl px-3 py-2 text-xs text-white">
+                <Filter className="w-3.5 h-3.5 text-zinc-400 mr-2 shrink-0" />
+                <select
+                  value={staffRoleFilter}
+                  onChange={(e) => setStaffRoleFilter(e.target.value)}
+                  className="bg-transparent text-white outline-none cursor-pointer pr-2 text-xs font-semibold"
+                >
+                  <option value="all" className="bg-zinc-900 text-white">Semua Posisi ({staffUsers.length})</option>
+                  <option value="admin" className="bg-zinc-900 text-white">System Admin</option>
+                  <option value="kasir" className="bg-zinc-900 text-white">Kasir & Front Desk</option>
+                  <option value="leader_pt" className="bg-zinc-900 text-white">Leader PT</option>
+                  <option value="pt" className="bg-zinc-900 text-white">Pelatih PT</option>
+                  <option value="teknisi" className="bg-zinc-900 text-white">Teknisi</option>
+                </select>
+              </div>
+            </div>
+
+            {/* Quick Pills */}
+            <div className="flex flex-wrap items-center justify-between gap-3 pt-2.5 border-t border-zinc-800 text-xs">
+              <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-none py-0.5">
+                <span className="text-[11px] font-bold text-zinc-500 mr-1 shrink-0">Filter Posisi:</span>
+                <button
+                  type="button"
+                  onClick={() => setStaffRoleFilter('all')}
+                  className={`text-xs font-bold px-3 py-1 rounded-xl transition shrink-0 ${
+                    staffRoleFilter === 'all'
+                      ? 'bg-zinc-200 text-black shadow-sm font-black'
+                      : 'bg-zinc-950 text-zinc-400 hover:text-white border border-zinc-800'
+                  }`}
+                >
+                  Semua ({staffUsers.length})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setStaffRoleFilter('pt')}
+                  className={`text-xs font-bold px-3 py-1 rounded-xl transition shrink-0 ${
+                    staffRoleFilter === 'pt'
+                      ? 'bg-orange-500 text-white shadow-sm font-black'
+                      : 'bg-zinc-950 text-orange-400 hover:text-orange-300 border border-zinc-800'
+                  }`}
+                >
+                  Pelatih PT ({staffUsers.filter((s) => s.role === 'pt').length})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setStaffRoleFilter('kasir')}
+                  className={`text-xs font-bold px-3 py-1 rounded-xl transition shrink-0 ${
+                    staffRoleFilter === 'kasir'
+                      ? 'bg-emerald-500 text-white shadow-sm font-black'
+                      : 'bg-zinc-950 text-emerald-400 hover:text-emerald-300 border border-zinc-800'
+                  }`}
+                >
+                  Kasir / Front Desk ({staffUsers.filter((s) => s.role === 'kasir').length})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setStaffRoleFilter('admin')}
+                  className={`text-xs font-bold px-3 py-1 rounded-xl transition shrink-0 ${
+                    staffRoleFilter === 'admin'
+                      ? 'bg-purple-500 text-white shadow-sm font-black'
+                      : 'bg-zinc-950 text-purple-400 hover:text-purple-300 border border-zinc-800'
+                  }`}
+                >
+                  Admin / Manager ({staffUsers.filter((s) => s.role === 'admin').length})
+                </button>
+              </div>
+
+              <div className="text-[11px] text-zinc-400 font-medium">
+                Menampilkan <strong className="text-white">{filteredStaff.length}</strong> dari {staffUsers.length} karyawan
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-zinc-900/90 border border-zinc-800 rounded-3xl overflow-hidden shadow-sm">
           <div className="overflow-x-auto scrollbar-thin scrollbar-thumb-zinc-800">
             <table className="w-full text-left whitespace-nowrap min-w-[760px]">
               <thead className="bg-zinc-950 text-zinc-400 border-b border-zinc-800 text-[10px] uppercase font-bold">
@@ -704,6 +844,7 @@ export const MasterDataView: React.FC<MasterDataViewProps> = ({
               </tbody>
             </table>
           </div>
+        </div>
         </div>
       )}
 
@@ -807,22 +948,86 @@ export const MasterDataView: React.FC<MasterDataViewProps> = ({
                 </div>
 
                 {activeTab === 'member' ? (
-                  <div>
-                    <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-wider mb-1">
-                      PIC Sales (Penanggung Jawab Member)
-                    </label>
-                    <select
-                      value={memberPicId}
-                      onChange={(e) => setMemberPicId(e.target.value)}
-                      required
-                      className="w-full bg-zinc-900 border border-zinc-700 rounded-xl px-3 py-2 text-xs text-white outline-none focus:border-orange-500"
-                    >
-                      {staffUsers.map((s) => (
-                        <option key={s.id} value={s.id}>
-                          {s.name} ({s.roleName})
-                        </option>
-                      ))}
-                    </select>
+                  <div className="space-y-1.5 p-3 rounded-2xl bg-zinc-950/70 border border-zinc-800">
+                    <div className="flex items-center justify-between">
+                      <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider flex items-center gap-1.5">
+                        PIC Sales (Penanggung Jawab Member) <span className="text-orange-400">*</span>
+                      </label>
+                      {memberPicId && (
+                        <div className="flex items-center gap-1.5">
+                          {isPicLocked ? (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/15 text-amber-400 border border-amber-500/30">
+                              <Lock className="w-3 h-3 text-amber-400" /> Terkunci
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
+                              <Unlock className="w-3 h-3 text-emerald-400" /> Terbuka
+                            </span>
+                          )}
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const nextLocked = !isPicLocked;
+                              setIsPicLocked(nextLocked);
+                              if (nextLocked) {
+                                showToast('PIC Dikunci 🔒', 'Pilihan PIC berhasil dikunci.', 'info');
+                              } else {
+                                showToast('Kunci PIC Dibuka 🔓', 'Anda sekarang dapat memilih atau mengganti staf PIC.', 'info');
+                              }
+                            }}
+                            className="text-[10px] text-zinc-400 hover:text-amber-400 font-semibold underline transition ml-1"
+                            title={isPicLocked ? 'Buka kunci untuk mengganti PIC' : 'Kunci pilihan PIC'}
+                          >
+                            {isPicLocked ? 'Buka Kunci' : 'Kunci PIC'}
+                          </button>
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="relative">
+                      <select
+                        value={memberPicId}
+                        disabled={isPicLocked && Boolean(memberPicId)}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setMemberPicId(val);
+                          if (val) {
+                            setIsPicLocked(true);
+                            const chosen = staffUsers.find((s) => s.id === val);
+                            showToast('PIC Terpilih & Terkunci 🔒', `${chosen?.name || 'Staff'} telah dipilih dan otomatis dikunci.`, 'success');
+                          }
+                        }}
+                        required
+                        className={`w-full border rounded-xl px-3 py-2 text-xs outline-none transition ${
+                          isPicLocked && memberPicId
+                            ? 'bg-amber-950/20 border-amber-500/40 text-amber-200 cursor-not-allowed opacity-95 font-medium'
+                            : 'bg-zinc-900 border-zinc-700 text-white focus:border-orange-500'
+                        }`}
+                      >
+                        <option value="">-- Pilih PIC Penanggung Jawab --</option>
+                        {staffUsers.map((s) => (
+                          <option key={s.id} value={s.id}>
+                            {s.name} ({s.roleName}) {s.shift ? `• Shift ${s.shift}` : ''}
+                          </option>
+                        ))}
+                      </select>
+                      {isPicLocked && memberPicId && (
+                        <div className="absolute right-8 top-1/2 -translate-y-1/2 pointer-events-none text-amber-400">
+                          <Lock className="w-3.5 h-3.5" />
+                        </div>
+                      )}
+                    </div>
+
+                    {isPicLocked && memberPicId ? (
+                      <p className="text-[10px] text-amber-400/90 flex items-center gap-1.5 pt-0.5">
+                        <Lock className="w-3 h-3 shrink-0 text-amber-400" />
+                        <span>PIC <strong>{staffUsers.find((s) => s.id === memberPicId)?.name}</strong> telah dikunci saat input member agar tidak berubah. Klik <em>Buka Kunci</em> jika ingin mengganti.</span>
+                      </p>
+                    ) : (
+                      <p className="text-[10px] text-zinc-500 pt-0.5">
+                        Pilih staf penanggung jawab member. Pilihan PIC otomatis dikunci saat dipilih.
+                      </p>
+                    )}
                   </div>
                 ) : (
                   <>
@@ -1019,6 +1224,48 @@ export const MasterDataView: React.FC<MasterDataViewProps> = ({
           setIsIdCardViewerOpen(false);
           openEditModal(person);
         }}
+      />
+
+      {/* MODAL: IMPORT DATA (EXCEL & CSV) */}
+      <DataImportModal
+        isOpen={isImportModalOpen}
+        onClose={() => setIsImportModalOpen(false)}
+        type={importExportTarget}
+        existingMembers={members}
+        existingStaff={staffUsers}
+        onImportComplete={(importedItems, mode) => {
+          if (importExportTarget === 'member') {
+            if (onImportMembers) {
+              onImportMembers(importedItems as Member[], mode);
+            } else {
+              (importedItems as Member[]).forEach((m) => onSaveMember(m));
+              showToast('Import Selesai', `Berhasil mengimpor ${importedItems.length} data member.`, 'success');
+            }
+          } else {
+            if (onImportStaff) {
+              onImportStaff(importedItems as User[], mode);
+            } else {
+              (importedItems as User[]).forEach((s) => onSaveStaff(s));
+              showToast('Import Selesai', `Berhasil mengimpor ${importedItems.length} data karyawan.`, 'success');
+            }
+          }
+        }}
+        showToast={showToast}
+      />
+
+      {/* MODAL: EXPORT DATA (EXCEL & CSV) */}
+      <DataExportModal
+        isOpen={isExportModalOpen}
+        onClose={() => setIsExportModalOpen(false)}
+        type={importExportTarget}
+        allItems={importExportTarget === 'member' ? members : staffUsers}
+        filteredItems={importExportTarget === 'member' ? filteredMembers : filteredStaff}
+        filterLabel={
+          importExportTarget === 'member'
+            ? `${memberStatusFilter !== 'all' ? `Status: ${memberStatusFilter.toUpperCase()} ` : ''}${memberSearchQuery ? `Pencarian: "${memberSearchQuery}"` : ''}`
+            : `${staffRoleFilter !== 'all' ? `Posisi: ${staffRoleFilter} ` : ''}${staffSearchQuery ? `Pencarian: "${staffSearchQuery}"` : ''}`
+        }
+        showToast={showToast}
       />
     </div>
   );

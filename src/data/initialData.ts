@@ -1904,10 +1904,180 @@ export const INITIAL_STAFF_ATTENDANCE: StaffAttendance[] = [
 ];
 
 export const INITIAL_LEADS: Lead[] = [
-  { id: 'L01', date: APP_TODAY, name: 'Bambang Sudiro', phone: '081288990011', source: 'Instagram', status: 'Baru', picId: 'S01' },
-  { id: 'L02', date: APP_TODAY, name: 'Clara Bella', phone: '081399887766', source: 'Walk-in', status: 'Follow Up', picId: 'S02' },
-  { id: 'L03', date: '2026-09-17', name: 'David Kevin', phone: '082166554433', source: 'Referral', status: 'Trial', picId: 'S03' },
-  { id: 'L04', date: '2026-09-16', name: 'Eka Saputra', phone: '085611223344', source: 'Instagram', status: 'Member', picId: 'S01' }
+  {
+    id: 'L01',
+    date: APP_TODAY,
+    name: 'Bambang Sudiro',
+    phone: '081288990011',
+    source: 'Instagram',
+    status: 'Baru',
+    picId: 'S02',
+    picName: 'Siti Kasir',
+    picRole: 'Kasir & Front Desk',
+    picShift: 'Siang',
+    assignedAt: '2026-09-24 10:15',
+    priority: 'Tinggi',
+    interest: 'Membership 3 Bulan',
+    estimatedValue: 850000,
+    notes: 'Tanya promo membership 3 bulan via DM Instagram. Ingin mulai gym pekan ini.',
+    lastFollowUpDate: APP_TODAY,
+    nextFollowUpDate: '2026-09-25',
+    followUpHistory: [
+      {
+        id: 'FU-L01-1',
+        date: APP_TODAY,
+        time: '10:30',
+        picId: 'S02',
+        picName: 'Siti Kasir',
+        picRole: 'Kasir & Front Desk',
+        method: 'WhatsApp',
+        result: 'Tertarik - Pertimbangkan Harga',
+        notes: 'Sudah dikirim price list dan video tur fasilitas gym.'
+      }
+    ]
+  },
+  {
+    id: 'L02',
+    date: APP_TODAY,
+    name: 'Clara Bella',
+    phone: '081399887766',
+    source: 'Walk-in',
+    status: 'Follow Up',
+    picId: 'S06',
+    picName: 'Sarah Wijaya',
+    picRole: 'Front Desk & CS',
+    picShift: 'Pagi',
+    assignedAt: '2026-09-24 08:45',
+    priority: 'Tinggi',
+    interest: 'Bundling Membership + PT 10 Sesi',
+    estimatedValue: 2400000,
+    notes: 'Datang langsung ke meja front desk pagi tadi, tertarik program fat loss dengan pendampingan pelatih.',
+    lastFollowUpDate: APP_TODAY,
+    nextFollowUpDate: '2026-09-25',
+    followUpHistory: [
+      {
+        id: 'FU-L02-1',
+        date: APP_TODAY,
+        time: '09:00',
+        picId: 'S06',
+        picName: 'Sarah Wijaya',
+        picRole: 'Front Desk & CS',
+        method: 'Tatap Muka',
+        result: 'Tertarik - Janji Trial',
+        notes: 'Janji coba trial fasilitas gratis sore ini jam 17:00.'
+      }
+    ],
+    handoverHistory: [
+      {
+        id: 'HO-L02-1',
+        date: APP_TODAY,
+        time: '11:00',
+        fromPicId: 'S01',
+        fromPicName: 'Budi Santoso',
+        toPicId: 'S06',
+        toPicName: 'Sarah Wijaya',
+        reason: 'Penyerahan dari penerimaan awal ke Front Desk shift pagi untuk follow up intensif.'
+      }
+    ]
+  },
+  {
+    id: 'L03',
+    date: '2026-09-23',
+    name: 'David Kevin',
+    phone: '082166554433',
+    source: 'Referral',
+    status: 'Trial',
+    picId: 'S03',
+    picName: 'Citra Lestari',
+    picRole: 'Leader PT',
+    picShift: 'Pagi',
+    assignedAt: '2026-09-23 14:00',
+    priority: 'Sedang',
+    interest: 'Paket PT 20 Sesi',
+    estimatedValue: 3500000,
+    notes: 'Rekomendasi dari member aktif M001 (Akbar). Sedang sesi trial kebugaran dan postur.',
+    lastFollowUpDate: '2026-09-23',
+    nextFollowUpDate: APP_TODAY,
+    followUpHistory: [
+      {
+        id: 'FU-L03-1',
+        date: '2026-09-23',
+        time: '16:00',
+        picId: 'S03',
+        picName: 'Citra Lestari',
+        picRole: 'Leader PT',
+        method: 'Tatap Muka',
+        result: 'Tertarik - Janji Trial',
+        notes: 'Trial body assessment dan fitness level test berjalan lancar. Respons sangat positif.'
+      }
+    ]
+  },
+  {
+    id: 'L04',
+    date: '2026-09-22',
+    name: 'Eka Saputra',
+    phone: '085611223344',
+    source: 'Instagram',
+    status: 'Member',
+    picId: 'S02',
+    picName: 'Siti Kasir',
+    picRole: 'Kasir & Front Desk',
+    picShift: 'Siang',
+    assignedAt: '2026-09-22 13:00',
+    priority: 'Tinggi',
+    interest: 'Membership 12 Bulan (Annual)',
+    estimatedValue: 2800000,
+    notes: 'Closing win! Telah mendaftar membership 1 tahun di loket kasir.',
+    lastFollowUpDate: '2026-09-22',
+    followUpHistory: [
+      {
+        id: 'FU-L04-1',
+        date: '2026-09-22',
+        time: '15:30',
+        picId: 'S02',
+        picName: 'Siti Kasir',
+        picRole: 'Kasir & Front Desk',
+        method: 'Tatap Muka',
+        result: 'Siap Jadi Member',
+        notes: 'Melakukan registrasi dan pembayaran via QRIS.'
+      }
+    ]
+  },
+  {
+    id: 'L05',
+    date: '2026-09-21',
+    name: 'Faisal Akbar',
+    phone: '081722334455',
+    source: 'Google / Website',
+    status: 'Lost',
+    picId: 'S06',
+    picName: 'Sarah Wijaya',
+    picRole: 'Front Desk & CS',
+    picShift: 'Pagi',
+    assignedAt: '2026-09-21 09:00',
+    priority: 'Rendah',
+    interest: 'Membership 1 Bulan',
+    estimatedValue: 350000,
+    lostReason: 'Lokasi terlalu jauh dari tempat tinggal / kantor baru.',
+    notes: 'Pindah domisili ke luar kota (Tangerang). Disimpan ke arsip lost untuk kampanye masa depan.'
+  },
+  {
+    id: 'L06',
+    date: APP_TODAY,
+    name: 'Gita Permata',
+    phone: '081900112233',
+    source: 'TikTok',
+    status: 'Baru',
+    picId: 'S02',
+    picName: 'Siti Kasir',
+    picRole: 'Kasir & Front Desk',
+    picShift: 'Siang',
+    assignedAt: '2026-09-24 11:20',
+    priority: 'Tinggi',
+    interest: 'Paket Studio Yoga & Zumba',
+    estimatedValue: 650000,
+    notes: 'Tertarik ikut kelas zumba & pilates setelah lihat konten TikTok GymPro.'
+  }
 ];
 
 export const INITIAL_FOLLOW_UPS: FollowUpLog[] = [

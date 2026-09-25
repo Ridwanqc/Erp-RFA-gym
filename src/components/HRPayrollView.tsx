@@ -46,6 +46,7 @@ interface HRPayrollViewProps {
   onDeleteAttendance?: (id: string) => void;
   onSaveStaff: (user: User, isNew: boolean) => void;
   onDeleteStaff: (id: string) => void;
+  onImportStaff?: (staff: User[], mode: 'merge' | 'skip_existing' | 'generate_new') => void;
   onSaveLeaveRequest: (leave: LeaveRequest, isNew: boolean) => void;
   onApproveLeaveRequest: (id: string, status: 'Approved' | 'Rejected', notes?: string) => void;
   showToast: (title: string, message: string, type: 'success' | 'error' | 'warning' | 'info') => void;
@@ -70,6 +71,7 @@ export const HRPayrollView: React.FC<HRPayrollViewProps> = ({
   onDeleteAttendance,
   onSaveStaff,
   onDeleteStaff,
+  onImportStaff,
   onSaveLeaveRequest,
   onApproveLeaveRequest,
   showToast
@@ -223,6 +225,7 @@ export const HRPayrollView: React.FC<HRPayrollViewProps> = ({
           staffUsers={staffUsers}
           onSaveStaff={onSaveStaff}
           onDeleteStaff={onDeleteStaff}
+          onImportStaff={onImportStaff}
           showToast={showToast}
         />
       )}

@@ -21,15 +21,17 @@ import {
   Smartphone
 } from 'lucide-react';
 import jsQR from 'jsqr';
-import { Member, Attendance } from '../types';
+import { Member, Attendance, LockerSlot } from '../types';
 import { getTimestamp, APP_TODAY } from '../utils/formatters';
 import { getMemberPassCode } from './IDCardModal';
+import { getRecommendedLocker } from '../data/lockerData';
 
 interface QRCodeScannerModalProps {
   isOpen: boolean;
   onClose: () => void;
   members: Member[];
   attendances: Attendance[];
+  lockers?: LockerSlot[];
   onAddAttendance: (newAtt: Attendance, memberToUpdate?: Member) => void;
   onCheckoutMember: (attId: string) => void;
   showToast: (title: string, message: string, type: 'success' | 'error' | 'warning' | 'info') => void;
@@ -107,6 +109,7 @@ export const QRCodeScannerModal: React.FC<QRCodeScannerModalProps> = ({
   onClose,
   members,
   attendances,
+  lockers = [],
   onAddAttendance,
   onCheckoutMember,
   showToast
@@ -247,6 +250,12 @@ export const QRCodeScannerModal: React.FC<QRCodeScannerModalProps> = ({
         updatedMember = { ...member, ptQuota: member.ptQuota - 1 };
       }
 
+      let allocatedLockerNum: number | undefined = undefined;
+      if (lockers && lockers.length > 0) {
+        const rec = getRecommendedLocker(lockers, member.gender);
+        if (rec) allocatedLockerNum = rec.number;
+      }
+
       const newAtt: Attendance = {
         id: 'ATT-' + Date.now(),
         date: APP_TODAY,
@@ -255,13 +264,19 @@ export const QRCodeScannerModal: React.FC<QRCodeScannerModalProps> = ({
         memberId: member.id,
         memberName: member.name,
         type: chosenType,
-        badge: chosenType === 'PT' ? 'Sesi PT' : 'Gym Reguler'
+        badge: chosenType === 'PT' ? 'Sesi PT' : 'Gym Reguler',
+        lockerNumber: allocatedLockerNum,
+        hasTowel: true
       };
 
       onAddAttendance(newAtt, updatedMember);
       playBeep(false);
       if ('vibrate' in navigator) navigator.vibrate?.(100);
-      showToast('Check-In Berhasil', `Selamat datang & berlatih, ${member.name}!`, 'success');
+      showToast(
+        'Check-In Berhasil',
+        `Selamat datang, ${member.name}!${allocatedLockerNum ? ` Kunci Loker #${allocatedLockerNum} (${member.gender === 'P' ? 'Wanita' : 'Pria'}) diserahkan.` : ''}`,
+        'success'
+      );
 
       setRecentScans((prev) => [
         {

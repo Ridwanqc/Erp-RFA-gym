@@ -50,8 +50,10 @@ import {
   MemberFreezeRecord,
   MembershipStatus,
   WorkSchedule,
-  LeaveRequest
+  LeaveRequest,
+  LockerSlot
 } from './types';
+import { INITIAL_LOCKERS } from './data/lockerData';
 import {
   INITIAL_BUNDLE_PACKAGES,
   INITIAL_MEMBER_MEMBERSHIPS,
@@ -85,7 +87,9 @@ import { LeaderPTDashboardView } from './components/LeaderPTDashboardView';
 import { TrainerPackagePerformanceView } from './components/TrainerPackagePerformanceView';
 import { TrainerPortalView } from './components/TrainerPortalView';
 import { BundlingReportsView } from './components/BundlingReportsView';
+import { FrontDeskPortalView } from './components/FrontDeskPortalView';
 import { InventoryView } from './components/InventoryView';
+import { LockerManagementView } from './components/LockerManagementView';
 import { MembershipFreezeView } from './components/MembershipFreezeView';
 import { INITIAL_FREEZE_RECORDS } from './data/freezeData';
 
@@ -260,6 +264,21 @@ export default function App() {
       return INITIAL_STAFF_ATTENDANCE;
     }
   });
+
+  const [lockers, setLockers] = useState<LockerSlot[]>(() => {
+    const saved = localStorage.getItem('rfa_lockers');
+    if (!saved) return INITIAL_LOCKERS;
+    try {
+      const parsed: LockerSlot[] = JSON.parse(saved);
+      return Array.isArray(parsed) && parsed.length > 0 ? parsed : INITIAL_LOCKERS;
+    } catch {
+      return INITIAL_LOCKERS;
+    }
+  });
+
+  useEffect(() => {
+    localStorage.setItem('rfa_lockers', JSON.stringify(lockers));
+  }, [lockers]);
 
   const [workSchedules, setWorkSchedules] = useState<WorkSchedule[]>(() => {
     const saved = localStorage.getItem('rfa_work_schedules');
@@ -843,6 +862,10 @@ export default function App() {
   }, [members]);
 
   useEffect(() => {
+    localStorage.setItem('rfa_staff', JSON.stringify(staffUsers));
+  }, [staffUsers]);
+
+  useEffect(() => {
     localStorage.setItem('rfa_products', JSON.stringify(products));
   }, [products]);
 
@@ -862,6 +885,14 @@ export default function App() {
     localStorage.setItem('rfa_closing', JSON.stringify(closingRecords));
     setIsStoreClosed(closingRecords.some((c) => c.date === APP_TODAY));
   }, [closingRecords]);
+
+  useEffect(() => {
+    localStorage.setItem('rfa_leads', JSON.stringify(leads));
+  }, [leads]);
+
+  useEffect(() => {
+    localStorage.setItem('rfa_followups', JSON.stringify(followUps));
+  }, [followUps]);
 
   // Firebase Boot Connectivity Test & Cloud Firestore Synchronization
   useEffect(() => {
@@ -944,6 +975,8 @@ export default function App() {
         setActiveTab('leader-pt');
       } else if (found.role === 'pt') {
         setActiveTab('trainer-portal');
+      } else if (found.role === 'kasir') {
+        setActiveTab('front-desk-portal');
       }
       showToast('Ganti Pengguna', `Beralih ke akun ${found.name} (${found.roleName}).`, 'info');
     }
@@ -964,7 +997,7 @@ export default function App() {
     } else if (user.role === 'pt') {
       setActiveTab('trainer-portal');
     } else if (user.role === 'kasir') {
-      setActiveTab('pos');
+      setActiveTab('front-desk-portal');
     } else {
       setActiveTab('dashboard');
     }
@@ -1576,7 +1609,7 @@ export default function App() {
     setIsStoreClosed(true);
   };
 
-  // Handler: Member Attendance
+  // Handler: Member Attendance & Locker Assignment
   const handleAddAttendance = (newAtt: Attendance, updatedMember?: Member) => {
     setAttendances([newAtt, ...attendances]);
     saveAttendanceToFirestore(newAtt).catch(() => {});
@@ -1584,14 +1617,141 @@ export default function App() {
       setMembers((prev) => prev.map((m) => (m.id === updatedMember.id ? updatedMember : m)));
       saveMemberToFirestore(updatedMember).catch(() => {});
     }
+
+    // Auto-occupy assigned locker
+    if (newAtt.lockerNumber) {
+      const lockerNum =
+        typeof newAtt.lockerNumber === 'string'
+          ? parseInt(newAtt.lockerNumber.replace(/\D/g, ''), 10)
+          : newAtt.lockerNumber;
+
+      if (lockerNum) {
+        setLockers((prev) =>
+          prev.map((l) =>
+            l.number === lockerNum
+              ? {
+                  ...l,
+                  isOccupied: true,
+                  memberId: newAtt.memberId,
+                  memberName: newAtt.memberName,
+                  timeIn: newAtt.timeIn,
+                  hasTowel: newAtt.hasTowel ?? true,
+                  status: 'Terpakai'
+                }
+              : l
+          )
+        );
+      }
+    }
   };
 
   const handleCheckoutMember = (attId: string) => {
     const timeNow = new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) + ' WIB';
+    const targetAtt = attendances.find((a) => a.id === attId);
+
     setAttendances((prev) =>
-      prev.map((a) => (a.id === attId ? { ...a, timeOut: timeNow } : a))
+      prev.map((a) => (a.id === attId ? { ...a, timeOut: timeNow, lockerReturned: true } : a))
     );
-    showToast('Check-Out Berhasil', 'Member telah keluar dari area gym.', 'info');
+
+    // Release locker automatically upon checkout
+    if (targetAtt && targetAtt.lockerNumber) {
+      const lockerNum =
+        typeof targetAtt.lockerNumber === 'string'
+          ? parseInt(targetAtt.lockerNumber.replace(/\D/g, ''), 10)
+          : targetAtt.lockerNumber;
+
+      if (lockerNum) {
+        setLockers((prev) =>
+          prev.map((l) =>
+            l.number === lockerNum
+              ? {
+                  ...l,
+                  isOccupied: false,
+                  memberId: undefined,
+                  memberName: undefined,
+                  timeIn: undefined,
+                  hasTowel: false,
+                  status: 'Tersedia'
+                }
+              : l
+          )
+        );
+      }
+    }
+
+    showToast(
+      'Check-Out Berhasil',
+      `Member ${targetAtt?.memberName || ''} telah checkout${
+        targetAtt?.lockerNumber ? ` & Kunci Loker #${targetAtt.lockerNumber} telah dikembalikan ke meja resepsionis.` : '.'
+      }`,
+      'info'
+    );
+  };
+
+  const handleReleaseLocker = (lockerNum: number) => {
+    setLockers((prev) =>
+      prev.map((l) =>
+        l.number === lockerNum
+          ? {
+              ...l,
+              isOccupied: false,
+              memberId: undefined,
+              memberName: undefined,
+              timeIn: undefined,
+              hasTowel: false,
+              status: 'Tersedia'
+            }
+          : l
+      )
+    );
+    showToast('Kunci Loker Dikembalikan', `Loker #${lockerNum} kini tersedia kembali.`, 'success');
+  };
+
+  const handleSwapLocker = (oldLockerNum: number, newLockerNum: number) => {
+    setLockers((prev) => {
+      const oldSlot = prev.find((l) => l.number === oldLockerNum);
+      if (!oldSlot || !oldSlot.isOccupied) return prev;
+
+      return prev.map((l) => {
+        if (l.number === oldLockerNum) {
+          return {
+            ...l,
+            isOccupied: false,
+            memberId: undefined,
+            memberName: undefined,
+            timeIn: undefined,
+            hasTowel: false,
+            status: 'Tersedia'
+          };
+        }
+        if (l.number === newLockerNum) {
+          return {
+            ...l,
+            isOccupied: true,
+            memberId: oldSlot.memberId,
+            memberName: oldSlot.memberName,
+            timeIn: oldSlot.timeIn,
+            hasTowel: oldSlot.hasTowel,
+            status: 'Terpakai'
+          };
+        }
+        return l;
+      });
+    });
+
+    // Update ongoing attendance record
+    const oldSlot = lockers.find((l) => l.number === oldLockerNum);
+    if (oldSlot && oldSlot.memberId) {
+      setAttendances((prev) =>
+        prev.map((a) =>
+          (a.memberId === oldSlot.memberId || a.memberName === oldSlot.memberName) && !a.timeOut
+            ? { ...a, lockerNumber: newLockerNum }
+            : a
+        )
+      );
+    }
+
+    showToast('Tukar Loker Berhasil', `Kunci dipindahkan dari Loker #${oldLockerNum} ke Loker #${newLockerNum}.`, 'success');
   };
 
   // Handler: Staff Attendance Clock In/Out
@@ -1696,6 +1856,105 @@ export default function App() {
   const handleDeleteStaff = (id: string) => {
     setStaffUsers((prev) => prev.filter((u) => u.id !== id));
     showToast('Karyawan Dihapus', 'Data staf berhasil dihapus.', 'info');
+  };
+
+  // Handler: Batch Import Members
+  const handleBatchImportMembers = (
+    importedMembers: Member[],
+    mode: 'merge' | 'skip_existing' | 'generate_new'
+  ) => {
+    setMembers((prev) => {
+      let updated: Member[];
+      if (mode === 'generate_new') {
+        updated = [...prev, ...importedMembers];
+      } else if (mode === 'skip_existing') {
+        const existingIds = new Set(prev.map((m) => m.id.toUpperCase()));
+        const existingPhones = new Set(
+          prev.filter((m) => m.phone).map((m) => m.phone.replace(/\D/g, ''))
+        );
+        const toAdd = importedMembers.filter(
+          (im) =>
+            !existingIds.has(im.id.toUpperCase()) &&
+            (!im.phone || !existingPhones.has(im.phone.replace(/\D/g, '')))
+        );
+        updated = [...prev, ...toAdd];
+      } else {
+        // merge / update existing + add new
+        const map = new Map<string, Member>();
+        prev.forEach((m) => map.set(m.id.toUpperCase(), m));
+        importedMembers.forEach((im) => {
+          const key = im.id.toUpperCase();
+          const existing = map.get(key);
+          if (existing) {
+            map.set(key, { ...existing, ...im });
+          } else {
+            map.set(key, im);
+          }
+        });
+        updated = Array.from(map.values());
+      }
+      try {
+        localStorage.setItem('rfa_members', JSON.stringify(updated));
+      } catch {}
+      return updated;
+    });
+
+    // Cloud firestore sync
+    importedMembers.forEach((m) => {
+      saveMemberToFirestore(m).catch(() => {});
+    });
+
+    showToast(
+      'Import Member Berhasil',
+      `Berhasil memproses ${importedMembers.length} data member ke dalam sistem.`,
+      'success'
+    );
+  };
+
+  // Handler: Batch Import Staff
+  const handleBatchImportStaff = (
+    importedStaff: User[],
+    mode: 'merge' | 'skip_existing' | 'generate_new'
+  ) => {
+    setStaffUsers((prev) => {
+      let updated: User[];
+      if (mode === 'generate_new') {
+        updated = [...prev, ...importedStaff];
+      } else if (mode === 'skip_existing') {
+        const existingIds = new Set(prev.map((s) => s.id.toUpperCase()));
+        const existingAccs = new Set(prev.map((s) => (s.accId || '').toLowerCase()));
+        const toAdd = importedStaff.filter(
+          (is) =>
+            !existingIds.has(is.id.toUpperCase()) &&
+            !existingAccs.has((is.accId || '').toLowerCase())
+        );
+        updated = [...prev, ...toAdd];
+      } else {
+        // merge / update existing + add new
+        const map = new Map<string, User>();
+        prev.forEach((s) => map.set(s.id.toUpperCase(), s));
+        importedStaff.forEach((is) => {
+          const key = is.id.toUpperCase();
+          const existing = map.get(key);
+          if (existing) {
+            map.set(key, { ...existing, ...is });
+          } else {
+            map.set(key, is);
+          }
+        });
+        updated = Array.from(map.values());
+      }
+      try {
+        localStorage.setItem('rfa_staff', JSON.stringify(updated));
+      } catch {}
+      return updated;
+    });
+
+    showToast(
+      'Import Karyawan Berhasil',
+      `Berhasil memproses ${importedStaff.length} data karyawan ke dalam sistem.`,
+      'success'
+    );
   };
 
   const handleSaveLeaveRequest = (leave: LeaveRequest, isNew: boolean) => {
@@ -1992,6 +2251,52 @@ export default function App() {
             />
           )}
 
+          {activeTab === 'front-desk-portal' && (
+            <FrontDeskPortalView
+              members={members}
+              attendances={attendances}
+              lockers={lockers}
+              onUpdateLockers={setLockers}
+              onReleaseLocker={handleReleaseLocker}
+              onSwapLocker={handleSwapLocker}
+              onAddAttendance={handleAddAttendance}
+              onCheckoutMember={handleCheckoutMember}
+              onUpdateMember={(upMem) => {
+                setMembers((prev) => prev.map((m) => (m.id === upMem.id ? upMem : m)));
+                saveMemberToFirestore(upMem).catch(console.error);
+              }}
+              onAddMember={(newMem) => {
+                setMembers((prev) => [newMem, ...prev]);
+                saveMemberToFirestore(newMem).catch(console.error);
+              }}
+              packages={packages}
+              bundlePackages={bundlePackages}
+              transactions={transactions}
+              onAddTransaction={(trx) => {
+                setTransactions((prev) => [trx, ...prev]);
+                saveTransactionToFirestore(trx).catch(console.error);
+              }}
+              currentUser={currentUser}
+              staffUsers={staffUsers}
+              schedules={schedules}
+              freezeRecords={freezeRecords}
+              onOpenFreezeModal={(mem) => {
+                setActiveFreezeMember(mem);
+                setIsFreezeModalOpen(true);
+              }}
+              onOpenUnfreezeModal={(mem) => {
+                setActiveUnfreezeMember(mem);
+                const rec = freezeRecords.find((r) => r.memberId === mem.id && r.status === 'FREEZE');
+                setActiveUnfreezeRecord(rec || null);
+              }}
+              onOpenMemberDetail={(mem) => setActiveDetailMember(mem)}
+              onOpenIDCard={(mem) => setActiveIDCardMember(mem)}
+              onNavigateTab={(tab) => setActiveTab(tab)}
+              showToast={showToast}
+              isStoreClosed={isStoreClosed}
+            />
+          )}
+
           {activeTab === 'membership' && (
             <MembershipView
               packages={packages}
@@ -2084,9 +2389,14 @@ export default function App() {
               staffUsers={staffUsers}
               attendances={attendances}
               staffAttendances={staffAttendances}
+              lockers={lockers}
+              onUpdateLockers={setLockers}
+              onReleaseLocker={handleReleaseLocker}
+              onSwapLocker={handleSwapLocker}
               onAddAttendance={handleAddAttendance}
               onCheckoutMember={handleCheckoutMember}
               onStaffClock={handleStaffClock}
+              transactions={transactions}
               showToast={showToast}
             />
           )}
@@ -2138,9 +2448,15 @@ export default function App() {
               followUps={followUps}
               transactions={transactions}
               currentUser={currentUser}
-              onAddLead={(l) => setLeads([...leads, l])}
+              onAddLead={(l) => setLeads([l, ...leads])}
               onUpdateLeadStatus={(lid, nStatus) =>
                 setLeads(leads.map((l) => (l.id === lid ? { ...l, status: nStatus } : l)))
+              }
+              onUpdateLead={(updatedLead) =>
+                setLeads(leads.map((l) => (l.id === updatedLead.id ? updatedLead : l)))
+              }
+              onDeleteLead={(lid) =>
+                setLeads(leads.filter((l) => l.id !== lid))
               }
               onAddFollowUp={(fu) => {
                 setFollowUps([fu, ...followUps]);
@@ -2181,6 +2497,8 @@ export default function App() {
                 }
               }}
               onDeleteStaff={(sid) => setStaffUsers(staffUsers.filter((s) => s.id !== sid))}
+              onImportMembers={handleBatchImportMembers}
+              onImportStaff={handleBatchImportStaff}
               showToast={showToast}
             />
           )}
@@ -2207,6 +2525,20 @@ export default function App() {
               onSaveMovement={handleSaveMovement}
               onSaveDisposal={handleSaveDisposal}
               onSaveApprovalConfig={handleSaveApprovalConfig}
+            />
+          )}
+
+          {activeTab === 'lockers' && (
+            <LockerManagementView
+              lockers={lockers}
+              onUpdateLockers={setLockers}
+              members={members}
+              attendances={attendances}
+              onAddAttendance={handleAddAttendance}
+              onCheckoutMember={handleCheckoutMember}
+              onReleaseLocker={handleReleaseLocker}
+              onSwapLocker={handleSwapLocker}
+              showToast={showToast}
             />
           )}
 
@@ -2312,6 +2644,7 @@ export default function App() {
               onDeleteAttendance={handleDeleteStaffAttendance}
               onSaveStaff={handleSaveStaff}
               onDeleteStaff={handleDeleteStaff}
+              onImportStaff={handleBatchImportStaff}
               onSaveLeaveRequest={handleSaveLeaveRequest}
               onApproveLeaveRequest={handleApproveLeaveRequest}
               packages={packages}

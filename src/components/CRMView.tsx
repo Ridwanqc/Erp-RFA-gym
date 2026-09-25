@@ -22,9 +22,23 @@ import {
   Search,
   X,
   RotateCcw,
-  FileText
+  FileText,
+  ArrowRightLeft,
+  UserCheck,
+  Flame,
+  Tag,
+  DollarSign,
+  History,
+  Edit3,
+  Trash2,
+  ExternalLink,
+  Send,
+  Check,
+  Briefcase,
+  AlertCircle,
+  ChevronLeft
 } from 'lucide-react';
-import { Lead, Member, User, FollowUpLog, Transaction } from '../types';
+import { Lead, Member, User, FollowUpLog, Transaction, LeadFollowUpRecord, LeadHandoverRecord } from '../types';
 import { formatRp, getDayDiff, formatDateIndo, APP_TODAY } from '../utils/formatters';
 
 export type DatePreset = 'all' | 'today' | 'last7' | 'this_month' | 'last_month' | 'custom';
@@ -77,6 +91,8 @@ interface CRMViewProps {
   currentUser: User | null;
   onAddLead: (lead: Lead) => void;
   onUpdateLeadStatus: (leadId: string, nextStatus: Lead['status']) => void;
+  onUpdateLead?: (updatedLead: Lead) => void;
+  onDeleteLead?: (leadId: string) => void;
   onAddFollowUp: (fu: FollowUpLog) => void;
   onConvertLeadToMember: (lead: Lead) => void;
   showToast: (title: string, message: string, type: 'success' | 'error' | 'warning' | 'info') => void;
@@ -91,6 +107,8 @@ export const CRMView: React.FC<CRMViewProps> = ({
   currentUser,
   onAddLead,
   onUpdateLeadStatus,
+  onUpdateLead,
+  onDeleteLead,
   onAddFollowUp,
   onConvertLeadToMember,
   showToast
@@ -108,11 +126,41 @@ export const CRMView: React.FC<CRMViewProps> = ({
   const [modalFilterCat, setModalFilterCat] = useState<'all' | 'Membership' | 'PT' | 'POS' | 'trx'>('all');
   const [modalSearch, setModalSearch] = useState('');
 
-  // Leads state
+  // Leads Kanban Filters & Scope
+  const [leadScope, setLeadScope] = useState<'all' | 'my' | 'unassigned' | 'high_priority'>('all');
+  const [filterLeadPic, setFilterLeadPic] = useState<string>('all');
+  const [filterLeadSource, setFilterLeadSource] = useState<string>('all');
+  const [filterLeadPriority, setFilterLeadPriority] = useState<string>('all');
+  const [searchLeadQuery, setSearchLeadQuery] = useState<string>('');
+
+  // Add Lead modal state
   const [isAddLeadOpen, setIsAddLeadOpen] = useState(false);
   const [leadName, setLeadName] = useState('');
   const [leadPhone, setLeadPhone] = useState('');
-  const [leadSource, setLeadSource] = useState<'Instagram' | 'Walk-in' | 'Referral'>('Instagram');
+  const [leadSource, setLeadSource] = useState<string>('Instagram');
+  const [leadPicId, setLeadPicId] = useState<string>('');
+  const [leadPriority, setLeadPriority] = useState<'Tinggi' | 'Sedang' | 'Rendah'>('Tinggi');
+  const [leadInterest, setLeadInterest] = useState('Membership 3 Bulan');
+  const [leadEstimatedValue, setLeadEstimatedValue] = useState('750000');
+  const [leadNotes, setLeadNotes] = useState('');
+
+  // Handover / Oper Alih PIC modal state
+  const [selectedLeadForHandover, setSelectedLeadForHandover] = useState<Lead | null>(null);
+  const [handoverTargetPicId, setHandoverTargetPicId] = useState<string>('');
+  const [handoverReason, setHandoverReason] = useState<string>('');
+
+  // Lead 360 Detail & Timeline modal state
+  const [selectedLeadForDetail, setSelectedLeadForDetail] = useState<Lead | null>(null);
+  const [detailModalTab, setDetailModalTab] = useState<'overview' | 'followup' | 'handover'>('overview');
+  const [detailNewFuMethod, setDetailNewFuMethod] = useState<'WhatsApp' | 'Telepon' | 'Tatap Muka' | 'Instagram DM'>('WhatsApp');
+  const [detailNewFuResult, setDetailNewFuResult] = useState<string>('Tertarik - Pertimbangkan Harga');
+  const [detailNewFuNotes, setDetailNewFuNotes] = useState<string>('');
+  const [detailNewFuNextStage, setDetailNewFuNextStage] = useState<string>('');
+
+  // Lost Reason modal state
+  const [selectedLeadForLost, setSelectedLeadForLost] = useState<Lead | null>(null);
+  const [lostReasonCategory, setLostReasonCategory] = useState<string>('Harga / Budget Terlalu Tinggi');
+  const [lostReasonNotes, setLostReasonNotes] = useState<string>('');
 
   // Follow up state
   const [filterPic, setFilterPic] = useState('all');
@@ -396,25 +444,332 @@ export const CRMView: React.FC<CRMViewProps> = ({
   const mediumCount = priorityMembers.filter((m) => m.priority === 'MEDIUM').length;
   const lowCount = priorityMembers.filter((m) => m.priority === 'LOW').length;
 
+  // Staff Helper
+  const getStaffById = (id?: string): User | undefined => {
+    if (!id) return undefined;
+    return staffUsers.find((s) => s.id === id);
+  };
+
+  // Filtered Leads Calculation
+  const myLeadsCount = useMemo(() => {
+    if (!currentUser) return 0;
+    return leads.filter((l) => l.picId === currentUser.id && l.status !== 'Lost').length;
+  }, [leads, currentUser]);
+
+  const unassignedLeadsCount = useMemo(() => {
+    return leads.filter((l) => !l.picId && l.status !== 'Lost').length;
+  }, [leads]);
+
+  const highPriorityLeadsCount = useMemo(() => {
+    return leads.filter((l) => l.priority === 'Tinggi' && l.status !== 'Lost').length;
+  }, [leads]);
+
+  const activePipelineValue = useMemo(() => {
+    return leads
+      .filter((l) => l.status !== 'Lost' && l.status !== 'Member')
+      .reduce((acc, curr) => acc + (curr.estimatedValue || 0), 0);
+  }, [leads]);
+
+  const winClosingValue = useMemo(() => {
+    return leads
+      .filter((l) => l.status === 'Member')
+      .reduce((acc, curr) => acc + (curr.estimatedValue || 0), 0);
+  }, [leads]);
+
+  const closingRate = useMemo(() => {
+    if (leads.length === 0) return 0;
+    const memberCount = leads.filter((l) => l.status === 'Member').length;
+    return Math.round((memberCount / leads.length) * 100);
+  }, [leads]);
+
+  // Filtered Leads for Kanban Board
+  const filteredLeads = useMemo(() => {
+    return leads.filter((lead) => {
+      // 1. Lead Scope filter
+      if (leadScope === 'my') {
+        if (!currentUser || lead.picId !== currentUser.id) return false;
+      } else if (leadScope === 'unassigned') {
+        if (lead.picId) return false;
+      } else if (leadScope === 'high_priority') {
+        if (lead.priority !== 'Tinggi') return false;
+      }
+
+      // 2. PIC filter
+      if (filterLeadPic !== 'all') {
+        if (filterLeadPic === 'unassigned') {
+          if (lead.picId) return false;
+        } else if (lead.picId !== filterLeadPic) {
+          return false;
+        }
+      }
+
+      // 3. Source filter
+      if (filterLeadSource !== 'all' && lead.source !== filterLeadSource) {
+        return false;
+      }
+
+      // 4. Priority filter
+      if (filterLeadPriority !== 'all' && lead.priority !== filterLeadPriority) {
+        return false;
+      }
+
+      // 5. Search query
+      if (searchLeadQuery.trim()) {
+        const q = searchLeadQuery.toLowerCase().trim();
+        const staff = getStaffById(lead.picId);
+        const matchName = lead.name.toLowerCase().includes(q);
+        const matchPhone = lead.phone.includes(q);
+        const matchPic = (staff?.name || lead.picName || '').toLowerCase().includes(q);
+        const matchInterest = (lead.interest || '').toLowerCase().includes(q);
+        const matchNotes = (lead.notes || '').toLowerCase().includes(q);
+        if (!matchName && !matchPhone && !matchPic && !matchInterest && !matchNotes) {
+          return false;
+        }
+      }
+
+      return true;
+    });
+  }, [leads, leadScope, filterLeadPic, filterLeadSource, filterLeadPriority, searchLeadQuery, currentUser, staffUsers]);
+
+  // Save New Lead Handler
   const handleSaveLead = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!leadName || !leadPhone) return;
+    if (!leadName.trim() || !leadPhone.trim()) {
+      showToast('Data Belum Lengkap', 'Nama dan No WhatsApp calon member wajib diisi.', 'warning');
+      return;
+    }
+
+    const assignedStaffId = leadPicId || currentUser?.id || staffUsers[0]?.id;
+    const assignedStaff = getStaffById(assignedStaffId);
+    const estValNum = parseInt(leadEstimatedValue.replace(/\D/g, '') || '0', 10);
 
     const newLead: Lead = {
       id: 'L-' + Date.now(),
       date: APP_TODAY,
-      name: leadName,
-      phone: leadPhone,
+      name: leadName.trim(),
+      phone: leadPhone.trim(),
       source: leadSource,
       status: 'Baru',
-      picId: currentUser?.id || 'S01'
+      picId: assignedStaff?.id,
+      picName: assignedStaff?.name || 'Petugas Front Desk',
+      picRole: assignedStaff?.roleName || 'Front Desk',
+      picShift: assignedStaff?.shift || 'Pagi',
+      assignedAt: `${APP_TODAY} ${new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}`,
+      assignedBy: currentUser?.name || 'Front Desk',
+      priority: leadPriority,
+      interest: leadInterest.trim() || 'Membership Gym',
+      estimatedValue: estValNum,
+      notes: leadNotes.trim(),
+      lastFollowUpDate: APP_TODAY,
+      followUpHistory: [
+        {
+          id: 'FU-' + Date.now(),
+          date: APP_TODAY,
+          time: new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) + ' WIB',
+          picId: assignedStaff?.id || 'SYSTEM',
+          picName: assignedStaff?.name || 'Petugas Front Desk',
+          picRole: assignedStaff?.roleName || 'Front Desk',
+          method: leadSource === 'Walk-in' ? 'Tatap Muka' : 'Instagram DM',
+          result: 'Inquiry Prospek Baru Diterima',
+          notes: leadNotes.trim() || 'Prospek berhasil ditambahkan ke Kanban dan ditugaskan ke Front Desk.'
+        }
+      ]
     };
 
     onAddLead(newLead);
-    showToast('Lead Baru Dibuat', `Prospek ${leadName} berhasil dimasukkan ke pipeline Kanban.`, 'success');
+    showToast(
+      'Lead Baru Ditambahkan 🎯',
+      `Prospek ${leadName} berhasil ditugaskan ke ${assignedStaff?.name || 'Front Desk'}.`,
+      'success'
+    );
+
+    // Reset Form
     setIsAddLeadOpen(false);
     setLeadName('');
     setLeadPhone('');
+    setLeadNotes('');
+    setLeadEstimatedValue('750000');
+  };
+
+  // Handover / Oper Alih PIC Handler (Pencegah Tertukar)
+  const handlePerformHandover = (lead: Lead, targetPicId: string, reason: string) => {
+    const targetStaff = getStaffById(targetPicId);
+    if (!targetStaff) {
+      showToast('Pilih Petugas', 'Silakan pilih petugas Front Desk / PIC tujuan.', 'warning');
+      return;
+    }
+
+    const currentStaff = getStaffById(lead.picId);
+    const fromName = currentStaff?.name || lead.picName || 'Belum Ada PIC (Pool Bebas)';
+
+    const newHandover: LeadHandoverRecord = {
+      id: 'HO-' + Date.now(),
+      date: APP_TODAY,
+      time: new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) + ' WIB',
+      fromPicId: lead.picId || 'UNASSIGNED',
+      fromPicName: fromName,
+      toPicId: targetStaff.id,
+      toPicName: targetStaff.name,
+      reason: reason.trim() || 'Oper alih tugas antar shift Front Desk / PIC'
+    };
+
+    const updatedLead: Lead = {
+      ...lead,
+      picId: targetStaff.id,
+      picName: targetStaff.name,
+      picRole: targetStaff.roleName || 'Front Desk',
+      picShift: targetStaff.shift || 'Pagi',
+      assignedAt: `${APP_TODAY} ${new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}`,
+      assignedBy: currentUser?.name || 'Front Desk',
+      handoverHistory: [newHandover, ...(lead.handoverHistory || [])]
+    };
+
+    if (onUpdateLead) {
+      onUpdateLead(updatedLead);
+    } else {
+      onUpdateLeadStatus(lead.id, lead.status);
+    }
+
+    showToast(
+      'Tanggung Jawab Dialihkan 🔄',
+      `Prospek ${lead.name} kini resmi dialihkan ke ${targetStaff.name} (${targetStaff.roleName || 'Front Desk'} - Shift ${targetStaff.shift || '-'}).`,
+      'success'
+    );
+
+    setSelectedLeadForHandover(null);
+    setHandoverReason('');
+    if (selectedLeadForDetail?.id === lead.id) {
+      setSelectedLeadForDetail(updatedLead);
+    }
+  };
+
+  // Claim Lead Handler
+  const handleClaimLead = (lead: Lead) => {
+    if (!currentUser) return;
+    handlePerformHandover(
+      lead,
+      currentUser.id,
+      `Klaim mandiri tanggung jawab oleh ${currentUser.name} (${currentUser.roleName || 'Front Desk'} - Shift ${currentUser.shift || '-'})`
+    );
+  };
+
+  // Add Follow Up Log to Lead Handler
+  const handleAddLeadFollowUp = (
+    lead: Lead,
+    method: 'WhatsApp' | 'Telepon' | 'Tatap Muka' | 'Instagram DM',
+    result: string,
+    notes: string,
+    nextStage?: Lead['status']
+  ) => {
+    const activeStaff = currentUser || getStaffById(lead.picId);
+    const newRecord: LeadFollowUpRecord = {
+      id: 'FU-' + Date.now(),
+      date: APP_TODAY,
+      time: new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) + ' WIB',
+      picId: activeStaff?.id || 'SYSTEM',
+      picName: activeStaff?.name || 'Petugas Front Desk',
+      picRole: activeStaff?.roleName || 'Front Desk',
+      method,
+      result,
+      notes: notes.trim()
+    };
+
+    const targetStage = nextStage || lead.status;
+    const updatedLead: Lead = {
+      ...lead,
+      status: targetStage,
+      lastFollowUpDate: APP_TODAY,
+      followUpHistory: [newRecord, ...(lead.followUpHistory || [])]
+    };
+
+    if (onUpdateLead) {
+      onUpdateLead(updatedLead);
+    } else if (nextStage && nextStage !== lead.status) {
+      onUpdateLeadStatus(lead.id, targetStage);
+    }
+
+    showToast('Follow Up Tercatat 📝', `Aktivitas follow-up untuk ${lead.name} berhasil disimpan.`, 'success');
+    if (selectedLeadForDetail?.id === lead.id) {
+      setSelectedLeadForDetail(updatedLead);
+    }
+  };
+
+  // Stage Movement Handler
+  const handleMoveStage = (lead: Lead, nextStatus: Lead['status']) => {
+    if (nextStatus === 'Member') {
+      onUpdateLeadStatus(lead.id, 'Member');
+      onConvertLeadToMember(lead);
+      return;
+    }
+
+    if (nextStatus === 'Lost') {
+      setSelectedLeadForLost(lead);
+      return;
+    }
+
+    onUpdateLeadStatus(lead.id, nextStatus);
+    showToast('Tahapan Diperbarui 📋', `${lead.name} dipindahkan ke tahap ${nextStatus}.`, 'info');
+  };
+
+  // Save Lost Reason Handler
+  const handleConfirmLost = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedLeadForLost) return;
+
+    const lostRecord: LeadFollowUpRecord = {
+      id: 'FU-LOST-' + Date.now(),
+      date: APP_TODAY,
+      time: new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) + ' WIB',
+      picId: currentUser?.id || selectedLeadForLost.picId || 'SYSTEM',
+      picName: currentUser?.name || selectedLeadForLost.picName || 'Front Desk',
+      picRole: currentUser?.roleName || 'Front Desk',
+      method: 'WhatsApp',
+      result: 'Batal / Lost Closing',
+      notes: `Alasan Batal: ${lostReasonCategory}. Catatan: ${lostReasonNotes.trim() || 'Tidak ada catatan tambahan.'}`
+    };
+
+    const updatedLead: Lead = {
+      ...selectedLeadForLost,
+      status: 'Lost',
+      lostReason: `${lostReasonCategory} - ${lostReasonNotes.trim()}`,
+      followUpHistory: [lostRecord, ...(selectedLeadForLost.followUpHistory || [])]
+    };
+
+    if (onUpdateLead) {
+      onUpdateLead(updatedLead);
+    } else {
+      onUpdateLeadStatus(selectedLeadForLost.id, 'Lost');
+    }
+
+    showToast('Prospek Diarsipkan (Lost)', `Prospek ${selectedLeadForLost.name} dipindahkan ke daftar Lost.`, 'info');
+    setSelectedLeadForLost(null);
+    setLostReasonNotes('');
+  };
+
+  // WhatsApp Smart Action
+  const openWhatsAppLead = (lead: Lead, templateType: 'greeting' | 'trial' | 'promo') => {
+    const staff = getStaffById(lead.picId) || currentUser;
+    const staffName = staff?.name || 'Petugas Front Desk GymPro';
+    const cleanPhone = lead.phone.replace(/^0/, '62').replace(/\D/g, '');
+
+    let text = '';
+    if (templateType === 'greeting') {
+      text = `Halo Kak ${lead.name}! Salam hangat dan sehat dari GymPro. Saya ${staffName} dari tim Front Desk. Terima kasih telah menghubungi kami mengenai ${lead.interest || 'program gym'}. Apakah ada jadwal luang untuk kami bantu jelaskan paket atau keliling studio gym kami?`;
+    } else if (templateType === 'trial') {
+      text = `Halo Kak ${lead.name}! Saya ${staffName} dari Front Desk GymPro. Kami ingin mengonfirmasi jadwal sesi Free Trial & Konsultasi Kebugaran untuk Kakak. Kapan kira-kira waktu yang paling nyaman untuk berkunjung ke gym kami?`;
+    } else {
+      text = `Halo Kak ${lead.name}! Saya ${staffName} dari GymPro. Spesial hari ini kami memiliki promo khusus membership dengan potongan biaya registrasi dan free akses kelas studio. Apakah Kakak berminat kami kirimkan brosur detailnya?`;
+    }
+
+    // Auto-record follow up
+    handleAddLeadFollowUp(
+      lead,
+      'WhatsApp',
+      `Kirim Pesan WhatsApp (${templateType === 'greeting' ? 'Sapaan Awal' : templateType === 'trial' ? 'Jadwal Trial' : 'Promo Khusus'})`,
+      `Pesan template WA terkirim otomatis oleh ${staffName}`
+    );
+
+    window.open(`https://wa.me/${cleanPhone}?text=${encodeURIComponent(text)}`, '_blank');
   };
 
   const handleSaveFollowUp = (e: React.FormEvent) => {
@@ -982,182 +1337,1159 @@ export const CRMView: React.FC<CRMViewProps> = ({
 
       {/* SUB-TAB 2: LEADS KANBAN PIPELINE */}
       {activeSubTab === 'leads' && (
-        <div className="space-y-4">
-          <div className="flex justify-between items-center">
-            <p className="text-xs text-zinc-400">
-              Geser dan update tahapan calon prospek dari tahap awal hingga terdaftar sebagai member.
-            </p>
-            <button
-              onClick={() => setIsAddLeadOpen(true)}
-              className="bg-orange-500 hover:bg-orange-600 text-white font-bold px-4 py-2 rounded-xl text-xs shadow-md transition flex items-center gap-1.5"
-            >
-              <Plus className="w-4 h-4" /> Tambah Lead Baru
-            </button>
+        <div className="space-y-5">
+          {/* Header & Quick Action */}
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 bg-zinc-900/60 border border-zinc-800 p-4 rounded-3xl">
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="w-2.5 h-2.5 rounded-full bg-orange-500 animate-pulse"></span>
+                <h3 className="text-sm font-bold text-white">Pipeline Prospek Calon Member (CRM Leads)</h3>
+              </div>
+              <p className="text-xs text-zinc-400 mt-0.5">
+                Setiap calon member ditugaskan secara jelas ke Petugas Front Desk / PIC agar teratur dan tidak tertukar.
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => {
+                  setLeadPicId(currentUser?.id || staffUsers[0]?.id || '');
+                  setIsAddLeadOpen(true);
+                }}
+                className="bg-orange-500 hover:bg-orange-600 text-white font-bold px-4 py-2.5 rounded-xl text-xs shadow-md transition flex items-center gap-1.5 shrink-0"
+              >
+                <Plus className="w-4 h-4" /> Tambah Lead Baru
+              </button>
+            </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 overflow-x-auto pb-4">
-            {/* Column 1: Baru */}
-            <div className="bg-zinc-900/90 border border-zinc-800 rounded-3xl p-4 flex flex-col min-h-[420px]">
-              <div className="flex justify-between items-center pb-3 mb-3 border-b border-zinc-800">
-                <span className="text-xs font-bold text-white flex items-center gap-2">
-                  <span className="w-2.5 h-2.5 rounded-full bg-blue-500"></span> Lead Baru
-                </span>
-                <span className="text-[10px] font-bold bg-blue-500/20 text-blue-400 px-2 py-0.5 rounded-full">
-                  {leads.filter((l) => l.status === 'Baru').length}
-                </span>
+          {/* KPI Summary Cards */}
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+            <div className="bg-zinc-900/90 border border-zinc-800 p-3.5 rounded-2xl flex items-center justify-between">
+              <div>
+                <p className="text-[10px] font-bold text-zinc-500 uppercase">Leads Aktif</p>
+                <h4 className="text-lg font-black text-white mt-0.5">
+                  {leads.filter((l) => l.status !== 'Lost' && l.status !== 'Member').length}
+                </h4>
+                <p className="text-[9px] text-zinc-400">Total prospek berjalan</p>
               </div>
-              <div className="space-y-3 flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-zinc-800">
-                {leads
-                  .filter((l) => l.status === 'Baru')
-                  .map((lead) => (
-                    <div key={lead.id} className="bg-zinc-950 border border-zinc-800 p-3.5 rounded-2xl space-y-2">
-                      <div className="flex justify-between items-start">
-                        <h5 className="text-xs font-bold text-white">{lead.name}</h5>
-                        <span className="text-[9px] text-zinc-400 bg-zinc-900 px-1.5 py-0.5 rounded border border-zinc-800">
-                          {lead.source}
-                        </span>
-                      </div>
-                      <p className="text-[11px] text-zinc-400 flex items-center gap-1">
-                        <Phone className="w-3 h-3 text-zinc-500" /> {lead.phone}
-                      </p>
-                      <div className="pt-2 border-t border-zinc-800/80 flex justify-between items-center">
-                        <a
-                          href={`https://wa.me/${lead.phone}`}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="text-[10px] font-bold text-emerald-400 hover:text-emerald-300"
-                        >
-                          WhatsApp
-                        </a>
-                        <button
-                          onClick={() => onUpdateLeadStatus(lead.id, 'Follow Up')}
-                          className="text-[10px] font-bold bg-zinc-800 hover:bg-zinc-700 text-orange-400 px-2.5 py-1 rounded-lg flex items-center gap-1 transition"
-                        >
-                          Ke Follow Up <ChevronRight className="w-3 h-3" />
-                        </button>
-                      </div>
-                    </div>
-                  ))}
+              <div className="w-9 h-9 rounded-xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center text-blue-400">
+                <Target className="w-4 h-4" />
               </div>
             </div>
 
-            {/* Column 2: Follow Up */}
-            <div className="bg-zinc-900/90 border border-zinc-800 rounded-3xl p-4 flex flex-col min-h-[420px]">
-              <div className="flex justify-between items-center pb-3 mb-3 border-b border-zinc-800">
-                <span className="text-xs font-bold text-white flex items-center gap-2">
-                  <span className="w-2.5 h-2.5 rounded-full bg-orange-500"></span> Follow Up
-                </span>
-                <span className="text-[10px] font-bold bg-orange-500/20 text-orange-400 px-2 py-0.5 rounded-full">
-                  {leads.filter((l) => l.status === 'Follow Up').length}
-                </span>
+            <div className="bg-zinc-900/90 border border-zinc-800 p-3.5 rounded-2xl flex items-center justify-between">
+              <div>
+                <p className="text-[10px] font-bold text-zinc-500 uppercase">Estimasi Pipeline</p>
+                <h4 className="text-lg font-black text-emerald-400 mt-0.5">{formatRp(activePipelineValue)}</h4>
+                <p className="text-[9px] text-zinc-400">Potensi nilai closing</p>
               </div>
-              <div className="space-y-3 flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-zinc-800">
-                {leads
-                  .filter((l) => l.status === 'Follow Up')
-                  .map((lead) => (
-                    <div key={lead.id} className="bg-zinc-950 border border-zinc-800 p-3.5 rounded-2xl space-y-2">
-                      <div className="flex justify-between items-start">
-                        <h5 className="text-xs font-bold text-white">{lead.name}</h5>
-                        <span className="text-[9px] text-zinc-400 bg-zinc-900 px-1.5 py-0.5 rounded border border-zinc-800">
-                          {lead.source}
-                        </span>
-                      </div>
-                      <p className="text-[11px] text-zinc-400 flex items-center gap-1">
-                        <Phone className="w-3 h-3 text-zinc-500" /> {lead.phone}
-                      </p>
-                      <div className="pt-2 border-t border-zinc-800/80 flex justify-between items-center">
-                        <a
-                          href={`https://wa.me/${lead.phone}`}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="text-[10px] font-bold text-emerald-400 hover:text-emerald-300"
-                        >
-                          WhatsApp
-                        </a>
-                        <button
-                          onClick={() => onUpdateLeadStatus(lead.id, 'Trial')}
-                          className="text-[10px] font-bold bg-zinc-800 hover:bg-zinc-700 text-orange-400 px-2.5 py-1 rounded-lg flex items-center gap-1 transition"
-                        >
-                          Ke Trial <ChevronRight className="w-3 h-3" />
-                        </button>
-                      </div>
-                    </div>
-                  ))}
+              <div className="w-9 h-9 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400">
+                <DollarSign className="w-4 h-4" />
               </div>
             </div>
 
-            {/* Column 3: Trial / Visit */}
-            <div className="bg-zinc-900/90 border border-zinc-800 rounded-3xl p-4 flex flex-col min-h-[420px]">
-              <div className="flex justify-between items-center pb-3 mb-3 border-b border-zinc-800">
-                <span className="text-xs font-bold text-white flex items-center gap-2">
-                  <span className="w-2.5 h-2.5 rounded-full bg-purple-500"></span> Trial / Visit
-                </span>
-                <span className="text-[10px] font-bold bg-purple-500/20 text-purple-400 px-2 py-0.5 rounded-full">
-                  {leads.filter((l) => l.status === 'Trial').length}
-                </span>
+            <div
+              onClick={() => setLeadScope(leadScope === 'my' ? 'all' : 'my')}
+              className={`p-3.5 rounded-2xl border transition cursor-pointer flex items-center justify-between ${
+                leadScope === 'my'
+                  ? 'bg-orange-500/20 border-orange-500/60 ring-1 ring-orange-500'
+                  : 'bg-zinc-900/90 border-zinc-800 hover:border-zinc-700'
+              }`}
+            >
+              <div>
+                <p className="text-[10px] font-bold text-orange-400 uppercase flex items-center gap-1">
+                  ⭐ Tanggung Jawab Saya
+                </p>
+                <h4 className="text-lg font-black text-white mt-0.5">{myLeadsCount} Prospek</h4>
+                <p className="text-[9px] text-zinc-400">
+                  {currentUser?.name || 'Petugas Aktif'} ({currentUser?.roleName || 'Front Desk'})
+                </p>
               </div>
-              <div className="space-y-3 flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-zinc-800">
-                {leads
-                  .filter((l) => l.status === 'Trial')
-                  .map((lead) => (
-                    <div key={lead.id} className="bg-zinc-950 border border-zinc-800 p-3.5 rounded-2xl space-y-2">
-                      <div className="flex justify-between items-start">
-                        <h5 className="text-xs font-bold text-white">{lead.name}</h5>
-                        <span className="text-[9px] text-zinc-400 bg-zinc-900 px-1.5 py-0.5 rounded border border-zinc-800">
-                          {lead.source}
-                        </span>
-                      </div>
-                      <p className="text-[11px] text-zinc-400 flex items-center gap-1">
-                        <Phone className="w-3 h-3 text-zinc-500" /> {lead.phone}
-                      </p>
-                      <div className="pt-2 border-t border-zinc-800/80 flex justify-between items-center">
-                        <a
-                          href={`https://wa.me/${lead.phone}`}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="text-[10px] font-bold text-emerald-400 hover:text-emerald-300"
-                        >
-                          WhatsApp
-                        </a>
-                        <button
-                          onClick={() => {
-                            onUpdateLeadStatus(lead.id, 'Member');
-                            onConvertLeadToMember(lead);
-                          }}
-                          className="text-[10px] font-bold bg-emerald-600 hover:bg-emerald-500 text-white px-2.5 py-1 rounded-lg flex items-center gap-1 transition shadow-sm"
-                        >
-                          Jadi Member <CheckCircle2 className="w-3 h-3" />
-                        </button>
-                      </div>
-                    </div>
-                  ))}
+              <div className="w-9 h-9 rounded-xl bg-orange-500/10 border border-orange-500/20 flex items-center justify-center text-orange-400">
+                <UserCheck className="w-4 h-4" />
               </div>
             </div>
 
-            {/* Column 4: Win (Member) */}
-            <div className="bg-zinc-900/90 border border-zinc-800 rounded-3xl p-4 flex flex-col min-h-[420px]">
-              <div className="flex justify-between items-center pb-3 mb-3 border-b border-zinc-800">
-                <span className="text-xs font-bold text-white flex items-center gap-2">
-                  <span className="w-2.5 h-2.5 rounded-full bg-emerald-500"></span> Win (Member)
-                </span>
-                <span className="text-[10px] font-bold bg-emerald-500/20 text-emerald-400 px-2 py-0.5 rounded-full">
-                  {leads.filter((l) => l.status === 'Member').length}
+            <div className="bg-zinc-900/90 border border-zinc-800 p-3.5 rounded-2xl flex items-center justify-between">
+              <div>
+                <p className="text-[10px] font-bold text-zinc-500 uppercase">Closing Win Rate</p>
+                <h4 className="text-lg font-black text-purple-400 mt-0.5">{closingRate}%</h4>
+                <p className="text-[9px] text-zinc-400">{formatRp(winClosingValue)} terkonversi</p>
+              </div>
+              <div className="w-9 h-9 rounded-xl bg-purple-500/10 border border-purple-500/20 flex items-center justify-center text-purple-400">
+                <Trophy className="w-4 h-4" />
+              </div>
+            </div>
+          </div>
+
+          {/* FRONT DESK PIC RESPONSIBILITY STRIP (Pencegah Tertukar) */}
+          <div className="bg-zinc-900/90 border border-zinc-800 rounded-3xl p-4 space-y-3">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <Users className="w-4 h-4 text-orange-400" />
+                <span className="text-xs font-bold text-white uppercase tracking-wider">
+                  Distribusi Petugas Front Desk / PIC (Klik untuk filter):
                 </span>
               </div>
-              <div className="space-y-3 flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-zinc-800">
-                {leads
-                  .filter((l) => l.status === 'Member')
-                  .map((lead) => (
-                    <div key={lead.id} className="bg-zinc-950 border border-zinc-800 p-3.5 rounded-2xl space-y-1.5">
-                      <div className="flex justify-between items-start">
-                        <h5 className="text-xs font-bold text-white">{lead.name}</h5>
-                        <span className="text-[9px] text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-1.5 py-0.5 rounded font-bold">
-                          Closing Win
+              <span className="text-[10px] text-zinc-400">
+                Memastikan tidak ada calon member yang tertukar atau terlantar
+              </span>
+            </div>
+
+            <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-thin scrollbar-thumb-zinc-800">
+              <button
+                onClick={() => {
+                  setFilterLeadPic('all');
+                  setLeadScope('all');
+                }}
+                className={`px-3 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 shrink-0 ${
+                  filterLeadPic === 'all' && leadScope === 'all'
+                    ? 'bg-orange-500 text-white shadow-md'
+                    : 'bg-zinc-950 hover:bg-zinc-800 text-zinc-400 border border-zinc-800'
+                }`}
+              >
+                <span>Semua Petugas</span>
+                <span
+                  className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold ${
+                    filterLeadPic === 'all' && leadScope === 'all'
+                      ? 'bg-black/30 text-white'
+                      : 'bg-zinc-800 text-zinc-400'
+                  }`}
+                >
+                  {leads.length}
+                </span>
+              </button>
+
+              {staffUsers
+                .filter((s) => s.roleName?.toLowerCase().includes('front') || s.roleName?.toLowerCase().includes('kasir') || s.roleName?.toLowerCase().includes('manager') || s.roleName?.toLowerCase().includes('leader'))
+                .map((staff) => {
+                  const staffLeadsCount = leads.filter(
+                    (l) => l.picId === staff.id && l.status !== 'Lost'
+                  ).length;
+                  const isSelected = filterLeadPic === staff.id;
+                  const isMe = currentUser?.id === staff.id;
+
+                  return (
+                    <button
+                      key={staff.id}
+                      onClick={() => {
+                        setFilterLeadPic(staff.id);
+                        setLeadScope('all');
+                      }}
+                      className={`px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-2.5 shrink-0 border ${
+                        isSelected
+                          ? 'bg-orange-500 text-white border-orange-400 shadow-md'
+                          : isMe
+                          ? 'bg-zinc-950 hover:bg-zinc-800 text-orange-400 border-orange-500/40'
+                          : 'bg-zinc-950 hover:bg-zinc-800 text-zinc-300 border-zinc-800'
+                      }`}
+                    >
+                      <div className="w-6 h-6 rounded-full bg-zinc-800 overflow-hidden border border-zinc-700 flex items-center justify-center shrink-0">
+                        {staff.photo ? (
+                          <img src={staff.photo} alt={staff.name} className="w-full h-full object-cover" />
+                        ) : (
+                          <span className="text-[10px] font-bold text-zinc-300">
+                            {staff.name.charAt(0)}
+                          </span>
+                        )}
+                      </div>
+                      <div className="text-left">
+                        <div className="flex items-center gap-1">
+                          <span className="truncate max-w-[110px]">{staff.name}</span>
+                          {isMe && <span className="text-[9px] text-amber-300">⭐</span>}
+                        </div>
+                        <span className="text-[9px] opacity-75 font-normal block leading-tight">
+                          {staff.roleName?.split(' ')[0] || 'Staff'} {staff.shift ? `(${staff.shift})` : ''}
                         </span>
                       </div>
-                      <p className="text-[11px] text-zinc-400">{lead.phone}</p>
-                    </div>
-                  ))}
+                      <span
+                        className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${
+                          isSelected
+                            ? 'bg-black/30 text-white'
+                            : staffLeadsCount > 0
+                            ? 'bg-zinc-800 text-zinc-200'
+                            : 'bg-zinc-900 text-zinc-500'
+                        }`}
+                      >
+                        {staffLeadsCount}
+                      </span>
+                    </button>
+                  );
+                })}
+
+              <button
+                onClick={() => {
+                  setFilterLeadPic('unassigned');
+                  setLeadScope('all');
+                }}
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-2 shrink-0 border ${
+                  filterLeadPic === 'unassigned'
+                    ? 'bg-amber-600 text-white border-amber-500 shadow-md'
+                    : 'bg-zinc-950 hover:bg-zinc-800 text-amber-400 border-amber-500/30'
+                }`}
+              >
+                <AlertCircle className="w-3.5 h-3.5 text-amber-400" />
+                <span>Belum Ada PIC</span>
+                <span className="text-[10px] bg-amber-500/20 text-amber-400 px-1.5 py-0.5 rounded-full font-bold">
+                  {unassignedLeadsCount}
+                </span>
+              </button>
+            </div>
+          </div>
+
+          {/* FILTER CONTROLS & SEARCH BAR */}
+          <div className="bg-zinc-900/60 border border-zinc-800 p-3.5 rounded-2xl flex flex-col md:flex-row md:items-center justify-between gap-3">
+            {/* Scope Pills */}
+            <div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0">
+              <button
+                onClick={() => {
+                  setLeadScope('all');
+                  setFilterLeadPic('all');
+                }}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition ${
+                  leadScope === 'all' && filterLeadPic === 'all'
+                    ? 'bg-zinc-800 text-white border border-zinc-700'
+                    : 'text-zinc-400 hover:text-white'
+                }`}
+              >
+                Semua ({leads.length})
+              </button>
+              <button
+                onClick={() => {
+                  setLeadScope('my');
+                  setFilterLeadPic('all');
+                }}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1 ${
+                  leadScope === 'my'
+                    ? 'bg-orange-500 text-white shadow'
+                    : 'text-orange-400 hover:bg-orange-500/10'
+                }`}
+              >
+                ⭐ Tanggung Jawab Saya ({myLeadsCount})
+              </button>
+              <button
+                onClick={() => {
+                  setLeadScope('unassigned');
+                  setFilterLeadPic('all');
+                }}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1 ${
+                  leadScope === 'unassigned'
+                    ? 'bg-amber-600 text-white shadow'
+                    : 'text-amber-400 hover:bg-amber-500/10'
+                }`}
+              >
+                ⚠️ Belum Ada PIC ({unassignedLeadsCount})
+              </button>
+              <button
+                onClick={() => setLeadScope(leadScope === 'high_priority' ? 'all' : 'high_priority')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1 ${
+                  leadScope === 'high_priority'
+                    ? 'bg-rose-600 text-white shadow'
+                    : 'text-rose-400 hover:bg-rose-500/10'
+                }`}
+              >
+                🔥 Prioritas Tinggi ({highPriorityLeadsCount})
+              </button>
+            </div>
+
+            {/* Dropdown Filters & Search */}
+            <div className="flex flex-wrap items-center gap-2">
+              {/* Dropdown Filter PIC (Front Desk / Sales) */}
+              <div className="relative">
+                <select
+                  aria-label="Filter Petugas PIC"
+                  value={
+                    leadScope === 'my'
+                      ? 'my'
+                      : leadScope === 'unassigned' || filterLeadPic === 'unassigned'
+                      ? 'unassigned'
+                      : filterLeadPic
+                  }
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    if (val === 'all') {
+                      setFilterLeadPic('all');
+                      if (leadScope === 'my' || leadScope === 'unassigned') {
+                        setLeadScope('all');
+                      }
+                    } else if (val === 'my') {
+                      setLeadScope('my');
+                      setFilterLeadPic('all');
+                    } else if (val === 'unassigned') {
+                      setFilterLeadPic('unassigned');
+                      setLeadScope('all');
+                    } else {
+                      setFilterLeadPic(val);
+                      setLeadScope('all');
+                    }
+                  }}
+                  className={`border rounded-xl px-2.5 py-1.5 text-xs outline-none transition font-medium cursor-pointer ${
+                    filterLeadPic !== 'all' || leadScope === 'my' || leadScope === 'unassigned'
+                      ? 'bg-orange-500/15 border-orange-500/60 text-orange-300 font-bold'
+                      : 'bg-zinc-950 border-zinc-800 text-zinc-300 focus:border-orange-500'
+                  }`}
+                >
+                  <option value="all">👤 Semua PIC / Petugas ({leads.length})</option>
+                  {currentUser && (
+                    <option value="my">⭐ PIC: Tanggung Jawab Saya ({myLeadsCount})</option>
+                  )}
+                  <option value="unassigned">⚠️ Belum Ada PIC ({unassignedLeadsCount})</option>
+                  <optgroup label="Front Desk & Sales Team">
+                    {staffUsers.map((staff) => {
+                      const count = leads.filter((l) => l.picId === staff.id && l.status !== 'Lost').length;
+                      const roleDisplay = staff.roleName?.split(' ')[0] || staff.role || 'Staff';
+                      const shiftDisplay = staff.shift ? ` [${staff.shift}]` : '';
+                      return (
+                        <option key={staff.id} value={staff.id}>
+                          {staff.name} ({roleDisplay}{shiftDisplay}) — {count} Leads
+                        </option>
+                      );
+                    })}
+                  </optgroup>
+                </select>
+              </div>
+
+              {/* Filter Sumber */}
+              <div className="relative">
+                <select
+                  value={filterLeadSource}
+                  onChange={(e) => setFilterLeadSource(e.target.value)}
+                  className="bg-zinc-950 border border-zinc-800 rounded-xl px-2.5 py-1.5 text-xs text-zinc-300 outline-none focus:border-orange-500"
+                >
+                  <option value="all">Semua Sumber</option>
+                  <option value="Instagram">Instagram</option>
+                  <option value="Walk-in">Walk-in</option>
+                  <option value="Referral">Referral</option>
+                  <option value="TikTok">TikTok</option>
+                  <option value="Google / Web">Google / Web</option>
+                </select>
+              </div>
+
+              {/* Filter Prioritas */}
+              <div className="relative">
+                <select
+                  value={filterLeadPriority}
+                  onChange={(e) => setFilterLeadPriority(e.target.value)}
+                  className="bg-zinc-950 border border-zinc-800 rounded-xl px-2.5 py-1.5 text-xs text-zinc-300 outline-none focus:border-orange-500"
+                >
+                  <option value="all">Semua Prioritas</option>
+                  <option value="Tinggi">🔥 Tinggi</option>
+                  <option value="Sedang">⚡ Sedang</option>
+                  <option value="Rendah">Rendah</option>
+                </select>
+              </div>
+
+              {/* Search Bar */}
+              <div className="relative min-w-[200px]">
+                <Search className="w-3.5 h-3.5 absolute left-3 top-2.5 text-zinc-500" />
+                <input
+                  type="text"
+                  placeholder="Cari prospek, telp, PIC..."
+                  value={searchLeadQuery}
+                  onChange={(e) => setSearchLeadQuery(e.target.value)}
+                  className="w-full bg-zinc-950 border border-zinc-800 rounded-xl pl-9 pr-7 py-1.5 text-xs text-white placeholder-zinc-500 outline-none focus:border-orange-500"
+                />
+                {searchLeadQuery && (
+                  <button
+                    onClick={() => setSearchLeadQuery('')}
+                    className="absolute right-2.5 top-2.5 text-zinc-500 hover:text-white"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* Active Filter Indicator & Reset */}
+          {(filterLeadPic !== 'all' || leadScope !== 'all' || filterLeadSource !== 'all' || filterLeadPriority !== 'all' || searchLeadQuery.trim() !== '') && (
+            <div className="flex flex-wrap items-center justify-between gap-2 px-4 py-2.5 bg-orange-500/10 border border-orange-500/30 rounded-2xl text-xs animate-in fade-in duration-200">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-zinc-400 font-medium">Fokus Filter:</span>
+                {(filterLeadPic !== 'all' || leadScope === 'my' || leadScope === 'unassigned') && (
+                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-orange-500/20 text-orange-300 rounded-lg font-bold border border-orange-500/30">
+                    <UserCheck className="w-3.5 h-3.5" />
+                    PIC:{' '}
+                    {leadScope === 'my'
+                      ? `Saya (${currentUser?.name || 'Petugas'})`
+                      : leadScope === 'unassigned' || filterLeadPic === 'unassigned'
+                      ? 'Belum Ada PIC'
+                      : getStaffById(filterLeadPic)?.name || filterLeadPic}
+                    <button
+                      onClick={() => {
+                        setFilterLeadPic('all');
+                        if (leadScope === 'my' || leadScope === 'unassigned') setLeadScope('all');
+                      }}
+                      className="hover:text-white ml-0.5"
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  </span>
+                )}
+                {leadScope === 'high_priority' && (
+                  <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-rose-500/20 text-rose-300 rounded-lg font-bold border border-rose-500/30">
+                    <Flame className="w-3 h-3" /> Prioritas Tinggi
+                    <button onClick={() => setLeadScope('all')} className="hover:text-white ml-0.5">
+                      <X className="w-3 h-3" />
+                    </button>
+                  </span>
+                )}
+                {filterLeadSource !== 'all' && (
+                  <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-zinc-800 text-zinc-300 rounded-lg font-bold border border-zinc-700">
+                    Sumber: {filterLeadSource}
+                    <button onClick={() => setFilterLeadSource('all')} className="hover:text-white ml-0.5">
+                      <X className="w-3 h-3" />
+                    </button>
+                  </span>
+                )}
+                {filterLeadPriority !== 'all' && (
+                  <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-zinc-800 text-zinc-300 rounded-lg font-bold border border-zinc-700">
+                    Prioritas: {filterLeadPriority}
+                    <button onClick={() => setFilterLeadPriority('all')} className="hover:text-white ml-0.5">
+                      <X className="w-3 h-3" />
+                    </button>
+                  </span>
+                )}
+                {searchLeadQuery.trim() !== '' && (
+                  <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-zinc-800 text-zinc-300 rounded-lg font-bold border border-zinc-700">
+                    Cari: "{searchLeadQuery}"
+                    <button onClick={() => setSearchLeadQuery('')} className="hover:text-white ml-0.5">
+                      <X className="w-3 h-3" />
+                    </button>
+                  </span>
+                )}
+              </div>
+
+              <div className="flex items-center gap-3">
+                <span className="text-zinc-400 font-medium">
+                  Menampilkan <strong className="text-white">{filteredLeads.length}</strong> dari {leads.length} prospek
+                </span>
+                <button
+                  onClick={() => {
+                    setFilterLeadPic('all');
+                    setLeadScope('all');
+                    setFilterLeadSource('all');
+                    setFilterLeadPriority('all');
+                    setSearchLeadQuery('');
+                  }}
+                  className="text-xs text-orange-400 hover:text-orange-300 underline font-semibold transition"
+                >
+                  Reset Filter
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* 5-COLUMN KANBAN BOARD */}
+          <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4 overflow-x-auto pb-4">
+            {/* COLUMN 1: BARU (INQUIRY MASUK) */}
+            <div className="bg-zinc-900/90 border border-zinc-800 rounded-3xl p-3.5 flex flex-col min-h-[500px]">
+              <div className="flex justify-between items-center pb-3 mb-3 border-b border-zinc-800">
+                <div>
+                  <span className="text-xs font-bold text-white flex items-center gap-2">
+                    <span className="w-2.5 h-2.5 rounded-full bg-blue-500"></span> Lead Baru
+                  </span>
+                  <span className="text-[10px] text-zinc-500 block">Inquiry / Prospek Masuk</span>
+                </div>
+                <div className="text-right">
+                  <span className="text-[10px] font-bold bg-blue-500/20 text-blue-400 px-2 py-0.5 rounded-full">
+                    {filteredLeads.filter((l) => l.status === 'Baru').length}
+                  </span>
+                  <p className="text-[9px] text-zinc-500 mt-0.5">
+                    {formatRp(
+                      filteredLeads
+                        .filter((l) => l.status === 'Baru')
+                        .reduce((a, b) => a + (b.estimatedValue || 0), 0)
+                    )}
+                  </p>
+                </div>
+              </div>
+
+              <div className="space-y-3 flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-zinc-800">
+                {filteredLeads.filter((l) => l.status === 'Baru').length === 0 ? (
+                  <div className="h-32 flex flex-col items-center justify-center text-center p-4 border border-dashed border-zinc-800 rounded-2xl text-zinc-500 text-xs">
+                    <p>Tidak ada lead di tahap ini</p>
+                  </div>
+                ) : (
+                  filteredLeads
+                    .filter((l) => l.status === 'Baru')
+                    .map((lead) => {
+                      const staff = getStaffById(lead.picId);
+                      const isMyLead = currentUser?.id === lead.picId;
+
+                      return (
+                        <div
+                          key={lead.id}
+                          className={`bg-zinc-950 border p-3.5 rounded-2xl space-y-2.5 transition shadow-sm hover:border-zinc-700 ${
+                            isMyLead ? 'border-orange-500/40 ring-1 ring-orange-500/20' : 'border-zinc-800/90'
+                          }`}
+                        >
+                          {/* Card Top: Priority, Source, Date */}
+                          <div className="flex justify-between items-center text-[10px]">
+                            <div className="flex items-center gap-1.5">
+                              <span
+                                className={`px-1.5 py-0.5 rounded font-bold ${
+                                  lead.priority === 'Tinggi'
+                                    ? 'bg-rose-500/20 text-rose-400 border border-rose-500/30'
+                                    : lead.priority === 'Sedang'
+                                    ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
+                                    : 'bg-zinc-800 text-zinc-400'
+                                }`}
+                              >
+                                {lead.priority === 'Tinggi' ? '🔥 Tinggi' : lead.priority || 'Sedang'}
+                              </span>
+                              <span className="text-zinc-400 bg-zinc-900 px-1.5 py-0.5 rounded border border-zinc-800">
+                                {lead.source}
+                              </span>
+                            </div>
+                            <span className="text-zinc-500">{formatDateIndo(lead.date || '')}</span>
+                          </div>
+
+                          {/* Lead Name & Target Program */}
+                          <div>
+                            <h5 className="text-xs font-bold text-white hover:text-orange-400 transition cursor-pointer" onClick={() => setSelectedLeadForDetail(lead)}>
+                              {lead.name}
+                            </h5>
+                            <p className="text-[11px] text-zinc-400 flex items-center gap-1 mt-0.5">
+                              <Phone className="w-3 h-3 text-zinc-500" /> {lead.phone}
+                            </p>
+                            {lead.interest && (
+                              <p className="text-[10px] text-orange-400/90 font-medium mt-1 bg-orange-500/5 px-2 py-0.5 rounded border border-orange-500/10">
+                                Minat: {lead.interest}
+                              </p>
+                            )}
+                            {lead.estimatedValue ? (
+                              <p className="text-[10px] text-emerald-400 font-bold mt-1">
+                                Est. Nilai: {formatRp(lead.estimatedValue)}
+                              </p>
+                            ) : null}
+                          </div>
+
+                          {/* PIC RESPONSIBILITY BOX (Pencegah Tertukar) */}
+                          <div className="bg-zinc-900/90 border border-zinc-800/80 rounded-xl p-2 space-y-1.5">
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-2">
+                                <div className="w-6 h-6 rounded-full bg-zinc-800 border border-zinc-700 flex items-center justify-center overflow-hidden shrink-0">
+                                  {staff?.photo ? (
+                                    <img src={staff.photo} alt={staff.name} className="w-full h-full object-cover" />
+                                  ) : (
+                                    <span className="text-[9px] font-bold text-zinc-300">
+                                      {(staff?.name || lead.picName || '?').charAt(0)}
+                                    </span>
+                                  )}
+                                </div>
+                                <div className="leading-tight">
+                                  <div className="flex items-center gap-1">
+                                    <span className="text-[11px] font-bold text-zinc-200">
+                                      {staff?.name || lead.picName || 'Belum Ada PIC'}
+                                    </span>
+                                    {isMyLead && (
+                                      <span className="text-[8px] bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 px-1 py-0.2 rounded font-bold">
+                                        Milik Saya
+                                      </span>
+                                    )}
+                                  </div>
+                                  <span className="text-[9px] text-zinc-500 block">
+                                    {staff?.roleName || lead.picRole || 'Front Desk'} • Shift {staff?.shift || lead.picShift || 'Pagi'}
+                                  </span>
+                                </div>
+                              </div>
+
+                              {/* Handover or Claim Button */}
+                              {lead.picId ? (
+                                <button
+                                  onClick={() => {
+                                    setSelectedLeadForHandover(lead);
+                                    setHandoverTargetPicId(staffUsers.find((s) => s.id !== lead.picId)?.id || '');
+                                  }}
+                                  title="Oper Alih / Handover ke Petugas Lain"
+                                  className="text-[9px] font-bold bg-zinc-800 hover:bg-zinc-700 text-orange-400 px-2 py-1 rounded-lg flex items-center gap-1 border border-zinc-700 transition"
+                                >
+                                  <ArrowRightLeft className="w-2.5 h-2.5" /> Oper
+                                </button>
+                              ) : (
+                                <button
+                                  onClick={() => handleClaimLead(lead)}
+                                  className="text-[9px] font-bold bg-amber-500/20 hover:bg-amber-500/30 text-amber-400 px-2 py-1 rounded-lg flex items-center gap-1 border border-amber-500/30 transition"
+                                >
+                                  <UserCheck className="w-2.5 h-2.5" /> Klaim
+                                </button>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* Quick Follow-up Log / Note */}
+                          {lead.notes && (
+                            <p className="text-[10px] text-zinc-400 italic line-clamp-1 bg-zinc-900/40 px-2 py-1 rounded">
+                              "{lead.notes}"
+                            </p>
+                          )}
+
+                          {/* Card Footer: WhatsApp & Stage Action */}
+                          <div className="pt-2 border-t border-zinc-800/80 flex justify-between items-center gap-1">
+                            <button
+                              onClick={() => openWhatsAppLead(lead, 'greeting')}
+                              className="text-[10px] font-bold text-emerald-400 hover:text-emerald-300 flex items-center gap-1 bg-emerald-500/10 hover:bg-emerald-500/20 px-2.5 py-1 rounded-lg border border-emerald-500/20 transition"
+                            >
+                              <MessageSquare className="w-3 h-3" /> Chat WA
+                            </button>
+
+                            <div className="flex items-center gap-1">
+                              <button
+                                onClick={() => setSelectedLeadForDetail(lead)}
+                                title="Lihat Detail & Timeline"
+                                className="text-[10px] bg-zinc-800 hover:bg-zinc-700 text-zinc-300 p-1.5 rounded-lg transition"
+                              >
+                                <Eye className="w-3 h-3" />
+                              </button>
+                              <button
+                                onClick={() => handleMoveStage(lead, 'Follow Up')}
+                                className="text-[10px] font-bold bg-orange-500 hover:bg-orange-600 text-white px-2.5 py-1 rounded-lg flex items-center gap-1 transition shadow-sm"
+                              >
+                                Ke Follow Up <ChevronRight className="w-3 h-3" />
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })
+                )}
+              </div>
+            </div>
+
+            {/* COLUMN 2: FOLLOW UP (SEDANG DISKUSI / PENAWARAN) */}
+            <div className="bg-zinc-900/90 border border-zinc-800 rounded-3xl p-3.5 flex flex-col min-h-[500px]">
+              <div className="flex justify-between items-center pb-3 mb-3 border-b border-zinc-800">
+                <div>
+                  <span className="text-xs font-bold text-white flex items-center gap-2">
+                    <span className="w-2.5 h-2.5 rounded-full bg-orange-500"></span> Follow Up
+                  </span>
+                  <span className="text-[10px] text-zinc-500 block">Konsultasi & Penawaran</span>
+                </div>
+                <div className="text-right">
+                  <span className="text-[10px] font-bold bg-orange-500/20 text-orange-400 px-2 py-0.5 rounded-full">
+                    {filteredLeads.filter((l) => l.status === 'Follow Up').length}
+                  </span>
+                  <p className="text-[9px] text-zinc-500 mt-0.5">
+                    {formatRp(
+                      filteredLeads
+                        .filter((l) => l.status === 'Follow Up')
+                        .reduce((a, b) => a + (b.estimatedValue || 0), 0)
+                    )}
+                  </p>
+                </div>
+              </div>
+
+              <div className="space-y-3 flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-zinc-800">
+                {filteredLeads.filter((l) => l.status === 'Follow Up').length === 0 ? (
+                  <div className="h-32 flex flex-col items-center justify-center text-center p-4 border border-dashed border-zinc-800 rounded-2xl text-zinc-500 text-xs">
+                    <p>Tidak ada lead di tahap ini</p>
+                  </div>
+                ) : (
+                  filteredLeads
+                    .filter((l) => l.status === 'Follow Up')
+                    .map((lead) => {
+                      const staff = getStaffById(lead.picId);
+                      const isMyLead = currentUser?.id === lead.picId;
+
+                      return (
+                        <div
+                          key={lead.id}
+                          className={`bg-zinc-950 border p-3.5 rounded-2xl space-y-2.5 transition shadow-sm hover:border-zinc-700 ${
+                            isMyLead ? 'border-orange-500/40 ring-1 ring-orange-500/20' : 'border-zinc-800/90'
+                          }`}
+                        >
+                          {/* Card Top: Priority, Source, Date */}
+                          <div className="flex justify-between items-center text-[10px]">
+                            <div className="flex items-center gap-1.5">
+                              <span
+                                className={`px-1.5 py-0.5 rounded font-bold ${
+                                  lead.priority === 'Tinggi'
+                                    ? 'bg-rose-500/20 text-rose-400 border border-rose-500/30'
+                                    : lead.priority === 'Sedang'
+                                    ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
+                                    : 'bg-zinc-800 text-zinc-400'
+                                }`}
+                              >
+                                {lead.priority === 'Tinggi' ? '🔥 Tinggi' : lead.priority || 'Sedang'}
+                              </span>
+                              <span className="text-zinc-400 bg-zinc-900 px-1.5 py-0.5 rounded border border-zinc-800">
+                                {lead.source}
+                              </span>
+                            </div>
+                            <span className="text-zinc-500">{formatDateIndo(lead.date || '')}</span>
+                          </div>
+
+                          {/* Lead Name & Target Program */}
+                          <div>
+                            <h5 className="text-xs font-bold text-white hover:text-orange-400 transition cursor-pointer" onClick={() => setSelectedLeadForDetail(lead)}>
+                              {lead.name}
+                            </h5>
+                            <p className="text-[11px] text-zinc-400 flex items-center gap-1 mt-0.5">
+                              <Phone className="w-3 h-3 text-zinc-500" /> {lead.phone}
+                            </p>
+                            {lead.interest && (
+                              <p className="text-[10px] text-orange-400/90 font-medium mt-1 bg-orange-500/5 px-2 py-0.5 rounded border border-orange-500/10">
+                                Minat: {lead.interest}
+                              </p>
+                            )}
+                            {lead.estimatedValue ? (
+                              <p className="text-[10px] text-emerald-400 font-bold mt-1">
+                                Est. Nilai: {formatRp(lead.estimatedValue)}
+                              </p>
+                            ) : null}
+                          </div>
+
+                          {/* PIC RESPONSIBILITY BOX (Pencegah Tertukar) */}
+                          <div className="bg-zinc-900/90 border border-zinc-800/80 rounded-xl p-2 space-y-1.5">
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-2">
+                                <div className="w-6 h-6 rounded-full bg-zinc-800 border border-zinc-700 flex items-center justify-center overflow-hidden shrink-0">
+                                  {staff?.photo ? (
+                                    <img src={staff.photo} alt={staff.name} className="w-full h-full object-cover" />
+                                  ) : (
+                                    <span className="text-[9px] font-bold text-zinc-300">
+                                      {(staff?.name || lead.picName || '?').charAt(0)}
+                                    </span>
+                                  )}
+                                </div>
+                                <div className="leading-tight">
+                                  <div className="flex items-center gap-1">
+                                    <span className="text-[11px] font-bold text-zinc-200">
+                                      {staff?.name || lead.picName || 'Belum Ada PIC'}
+                                    </span>
+                                    {isMyLead && (
+                                      <span className="text-[8px] bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 px-1 py-0.2 rounded font-bold">
+                                        Milik Saya
+                                      </span>
+                                    )}
+                                  </div>
+                                  <span className="text-[9px] text-zinc-500 block">
+                                    {staff?.roleName || lead.picRole || 'Front Desk'} • Shift {staff?.shift || lead.picShift || 'Pagi'}
+                                  </span>
+                                </div>
+                              </div>
+
+                              {lead.picId ? (
+                                <button
+                                  onClick={() => {
+                                    setSelectedLeadForHandover(lead);
+                                    setHandoverTargetPicId(staffUsers.find((s) => s.id !== lead.picId)?.id || '');
+                                  }}
+                                  title="Oper Alih / Handover ke Petugas Lain"
+                                  className="text-[9px] font-bold bg-zinc-800 hover:bg-zinc-700 text-orange-400 px-2 py-1 rounded-lg flex items-center gap-1 border border-zinc-700 transition"
+                                >
+                                  <ArrowRightLeft className="w-2.5 h-2.5" /> Oper
+                                </button>
+                              ) : (
+                                <button
+                                  onClick={() => handleClaimLead(lead)}
+                                  className="text-[9px] font-bold bg-amber-500/20 hover:bg-amber-500/30 text-amber-400 px-2 py-1 rounded-lg flex items-center gap-1 border border-amber-500/30 transition"
+                                >
+                                  <UserCheck className="w-2.5 h-2.5" /> Klaim
+                                </button>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* Last Follow Up Record */}
+                          {lead.followUpHistory && lead.followUpHistory.length > 0 && (
+                            <div className="text-[9px] text-zinc-400 bg-zinc-900/60 p-1.5 rounded-lg border border-zinc-800/60 space-y-0.5">
+                              <span className="font-bold text-zinc-300">
+                                Follow-up: {lead.followUpHistory[0].result}
+                              </span>
+                              <p className="line-clamp-1 text-zinc-500">
+                                {lead.followUpHistory[0].notes}
+                              </p>
+                            </div>
+                          )}
+
+                          {/* Card Footer: WhatsApp & Stage Action */}
+                          <div className="pt-2 border-t border-zinc-800/80 flex justify-between items-center gap-1">
+                            <button
+                              onClick={() => openWhatsAppLead(lead, 'promo')}
+                              className="text-[10px] font-bold text-emerald-400 hover:text-emerald-300 flex items-center gap-1 bg-emerald-500/10 hover:bg-emerald-500/20 px-2.5 py-1 rounded-lg border border-emerald-500/20 transition"
+                            >
+                              <MessageSquare className="w-3 h-3" /> Promo WA
+                            </button>
+
+                            <div className="flex items-center gap-1">
+                              <button
+                                onClick={() => handleMoveStage(lead, 'Baru')}
+                                title="Kembalikan ke Baru"
+                                className="text-[10px] bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-white p-1.5 rounded-lg transition"
+                              >
+                                <ChevronLeft className="w-3 h-3" />
+                              </button>
+                              <button
+                                onClick={() => setSelectedLeadForDetail(lead)}
+                                title="Lihat Detail & Timeline"
+                                className="text-[10px] bg-zinc-800 hover:bg-zinc-700 text-zinc-300 p-1.5 rounded-lg transition"
+                              >
+                                <Eye className="w-3 h-3" />
+                              </button>
+                              <button
+                                onClick={() => handleMoveStage(lead, 'Trial')}
+                                className="text-[10px] font-bold bg-purple-600 hover:bg-purple-500 text-white px-2.5 py-1 rounded-lg flex items-center gap-1 transition shadow-sm"
+                              >
+                                Ke Trial <ChevronRight className="w-3 h-3" />
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })
+                )}
+              </div>
+            </div>
+
+            {/* COLUMN 3: TRIAL / VISIT (JADWAL KUNJUNGAN GYM) */}
+            <div className="bg-zinc-900/90 border border-zinc-800 rounded-3xl p-3.5 flex flex-col min-h-[500px]">
+              <div className="flex justify-between items-center pb-3 mb-3 border-b border-zinc-800">
+                <div>
+                  <span className="text-xs font-bold text-white flex items-center gap-2">
+                    <span className="w-2.5 h-2.5 rounded-full bg-purple-500"></span> Trial / Visit
+                  </span>
+                  <span className="text-[10px] text-zinc-500 block">Jadwal Survey & Latihan</span>
+                </div>
+                <div className="text-right">
+                  <span className="text-[10px] font-bold bg-purple-500/20 text-purple-400 px-2 py-0.5 rounded-full">
+                    {filteredLeads.filter((l) => l.status === 'Trial').length}
+                  </span>
+                  <p className="text-[9px] text-zinc-500 mt-0.5">
+                    {formatRp(
+                      filteredLeads
+                        .filter((l) => l.status === 'Trial')
+                        .reduce((a, b) => a + (b.estimatedValue || 0), 0)
+                    )}
+                  </p>
+                </div>
+              </div>
+
+              <div className="space-y-3 flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-zinc-800">
+                {filteredLeads.filter((l) => l.status === 'Trial').length === 0 ? (
+                  <div className="h-32 flex flex-col items-center justify-center text-center p-4 border border-dashed border-zinc-800 rounded-2xl text-zinc-500 text-xs">
+                    <p>Tidak ada lead di tahap ini</p>
+                  </div>
+                ) : (
+                  filteredLeads
+                    .filter((l) => l.status === 'Trial')
+                    .map((lead) => {
+                      const staff = getStaffById(lead.picId);
+                      const isMyLead = currentUser?.id === lead.picId;
+
+                      return (
+                        <div
+                          key={lead.id}
+                          className={`bg-zinc-950 border p-3.5 rounded-2xl space-y-2.5 transition shadow-sm hover:border-zinc-700 ${
+                            isMyLead ? 'border-orange-500/40 ring-1 ring-orange-500/20' : 'border-zinc-800/90'
+                          }`}
+                        >
+                          {/* Card Top: Priority, Source, Date */}
+                          <div className="flex justify-between items-center text-[10px]">
+                            <div className="flex items-center gap-1.5">
+                              <span
+                                className={`px-1.5 py-0.5 rounded font-bold ${
+                                  lead.priority === 'Tinggi'
+                                    ? 'bg-rose-500/20 text-rose-400 border border-rose-500/30'
+                                    : lead.priority === 'Sedang'
+                                    ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
+                                    : 'bg-zinc-800 text-zinc-400'
+                                }`}
+                              >
+                                {lead.priority === 'Tinggi' ? '🔥 Tinggi' : lead.priority || 'Sedang'}
+                              </span>
+                              <span className="text-zinc-400 bg-zinc-900 px-1.5 py-0.5 rounded border border-zinc-800">
+                                {lead.source}
+                              </span>
+                            </div>
+                            <span className="text-zinc-500">{formatDateIndo(lead.date || '')}</span>
+                          </div>
+
+                          {/* Lead Name & Target Program */}
+                          <div>
+                            <h5 className="text-xs font-bold text-white hover:text-orange-400 transition cursor-pointer" onClick={() => setSelectedLeadForDetail(lead)}>
+                              {lead.name}
+                            </h5>
+                            <p className="text-[11px] text-zinc-400 flex items-center gap-1 mt-0.5">
+                              <Phone className="w-3 h-3 text-zinc-500" /> {lead.phone}
+                            </p>
+                            {lead.interest && (
+                              <p className="text-[10px] text-orange-400/90 font-medium mt-1 bg-orange-500/5 px-2 py-0.5 rounded border border-orange-500/10">
+                                Minat: {lead.interest}
+                              </p>
+                            )}
+                            {lead.estimatedValue ? (
+                              <p className="text-[10px] text-emerald-400 font-bold mt-1">
+                                Est. Nilai: {formatRp(lead.estimatedValue)}
+                              </p>
+                            ) : null}
+                          </div>
+
+                          {/* PIC RESPONSIBILITY BOX (Pencegah Tertukar) */}
+                          <div className="bg-zinc-900/90 border border-zinc-800/80 rounded-xl p-2 space-y-1.5">
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-2">
+                                <div className="w-6 h-6 rounded-full bg-zinc-800 border border-zinc-700 flex items-center justify-center overflow-hidden shrink-0">
+                                  {staff?.photo ? (
+                                    <img src={staff.photo} alt={staff.name} className="w-full h-full object-cover" />
+                                  ) : (
+                                    <span className="text-[9px] font-bold text-zinc-300">
+                                      {(staff?.name || lead.picName || '?').charAt(0)}
+                                    </span>
+                                  )}
+                                </div>
+                                <div className="leading-tight">
+                                  <div className="flex items-center gap-1">
+                                    <span className="text-[11px] font-bold text-zinc-200">
+                                      {staff?.name || lead.picName || 'Belum Ada PIC'}
+                                    </span>
+                                    {isMyLead && (
+                                      <span className="text-[8px] bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 px-1 py-0.2 rounded font-bold">
+                                        Milik Saya
+                                      </span>
+                                    )}
+                                  </div>
+                                  <span className="text-[9px] text-zinc-500 block">
+                                    {staff?.roleName || lead.picRole || 'Front Desk'} • Shift {staff?.shift || lead.picShift || 'Pagi'}
+                                  </span>
+                                </div>
+                              </div>
+
+                              {lead.picId ? (
+                                <button
+                                  onClick={() => {
+                                    setSelectedLeadForHandover(lead);
+                                    setHandoverTargetPicId(staffUsers.find((s) => s.id !== lead.picId)?.id || '');
+                                  }}
+                                  title="Oper Alih / Handover ke Petugas Lain"
+                                  className="text-[9px] font-bold bg-zinc-800 hover:bg-zinc-700 text-orange-400 px-2 py-1 rounded-lg flex items-center gap-1 border border-zinc-700 transition"
+                                >
+                                  <ArrowRightLeft className="w-2.5 h-2.5" /> Oper
+                                </button>
+                              ) : (
+                                <button
+                                  onClick={() => handleClaimLead(lead)}
+                                  className="text-[9px] font-bold bg-amber-500/20 hover:bg-amber-500/30 text-amber-400 px-2 py-1 rounded-lg flex items-center gap-1 border border-amber-500/30 transition"
+                                >
+                                  <UserCheck className="w-2.5 h-2.5" /> Klaim
+                                </button>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* Card Footer: WhatsApp, Move Stage, & Jadi Member */}
+                          <div className="pt-2 border-t border-zinc-800/80 flex justify-between items-center gap-1">
+                            <button
+                              onClick={() => openWhatsAppLead(lead, 'trial')}
+                              className="text-[10px] font-bold text-emerald-400 hover:text-emerald-300 flex items-center gap-1 bg-emerald-500/10 hover:bg-emerald-500/20 px-2.5 py-1 rounded-lg border border-emerald-500/20 transition"
+                            >
+                              <MessageSquare className="w-3 h-3" /> Konfirmasi
+                            </button>
+
+                            <div className="flex items-center gap-1">
+                              <button
+                                onClick={() => handleMoveStage(lead, 'Follow Up')}
+                                title="Kembalikan ke Follow Up"
+                                className="text-[10px] bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-white p-1.5 rounded-lg transition"
+                              >
+                                <ChevronLeft className="w-3 h-3" />
+                              </button>
+                              <button
+                                onClick={() => setSelectedLeadForDetail(lead)}
+                                title="Lihat Detail & Timeline"
+                                className="text-[10px] bg-zinc-800 hover:bg-zinc-700 text-zinc-300 p-1.5 rounded-lg transition"
+                              >
+                                <Eye className="w-3 h-3" />
+                              </button>
+                              <button
+                                onClick={() => {
+                                  onUpdateLeadStatus(lead.id, 'Member');
+                                  onConvertLeadToMember(lead);
+                                }}
+                                className="text-[10px] font-bold bg-emerald-600 hover:bg-emerald-500 text-white px-2.5 py-1 rounded-lg flex items-center gap-1 transition shadow-sm"
+                              >
+                                Jadi Member <CheckCircle2 className="w-3 h-3" />
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })
+                )}
+              </div>
+            </div>
+
+            {/* COLUMN 4: WIN (MEMBER BARU CLOSING) */}
+            <div className="bg-zinc-900/90 border border-zinc-800 rounded-3xl p-3.5 flex flex-col min-h-[500px]">
+              <div className="flex justify-between items-center pb-3 mb-3 border-b border-zinc-800">
+                <div>
+                  <span className="text-xs font-bold text-white flex items-center gap-2">
+                    <span className="w-2.5 h-2.5 rounded-full bg-emerald-500"></span> Win (Member)
+                  </span>
+                  <span className="text-[10px] text-zinc-500 block">Closing & Terdaftar Resmi</span>
+                </div>
+                <div className="text-right">
+                  <span className="text-[10px] font-bold bg-emerald-500/20 text-emerald-400 px-2 py-0.5 rounded-full">
+                    {filteredLeads.filter((l) => l.status === 'Member').length}
+                  </span>
+                  <p className="text-[9px] text-zinc-500 mt-0.5">
+                    {formatRp(
+                      filteredLeads
+                        .filter((l) => l.status === 'Member')
+                        .reduce((a, b) => a + (b.estimatedValue || 0), 0)
+                    )}
+                  </p>
+                </div>
+              </div>
+
+              <div className="space-y-3 flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-zinc-800">
+                {filteredLeads.filter((l) => l.status === 'Member').length === 0 ? (
+                  <div className="h-32 flex flex-col items-center justify-center text-center p-4 border border-dashed border-zinc-800 rounded-2xl text-zinc-500 text-xs">
+                    <p>Belum ada closing di filter ini</p>
+                  </div>
+                ) : (
+                  filteredLeads
+                    .filter((l) => l.status === 'Member')
+                    .map((lead) => {
+                      const staff = getStaffById(lead.picId);
+                      const isMyLead = currentUser?.id === lead.picId;
+
+                      return (
+                        <div
+                          key={lead.id}
+                          className="bg-zinc-950 border border-emerald-500/30 p-3.5 rounded-2xl space-y-2.5 transition shadow-sm hover:border-emerald-500/50"
+                        >
+                          {/* Card Top: Win Tag & Date */}
+                          <div className="flex justify-between items-center text-[10px]">
+                            <span className="text-[9px] font-bold text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded-full flex items-center gap-1">
+                              <Trophy className="w-2.5 h-2.5" /> Closing Win
+                            </span>
+                            <span className="text-zinc-500">{formatDateIndo(lead.date || '')}</span>
+                          </div>
+
+                          {/* Member info */}
+                          <div>
+                            <h5 className="text-xs font-bold text-white flex items-center justify-between">
+                              <span>{lead.name}</span>
+                              <span className="text-[10px] text-emerald-400 font-bold">
+                                {formatRp(lead.estimatedValue || 0)}
+                              </span>
+                            </h5>
+                            <p className="text-[11px] text-zinc-400 flex items-center gap-1 mt-0.5">
+                              <Phone className="w-3 h-3 text-zinc-500" /> {lead.phone}
+                            </p>
+                            <p className="text-[10px] text-zinc-400 mt-1">
+                              Paket: <strong className="text-zinc-200">{lead.interest || 'Membership'}</strong>
+                            </p>
+                          </div>
+
+                          {/* Closing PIC Badge */}
+                          <div className="bg-zinc-900/80 border border-zinc-800 rounded-xl p-2 flex items-center justify-between text-[10px]">
+                            <div className="flex items-center gap-2">
+                              <div className="w-5 h-5 rounded-full bg-emerald-500/20 border border-emerald-500/30 flex items-center justify-center shrink-0">
+                                <Check className="w-3 h-3 text-emerald-400" />
+                              </div>
+                              <div className="leading-tight">
+                                <span className="text-[11px] font-bold text-zinc-200 block">
+                                  PIC Closing: {staff?.name || lead.picName || 'Front Desk'}
+                                </span>
+                                <span className="text-[9px] text-zinc-500">
+                                  Shift {staff?.shift || lead.picShift || 'Pagi'}
+                                </span>
+                              </div>
+                            </div>
+                            {isMyLead && (
+                              <span className="text-[9px] text-emerald-400 font-bold bg-emerald-500/10 px-1.5 py-0.5 rounded border border-emerald-500/20">
+                                Closing Anda ⭐
+                              </span>
+                            )}
+                          </div>
+
+                          <div className="pt-2 border-t border-zinc-800/80 flex justify-between items-center">
+                            <button
+                              onClick={() => setSelectedLeadForDetail(lead)}
+                              className="text-[10px] text-zinc-400 hover:text-white flex items-center gap-1"
+                            >
+                              <History className="w-3 h-3" /> Riwayat Prospek
+                            </button>
+                            <a
+                              href={`https://wa.me/${lead.phone.replace(/^0/, '62').replace(/\D/g, '')}`}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="text-[10px] font-bold text-emerald-400 hover:text-emerald-300 flex items-center gap-1"
+                            >
+                              <MessageSquare className="w-3 h-3" /> WhatsApp
+                            </a>
+                          </div>
+                        </div>
+                      );
+                    })
+                )}
+              </div>
+            </div>
+
+            {/* COLUMN 5: LOST / BATAL (ARSIP PROSPEK BATAL) */}
+            <div className="bg-zinc-900/90 border border-zinc-800 rounded-3xl p-3.5 flex flex-col min-h-[500px]">
+              <div className="flex justify-between items-center pb-3 mb-3 border-b border-zinc-800">
+                <div>
+                  <span className="text-xs font-bold text-white flex items-center gap-2">
+                    <span className="w-2.5 h-2.5 rounded-full bg-rose-500"></span> Lost / Batal
+                  </span>
+                  <span className="text-[10px] text-zinc-500 block">Tidak Berminat / Gagal</span>
+                </div>
+                <div className="text-right">
+                  <span className="text-[10px] font-bold bg-rose-500/20 text-rose-400 px-2 py-0.5 rounded-full">
+                    {filteredLeads.filter((l) => l.status === 'Lost').length}
+                  </span>
+                </div>
+              </div>
+
+              <div className="space-y-3 flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-zinc-800">
+                {filteredLeads.filter((l) => l.status === 'Lost').length === 0 ? (
+                  <div className="h-32 flex flex-col items-center justify-center text-center p-4 border border-dashed border-zinc-800 rounded-2xl text-zinc-500 text-xs">
+                    <p>Tidak ada lead di daftar Lost</p>
+                  </div>
+                ) : (
+                  filteredLeads
+                    .filter((l) => l.status === 'Lost')
+                    .map((lead) => {
+                      const staff = getStaffById(lead.picId);
+
+                      return (
+                        <div
+                          key={lead.id}
+                          className="bg-zinc-950 border border-zinc-800/80 p-3 rounded-2xl space-y-2 opacity-80 hover:opacity-100 transition"
+                        >
+                          <div className="flex justify-between items-start">
+                            <div>
+                              <h5 className="text-xs font-bold text-zinc-300">{lead.name}</h5>
+                              <p className="text-[10px] text-zinc-500">{lead.phone}</p>
+                            </div>
+                            <span className="text-[9px] text-rose-400 bg-rose-500/10 border border-rose-500/20 px-1.5 py-0.5 rounded font-bold">
+                              Lost
+                            </span>
+                          </div>
+
+                          {lead.lostReason && (
+                            <p className="text-[9px] text-rose-400/90 bg-rose-500/5 border border-rose-500/10 p-1.5 rounded">
+                              Alasan: {lead.lostReason}
+                            </p>
+                          )}
+
+                          <div className="text-[9px] text-zinc-500 flex justify-between items-center pt-1 border-t border-zinc-800">
+                            <span>PIC: {staff?.name || lead.picName || 'Front Desk'}</span>
+                            <button
+                              onClick={() => handleMoveStage(lead, 'Follow Up')}
+                              className="text-orange-400 hover:text-orange-300 font-bold flex items-center gap-0.5"
+                            >
+                              <RotateCcw className="w-2.5 h-2.5" /> Reaktivasi
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })
+                )}
               </div>
             </div>
           </div>
@@ -1320,53 +2652,152 @@ export const CRMView: React.FC<CRMViewProps> = ({
         </div>
       )}
 
-      {/* MODAL: TAMBAH LEAD BARU */}
+      {/* MODAL: TAMBAH LEAD BARU (ENHANCED DENGAN PIC RESPONSIBILITY) */}
       {isAddLeadOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-xs p-3 sm:p-4 overflow-y-auto">
-          <div className="bg-zinc-900 border border-zinc-800 rounded-2xl shadow-2xl w-full max-w-sm p-4 sm:p-6 my-auto max-h-[92vh] overflow-y-auto animate-in fade-in zoom-in-95">
-            <h3 className="text-base font-bold text-white mb-4">Tambah Prospek Lead Baru</h3>
+          <div className="bg-zinc-900 border border-zinc-800 rounded-3xl shadow-2xl w-full max-w-lg p-5 sm:p-6 my-auto max-h-[92vh] overflow-y-auto animate-in fade-in zoom-in-95">
+            <div className="flex justify-between items-start mb-4">
+              <div>
+                <h3 className="text-base font-bold text-white flex items-center gap-2">
+                  <span className="w-2.5 h-2.5 rounded-full bg-orange-500"></span>
+                  Tambah Prospek Lead Baru
+                </h3>
+                <p className="text-xs text-zinc-400 mt-0.5">
+                  Tugaskan ke Petugas Front Desk yang bertanggung jawab agar tindak lanjut jelas dan tidak tertukar.
+                </p>
+              </div>
+              <button
+                onClick={() => setIsAddLeadOpen(false)}
+                className="text-zinc-500 hover:text-white p-1 rounded-lg"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
             <form onSubmit={handleSaveLead} className="space-y-4">
-              <div>
-                <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-wider mb-1.5">
-                  Nama Prospek
-                </label>
-                <input
-                  type="text"
-                  value={leadName}
-                  onChange={(e) => setLeadName(e.target.value)}
-                  placeholder="Cth: Denny Chandra"
-                  required
-                  className="w-full bg-zinc-950 border border-zinc-700 rounded-xl px-3.5 py-2.5 text-xs text-white outline-none focus:border-orange-500"
-                />
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-wider mb-1.5">
+                    Nama Calon Member *
+                  </label>
+                  <input
+                    type="text"
+                    value={leadName}
+                    onChange={(e) => setLeadName(e.target.value)}
+                    placeholder="Cth: Denny Chandra"
+                    required
+                    className="w-full bg-zinc-950 border border-zinc-700 rounded-xl px-3.5 py-2.5 text-xs text-white outline-none focus:border-orange-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-wider mb-1.5">
+                    No WhatsApp Aktif *
+                  </label>
+                  <input
+                    type="text"
+                    value={leadPhone}
+                    onChange={(e) => setLeadPhone(e.target.value)}
+                    placeholder="Cth: 08123456789"
+                    required
+                    className="w-full bg-zinc-950 border border-zinc-700 rounded-xl px-3.5 py-2.5 text-xs text-white outline-none focus:border-orange-500"
+                  />
+                </div>
               </div>
 
-              <div>
-                <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-wider mb-1.5">
-                  No WhatsApp
-                </label>
-                <input
-                  type="text"
-                  value={leadPhone}
-                  onChange={(e) => setLeadPhone(e.target.value)}
-                  placeholder="Cth: 08123456789"
-                  required
-                  className="w-full bg-zinc-950 border border-zinc-700 rounded-xl px-3.5 py-2.5 text-xs text-white outline-none focus:border-orange-500"
-                />
-              </div>
-
-              <div>
-                <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-wider mb-1.5">
-                  Sumber Trafik
+              {/* PETUGAS FRONT DESK / PIC YANG BERTANGGUNG JAWAB */}
+              <div className="bg-zinc-950 border border-orange-500/30 rounded-2xl p-3.5 space-y-2">
+                <label className="block text-[10px] font-bold text-orange-400 uppercase tracking-wider flex items-center justify-between">
+                  <span>Petugas Front Desk / PIC Penanggung Jawab *</span>
+                  <span className="text-[9px] text-zinc-500 lowercase font-normal">mencegah leads tertukar</span>
                 </label>
                 <select
-                  value={leadSource}
-                  onChange={(e) => setLeadSource(e.target.value as any)}
-                  className="w-full bg-zinc-950 border border-zinc-700 rounded-xl px-3.5 py-2.5 text-xs text-white outline-none focus:border-orange-500"
+                  value={leadPicId}
+                  onChange={(e) => setLeadPicId(e.target.value)}
+                  className="w-full bg-zinc-900 border border-zinc-700 rounded-xl px-3.5 py-2.5 text-xs text-white outline-none focus:border-orange-500"
                 >
-                  <option value="Instagram">Instagram / Media Sosial</option>
-                  <option value="Walk-in">Walk-in Langsung ke Gym</option>
-                  <option value="Referral">Rekomendasi Teman (Referral)</option>
+                  {staffUsers.map((staff) => (
+                    <option key={staff.id} value={staff.id}>
+                      {staff.name} — {staff.roleName || 'Front Desk'} {staff.shift ? `(Shift ${staff.shift})` : ''} {currentUser?.id === staff.id ? '⭐ [Saya]' : ''}
+                    </option>
+                  ))}
                 </select>
+                <p className="text-[10px] text-zinc-400">
+                  Petugas terpilih wajib melakukan kontak awal, follow-up, dan mencatat riwayat interaksi.
+                </p>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div>
+                  <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-wider mb-1.5">
+                    Sumber Prospek
+                  </label>
+                  <select
+                    value={leadSource}
+                    onChange={(e) => setLeadSource(e.target.value)}
+                    className="w-full bg-zinc-950 border border-zinc-700 rounded-xl px-3 py-2.5 text-xs text-white outline-none focus:border-orange-500"
+                  >
+                    <option value="Instagram">Instagram</option>
+                    <option value="Walk-in">Walk-in Langsung</option>
+                    <option value="Referral">Rekomendasi Teman</option>
+                    <option value="TikTok">TikTok</option>
+                    <option value="Google / Web">Google / Web</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-wider mb-1.5">
+                    Tingkat Prioritas
+                  </label>
+                  <select
+                    value={leadPriority}
+                    onChange={(e) => setLeadPriority(e.target.value as any)}
+                    className="w-full bg-zinc-950 border border-zinc-700 rounded-xl px-3 py-2.5 text-xs text-white outline-none focus:border-orange-500"
+                  >
+                    <option value="Tinggi">🔥 Tinggi (Segera Hubungi)</option>
+                    <option value="Sedang">⚡ Sedang</option>
+                    <option value="Rendah">Rendah (Santai)</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-wider mb-1.5">
+                    Est. Nilai Omset (Rp)
+                  </label>
+                  <input
+                    type="number"
+                    value={leadEstimatedValue}
+                    onChange={(e) => setLeadEstimatedValue(e.target.value)}
+                    placeholder="750000"
+                    className="w-full bg-zinc-950 border border-zinc-700 rounded-xl px-3 py-2.5 text-xs text-white outline-none focus:border-orange-500"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-wider mb-1.5">
+                  Program / Paket yang Diminati
+                </label>
+                <input
+                  type="text"
+                  value={leadInterest}
+                  onChange={(e) => setLeadInterest(e.target.value)}
+                  placeholder="Cth: Membership 3 Bulan + 5 Sesi PT"
+                  className="w-full bg-zinc-950 border border-zinc-700 rounded-xl px-3.5 py-2.5 text-xs text-white outline-none focus:border-orange-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-wider mb-1.5">
+                  Catatan Kebutuhan Calon Member
+                </label>
+                <textarea
+                  value={leadNotes}
+                  onChange={(e) => setLeadNotes(e.target.value)}
+                  rows={2}
+                  placeholder="Cth: Mau coba free trial besok sore jam 17:00, tertarik fat loss program"
+                  className="w-full bg-zinc-950 border border-zinc-700 rounded-xl p-3 text-xs text-white outline-none focus:border-orange-500"
+                ></textarea>
               </div>
 
               <div className="flex gap-2 pt-2">
@@ -1381,7 +2812,473 @@ export const CRMView: React.FC<CRMViewProps> = ({
                   type="submit"
                   className="flex-1 py-2.5 bg-orange-500 hover:bg-orange-600 text-white rounded-xl text-xs font-bold shadow-md transition"
                 >
-                  Simpan Lead
+                  Simpan & Tugaskan Lead
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: OPER ALIH / HANDOVER PIC (PENCEGAH TERTUKAR & AUDIT SERAH TERIMA) */}
+      {selectedLeadForHandover && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-xs p-3 sm:p-4 overflow-y-auto">
+          <div className="bg-zinc-900 border border-zinc-800 rounded-3xl shadow-2xl w-full max-w-md p-5 sm:p-6 my-auto max-h-[92vh] overflow-y-auto animate-in fade-in zoom-in-95">
+            <div className="flex justify-between items-start mb-4">
+              <div>
+                <h3 className="text-base font-bold text-white flex items-center gap-2">
+                  <ArrowRightLeft className="w-4 h-4 text-orange-400" />
+                  Oper Alih Tanggung Jawab Prospek
+                </h3>
+                <p className="text-xs text-zinc-400 mt-0.5">
+                  Serah terima tanggung jawab calon member ke petugas Front Desk lain agar tidak tertukar.
+                </p>
+              </div>
+              <button
+                onClick={() => setSelectedLeadForHandover(null)}
+                className="text-zinc-500 hover:text-white p-1 rounded-lg"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Current Lead Info */}
+            <div className="bg-zinc-950 border border-zinc-800 rounded-2xl p-3.5 space-y-2 mb-4">
+              <div className="flex justify-between items-center">
+                <h4 className="text-xs font-bold text-white">{selectedLeadForHandover.name}</h4>
+                <span className="text-[10px] text-zinc-400 bg-zinc-900 px-2 py-0.5 rounded border border-zinc-800">
+                  {selectedLeadForHandover.phone}
+                </span>
+              </div>
+              <div className="text-[11px] text-zinc-400 flex items-center justify-between pt-1 border-t border-zinc-800/80">
+                <span>PIC Saat Ini:</span>
+                <strong className="text-orange-400">
+                  {getStaffById(selectedLeadForHandover.picId)?.name || selectedLeadForHandover.picName || 'Belum Ada PIC'}
+                </strong>
+              </div>
+            </div>
+
+            <div className="space-y-4">
+              <div>
+                <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-wider mb-1.5">
+                  Alihkan Tanggung Jawab Kepada *
+                </label>
+                <select
+                  value={handoverTargetPicId}
+                  onChange={(e) => setHandoverTargetPicId(e.target.value)}
+                  className="w-full bg-zinc-950 border border-zinc-700 rounded-xl px-3.5 py-2.5 text-xs text-white outline-none focus:border-orange-500"
+                >
+                  <option value="">-- Pilih Petugas Front Desk Baru --</option>
+                  {staffUsers
+                    .filter((s) => s.id !== selectedLeadForHandover.picId)
+                    .map((staff) => (
+                      <option key={staff.id} value={staff.id}>
+                        {staff.name} ({staff.roleName || 'Front Desk'} • Shift {staff.shift || '-'})
+                      </option>
+                    ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-wider mb-1.5">
+                  Catatan Serah Terima / Alasan Oper Alih
+                </label>
+                <textarea
+                  value={handoverReason}
+                  onChange={(e) => setHandoverReason(e.target.value)}
+                  rows={3}
+                  placeholder="Cth: Pergantian shift siang ke sore. Member sudah janjian mau trial jam 18:30 WIB, tolong disapa dan dampingi saat datang."
+                  className="w-full bg-zinc-950 border border-zinc-700 rounded-xl p-3 text-xs text-white outline-none focus:border-orange-500"
+                ></textarea>
+              </div>
+
+              <div className="flex gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setSelectedLeadForHandover(null)}
+                  className="flex-1 py-2.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-xl text-xs font-bold transition"
+                >
+                  Batal
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (!handoverTargetPicId) {
+                      showToast('Pilih Petugas', 'Silakan tentukan petugas yang akan menerima prospek.', 'warning');
+                      return;
+                    }
+                    handlePerformHandover(selectedLeadForHandover, handoverTargetPicId, handoverReason);
+                  }}
+                  className="flex-1 py-2.5 bg-orange-500 hover:bg-orange-600 text-white rounded-xl text-xs font-bold shadow-md transition flex items-center justify-center gap-1.5"
+                >
+                  <Check className="w-3.5 h-3.5" /> Konfirmasi Alihkan
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: DETAIL PROSPEK 360 & TIMELINE AKTIVITAS */}
+      {selectedLeadForDetail && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-xs p-3 sm:p-4 overflow-y-auto">
+          <div className="bg-zinc-900 border border-zinc-800 rounded-3xl shadow-2xl w-full max-w-xl p-5 sm:p-6 my-auto max-h-[94vh] overflow-y-auto animate-in fade-in zoom-in-95 space-y-4">
+            {/* Modal Header */}
+            <div className="flex justify-between items-start border-b border-zinc-800 pb-3">
+              <div>
+                <div className="flex items-center gap-2">
+                  <h3 className="text-base font-bold text-white">{selectedLeadForDetail.name}</h3>
+                  <span
+                    className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                      selectedLeadForDetail.status === 'Member'
+                        ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+                        : selectedLeadForDetail.status === 'Lost'
+                        ? 'bg-rose-500/20 text-rose-400 border border-rose-500/30'
+                        : selectedLeadForDetail.status === 'Trial'
+                        ? 'bg-purple-500/20 text-purple-400 border border-purple-500/30'
+                        : selectedLeadForDetail.status === 'Follow Up'
+                        ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
+                        : 'bg-blue-500/20 text-blue-400 border border-blue-500/30'
+                    }`}
+                  >
+                    Tahap: {selectedLeadForDetail.status}
+                  </span>
+                </div>
+                <p className="text-xs text-zinc-400 mt-0.5 flex items-center gap-2">
+                  <span>No HP: {selectedLeadForDetail.phone}</span> •{' '}
+                  <span>Sumber: {selectedLeadForDetail.source}</span>
+                </p>
+              </div>
+              <button
+                onClick={() => setSelectedLeadForDetail(null)}
+                className="text-zinc-500 hover:text-white p-1 rounded-lg"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Quick Action Strip inside detail */}
+            <div className="bg-zinc-950 border border-zinc-800 rounded-2xl p-3 flex flex-wrap items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <div className="w-7 h-7 rounded-full bg-zinc-800 border border-zinc-700 flex items-center justify-center shrink-0">
+                  <span className="text-[10px] font-bold text-zinc-300">
+                    {(selectedLeadForDetail.picName || '?').charAt(0)}
+                  </span>
+                </div>
+                <div className="leading-tight">
+                  <span className="text-[11px] font-bold text-zinc-200 block">
+                    PIC: {getStaffById(selectedLeadForDetail.picId)?.name || selectedLeadForDetail.picName || 'Belum Ada PIC'}
+                  </span>
+                  <span className="text-[9px] text-zinc-500">
+                    Shift {getStaffById(selectedLeadForDetail.picId)?.shift || selectedLeadForDetail.picShift || '-'}
+                  </span>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => openWhatsAppLead(selectedLeadForDetail, 'greeting')}
+                  className="bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold px-3 py-1.5 rounded-xl transition flex items-center gap-1.5 shadow"
+                >
+                  <MessageSquare className="w-3.5 h-3.5" /> Chat WhatsApp
+                </button>
+                <button
+                  onClick={() => {
+                    setSelectedLeadForHandover(selectedLeadForDetail);
+                    setHandoverTargetPicId(staffUsers.find((s) => s.id !== selectedLeadForDetail.picId)?.id || '');
+                  }}
+                  className="bg-zinc-800 hover:bg-zinc-700 text-orange-400 text-xs font-bold px-3 py-1.5 rounded-xl transition flex items-center gap-1.5 border border-zinc-700"
+                >
+                  <ArrowRightLeft className="w-3.5 h-3.5" /> Oper Alih
+                </button>
+                {selectedLeadForDetail.status !== 'Member' && (
+                  <button
+                    onClick={() => {
+                      onUpdateLeadStatus(selectedLeadForDetail.id, 'Member');
+                      onConvertLeadToMember(selectedLeadForDetail);
+                      setSelectedLeadForDetail(null);
+                    }}
+                    className="bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-400 text-xs font-bold px-3 py-1.5 rounded-xl transition flex items-center gap-1.5 border border-emerald-500/30"
+                  >
+                    <CheckCircle2 className="w-3.5 h-3.5" /> Jadi Member
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Tab navigation inside modal */}
+            <div className="flex border-b border-zinc-800 gap-4 text-xs font-bold">
+              <button
+                onClick={() => setDetailModalTab('overview')}
+                className={`pb-2.5 transition border-b-2 ${
+                  detailModalTab === 'overview'
+                    ? 'border-orange-500 text-orange-400'
+                    : 'border-transparent text-zinc-400 hover:text-white'
+                }`}
+              >
+                Ringkasan Prospek
+              </button>
+              <button
+                onClick={() => setDetailModalTab('followup')}
+                className={`pb-2.5 transition border-b-2 flex items-center gap-1.5 ${
+                  detailModalTab === 'followup'
+                    ? 'border-orange-500 text-orange-400'
+                    : 'border-transparent text-zinc-400 hover:text-white'
+                }`}
+              >
+                <span>Riwayat Follow-Up</span>
+                <span className="text-[10px] bg-zinc-800 text-zinc-300 px-1.5 py-0.2 rounded-full">
+                  {selectedLeadForDetail.followUpHistory?.length || 0}
+                </span>
+              </button>
+              <button
+                onClick={() => setDetailModalTab('handover')}
+                className={`pb-2.5 transition border-b-2 flex items-center gap-1.5 ${
+                  detailModalTab === 'handover'
+                    ? 'border-orange-500 text-orange-400'
+                    : 'border-transparent text-zinc-400 hover:text-white'
+                }`}
+              >
+                <span>Audit Serah Terima (Handover)</span>
+                <span className="text-[10px] bg-zinc-800 text-zinc-300 px-1.5 py-0.2 rounded-full">
+                  {selectedLeadForDetail.handoverHistory?.length || 0}
+                </span>
+              </button>
+            </div>
+
+            {/* TAB 1: OVERVIEW */}
+            {detailModalTab === 'overview' && (
+              <div className="space-y-4">
+                <div className="grid grid-cols-2 gap-3 text-xs">
+                  <div className="bg-zinc-950 p-3 rounded-xl border border-zinc-800">
+                    <span className="text-zinc-500 block text-[10px] uppercase font-bold">Program Minat</span>
+                    <strong className="text-white text-xs mt-0.5 block">
+                      {selectedLeadForDetail.interest || 'Membership Umum'}
+                    </strong>
+                  </div>
+                  <div className="bg-zinc-950 p-3 rounded-xl border border-zinc-800">
+                    <span className="text-zinc-500 block text-[10px] uppercase font-bold">Estimasi Nilai</span>
+                    <strong className="text-emerald-400 text-xs mt-0.5 block">
+                      {formatRp(selectedLeadForDetail.estimatedValue || 0)}
+                    </strong>
+                  </div>
+                  <div className="bg-zinc-950 p-3 rounded-xl border border-zinc-800">
+                    <span className="text-zinc-500 block text-[10px] uppercase font-bold">Prioritas</span>
+                    <strong className="text-orange-400 text-xs mt-0.5 block">
+                      {selectedLeadForDetail.priority || 'Sedang'}
+                    </strong>
+                  </div>
+                  <div className="bg-zinc-950 p-3 rounded-xl border border-zinc-800">
+                    <span className="text-zinc-500 block text-[10px] uppercase font-bold">Tanggal Masuk</span>
+                    <strong className="text-zinc-300 text-xs mt-0.5 block">
+                      {formatDateIndo(selectedLeadForDetail.date || '')}
+                    </strong>
+                  </div>
+                </div>
+
+                <div className="bg-zinc-950 p-3.5 rounded-xl border border-zinc-800 space-y-1">
+                  <span className="text-zinc-500 text-[10px] uppercase font-bold">Catatan Kebutuhan</span>
+                  <p className="text-xs text-zinc-300 whitespace-pre-wrap">
+                    {selectedLeadForDetail.notes || 'Belum ada catatan khusus.'}
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {/* TAB 2: FOLLOW-UP TIMELINE & LOGGING FORM */}
+            {detailModalTab === 'followup' && (
+              <div className="space-y-4">
+                {/* Form Quick Log Follow-up */}
+                <div className="bg-zinc-950 border border-orange-500/20 rounded-2xl p-3.5 space-y-3">
+                  <h4 className="text-xs font-bold text-orange-400 flex items-center gap-1.5">
+                    <Plus className="w-3.5 h-3.5" /> Tambah Catatan Kontak / Follow-Up Baru
+                  </h4>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="block text-[9px] font-bold text-zinc-400 uppercase mb-1">Metode</label>
+                      <select
+                        value={detailNewFuMethod}
+                        onChange={(e) => setDetailNewFuMethod(e.target.value as any)}
+                        className="w-full bg-zinc-900 border border-zinc-700 rounded-lg px-2.5 py-1.5 text-xs text-white"
+                      >
+                        <option value="WhatsApp">WhatsApp</option>
+                        <option value="Telepon">Telepon Langsung</option>
+                        <option value="Tatap Muka">Tatap Muka di Gym</option>
+                        <option value="Instagram DM">Instagram DM</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-[9px] font-bold text-zinc-400 uppercase mb-1">Hasil Kontak</label>
+                      <input
+                        type="text"
+                        value={detailNewFuResult}
+                        onChange={(e) => setDetailNewFuResult(e.target.value)}
+                        placeholder="Cth: Menjadwalkan Trial"
+                        className="w-full bg-zinc-900 border border-zinc-700 rounded-lg px-2.5 py-1.5 text-xs text-white"
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-[9px] font-bold text-zinc-400 uppercase mb-1">Catatan Percakapan</label>
+                    <textarea
+                      value={detailNewFuNotes}
+                      onChange={(e) => setDetailNewFuNotes(e.target.value)}
+                      rows={2}
+                      placeholder="Detail respon calon member..."
+                      className="w-full bg-zinc-900 border border-zinc-700 rounded-lg p-2 text-xs text-white"
+                    ></textarea>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (!detailNewFuResult.trim()) {
+                        showToast('Isi Hasil Kontak', 'Harap isi ringkasan hasil kontak.', 'warning');
+                        return;
+                      }
+                      handleAddLeadFollowUp(
+                        selectedLeadForDetail,
+                        detailNewFuMethod,
+                        detailNewFuResult,
+                        detailNewFuNotes
+                      );
+                      setDetailNewFuNotes('');
+                    }}
+                    className="w-full py-2 bg-orange-500 hover:bg-orange-600 text-white rounded-xl text-xs font-bold transition shadow"
+                  >
+                    Simpan Catatan Follow-Up
+                  </button>
+                </div>
+
+                {/* Follow-up Timeline List */}
+                <div className="space-y-2">
+                  <h4 className="text-xs font-bold text-zinc-400 uppercase tracking-wider">Timeline Aktivitas</h4>
+                  {(!selectedLeadForDetail.followUpHistory || selectedLeadForDetail.followUpHistory.length === 0) ? (
+                    <p className="text-xs text-zinc-500 italic p-4 text-center">Belum ada riwayat follow-up tercatat.</p>
+                  ) : (
+                    <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
+                      {selectedLeadForDetail.followUpHistory.map((fu) => (
+                        <div key={fu.id} className="bg-zinc-950 border border-zinc-800 p-3 rounded-xl space-y-1">
+                          <div className="flex justify-between items-center text-[10px]">
+                            <span className="font-bold text-white flex items-center gap-1.5">
+                              <span className="w-1.5 h-1.5 rounded-full bg-orange-400"></span>
+                              {fu.method} • {fu.result}
+                            </span>
+                            <span className="text-zinc-500">{fu.date} {fu.time || ''}</span>
+                          </div>
+                          <p className="text-xs text-zinc-300">{fu.notes}</p>
+                          <span className="text-[9px] text-zinc-500 block pt-0.5">
+                            Oleh: <strong className="text-zinc-400">{fu.picName || 'Front Desk'}</strong>
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* TAB 3: AUDIT SERAH TERIMA (HANDOVER) */}
+            {detailModalTab === 'handover' && (
+              <div className="space-y-3">
+                <div className="bg-zinc-950 border border-zinc-800 rounded-xl p-3">
+                  <p className="text-xs text-zinc-400">
+                    Semua pergantian PIC dicatat secara transparan beserta tanggal, waktu, petugas asal, petugas penerima, dan catatan serah terima antar shift.
+                  </p>
+                </div>
+
+                {(!selectedLeadForDetail.handoverHistory || selectedLeadForDetail.handoverHistory.length === 0) ? (
+                  <p className="text-xs text-zinc-500 italic p-6 text-center">
+                    Belum pernah ada pengalihan tanggung jawab untuk prospek ini.
+                  </p>
+                ) : (
+                  <div className="space-y-2.5 max-h-72 overflow-y-auto pr-1">
+                    {selectedLeadForDetail.handoverHistory.map((ho) => (
+                      <div key={ho.id} className="bg-zinc-950 border border-zinc-800 p-3.5 rounded-2xl space-y-2">
+                        <div className="flex justify-between items-center text-[10px]">
+                          <span className="text-orange-400 font-bold flex items-center gap-1">
+                            <ArrowRightLeft className="w-3 h-3" /> Serah Terima PIC
+                          </span>
+                          <span className="text-zinc-500">{ho.date} {ho.time}</span>
+                        </div>
+                        <div className="flex items-center gap-2 text-xs">
+                          <span className="bg-zinc-900 border border-zinc-800 px-2 py-1 rounded-lg text-zinc-300">
+                            {ho.fromPicName}
+                          </span>
+                          <ChevronRight className="w-3 h-3 text-zinc-500 shrink-0" />
+                          <span className="bg-orange-500/20 border border-orange-500/30 px-2 py-1 rounded-lg text-orange-400 font-bold">
+                            {ho.toPicName}
+                          </span>
+                        </div>
+                        <p className="text-xs text-zinc-300 bg-zinc-900/60 p-2 rounded-xl italic">
+                          "{ho.reason}"
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: ALASAN BATAL / LOST (ARSIP PROSPEK) */}
+      {selectedLeadForLost && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-xs p-3 sm:p-4 overflow-y-auto">
+          <div className="bg-zinc-900 border border-zinc-800 rounded-3xl shadow-2xl w-full max-w-md p-5 sm:p-6 my-auto max-h-[92vh] overflow-y-auto animate-in fade-in zoom-in-95">
+            <h3 className="text-base font-bold text-white mb-2 flex items-center gap-2">
+              <AlertTriangle className="w-4 h-4 text-rose-500" />
+              Tandai Prospek Batal (Lost)
+            </h3>
+            <p className="text-xs text-zinc-400 mb-4">
+              Calon member: <strong className="text-white">{selectedLeadForLost.name}</strong> ({selectedLeadForLost.phone})
+            </p>
+
+            <form onSubmit={handleConfirmLost} className="space-y-4">
+              <div>
+                <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-wider mb-1.5">
+                  Kategori Alasan Batal
+                </label>
+                <select
+                  value={lostReasonCategory}
+                  onChange={(e) => setLostReasonCategory(e.target.value)}
+                  className="w-full bg-zinc-950 border border-zinc-700 rounded-xl px-3.5 py-2.5 text-xs text-white outline-none focus:border-rose-500"
+                >
+                  <option value="Harga / Budget Terlalu Tinggi">Harga / Budget Terlalu Tinggi</option>
+                  <option value="Lokasi Studio Terlalu Jauh">Lokasi Studio Terlalu Jauh</option>
+                  <option value="Jadwal Gym Tidak Cocok">Jadwal Gym Tidak Cocok</option>
+                  <option value="Pindah Keluar Kota">Pindah Keluar Kota</option>
+                  <option value="Sudah Daftar di Gym Lain">Sudah Daftar di Gym Lain</option>
+                  <option value="Tidak Merespon / Nomor Tidak Aktif">Tidak Merespon / Nomor Tidak Aktif</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-wider mb-1.5">
+                  Catatan Tambahan
+                </label>
+                <textarea
+                  value={lostReasonNotes}
+                  onChange={(e) => setLostReasonNotes(e.target.value)}
+                  rows={3}
+                  placeholder="Cth: Menginfokan bahwa budget bulan ini belum cukup, follow-up ulang saat ada promo gajian."
+                  className="w-full bg-zinc-950 border border-zinc-700 rounded-xl p-3 text-xs text-white outline-none focus:border-rose-500"
+                ></textarea>
+              </div>
+
+              <div className="flex gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setSelectedLeadForLost(null)}
+                  className="flex-1 py-2.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-xl text-xs font-bold transition"
+                >
+                  Batal
+                </button>
+                <button
+                  type="submit"
+                  className="flex-1 py-2.5 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-bold shadow-md transition"
+                >
+                  Konfirmasi Lost
                 </button>
               </div>
             </form>

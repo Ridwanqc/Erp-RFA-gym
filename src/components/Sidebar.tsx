@@ -37,6 +37,7 @@ import { useTheme } from '../context/ThemeContext';
 
 export type ActiveTab =
   | 'dashboard'
+  | 'front-desk-portal'
   | 'leader-pt'
   | 'pt-package-performance'
   | 'trainer-portal'
@@ -50,6 +51,7 @@ export type ActiveTab =
   | 'crm'
   | 'master-data'
   | 'inventaris'
+  | 'lockers'
   | 'hr-payroll'
   | 'piutang'
   | 'laporan'
@@ -166,6 +168,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
           badge: freezeCount > 0 ? freezeCount : undefined,
           subItems: [
             {
+              id: 'front-desk-portal',
+              label: 'Portal Kasir & Front Desk',
+              roles: ['admin', 'kasir', 'leader_pt']
+            },
+            {
               id: 'membership',
               label: 'Paket & Pembelian',
               roles: ['admin', 'kasir']
@@ -238,6 +245,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
           roles: ['admin', 'kasir'] as UserRole[],
           subItems: [
             {
+              id: 'front-desk-portal',
+              label: 'Portal Fokus Member',
+              roles: ['admin', 'kasir']
+            },
+            {
               id: 'pos',
               label: 'Kasir POS FnB & Retail',
               roles: ['admin', 'kasir']
@@ -259,6 +271,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
           label: 'Inventaris & Servis Alat',
           icon: Wrench,
           roles: ['admin', 'manager', 'teknisi', 'kasir', 'leader_pt'] as UserRole[]
+        },
+        {
+          id: 'lockers' as ActiveTab,
+          label: 'Manajemen & Input Loker',
+          icon: Lock,
+          roles: ['admin', 'kasir', 'manager', 'teknisi', 'leader_pt'] as UserRole[]
         }
       ]
     },
