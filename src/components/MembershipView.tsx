@@ -3,6 +3,9 @@ import { Crown, Sparkles, Check, AlertCircle, Plus, DollarSign, Info, CreditCard
 import { PackageItem, Member, User, Transaction, BundlePackage } from '../types';
 import { formatRp, getTimestamp, APP_TODAY } from '../utils/formatters';
 import { SearchableMemberSelect } from './SearchableMemberSelect';
+import { useSettings } from '../context/SettingsContext';
+import { DEFAULT_PIC_PROTECTION } from '../data/settingsData';
+import { PicPasswordModal } from './PicPasswordModal';
 
 interface MembershipViewProps {
   packages: PackageItem[];
@@ -35,7 +38,7 @@ export const MembershipView: React.FC<MembershipViewProps> = ({
   isStoreClosed,
   showToast
 }) => {
-  const [cat, setCat] = useState<'Membership' | 'PT' | 'Bundling'>('Membership');
+  const [cat, setCat] = useState<'Membership' | 'PT' | 'Class' | 'Bundling'>('Membership');
   const [type, setType] = useState<'Personal' | 'Couple' | 'Trio'>('Personal');
   const [selectedPkgIndex, setSelectedPkgIndex] = useState(0);
   const [selectedBundleId, setSelectedBundleId] = useState<string>('');
@@ -53,6 +56,34 @@ export const MembershipView: React.FC<MembershipViewProps> = ({
   const [isP2PicLocked, setIsP2PicLocked] = useState<boolean>(true);
   const [isP3PicLocked, setIsP3PicLocked] = useState<boolean>(true);
 
+  // PIC Password Protection from Settings
+  const { settings } = useSettings();
+  const picProtection = settings?.picProtection || DEFAULT_PIC_PROTECTION;
+  const [isPicPasswordModalOpen, setIsPicPasswordModalOpen] = useState(false);
+  const [unlockPicTarget, setUnlockPicTarget] = useState<'p1' | 'p2' | 'p3' | 'closing' | null>(null);
+
+  const handleRequestUnlockPic = (target: 'p1' | 'p2' | 'p3' | 'closing') => {
+    const isProtected = picProtection.requirePasswordToChangePic && (picProtection.requirePasswordOnTransaction !== false);
+    const canBypass = (currentUser?.role === 'admin' || currentUser?.role === 'manager') && picProtection.allowAdminBypass;
+
+    if (isProtected && !canBypass) {
+      setUnlockPicTarget(target);
+      setIsPicPasswordModalOpen(true);
+    } else {
+      if (target === 'p1' || target === 'closing') setIsP1PicLocked(false);
+      if (target === 'p2') setIsP2PicLocked(false);
+      if (target === 'p3') setIsP3PicLocked(false);
+      showToast('Kunci PIC Dibuka 🔓', 'Anda dapat memilih atau mengganti staf PIC.', 'info');
+    }
+  };
+
+  const handleUnlockPicSuccess = () => {
+    if (unlockPicTarget === 'p1' || unlockPicTarget === 'closing') setIsP1PicLocked(false);
+    if (unlockPicTarget === 'p2') setIsP2PicLocked(false);
+    if (unlockPicTarget === 'p3') setIsP3PicLocked(false);
+    setUnlockPicTarget(null);
+  };
+
   // Transaction settings
   const [trxType, setTrxType] = useState<'NEW MEMBERSHIP' | 'RENEWAL' | 'UPGRADE'>('NEW MEMBERSHIP');
   const [picSalesId, setPicSalesId] = useState('');
@@ -60,27 +91,42 @@ export const MembershipView: React.FC<MembershipViewProps> = ({
   const [syncMemberPic, setSyncMemberPic] = useState<boolean>(true);
   const [discount, setDiscount] = useState('0');
 
-  // Tipe Bayar: 'Lunas' (Penuh) vs 'Cicilan' (DP)
-  const [paymentType, setPaymentType] = useState<'Lunas' | 'Cicilan'>('Lunas');
+  // Skema Pembayaran: 'Lunas' (Penuh 100%) vs 'Cicilan' (DP & Piutang) vs 'Split' (Campuran Tunai & Nontunai)
+  const [paymentType, setPaymentType] = useState<'Lunas' | 'Cicilan' | 'Split'>('Lunas');
   // Metode Bayar: Tunai / Cash, Transfer Mandiri, QRIS / QR, Kartu EDC
   const [paymentMethod, setPaymentMethod] = useState<'Tunai' | 'Transfer' | 'QRIS' | 'EDC'>('Tunai');
   // Opsi DP Cicilan
   const [dpPercent, setDpPercent] = useState<number>(50);
   const [customDpAmount, setCustomDpAmount] = useState<string>('');
+  // Kebijakan Aktivasi Sesi Kelas jika Cicilan: 'proportional' (sesi sesuai DP) vs 'full' (buka semua kuota, sisa piutang)
+  const [classDpPolicy, setClassDpPolicy] = useState<'proportional' | 'full'>('proportional');
+
+  // Skema Split Payment (Campuran Tunai & Nontunai)
+  const [splitCashAmount, setSplitCashAmount] = useState<string>('');
+  const [splitNonCashAmount, setSplitNonCashAmount] = useState<string>('');
+  const [splitNonCashMethod, setSplitNonCashMethod] = useState<'Transfer' | 'QRIS' | 'EDC'>('Transfer');
+
+  // Kalkulator Kasir Uang Tunai & Kembalian
+  const [cashGiven, setCashGiven] = useState<string>('');
+
+  // Promo Diskon Loyalty Member Aktif (10%)
+  const [applyMemberDiscount, setApplyMemberDiscount] = useState<boolean>(false);
 
   // Master package modal & commission state
   const [isPkgModalOpen, setIsPkgModalOpen] = useState(false);
   const [pkgModalTab, setPkgModalTab] = useState<'form' | 'list'>('form');
   const [editingPkgId, setEditingPkgId] = useState<string | null>(null);
   const [pkgSearch, setPkgSearch] = useState('');
-  const [pkgFilterCat, setPkgFilterCat] = useState<'ALL' | 'Membership' | 'PT'>('ALL');
+  const [pkgFilterCat, setPkgFilterCat] = useState<'ALL' | 'Membership' | 'PT' | 'Class'>('ALL');
 
   // Form Fields
-  const [newPkgCat, setNewPkgCat] = useState<'Membership' | 'PT'>('Membership');
+  const [newPkgCat, setNewPkgCat] = useState<'Membership' | 'PT' | 'Class'>('Membership');
   const [newPkgType, setNewPkgType] = useState<'Personal' | 'Couple' | 'Trio'>('Personal');
   const [newPkgName, setNewPkgName] = useState('');
   const [newPkgPrice, setNewPkgPrice] = useState('');
   const [newPkgValue, setNewPkgValue] = useState('');
+  const [newPkgValidityDays, setNewPkgValidityDays] = useState('30');
+  const [newPkgClassCategory, setNewPkgClassCategory] = useState('Semua Kelas');
 
   // Commission configurations
   const [commissionType, setCommissionType] = useState<'PERCENT' | 'NOMINAL'>('PERCENT');
@@ -92,7 +138,14 @@ export const MembershipView: React.FC<MembershipViewProps> = ({
   const [productBonusNominal, setProductBonusNominal] = useState<string>('0');
   const [commissionNotes, setCommissionNotes] = useState<string>('');
 
-  const filteredPackages = packages.filter((p) => p.cat === cat && p.type === type);
+  const filteredPackages = useMemo(() => {
+    const matched = packages.filter((p) => p.cat === cat && p.type === type);
+    if (matched.length === 0 && cat === 'Class') {
+      return packages.filter((p) => p.cat === 'Class');
+    }
+    return matched;
+  }, [packages, cat, type]);
+
   const currentPackage = filteredPackages[selectedPkgIndex] || filteredPackages[0];
 
   // Bundling packages
@@ -148,12 +201,22 @@ export const MembershipView: React.FC<MembershipViewProps> = ({
     showToast('PIC Diselaraskan', `PIC semua peserta disamakan dengan ${staff?.name || 'PIC Peserta 1'}.`, 'success');
   };
 
+  // Active member detection for participant 1
+  const selectedMember1 = useMemo(() => members.find((m) => m.id === p1Id), [members, p1Id]);
+  const isMember1Active = useMemo(() => {
+    if (!selectedMember1?.expired) return false;
+    return selectedMember1.expired >= APP_TODAY;
+  }, [selectedMember1]);
+
   // Price calculations
   const rawPrice = cat === 'Bundling' ? (currentBundle ? currentBundle.price : 0) : (currentPackage ? currentPackage.price : 0);
-  const discValue = Number(discount) || 0;
+  const loyaltyDiscAmount = (cat === 'Class' && applyMemberDiscount && isMember1Active) ? Math.round(rawPrice * 0.1) : 0;
+  const manualDiscValue = Number(discount) || 0;
+  const discValue = manualDiscValue + loyaltyDiscAmount;
   const netTotal = Math.max(rawPrice - discValue, 0);
 
   const isCicilan = paymentType === 'Cicilan';
+  const isSplit = paymentType === 'Split';
 
   // Calculate downPayment
   let downPayment = netTotal;
@@ -163,8 +226,15 @@ export const MembershipView: React.FC<MembershipViewProps> = ({
     } else {
       downPayment = Math.round((netTotal * dpPercent) / 100);
     }
+  } else if (isSplit) {
+    downPayment = netTotal;
   }
   const sisaCicilan = isCicilan ? Math.max(netTotal - downPayment, 0) : 0;
+
+  // Cash change calculation
+  const cashNum = Number(cashGiven) || 0;
+  const cashChange = Math.max(0, cashNum - downPayment);
+  const cashShortage = Math.max(0, downPayment - cashNum);
 
   // Real-time Commission Estimates for Checkout Review
   const salesCommEstimate = useMemo(() => {
@@ -175,7 +245,7 @@ export const MembershipView: React.FC<MembershipViewProps> = ({
     }
     if (currentPackage) {
       if (currentPackage.salesCommissionNominal) return currentPackage.salesCommissionNominal;
-      const rate = currentPackage.salesCommissionRate || (currentPackage.cat === 'Membership' ? 4 : 3);
+      const rate = currentPackage.salesCommissionRate || (currentPackage.cat === 'Membership' ? 4 : currentPackage.cat === 'Class' ? 4 : 3);
       return Math.round((netTotal * rate) / 100);
     }
     return 0;
@@ -187,9 +257,9 @@ export const MembershipView: React.FC<MembershipViewProps> = ({
       const rate = currentBundle.commissionRate || currentBundle.trainerCommissionRate || 20;
       return Math.round((ptVal * rate) / 100);
     }
-    if (currentPackage && currentPackage.cat === 'PT') {
+    if (currentPackage && (currentPackage.cat === 'PT' || currentPackage.cat === 'Class')) {
       if (currentPackage.trainerCommissionNominal) return currentPackage.trainerCommissionNominal;
-      const rate = currentPackage.trainerCommissionRate || 40;
+      const rate = currentPackage.trainerCommissionRate || (currentPackage.cat === 'Class' ? 35 : 40);
       return Math.round((netTotal * rate) / 100);
     }
     return 0;
@@ -221,6 +291,19 @@ export const MembershipView: React.FC<MembershipViewProps> = ({
     if (isCicilan && downPayment <= 0 && netTotal > 0) {
       showToast('Peringatan', 'Nominal DP cicilan harus lebih besar dari Rp 0.', 'warning');
       return;
+    }
+
+    if (isSplit) {
+      const cAmt = Number(splitCashAmount) || 0;
+      const nAmt = Number(splitNonCashAmount) || 0;
+      if (cAmt + nAmt !== netTotal) {
+        showToast(
+          'Split Payment Tidak Sesuai',
+          `Total split (${formatRp(cAmt + nAmt)}) harus sama persis dengan total tagihan (${formatRp(netTotal)}).`,
+          'warning'
+        );
+        return;
+      }
     }
 
     if (type === 'Couple' && !p2Id) {
@@ -257,7 +340,8 @@ export const MembershipView: React.FC<MembershipViewProps> = ({
         let updatedMember: Member = {
           ...existing,
           picId: syncMemberPic ? (assignedPicId || existing.picId) : existing.picId,
-          picName: syncMemberPic ? (assignedStaff ? assignedStaff.name : (existing.picName || '')) : (existing.picName || '')
+          picName: syncMemberPic ? (assignedStaff ? assignedStaff.name : (existing.picName || '')) : (existing.picName || ''),
+          isPicLocked: true
         };
 
         if (cat === 'Bundling') {
@@ -292,6 +376,30 @@ export const MembershipView: React.FC<MembershipViewProps> = ({
             expired: newExp,
             followUpStatus: 'SUDAH RENEWAL'
           };
+        } else if (cat === 'Class') {
+          // Add Studio Class Quota & validity
+          const totalSessions = currentPackage.sessionCount || currentPackage.value || 1;
+          const sessionsToAdd = isCicilan && classDpPolicy === 'proportional'
+            ? Math.max(1, Math.round((totalSessions * downPayment) / (netTotal || 1)))
+            : totalSessions;
+
+          const currentClassExp = existing.classPackageExpired
+            ? new Date(existing.classPackageExpired + 'T00:00:00')
+            : null;
+          const todayDate = new Date(APP_TODAY + 'T00:00:00');
+          const baseDate = (currentClassExp && currentClassExp > todayDate) ? currentClassExp : todayDate;
+          const daysToAdd = currentPackage.validityDays || 30;
+          baseDate.setDate(baseDate.getDate() + daysToAdd);
+          const newClassExp = baseDate.toISOString().split('T')[0];
+
+          updatedMember = {
+            ...updatedMember,
+            classQuota: (existing.classQuota || 0) + sessionsToAdd,
+            classPackageName: currentPackage.name,
+            classPackageExpired: newClassExp,
+            classCategoryAllowed: currentPackage.classCategory || 'Semua Kelas',
+            followUpStatus: 'AKTIF KELAS'
+          };
         } else {
           // Add PT Quota
           updatedMember = {
@@ -304,9 +412,6 @@ export const MembershipView: React.FC<MembershipViewProps> = ({
     });
 
     // Create Transaction
-    // CRITICAL: Initial cash inflow for today is ONLY downPayment!
-    // Remaining debt is placed in amountRemaining with 40 days due date.
-    // When paid in future, a PAY-* record will capture that cash flow cleanly with NO double counting!
     const dueDateDate = new Date(APP_TODAY + 'T00:00:00');
     dueDateDate.setDate(dueDateDate.getDate() + 40);
     const dueDateStr = dueDateDate.toISOString().split('T')[0];
@@ -324,8 +429,7 @@ export const MembershipView: React.FC<MembershipViewProps> = ({
       };
     });
 
-    // Determine closing PICs for sales lead attribution:
-    // If participants > 1 (Couple/Trio), user can either combine all participant PICs automatically or select custom closing PIC
+    // Determine closing PICs for sales lead attribution
     let closingPicIds: string[] = [];
     if (type === 'Personal') {
       closingPicIds = [effectiveP1Pic].filter(Boolean);
@@ -334,7 +438,6 @@ export const MembershipView: React.FC<MembershipViewProps> = ({
     } else if (type === 'Couple') {
       closingPicIds = [effectiveP1Pic, effectiveP2Pic].filter(Boolean);
     } else {
-      // Trio: Gabung PIC 1, PIC 2, & PIC 3
       closingPicIds = [effectiveP1Pic, effectiveP2Pic, effectiveP3Pic].filter(Boolean);
     }
 
@@ -346,6 +449,15 @@ export const MembershipView: React.FC<MembershipViewProps> = ({
       .map((pid) => staffUsers.find((s) => s.id === pid)?.name || pid)
       .join(', ');
 
+    const schemeLabel = isCicilan
+      ? `Cicilan DP ${formatRp(downPayment)} (Sisa Piutang ${formatRp(sisaCicilan)})`
+      : isSplit
+      ? `Split Payment (Tunai ${formatRp(Number(splitCashAmount))} + ${splitNonCashMethod} ${formatRp(Number(splitNonCashAmount))})`
+      : `Lunas via ${paymentMethod}`;
+
+    const effectiveMethod = isSplit ? 'Split Payment' : paymentMethod;
+    const effectiveStatus: Transaction['status'] = isCicilan ? (dpPercent === 50 ? 'DP 50%' : 'BELUM LUNAS') : 'Paid';
+
     const newTrx: Transaction = {
       id: 'TRX-' + Math.floor(100000 + Math.random() * 900000),
       date: APP_TODAY,
@@ -354,8 +466,10 @@ export const MembershipView: React.FC<MembershipViewProps> = ({
       bundleId: cat === 'Bundling' && currentBundle ? currentBundle.bundleId : undefined,
       bundleCode: cat === 'Bundling' && currentBundle ? currentBundle.bundleCode : undefined,
       desc: cat === 'Bundling' && currentBundle
-        ? `Paket Bundling ${currentBundle.bundleName} (${currentBundle.bundleCode})${isCicilan ? ` (Cicilan DP ${formatRp(downPayment)})` : ''}`
-        : `Paket ${currentPackage ? currentPackage.name : ''}${isCicilan ? ` (Cicilan DP ${formatRp(downPayment)})` : ''}`,
+        ? `Paket Bundling ${currentBundle.bundleName} (${currentBundle.bundleCode}) [${schemeLabel}]`
+        : cat === 'Class' && currentPackage
+        ? `Paket Kelas Studio ${currentPackage.name} (${currentPackage.value} Sesi) [${schemeLabel}]`
+        : `Paket ${currentPackage ? currentPackage.name : ''} [${schemeLabel}]`,
       customer: customerNames,
       amount: netTotal,
       amountPaid: downPayment,
@@ -363,10 +477,17 @@ export const MembershipView: React.FC<MembershipViewProps> = ({
       dueDate: isCicilan ? dueDateStr : '-',
       cogs: 0,
       profit: downPayment,
-      method: paymentMethod,
-      status: isCicilan ? 'DP 50%' : 'Paid',
+      method: effectiveMethod,
+      status: effectiveStatus,
       cashier: currentUser?.name || 'Kasir',
-      bankDest: paymentMethod === 'Tunai' ? undefined : 'Mandiri',
+      bankDest: paymentMethod === 'Transfer' || (isSplit && splitNonCashMethod === 'Transfer') ? 'Mandiri' : undefined,
+      classPackageId: cat === 'Class' && currentPackage ? currentPackage.id : undefined,
+      classSessionsGranted: cat === 'Class' && currentPackage ? (isCicilan && classDpPolicy === 'proportional' ? Math.max(1, Math.round(((currentPackage.sessionCount || currentPackage.value) * downPayment) / (netTotal || 1))) : (currentPackage.sessionCount || currentPackage.value)) : undefined,
+      classValidityDays: cat === 'Class' && currentPackage ? (currentPackage.validityDays || 30) : undefined,
+      paymentScheme: isCicilan ? 'DP_CICILAN' : isSplit ? 'SPLIT_PAYMENT' : 'LUNAS',
+      splitCashAmount: isSplit ? Number(splitCashAmount) : undefined,
+      splitNonCashAmount: isSplit ? Number(splitNonCashAmount) : undefined,
+      splitNonCashMethod: isSplit ? splitNonCashMethod : undefined,
       itemsJSON: JSON.stringify([
         cat === 'Bundling' && currentBundle
           ? {
@@ -381,7 +502,10 @@ export const MembershipView: React.FC<MembershipViewProps> = ({
             }
           : {
               name: currentPackage ? currentPackage.name : '',
+              category: cat,
               price: currentPackage ? currentPackage.price : 0,
+              sessions: currentPackage?.value,
+              validityDays: currentPackage?.validityDays || 30,
               qty: 1,
               participants: participantsDetail
             }
@@ -394,9 +518,10 @@ export const MembershipView: React.FC<MembershipViewProps> = ({
     };
 
     onPurchasePackage(newTrx, updatedMembersList);
+    const targetName = cat === 'Bundling' ? (currentBundle?.bundleName || 'Bundling') : (currentPackage?.name || 'Paket');
     showToast(
       'Pembelian Berhasil',
-      `Paket ${currentPackage.name} untuk ${customerNames} berhasil diproses (${isCicilan ? `Cicilan DP ${formatRp(downPayment)} via ${paymentMethod}` : `Lunas via ${paymentMethod}`}).`,
+      `Paket ${targetName} untuk ${customerNames} berhasil diproses [${schemeLabel}].`,
       'success'
     );
 
@@ -413,6 +538,10 @@ export const MembershipView: React.FC<MembershipViewProps> = ({
     setPaymentMethod('Tunai');
     setDpPercent(50);
     setCustomDpAmount('');
+    setSplitCashAmount('');
+    setSplitNonCashAmount('');
+    setCashGiven('');
+    setApplyMemberDiscount(false);
   };
 
   const handleEditPackage = (pkg: PackageItem) => {
@@ -672,6 +801,7 @@ export const MembershipView: React.FC<MembershipViewProps> = ({
                 >
                   <option value="Membership">Akses Gym (Membership)</option>
                   <option value="PT">Sesi Personal Trainer (PT)</option>
+                  <option value="Class">🧘 Paket Kelas Studio (Zumba, Yoga, Pilates, Drop-In)</option>
                   <option value="Bundling">🎁 Paket Bundling (VIP PLUS, Gold, dll)</option>
                 </select>
               </div>
@@ -822,7 +952,11 @@ export const MembershipView: React.FC<MembershipViewProps> = ({
                         Alokasi Komisi: <strong className="text-white">{currentPackage.name}</strong>
                       </span>
                       <span className="text-[10px] px-2 py-0.5 rounded-full bg-zinc-800 text-zinc-300 font-semibold border border-zinc-700">
-                        {currentPackage.cat === 'PT' ? `${currentPackage.value} Sesi PT` : `${currentPackage.value} Hari Akses`}
+                        {currentPackage.cat === 'PT'
+                          ? `${currentPackage.value} Sesi PT`
+                          : currentPackage.cat === 'Class'
+                          ? `${currentPackage.sessionCount || currentPackage.value} Sesi Kelas (${currentPackage.validityDays || 30} Hari)`
+                          : `${currentPackage.value} Hari Akses`}
                       </span>
                     </div>
 
@@ -841,17 +975,25 @@ export const MembershipView: React.FC<MembershipViewProps> = ({
 
                       <div className="bg-zinc-900/90 rounded-xl p-2.5 border border-zinc-800">
                         <span className="text-[10px] text-zinc-400 block font-semibold flex items-center gap-1">
-                          <Dumbbell className="w-3 h-3 text-orange-400" /> Komisi Trainer (PT)
+                          <Dumbbell className="w-3 h-3 text-orange-400" /> {currentPackage.cat === 'Class' ? 'Komisi Instruktur Kelas' : 'Komisi Trainer (PT)'}
                         </span>
                         <span className="text-xs font-bold text-orange-400 mt-0.5 block">
                           {currentPackage.cat === 'PT'
                             ? currentPackage.trainerCommissionNominal
                               ? `${formatRp(currentPackage.trainerCommissionNominal)} (${formatRp(currentPackage.trainerCommissionPerSession || Math.round(currentPackage.trainerCommissionNominal / (currentPackage.value || 1)))}/sesi)`
                               : `${currentPackage.trainerCommissionRate || 40}% (${formatRp(Math.round(currentPackage.price * ((currentPackage.trainerCommissionRate || 40) / 100)))})`
+                            : currentPackage.cat === 'Class'
+                            ? currentPackage.trainerCommissionNominal
+                              ? `${formatRp(currentPackage.trainerCommissionNominal)} (${formatRp(currentPackage.trainerCommissionPerSession || Math.round(currentPackage.trainerCommissionNominal / (currentPackage.value || 1)))}/sesi)`
+                              : `${currentPackage.trainerCommissionRate || 35}% (${formatRp(Math.round(currentPackage.price * ((currentPackage.trainerCommissionRate || 35) / 100)))})`
                             : '0% (Akses Mandiri)'}
                         </span>
                         <span className="text-[9px] text-zinc-500">
-                          {currentPackage.cat === 'PT' ? 'Fee sesi pelatih' : 'Tanpa trainer'}
+                          {currentPackage.cat === 'PT'
+                            ? 'Fee sesi pelatih'
+                            : currentPackage.cat === 'Class'
+                            ? `Fee kelas studio (${currentPackage.classCategory || 'Semua Kelas'})`
+                            : 'Tanpa trainer'}
                         </span>
                       </div>
 
@@ -972,12 +1114,11 @@ export const MembershipView: React.FC<MembershipViewProps> = ({
                         <button
                           type="button"
                           onClick={() => {
-                            const next = !isP1PicLocked;
-                            setIsP1PicLocked(next);
-                            if (next) {
-                              showToast('PIC Dikunci 🔒', 'Pilihan PIC Peserta 1 dikunci.', 'info');
+                            if (isP1PicLocked) {
+                              handleRequestUnlockPic('p1');
                             } else {
-                              showToast('Kunci PIC Dibuka 🔓', 'Anda dapat memilih staf PIC lain.', 'info');
+                              setIsP1PicLocked(true);
+                              showToast('PIC Dikunci 🔒', 'Pilihan PIC Peserta 1 dikunci.', 'info');
                             }
                           }}
                           className="text-[10px] text-zinc-400 hover:text-amber-400 font-semibold underline transition ml-1"
@@ -1088,12 +1229,11 @@ export const MembershipView: React.FC<MembershipViewProps> = ({
                             <button
                               type="button"
                               onClick={() => {
-                                const next = !isP2PicLocked;
-                                setIsP2PicLocked(next);
-                                if (next) {
-                                  showToast('PIC Dikunci 🔒', 'Pilihan PIC Peserta 2 dikunci.', 'info');
+                                if (isP2PicLocked) {
+                                  handleRequestUnlockPic('p2');
                                 } else {
-                                  showToast('Kunci PIC Dibuka 🔓', 'Anda dapat memilih staf PIC lain.', 'info');
+                                  setIsP2PicLocked(true);
+                                  showToast('PIC Dikunci 🔒', 'Pilihan PIC Peserta 2 dikunci.', 'info');
                                 }
                               }}
                               className="text-[10px] text-zinc-400 hover:text-amber-400 font-semibold underline transition ml-1"
@@ -1199,12 +1339,11 @@ export const MembershipView: React.FC<MembershipViewProps> = ({
                             <button
                               type="button"
                               onClick={() => {
-                                const next = !isP3PicLocked;
-                                setIsP3PicLocked(next);
-                                if (next) {
-                                  showToast('PIC Dikunci 🔒', 'Pilihan PIC Peserta 3 dikunci.', 'info');
+                                if (isP3PicLocked) {
+                                  handleRequestUnlockPic('p3');
                                 } else {
-                                  showToast('Kunci PIC Dibuka 🔓', 'Anda dapat memilih staf PIC lain.', 'info');
+                                  setIsP3PicLocked(true);
+                                  showToast('PIC Dikunci 🔒', 'Pilihan PIC Peserta 3 dikunci.', 'info');
                                 }
                               }}
                               className="text-[10px] text-zinc-400 hover:text-amber-400 font-semibold underline transition ml-1"
@@ -1290,12 +1429,11 @@ export const MembershipView: React.FC<MembershipViewProps> = ({
                         <button
                           type="button"
                           onClick={() => {
-                            const next = !isP1PicLocked;
-                            setIsP1PicLocked(next);
-                            if (next) {
-                              showToast('PIC Dikunci 🔒', 'Pilihan PIC dikunci.', 'info');
+                            if (isP1PicLocked) {
+                              handleRequestUnlockPic('closing');
                             } else {
-                              showToast('Kunci PIC Dibuka 🔓', 'Anda dapat memilih staf PIC lain.', 'info');
+                              setIsP1PicLocked(true);
+                              showToast('PIC Dikunci 🔒', 'Pilihan PIC dikunci.', 'info');
                             }
                           }}
                           className="text-[10px] text-zinc-400 hover:text-amber-400 font-semibold underline transition ml-1"
@@ -1491,16 +1629,16 @@ export const MembershipView: React.FC<MembershipViewProps> = ({
               </div>
             </div>
 
-            {/* Tipe Bayar (Skema Pembayaran): Lunas vs Cicilan */}
+            {/* Tipe Bayar (Skema Pembayaran): Lunas vs Cicilan vs Split */}
             <div className="space-y-2 pt-1">
               <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-wider ml-1">
                 Tipe Bayar (Skema Pembayaran)
               </label>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <button
                   type="button"
                   onClick={() => setPaymentType('Lunas')}
-                  className={`p-3.5 rounded-2xl border text-left transition flex items-start gap-3 ${
+                  className={`p-3.5 rounded-2xl border text-left transition flex items-start gap-3 cursor-pointer ${
                     paymentType === 'Lunas'
                       ? 'bg-orange-500/10 border-orange-500 text-white shadow-sm ring-1 ring-orange-500/30'
                       : 'bg-zinc-950/60 border-zinc-800 text-zinc-400 hover:border-zinc-700 hover:text-zinc-200'
@@ -1523,7 +1661,7 @@ export const MembershipView: React.FC<MembershipViewProps> = ({
                       </span>
                     </div>
                     <p className="text-[11px] text-zinc-400 mt-0.5 leading-relaxed">
-                      Pelunasan langsung tanpa sisa piutang. Paket aktif penuh.
+                      Pelunasan langsung tanpa sisa piutang. Paket & kuota aktif penuh.
                     </p>
                   </div>
                 </button>
@@ -1531,7 +1669,7 @@ export const MembershipView: React.FC<MembershipViewProps> = ({
                 <button
                   type="button"
                   onClick={() => setPaymentType('Cicilan')}
-                  className={`p-3.5 rounded-2xl border text-left transition flex items-start gap-3 ${
+                  className={`p-3.5 rounded-2xl border text-left transition flex items-start gap-3 cursor-pointer ${
                     paymentType === 'Cicilan'
                       ? 'bg-amber-500/10 border-amber-500 text-white shadow-sm ring-1 ring-amber-500/30'
                       : 'bg-zinc-950/60 border-zinc-800 text-zinc-400 hover:border-zinc-700 hover:text-zinc-200'
@@ -1555,6 +1693,42 @@ export const MembershipView: React.FC<MembershipViewProps> = ({
                     </div>
                     <p className="text-[11px] text-zinc-400 mt-0.5 leading-relaxed">
                       Bayar DP hari ini, sisa tagihan dicatat di Buku Piutang (40 hari).
+                    </p>
+                  </div>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setPaymentType('Split');
+                    const half = Math.round(netTotal / 2);
+                    setSplitCashAmount(String(half));
+                    setSplitNonCashAmount(String(netTotal - half));
+                  }}
+                  className={`p-3.5 rounded-2xl border text-left transition flex items-start gap-3 cursor-pointer ${
+                    paymentType === 'Split'
+                      ? 'bg-blue-500/10 border-blue-500 text-white shadow-sm ring-1 ring-blue-500/30'
+                      : 'bg-zinc-950/60 border-zinc-800 text-zinc-400 hover:border-zinc-700 hover:text-zinc-200'
+                  }`}
+                >
+                  <div
+                    className={`p-2 rounded-xl shrink-0 ${
+                      paymentType === 'Split'
+                        ? 'bg-blue-500 text-zinc-950 font-black'
+                        : 'bg-zinc-800 text-zinc-400'
+                    }`}
+                  >
+                    <Percent className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="font-bold text-xs sm:text-sm text-white">Split Payment</span>
+                      <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-blue-500/20 text-blue-400 border border-blue-500/30">
+                        Campuran
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-zinc-400 mt-0.5 leading-relaxed">
+                      Kombinasi Tunai Cash + Nontunai (QRIS / Transfer Mandiri / EDC).
                     </p>
                   </div>
                 </button>
@@ -1592,7 +1766,7 @@ export const MembershipView: React.FC<MembershipViewProps> = ({
                           if (!customDpAmount) setCustomDpAmount(String(Math.round(netTotal / 2)));
                         }
                       }}
-                      className={`py-2 px-2.5 rounded-xl text-xs font-bold transition border text-center ${
+                      className={`py-2 px-2.5 rounded-xl text-xs font-bold transition border text-center cursor-pointer ${
                         (opt.percent > 0 && dpPercent === opt.percent && !customDpAmount) ||
                         (opt.percent === 0 && customDpAmount !== '')
                           ? 'bg-amber-500 text-zinc-950 border-amber-400 font-black shadow-sm'
@@ -1621,6 +1795,50 @@ export const MembershipView: React.FC<MembershipViewProps> = ({
                   </div>
                 )}
 
+                {/* Kebijakan Kuota Sesi Kelas saat Cicilan (Class Quota DP Policy) */}
+                {cat === 'Class' && currentPackage && (
+                  <div className="pt-2 border-t border-amber-500/20 space-y-2">
+                    <span className="text-[10px] font-bold text-amber-300 uppercase tracking-wider block">
+                      Kebijakan Aktivasi Sesi Kelas saat Cicilan:
+                    </span>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+                      <button
+                        type="button"
+                        onClick={() => setClassDpPolicy('proportional')}
+                        className={`p-2.5 rounded-xl border text-left transition cursor-pointer ${
+                          classDpPolicy === 'proportional'
+                            ? 'bg-amber-500/20 border-amber-500 text-white font-bold'
+                            : 'bg-zinc-950 border-zinc-800 text-zinc-400 hover:text-zinc-200'
+                        }`}
+                      >
+                        <span className="block text-xs font-bold text-white">
+                          ✓ Proporsional Sesuai DP (Rekomendasi Aman Gym)
+                        </span>
+                        <span className="text-[10px] text-zinc-400 mt-0.5 block">
+                          Buka {Math.max(1, Math.round(((currentPackage.sessionCount || currentPackage.value) * downPayment) / (netTotal || 1)))} sesi hari ini, sisa {Math.max(0, (currentPackage.sessionCount || currentPackage.value) - Math.max(1, Math.round(((currentPackage.sessionCount || currentPackage.value) * downPayment) / (netTotal || 1))))} sesi dibuka setelah piutang lunas.
+                        </span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setClassDpPolicy('full')}
+                        className={`p-2.5 rounded-xl border text-left transition cursor-pointer ${
+                          classDpPolicy === 'full'
+                            ? 'bg-amber-500/20 border-amber-500 text-white font-bold'
+                            : 'bg-zinc-950 border-zinc-800 text-zinc-400 hover:text-zinc-200'
+                        }`}
+                      >
+                        <span className="block text-xs font-bold text-white">
+                          Buka Semua ({currentPackage.sessionCount || currentPackage.value} Sesi Penuh)
+                        </span>
+                        <span className="text-[10px] text-zinc-400 mt-0.5 block">
+                          Semua sesi langsung bisa dibooking member, sisa piutang jatuh tempo 40 hari.
+                        </span>
+                      </button>
+                    </div>
+                  </div>
+                )}
+
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1 text-xs">
                   <div className="bg-zinc-950/80 border border-zinc-800/80 rounded-xl p-3 flex justify-between items-center">
                     <span className="text-zinc-400">DP Dibayar Hari Ini:</span>
@@ -1634,61 +1852,265 @@ export const MembershipView: React.FC<MembershipViewProps> = ({
               </div>
             )}
 
-            {/* Metode Pembayaran (Cash, Transfer, QRIS, EDC) */}
-            <div className="space-y-2 pt-1">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 ml-1">
-                <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">
-                  {isCicilan
-                    ? 'Pilih Metode Pembayaran Uang Muka (DP Hari Ini)'
-                    : 'Pilih Metode Pembayaran (Pelunasan Penuh)'}
-                </label>
-                <span className="text-[11px] text-zinc-400">
-                  Nominal Dibayar:{' '}
-                  <strong className="text-orange-400 font-bold">{formatRp(downPayment)}</strong>
-                </span>
-              </div>
+            {/* Split Payment Configuration Box */}
+            {isSplit && (
+              <div className="bg-blue-500/5 border border-blue-500/30 rounded-2xl p-4 space-y-3.5 animate-in fade-in duration-200">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-blue-400 flex items-center gap-1.5">
+                    <Percent className="w-4 h-4" /> Alokasi Split Payment (Campuran Tunai & Nontunai)
+                  </span>
+                  <span className="text-[11px] text-zinc-400">
+                    Total Tagihan: <strong className="text-white">{formatRp(netTotal)}</strong>
+                  </span>
+                </div>
 
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
-                {[
-                  { id: 'Tunai', label: 'Cash / Tunai', desc: 'Kas Laci Kasir', icon: Wallet },
-                  { id: 'Transfer', label: 'Transfer Bank', desc: 'Rek. Mandiri', icon: Building2 },
-                  { id: 'QRIS', label: 'QRIS / QR Code', desc: 'Scan QR Code', icon: QrCode },
-                  { id: 'EDC', label: 'Debit / EDC', desc: 'Mesin Kartu', icon: CreditCard }
-                ].map((m) => {
-                  const Icon = m.icon;
-                  const isSelected = paymentMethod === m.id;
-                  return (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-wider mb-1">
+                      Nominal Uang Tunai (Cash)
+                    </label>
+                    <input
+                      type="number"
+                      value={splitCashAmount}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setSplitCashAmount(val);
+                        const c = Number(val) || 0;
+                        setSplitNonCashAmount(String(Math.max(0, netTotal - c)));
+                      }}
+                      className="w-full bg-zinc-950 border border-zinc-700 rounded-xl px-3 py-2 text-xs font-bold text-white outline-none focus:border-blue-500"
+                    />
+                  </div>
+
+                  <div>
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">
+                        Nominal Non-Tunai
+                      </label>
+                      <div className="flex gap-1 text-[10px]">
+                        {(['QRIS', 'Transfer', 'EDC'] as const).map((m) => (
+                          <button
+                            key={m}
+                            type="button"
+                            onClick={() => setSplitNonCashMethod(m)}
+                            className={`px-1.5 py-0.5 rounded cursor-pointer ${
+                              splitNonCashMethod === m
+                                ? 'bg-blue-600 text-white font-bold'
+                                : 'bg-zinc-800 text-zinc-400'
+                            }`}
+                          >
+                            {m}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    <input
+                      type="number"
+                      value={splitNonCashAmount}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setSplitNonCashAmount(val);
+                        const n = Number(val) || 0;
+                        setSplitCashAmount(String(Math.max(0, netTotal - n)));
+                      }}
+                      className="w-full bg-zinc-950 border border-zinc-700 rounded-xl px-3 py-2 text-xs font-bold text-white outline-none focus:border-blue-500"
+                    />
+                  </div>
+                </div>
+
+                {/* Quick presets */}
+                <div className="flex items-center justify-between gap-2 pt-1 flex-wrap text-[11px]">
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-zinc-500 text-[10px] uppercase font-bold">Preset:</span>
                     <button
-                      key={m.id}
                       type="button"
-                      onClick={() => setPaymentMethod(m.id as any)}
-                      className={`p-3 rounded-2xl border text-left transition flex flex-col justify-between ${
-                        isSelected
-                          ? 'bg-orange-500/15 border-orange-500 text-white shadow-md ring-1 ring-orange-500/50'
-                          : 'bg-zinc-950/70 border-zinc-800 text-zinc-400 hover:border-zinc-700 hover:text-zinc-200'
-                      }`}
+                      onClick={() => {
+                        const half = Math.round(netTotal / 2);
+                        setSplitCashAmount(String(half));
+                        setSplitNonCashAmount(String(netTotal - half));
+                      }}
+                      className="px-2 py-0.5 rounded bg-zinc-900 hover:bg-zinc-800 text-zinc-300 border border-zinc-700 font-semibold"
                     >
-                      <div className="flex items-center justify-between w-full mb-2">
-                        <div
-                          className={`p-2 rounded-xl ${
-                            isSelected ? 'bg-orange-500 text-zinc-950 font-black' : 'bg-zinc-800 text-zinc-400'
-                          }`}
-                        >
-                          <Icon className="w-4 h-4" />
-                        </div>
-                        {isSelected && <Check className="w-4 h-4 text-orange-400" />}
-                      </div>
-                      <div>
-                        <p className={`text-xs font-bold ${isSelected ? 'text-white' : 'text-zinc-200'}`}>
-                          {m.label}
-                        </p>
-                        <p className="text-[10px] text-zinc-400 mt-0.5">{m.desc}</p>
-                      </div>
+                      50% : 50%
                     </button>
-                  );
-                })}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSplitCashAmount('50000');
+                        setSplitNonCashAmount(String(Math.max(0, netTotal - 50000)));
+                      }}
+                      className="px-2 py-0.5 rounded bg-zinc-900 hover:bg-zinc-800 text-zinc-300 border border-zinc-700 font-semibold"
+                    >
+                      Cash 50k
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSplitCashAmount('100000');
+                        setSplitNonCashAmount(String(Math.max(0, netTotal - 100000)));
+                      }}
+                      className="px-2 py-0.5 rounded bg-zinc-900 hover:bg-zinc-800 text-zinc-300 border border-zinc-700 font-semibold"
+                    >
+                      Cash 100k
+                    </button>
+                  </div>
+
+                  <span
+                    className={`font-black ${
+                      Number(splitCashAmount) + Number(splitNonCashAmount) === netTotal
+                        ? 'text-emerald-400'
+                        : 'text-rose-400'
+                    }`}
+                  >
+                    Total: {formatRp(Number(splitCashAmount) + Number(splitNonCashAmount))} / {formatRp(netTotal)}
+                  </span>
+                </div>
               </div>
-            </div>
+            )}
+
+            {/* Skema Promo Loyalty Khusus Member Gym Aktif saat Beli Paket Kelas */}
+            {cat === 'Class' && (
+              <div className="flex items-start gap-2.5 p-3 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-xs">
+                <input
+                  type="checkbox"
+                  id="applyMemberDiscount"
+                  disabled={!isMember1Active}
+                  checked={applyMemberDiscount && isMember1Active}
+                  onChange={(e) => setApplyMemberDiscount(e.target.checked)}
+                  className="w-4 h-4 mt-0.5 rounded text-orange-500 bg-zinc-950 border-zinc-700 focus:ring-orange-500 accent-orange-500 cursor-pointer disabled:opacity-40"
+                />
+                <div>
+                  <label
+                    htmlFor="applyMemberDiscount"
+                    className={`font-bold block cursor-pointer ${
+                      isMember1Active ? 'text-white' : 'text-zinc-500'
+                    }`}
+                  >
+                    💎 Promo Loyalty Member Gym Aktif (Diskon 10% Paket Kelas)
+                  </label>
+                  <p className="text-[11px] text-zinc-400 mt-0.5">
+                    {isMember1Active
+                      ? `Member memiliki akses gym aktif (s/d ${selectedMember1?.expired || '-'}). Dapatkan potongan loyalty sebesar -${formatRp(Math.round(rawPrice * 0.1))}.`
+                      : 'Hanya dapat diterapkan jika Peserta 1 terdaftar sebagai Member Gym Aktif.'}
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {/* Metode Pembayaran (Cash, Transfer, QRIS, EDC) */}
+            {!isSplit && (
+              <div className="space-y-2 pt-1">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 ml-1">
+                  <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">
+                    {isCicilan
+                      ? 'Pilih Metode Pembayaran Uang Muka (DP Hari Ini)'
+                      : 'Pilih Metode Pembayaran (Pelunasan Penuh)'}
+                  </label>
+                  <span className="text-[11px] text-zinc-400">
+                    Nominal Dibayar:{' '}
+                    <strong className="text-orange-400 font-bold">{formatRp(downPayment)}</strong>
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                  {[
+                    { id: 'Tunai', label: 'Cash / Tunai', desc: 'Kas Laci Kasir', icon: Wallet },
+                    { id: 'Transfer', label: 'Transfer Bank', desc: 'Rek. Mandiri', icon: Building2 },
+                    { id: 'QRIS', label: 'QRIS / QR Code', desc: 'Scan QR Code', icon: QrCode },
+                    { id: 'EDC', label: 'Debit / EDC', desc: 'Mesin Kartu', icon: CreditCard }
+                  ].map((m) => {
+                    const Icon = m.icon;
+                    const isSelected = paymentMethod === m.id;
+                    return (
+                      <button
+                        key={m.id}
+                        type="button"
+                        onClick={() => setPaymentMethod(m.id as any)}
+                        className={`p-3 rounded-2xl border text-left transition flex flex-col justify-between cursor-pointer ${
+                          isSelected
+                            ? 'bg-orange-500/15 border-orange-500 text-white shadow-md ring-1 ring-orange-500/50'
+                            : 'bg-zinc-950/70 border-zinc-800 text-zinc-400 hover:border-zinc-700 hover:text-zinc-200'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between w-full mb-2">
+                          <div
+                            className={`p-2 rounded-xl ${
+                              isSelected ? 'bg-orange-500 text-zinc-950 font-black' : 'bg-zinc-800 text-zinc-400'
+                            }`}
+                          >
+                            <Icon className="w-4 h-4" />
+                          </div>
+                          {isSelected && <Check className="w-4 h-4 text-orange-400" />}
+                        </div>
+                        <div>
+                          <p className={`text-xs font-bold ${isSelected ? 'text-white' : 'text-zinc-200'}`}>
+                            {m.label}
+                          </p>
+                          <p className="text-[10px] text-zinc-400 mt-0.5">{m.desc}</p>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* Kalkulator Kasir Cepat & Kembalian Uang Tunai */}
+            {(paymentMethod === 'Tunai' || (isSplit && Number(splitCashAmount) > 0)) && (
+              <div className="p-3.5 rounded-2xl bg-zinc-950/80 border border-zinc-800 space-y-2 text-xs">
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider flex items-center gap-1">
+                    <Wallet className="w-3.5 h-3.5 text-orange-400" /> Kalkulator Kasir Uang Tunai & Kembalian
+                  </span>
+                  <span className="text-zinc-400">
+                    Kas Diterima Harus: <strong className="text-white">{formatRp(isSplit ? Number(splitCashAmount) || 0 : downPayment)}</strong>
+                  </span>
+                </div>
+
+                <div className="flex flex-col sm:flex-row gap-2">
+                  <input
+                    type="number"
+                    value={cashGiven}
+                    onChange={(e) => setCashGiven(e.target.value)}
+                    placeholder="Uang tunai diserahkan (Rp)..."
+                    className="flex-1 bg-zinc-900 border border-zinc-700 rounded-xl px-3 py-2 text-xs font-bold text-white outline-none focus:border-orange-500"
+                  />
+                  <div className="flex gap-1 overflow-x-auto">
+                    {[
+                      { label: 'Uang Pas', amt: isSplit ? Number(splitCashAmount) || 0 : downPayment },
+                      { label: '70k', amt: 70000 },
+                      { label: '100k', amt: 100000 },
+                      { label: '200k', amt: 200000 },
+                      { label: '500k', amt: 500000 }
+                    ].map((preset) => (
+                      <button
+                        key={preset.label}
+                        type="button"
+                        onClick={() => setCashGiven(String(preset.amt))}
+                        className="px-2.5 py-1.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-zinc-300 hover:text-white border border-zinc-700 text-[10px] font-bold shrink-0 cursor-pointer"
+                      >
+                        {preset.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {cashNum > 0 && (
+                  <div className="flex items-center justify-between pt-1">
+                    <span className="text-zinc-400">Status Pembayaran Tunai:</span>
+                    {cashNum >= (isSplit ? Number(splitCashAmount) || 0 : downPayment) ? (
+                      <span className="font-bold text-emerald-400">
+                        Kembalian: {formatRp(cashChange)}
+                      </span>
+                    ) : (
+                      <span className="font-bold text-rose-400">
+                        Kurang: -{formatRp(cashShortage)}
+                      </span>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* Total and Submit */}
             <div className="pt-3 flex flex-col sm:flex-row justify-between items-start sm:items-end gap-3 border-t border-zinc-800">
@@ -2861,6 +3283,20 @@ export const MembershipView: React.FC<MembershipViewProps> = ({
           </div>
         </div>
       )}
+
+      {/* Password Authorization Modal to Unlock / Change PIC */}
+      <PicPasswordModal
+        isOpen={isPicPasswordModalOpen}
+        onClose={() => {
+          setIsPicPasswordModalOpen(false);
+          setUnlockPicTarget(null);
+        }}
+        onSuccess={handleUnlockPicSuccess}
+        currentUser={currentUser}
+        showToast={showToast}
+        title="Otorisasi Ganti PIC Member"
+        description="Masukkan password otorisasi keamanan untuk membuka kunci dan mengganti staf PIC pada transaksi paket ini."
+      />
     </div>
   );
 };

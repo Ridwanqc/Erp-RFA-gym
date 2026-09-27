@@ -1,13 +1,52 @@
-export const APP_TODAY = '2026-09-18';
+/**
+ * Mengambil tanggal nyata hari ini dalam format YYYY-MM-DD sesuai tanggal lokal perangkat.
+ * Dijamin selalu akurat mengikuti tanggal real time sistem.
+ */
+export function getRealTodayIso(): string {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+  const day = String(now.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+export const APP_TODAY = getRealTodayIso();
+
+/**
+ * Mendeteksi label zona waktu lokal (WIB / WITA / WIT / GMT+X)
+ */
+export function getSystemTimezoneLabel(): string {
+  try {
+    const offsetMinutes = -new Date().getTimezoneOffset();
+    if (offsetMinutes === 420) return 'WIB';
+    if (offsetMinutes === 480) return 'WITA';
+    if (offsetMinutes === 540) return 'WIT';
+    const hours = Math.floor(Math.abs(offsetMinutes) / 60);
+    const sign = offsetMinutes >= 0 ? '+' : '-';
+    return `GMT${sign}${hours}`;
+  } catch {
+    return 'WIB';
+  }
+}
 
 export function formatRp(n: number | string | undefined | null): string {
   const val = typeof n === 'string' ? parseFloat(n) : (n || 0);
   return 'Rp ' + Math.round(val).toLocaleString('id-ID');
 }
 
-export function getTimestamp(): string {
+/**
+ * Mengambil timestamp waktu nyata (HH:mm[:ss] ZONA)
+ */
+export function getTimestamp(withSeconds = false): string {
   const now = new Date();
-  return now.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) + ' WIB';
+  const tz = getSystemTimezoneLabel();
+  const timeStr = now.toLocaleTimeString('id-ID', {
+    hour: '2-digit',
+    minute: '2-digit',
+    second: withSeconds ? '2-digit' : undefined,
+    hour12: false
+  });
+  return `${timeStr} ${tz}`;
 }
 
 export function formatDateIndo(dateStr: string): string {
@@ -18,6 +57,15 @@ export function formatDateIndo(dateStr: string): string {
   } catch {
     return dateStr;
   }
+}
+
+export function formatFullDateIndo(date: Date = new Date()): string {
+  return date.toLocaleDateString('id-ID', {
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric'
+  });
 }
 
 export function getDayDiff(targetDateStr: string, baseDateStr: string = APP_TODAY): number {

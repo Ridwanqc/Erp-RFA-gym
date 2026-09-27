@@ -1,12 +1,16 @@
 import React, { useState } from 'react';
-import { Calendar, Users, Plus, CheckCircle2, Clock, MapPin, Sparkles } from 'lucide-react';
-import { StudioClass, Member, User } from '../types';
+import { Calendar, Users, Plus, CheckCircle2, Clock, MapPin, Sparkles, AlertCircle } from 'lucide-react';
+import { StudioClass, Member, User, PackageItem, Transaction } from '../types';
 import { APP_TODAY } from '../utils/formatters';
+import { ClassPaymentModal } from './ClassPaymentModal';
 
 interface StudioClassViewProps {
   studioClasses: StudioClass[];
   members: Member[];
   staffUsers: User[];
+  packages?: PackageItem[];
+  currentUser?: User | null;
+  onPurchasePackage?: (trx: Transaction, updatedMembers: Member[]) => void;
   onBookClass: (classId: string, memberId: string) => void;
   onAddClass: (newClass: StudioClass) => void;
   showToast: (title: string, message: string, type: 'success' | 'error' | 'warning' | 'info') => void;
@@ -16,6 +20,9 @@ export const StudioClassView: React.FC<StudioClassViewProps> = ({
   studioClasses,
   members,
   staffUsers,
+  packages = [],
+  currentUser = null,
+  onPurchasePackage,
   onBookClass,
   onAddClass,
   showToast
@@ -23,6 +30,11 @@ export const StudioClassView: React.FC<StudioClassViewProps> = ({
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [selectedClassForBooking, setSelectedClassForBooking] = useState<StudioClass | null>(null);
   const [bookingMemberId, setBookingMemberId] = useState('');
+
+  // Class Payment Modal State
+  const [isClassPaymentModalOpen, setIsClassPaymentModalOpen] = useState(false);
+  const [classPaymentPreselectedMemberId, setClassPaymentPreselectedMemberId] = useState<string>('');
+  const [classPaymentTargetClass, setClassPaymentTargetClass] = useState<StudioClass | null>(null);
 
   // Add Class form state
   const [name, setName] = useState('');
@@ -91,12 +103,28 @@ export const StudioClassView: React.FC<StudioClassViewProps> = ({
           </p>
         </div>
 
-        <button
-          onClick={() => setIsAddOpen(true)}
-          className="bg-orange-500 hover:bg-orange-600 text-white font-bold px-4 py-2.5 rounded-xl text-xs shadow-md transition flex items-center gap-1.5"
-        >
-          <Plus className="w-4 h-4" /> Buka Jadwal Kelas Baru
-        </button>
+        <div className="flex items-center gap-2">
+          {onPurchasePackage && (
+            <button
+              type="button"
+              onClick={() => {
+                setClassPaymentPreselectedMemberId('');
+                setClassPaymentTargetClass(null);
+                setIsClassPaymentModalOpen(true);
+              }}
+              className="bg-orange-500/15 hover:bg-orange-500/25 text-orange-300 font-bold px-3.5 py-2.5 rounded-xl text-xs border border-orange-500/30 transition flex items-center gap-1.5 cursor-pointer shadow-sm"
+            >
+              <Sparkles className="w-4 h-4 text-orange-400" /> Beli Paket Kelas
+            </button>
+          )}
+
+          <button
+            onClick={() => setIsAddOpen(true)}
+            className="bg-orange-500 hover:bg-orange-600 text-white font-bold px-4 py-2.5 rounded-xl text-xs shadow-md transition flex items-center gap-1.5 cursor-pointer"
+          >
+            <Plus className="w-4 h-4" /> Buka Jadwal Kelas Baru
+          </button>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
@@ -182,11 +210,62 @@ export const StudioClassView: React.FC<StudioClassViewProps> = ({
                   <option value="">-- Pilih Member --</option>
                   {members.map((m) => (
                     <option key={m.id} value={m.id}>
-                      {m.id} - {m.name}
+                      {m.id} - {m.name} {m.classQuota && m.classQuota > 0 ? `• [${m.classQuota} Sesi]` : '• [0 Sesi]'}
                     </option>
                   ))}
                 </select>
               </div>
+
+              {/* Status Kuota Kelas Member & Opsi Beli Langsung */}
+              {(() => {
+                const targetMember = members.find((m) => m.id === bookingMemberId);
+                if (!targetMember) return null;
+
+                const hasQuota = targetMember.classQuota && targetMember.classQuota > 0;
+                return (
+                  <div className="space-y-2">
+                    {hasQuota ? (
+                      <div className="p-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-xs text-emerald-300">
+                        <div className="flex items-center justify-between font-bold">
+                          <span>✓ Kuota Tersedia: {targetMember.classQuota} Sesi</span>
+                          <span className="text-[10px] text-zinc-400 font-normal">
+                            Exp: {targetMember.classPackageExpired || '-'}
+                          </span>
+                        </div>
+                        <span className="text-[11px] text-emerald-400/80 mt-0.5 block">
+                          Paket: {targetMember.classPackageName || 'Studio Pass'} • 1 sesi akan dipotong saat booking.
+                        </span>
+                      </div>
+                    ) : (
+                      <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 text-xs space-y-2">
+                        <div className="flex items-start gap-1.5 text-amber-300">
+                          <AlertCircle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+                          <div>
+                            <strong className="block text-white">Member Belum Memiliki Kuota Kelas</strong>
+                            <p className="text-[11px] text-zinc-400 mt-0.5">
+                              Sisa kuota: 0 sesi. Member dapat membeli Single Pass Drop-In atau Paket Kelas Studio dengan skema Lunas, DP Cicilan, atau Split Payment.
+                            </p>
+                          </div>
+                        </div>
+                        {onPurchasePackage && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setClassPaymentPreselectedMemberId(targetMember.id);
+                              setClassPaymentTargetClass(selectedClassForBooking);
+                              setSelectedClassForBooking(null);
+                              setIsClassPaymentModalOpen(true);
+                            }}
+                            className="w-full py-2 px-3 rounded-lg bg-orange-500 hover:bg-orange-600 text-white font-bold text-xs shadow-md transition flex items-center justify-center gap-1.5 cursor-pointer"
+                          >
+                            <Sparkles className="w-3.5 h-3.5" /> Beli Paket Kelas / Drop-In Sekarang
+                          </button>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
 
               <div className="flex gap-2 pt-2">
                 <button

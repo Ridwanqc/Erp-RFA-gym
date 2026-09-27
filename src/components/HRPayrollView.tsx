@@ -8,7 +8,8 @@ import {
   UserCheck,
   ShieldCheck,
   Briefcase,
-  BarChart3
+  BarChart3,
+  Building2
 } from 'lucide-react';
 import {
   User,
@@ -28,6 +29,7 @@ import { StaffDirectoryTab } from './hr/StaffDirectoryTab';
 import { LeaveManagementTab } from './hr/LeaveManagementTab';
 import { PayrollTab } from './hr/PayrollTab';
 import { APP_TODAY } from '../utils/formatters';
+import { useSettings } from '../context/SettingsContext';
 
 interface HRPayrollViewProps {
   staffUsers: User[];
@@ -76,6 +78,7 @@ export const HRPayrollView: React.FC<HRPayrollViewProps> = ({
   onApproveLeaveRequest,
   showToast
 }) => {
+  const { activeBranch, isAllBranches } = useSettings();
   const [activeTab, setActiveTab] = useState<HRActiveTab>('dashboard');
 
   const pendingLeavesCount = leaveRequests.filter((l) => l.status === 'Pending').length;
@@ -88,10 +91,20 @@ export const HRPayrollView: React.FC<HRPayrollViewProps> = ({
       {/* 1. MAIN HEADER & TAB NAVIGATION */}
       <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
         <div>
-          <h2 className="text-xl sm:text-2xl font-black text-white tracking-tight flex items-center gap-2">
-            <UserCheck className="w-6 h-6 text-orange-500" />
-            Sistem HR & Manajemen Karyawan
-          </h2>
+          <div className="flex items-center gap-2 flex-wrap">
+            <h2 className="text-xl sm:text-2xl font-black text-white tracking-tight flex items-center gap-2">
+              <UserCheck className="w-6 h-6 text-orange-500" />
+              Sistem HR & Manajemen Karyawan
+            </h2>
+            <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-bold border flex items-center gap-1.5 ${
+              isAllBranches
+                ? 'bg-amber-500/15 text-amber-300 border-amber-500/30'
+                : 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30'
+            }`}>
+              <Building2 className="w-3.5 h-3.5 shrink-0" />
+              <span>Unit HR: {isAllBranches ? 'Konsolidasi Seluruh Cabang' : activeBranch?.name}</span>
+            </span>
+          </div>
           <p className="text-xs text-zinc-400 mt-0.5">
             Pengelolaan jadwal kerja shift mingguan, laporan absensi real-time, pengajuan cuti, dan penggajian otomatis
           </p>
@@ -249,6 +262,7 @@ export const HRPayrollView: React.FC<HRPayrollViewProps> = ({
           packages={packages}
           trainerCommissions={trainerCommissions}
           salesCommissions={salesCommissions}
+          onSaveStaff={onSaveStaff}
           showToast={showToast}
         />
       )}

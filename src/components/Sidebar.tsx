@@ -60,6 +60,7 @@ export type ActiveTab =
   | 'google-sheets'
   | 'settings'
   | 'settings-printer'
+  | 'settings-theme'
   | 'settings-roles'
   | 'settings-branches'
   | 'settings-profile'
@@ -349,6 +350,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
             {
               id: 'settings-printer',
               label: 'Setting Printer & Struk',
+              roles: ['admin', 'manager', 'kasir']
+            },
+            {
+              id: 'settings-theme',
+              label: 'Setting Tema & Tampilan',
               roles: ['admin', 'manager', 'kasir']
             },
             {

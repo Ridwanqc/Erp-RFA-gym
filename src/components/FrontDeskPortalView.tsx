@@ -73,6 +73,11 @@ import {
   INITIAL_LOCKERS
 } from '../data/lockerData';
 import { LockerManagementView } from './LockerManagementView';
+import { PicPasswordModal } from './PicPasswordModal';
+import { ReceiptModal } from './ReceiptModal';
+import { RealTimeClock } from './RealTimeClock';
+import { useSettings } from '../context/SettingsContext';
+import { DEFAULT_PIC_PROTECTION } from '../data/settingsData';
 
 interface FrontDeskPortalViewProps {
   members: Member[];
@@ -264,6 +269,12 @@ export const FrontDeskPortalView: React.FC<FrontDeskPortalViewProps> = ({
   const [quick360Member, setQuick360Member] = useState<Member | null>(null);
   const [universalSearchQuery, setUniversalSearchQuery] = useState('');
   const [isUniversalSearchOpen, setIsUniversalSearchOpen] = useState(false);
+
+  // Settings & PIC Password Protection
+  const { settings } = useSettings();
+  const picProtection = settings?.picProtection || DEFAULT_PIC_PROTECTION;
+  const [isPicPasswordModalOpen, setIsPicPasswordModalOpen] = useState(false);
+  const [passwordUnlockTarget, setPasswordUnlockTarget] = useState<'reg' | 'renewal'>('reg');
 
   // Fast-Track Registration Modal State
   const [isNewMemberModalOpen, setIsNewMemberModalOpen] = useState(false);
@@ -785,6 +796,7 @@ export const FrontDeskPortalView: React.FC<FrontDeskPortalViewProps> = ({
       ptQuota: pkg?.cat === 'PT' ? pkg.value : 0,
       picId: staffObj?.id || 'S01',
       picName: staffObj?.name || 'Staf Kasir',
+      isPicLocked: true,
       followUpStatus: 'Member Baru',
       photo: newMemberForm.gender === 'P'
         ? 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?q=80&w=200&auto=format&fit=crop'
@@ -1158,6 +1170,8 @@ export const FrontDeskPortalView: React.FC<FrontDeskPortalViewProps> = ({
                 <Clock className="w-3.5 h-3.5 text-zinc-400" />
                 Shift: <strong className="text-white">{currentUser?.shift || 'Pagi'}</strong>
               </span>
+              <span className="text-zinc-500 text-xs">·</span>
+              <RealTimeClock variant="badge" />
               <span className="text-zinc-500 text-xs">·</span>
               <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full border ${isStoreClosed ? 'bg-red-500/10 text-red-400 border-red-500/30' : 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30'}`}>
                 {isStoreClosed ? 'Kasir Tutup' : 'Kasir Buka'}
@@ -3200,12 +3214,20 @@ export const FrontDeskPortalView: React.FC<FrontDeskPortalViewProps> = ({
                         <button
                           type="button"
                           onClick={() => {
-                            const next = !isRegPicLocked;
-                            setIsRegPicLocked(next);
-                            if (next) {
-                              showToast('PIC Dikunci 🔒', 'Pilihan PIC berhasil dikunci.', 'info');
+                            if (isRegPicLocked) {
+                              const isProtected = picProtection.requirePasswordToChangePic && (picProtection.requirePasswordOnMemberForm !== false);
+                              const canBypass = (currentUser?.role === 'admin' || currentUser?.role === 'manager') && picProtection.allowAdminBypass;
+
+                              if (isProtected && !canBypass) {
+                                setPasswordUnlockTarget('reg');
+                                setIsPicPasswordModalOpen(true);
+                              } else {
+                                setIsRegPicLocked(false);
+                                showToast('Kunci PIC Dibuka 🔓', 'Anda dapat memilih staf PIC lain.', 'info');
+                              }
                             } else {
-                              showToast('Kunci PIC Dibuka 🔓', 'Anda dapat memilih staf PIC lain.', 'info');
+                              setIsRegPicLocked(true);
+                              showToast('PIC Dikunci 🔒', 'Pilihan PIC berhasil dikunci.', 'info');
                             }
                           }}
                           className="text-[10px] text-zinc-400 hover:text-amber-400 font-semibold underline transition ml-1"
@@ -3404,12 +3426,20 @@ export const FrontDeskPortalView: React.FC<FrontDeskPortalViewProps> = ({
                       <button
                         type="button"
                         onClick={() => {
-                          const next = !isRenewalPicLocked;
-                          setIsRenewalPicLocked(next);
-                          if (next) {
-                            showToast('PIC Renewal Dikunci 🔒', 'Pilihan PIC perpanjangan dikunci.', 'info');
+                          if (isRenewalPicLocked) {
+                            const isProtected = picProtection.requirePasswordToChangePic && (picProtection.requirePasswordOnRenewal !== false);
+                            const canBypass = (currentUser?.role === 'admin' || currentUser?.role === 'manager') && picProtection.allowAdminBypass;
+
+                            if (isProtected && !canBypass) {
+                              setPasswordUnlockTarget('renewal');
+                              setIsPicPasswordModalOpen(true);
+                            } else {
+                              setIsRenewalPicLocked(false);
+                              showToast('Kunci PIC Dibuka 🔓', 'Anda dapat memilih staf PIC lain.', 'info');
+                            }
                           } else {
-                            showToast('Kunci PIC Dibuka 🔓', 'Anda dapat memilih staf PIC lain.', 'info');
+                            setIsRenewalPicLocked(true);
+                            showToast('PIC Renewal Dikunci 🔒', 'Pilihan PIC perpanjangan dikunci.', 'info');
                           }
                         }}
                         className="text-[10px] text-zinc-400 hover:text-amber-400 font-semibold underline transition ml-1"
@@ -3772,87 +3802,26 @@ export const FrontDeskPortalView: React.FC<FrontDeskPortalViewProps> = ({
       {/* MODAL: CASHIER RECEIPT / STRUK TRANSAKSI MEJA DESK */}
       {/* ------------------------------------------------------------------ */}
       {receiptModalData && (
-        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-zinc-900 border border-zinc-800 rounded-3xl p-6 w-full max-w-md shadow-2xl space-y-4 animate-in fade-in-50 zoom-in-95">
-            <div className="text-center pb-3 border-b border-zinc-800 space-y-1">
-              <div className="w-10 h-10 rounded-2xl bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 flex items-center justify-center mx-auto mb-2">
-                <Check className="w-6 h-6" />
-              </div>
-              <h3 className="text-base font-black text-white">STRUK TRANSAKSI KASIR</h3>
-              <p className="text-xs text-zinc-400">GymPro Fitness & Front Desk Center</p>
-              <span className="text-[10px] text-zinc-500 font-mono block">
-                No: {receiptModalData.trxId} · {receiptModalData.date} {receiptModalData.time}
-              </span>
-            </div>
-
-            <div className="text-xs space-y-1.5 py-1 text-zinc-400">
-              <div className="flex justify-between">
-                <span>Pelanggan:</span>
-                <strong className="text-white">{receiptModalData.customerName}</strong>
-              </div>
-              <div className="flex justify-between">
-                <span>Kasir:</span>
-                <span className="text-zinc-300">{receiptModalData.cashierName}</span>
-              </div>
-              <div className="flex justify-between">
-                <span>Metode:</span>
-                <span className="text-emerald-400 font-bold">{receiptModalData.paymentMethod}</span>
-              </div>
-            </div>
-
-            <div className="space-y-2 border-t border-b border-zinc-800 py-3 max-h-48 overflow-y-auto">
-              {receiptModalData.items.map((item, idx) => (
-                <div key={idx} className="flex justify-between text-xs">
-                  <div className="pr-2">
-                    <span className="text-zinc-200 block">{item.name}</span>
-                    <span className="text-[11px] text-zinc-500">{formatRp(item.price)} x {item.qty}</span>
-                  </div>
-                  <span className="text-white font-mono font-bold">{formatRp(item.total)}</span>
-                </div>
-              ))}
-            </div>
-
-            <div className="text-xs space-y-1 pt-1">
-              <div className="flex justify-between font-black text-sm text-white">
-                <span>TOTAL BAYAR:</span>
-                <span className="text-emerald-400 font-mono">{formatRp(receiptModalData.total)}</span>
-              </div>
-              {receiptModalData.cashGiven !== undefined && (
-                <>
-                  <div className="flex justify-between text-zinc-400">
-                    <span>Uang Tunai:</span>
-                    <span className="font-mono">{formatRp(receiptModalData.cashGiven)}</span>
-                  </div>
-                  <div className="flex justify-between text-amber-400 font-bold">
-                    <span>Kembalian:</span>
-                    <span className="font-mono">{formatRp(receiptModalData.changeGiven || 0)}</span>
-                  </div>
-                </>
-              )}
-            </div>
-
-            <div className="pt-3 border-t border-zinc-800 flex gap-2">
-              <button
-                type="button"
-                onClick={() => {
-                  window.print();
-                  showToast('Cetak Struk 🖨️', 'Perintah cetak struk dikirim ke printer kasir.', 'info');
-                }}
-                className="flex-1 py-2.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 font-bold rounded-xl text-xs transition flex items-center justify-center gap-1.5"
-              >
-                <Printer className="w-4 h-4" />
-                Cetak Struk
-              </button>
-              <button
-                type="button"
-                onClick={() => setReceiptModalData(null)}
-                className="flex-1 py-2.5 bg-emerald-500 hover:bg-emerald-600 text-zinc-950 font-black rounded-xl text-xs transition active:scale-95"
-              >
-                Tutup & Selesai
-              </button>
-            </div>
-          </div>
-        </div>
+        <ReceiptModal
+          isOpen={Boolean(receiptModalData)}
+          onClose={() => setReceiptModalData(null)}
+          transaction={{
+            id: receiptModalData.trxId,
+            date: receiptModalData.date,
+            time: receiptModalData.time,
+            type: 'POS',
+            desc: receiptModalData.items.map((i) => `${i.qty}x ${i.name}`).join(', '),
+            customer: receiptModalData.customerName,
+            memberId: receiptModalData.memberId,
+            amount: receiptModalData.total,
+            amountPaid: receiptModalData.total,
+            amountRemaining: 0,
+            method: receiptModalData.paymentMethod,
+            status: 'Paid',
+            cashier: receiptModalData.cashierName,
+            itemsJSON: JSON.stringify(receiptModalData.items)
+          }}
+        />
       )}
 
       {/* ------------------------------------------------------------------ */}
@@ -4607,6 +4576,30 @@ export const FrontDeskPortalView: React.FC<FrontDeskPortalViewProps> = ({
           </div>
         );
       })()}
+
+      {/* Password Authorization Modal to Unlock PIC in Fast-Track & Renewal */}
+      <PicPasswordModal
+        isOpen={isPicPasswordModalOpen}
+        onClose={() => setIsPicPasswordModalOpen(false)}
+        onSuccess={() => {
+          if (passwordUnlockTarget === 'reg') {
+            setIsRegPicLocked(false);
+          } else {
+            setIsRenewalPicLocked(false);
+          }
+          setIsPicPasswordModalOpen(false);
+          showToast('Kunci PIC Dibuka 🔓', 'Password otorisasi terverifikasi. Silakan pilih staf PIC baru.', 'success');
+        }}
+        currentStaffName={
+          passwordUnlockTarget === 'reg'
+            ? staffUsers.find((s) => s.id === newMemberForm.assignedStaffId)?.name
+            : staffUsers.find((s) => s.id === renewalPicId)?.name || selectedMemberForRenewal?.picName
+        }
+        currentUser={currentUser}
+        showToast={showToast}
+        title="Otorisasi Ganti PIC Front Desk"
+        description="Masukkan password otorisasi keamanan untuk membuka kunci dan mengganti staf PIC penanggung jawab."
+      />
     </div>
   );
 };

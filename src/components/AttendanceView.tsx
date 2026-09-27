@@ -26,7 +26,8 @@ import {
   Info,
   Settings,
   Wrench,
-  Crown
+  Crown,
+  Building2
 } from 'lucide-react';
 import { Member, User, Attendance, StaffAttendance, LockerSlot, Transaction } from '../types';
 import { getTimestamp, APP_TODAY, formatRp, formatDateIndo, getDayDiff } from '../utils/formatters';
@@ -34,7 +35,9 @@ import { SearchableMemberSelect } from './SearchableMemberSelect';
 import { SearchableStaffSelect } from './SearchableStaffSelect';
 import { QRCodeScannerModal } from './QRCodeScannerModal';
 import { LockerManagementModal } from './LockerManagementModal';
+import { RealTimeClock } from './RealTimeClock';
 import { getRecommendedLocker, getLockerStats, getAvailableLockersByGender } from '../data/lockerData';
+import { useSettings } from '../context/SettingsContext';
 
 interface AttendanceViewProps {
   members: Member[];
@@ -67,6 +70,7 @@ export const AttendanceView: React.FC<AttendanceViewProps> = ({
   transactions = [],
   showToast
 }) => {
+  const { activeBranch, isAllBranches } = useSettings();
   const [activeTab, setActiveTab] = useState<'member' | 'staff'>('member');
   const [activeMemberSubTab, setActiveMemberSubTab] = useState<'attendance-list' | 'locker-board'>('attendance-list');
   const [isScannerOpen, setIsScannerOpen] = useState(false);
@@ -285,8 +289,13 @@ export const AttendanceView: React.FC<AttendanceViewProps> = ({
     const assignedLocker = withoutLocker ? null : selectedLockerNumber;
     const timeInStr = getTimestamp();
 
+    const branchIdToTag = member.branchId || (isAllBranches ? 'BR-001' : activeBranch?.id);
+    const branchNameToTag = member.branchName || (isAllBranches ? 'Cabang Utama' : activeBranch?.name);
+
     const newAttendance: Attendance = {
       id: 'ATT-' + Date.now(),
+      branchId: branchIdToTag,
+      branchName: branchNameToTag,
       date: APP_TODAY,
       timeIn: timeInStr,
       timeOut: '',
@@ -345,8 +354,13 @@ export const AttendanceView: React.FC<AttendanceViewProps> = ({
         return;
       }
 
+      const staffBranchId = staff.branchId || (isAllBranches ? 'BR-001' : activeBranch?.id);
+      const staffBranchName = staff.branchName || (isAllBranches ? 'Cabang Utama' : activeBranch?.name);
+
       const newClock: StaffAttendance = {
         id: 'SA-' + Date.now(),
+        branchId: staffBranchId,
+        branchName: staffBranchName,
         date: APP_TODAY,
         timeIn: getTimestamp(),
         timeOut: '',
@@ -446,16 +460,28 @@ export const AttendanceView: React.FC<AttendanceViewProps> = ({
       {/* Top Header & Tab switcher */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
-          <h2 className="text-xl sm:text-2xl font-black text-white tracking-tight flex items-center gap-2">
-            <UserCheck className="w-6 h-6 text-orange-500" />
-            Presensi Member, Absensi & Manajemen Kunci Loker
-          </h2>
+          <div className="flex items-center gap-2 flex-wrap">
+            <h2 className="text-xl sm:text-2xl font-black text-white tracking-tight flex items-center gap-2">
+              <UserCheck className="w-6 h-6 text-orange-500" />
+              Presensi Member, Absensi & Manajemen Kunci Loker
+            </h2>
+            <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-bold border flex items-center gap-1.5 ${
+              isAllBranches
+                ? 'bg-amber-500/15 text-amber-300 border-amber-500/30'
+                : 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30'
+            }`}>
+              <Building2 className="w-3.5 h-3.5 shrink-0" />
+              <span>Resepsionis: {isAllBranches ? 'Konsolidasi Seluruh Cabang' : activeBranch?.name}</span>
+            </span>
+          </div>
           <p className="text-xs text-zinc-400 mt-0.5">
             Sistem check-in terpadu front desk: rekomendasi otomatis kunci loker, panduan operasional pintar, dan monitoring kehadiran real-time
           </p>
         </div>
 
         <div className="flex flex-wrap items-center gap-3">
+          <RealTimeClock variant="badge" />
+
           {activeTab === 'member' && (
             <button
               type="button"
@@ -1359,9 +1385,12 @@ export const AttendanceView: React.FC<AttendanceViewProps> = ({
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <div className="bg-zinc-900/90 border border-zinc-800 rounded-3xl p-6 shadow-sm h-fit">
             <h3 className="text-base font-bold text-white mb-2">Presensi Shift Staf</h3>
-            <p className="text-xs text-zinc-400 mb-6 leading-relaxed">
+            <p className="text-xs text-zinc-400 mb-4 leading-relaxed">
               Catat waktu masuk (Clock IN) dan waktu selesai kerja (Clock OUT) staf dan trainer gym.
             </p>
+
+            {/* Live Real-Time Precision Clock */}
+            <RealTimeClock variant="card" className="mb-4" />
 
             <div className="space-y-4">
               <div>
@@ -1504,6 +1533,12 @@ export const AttendanceView: React.FC<AttendanceViewProps> = ({
                 <div className="flex justify-between items-center">
                   <span className="text-zinc-400">Tipe Kunjungan:</span>
                   <span className="font-semibold text-white">{lastCheckInSlip.type}</span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-zinc-400">Cabang / Outlet:</span>
+                  <span className="font-semibold text-amber-300">
+                    {lastCheckInSlip.member.branchName || activeBranch?.name || 'Cabang Utama'}
+                  </span>
                 </div>
                 <div className="flex justify-between items-center">
                   <span className="text-zinc-400">Fasilitas Handuk:</span>

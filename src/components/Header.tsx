@@ -10,18 +10,16 @@ import {
   Shield,
   PanelLeftClose,
   PanelLeftOpen,
-  Palette,
   Settings,
-  Printer,
   Building2,
   Check,
   Plus,
   X
 } from 'lucide-react';
-import { User } from '../types';
+import { User, ALL_BRANCHES_ID } from '../types';
 import { formatDateIndo, APP_TODAY } from '../utils/formatters';
 import { PWAInstallButton } from './PWAInstallButton';
-import { useTheme } from '../context/ThemeContext';
+import { RealTimeClock } from './RealTimeClock';
 import { useSettings } from '../context/SettingsContext';
 
 interface HeaderProps {
@@ -35,7 +33,7 @@ interface HeaderProps {
   onSwitchUser?: (userId: string) => void;
   onLogout?: () => void;
   firebaseConnected?: boolean;
-  onOpenSettings?: (subTab?: 'printer' | 'roles' | 'profile' | 'branches' | 'finance' | 'templates' | 'backup') => void;
+  onOpenSettings?: (subTab?: 'printer' | 'theme' | 'roles' | 'profile' | 'branches' | 'finance' | 'templates' | 'backup') => void;
   onOpenAddBranchModal?: () => void;
 }
 
@@ -57,8 +55,10 @@ export const Header: React.FC<HeaderProps> = ({
   const [isBranchOpen, setIsBranchOpen] = useState(false);
   const profileMenuRef = useRef<HTMLDivElement | null>(null);
   const branchMenuRef = useRef<HTMLDivElement | null>(null);
-  const { openThemeModal, currentAccent, theme } = useTheme();
-  const { branches, activeBranchId, activeBranch, setActiveBranchId } = useSettings();
+  const { branches, activeBranchId, activeBranch, setActiveBranchId, canUserAccessBranch } = useSettings();
+
+  const isSuperUser = !currentUser || currentUser.role === 'admin' || currentUser.role === 'manager';
+  const isBranchLocked = !isSuperUser && currentUser?.branchId && (!currentUser.allowedBranchIds || currentUser.allowedBranchIds.length <= 1);
 
   // Close dropdowns when clicking outside or pressing Escape
   useEffect(() => {
@@ -141,47 +141,11 @@ export const Header: React.FC<HeaderProps> = ({
           <span className="hidden md:inline text-[11px] font-bold text-amber-200">Cloud Sync</span>
         </div>
 
-        {/* Current Date Widget (hidden on mobile, visible on sm) */}
-        <div className="hidden sm:flex text-xs font-semibold text-zinc-300 bg-zinc-900 px-3 py-1.5 rounded-xl border border-zinc-800 items-center shadow-inner">
-          <Calendar className="w-3.5 h-3.5 text-orange-500 mr-2 shrink-0" />
-          <span className="whitespace-nowrap">{formatDateIndo(APP_TODAY)}</span>
-        </div>
+        {/* Real-Time Live DateTime Widget (Akurasinya 100% Sesuai Waktu Real Perangkat & Server) */}
+        <RealTimeClock variant="header" />
 
         {/* PWA Install Button (Android / iOS / Desktop) */}
         <PWAInstallButton variant="compact" />
-
-        {/* Quick Theme Settings Button */}
-        <button
-          type="button"
-          id="btn-header-theme-toggle"
-          onClick={openThemeModal}
-          className="flex items-center gap-1.5 p-2 sm:px-2.5 sm:py-1.5 rounded-xl bg-zinc-900/90 hover:bg-zinc-800 border border-zinc-800 text-zinc-300 hover:text-white transition active:scale-95 min-h-[44px]"
-          title={`Pengaturan Tema (${theme.mode} • Aksen ${currentAccent.name})`}
-          aria-label="Buka Pengaturan Tema"
-        >
-          <Palette className="w-4 h-4 text-orange-400 shrink-0" />
-          <span
-            className="w-2.5 h-2.5 rounded-full shrink-0 shadow-sm"
-            style={{ backgroundColor: currentAccent.hex }}
-            title={`Aksen Aktif: ${currentAccent.name}`}
-          />
-          <span className="hidden xl:inline text-[11px] font-bold">Tema</span>
-        </button>
-
-        {/* Quick System Settings Shortcut */}
-        {onOpenSettings && (
-          <button
-            type="button"
-            id="btn-header-settings-shortcut"
-            onClick={() => onOpenSettings('printer')}
-            className="flex items-center gap-1.5 p-2 sm:px-2.5 sm:py-1.5 rounded-xl bg-zinc-900/90 hover:bg-zinc-800 border border-zinc-800 text-zinc-300 hover:text-white transition active:scale-95 min-h-[44px]"
-            title="Pengaturan Printer & Sistem"
-            aria-label="Buka Pengaturan Printer"
-          >
-            <Printer className="w-4 h-4 text-orange-400 shrink-0" />
-            <span className="hidden xl:inline text-[11px] font-bold">Printer</span>
-          </button>
-        )}
 
         {/* Branch Selector Dropdown */}
         <div className="relative" ref={branchMenuRef}>
@@ -189,15 +153,30 @@ export const Header: React.FC<HeaderProps> = ({
             type="button"
             id="btn-header-branch-switcher"
             onClick={() => setIsBranchOpen(!isBranchOpen)}
-            className="flex items-center gap-1.5 p-1.5 sm:px-2.5 sm:py-1.5 rounded-xl bg-zinc-900/90 hover:bg-zinc-800 border border-zinc-800 text-zinc-300 hover:text-white transition active:scale-95 min-h-[44px] cursor-pointer"
+            className={`flex items-center gap-1.5 p-1.5 sm:px-2.5 sm:py-1.5 rounded-xl border transition active:scale-95 min-h-[44px] cursor-pointer ${
+              activeBranchId === ALL_BRANCHES_ID
+                ? 'bg-amber-500/10 border-amber-500/30 text-amber-200 hover:bg-amber-500/20'
+                : 'bg-zinc-900/90 hover:bg-zinc-800 border-zinc-800 text-zinc-300 hover:text-white'
+            }`}
             title={`Cabang Aktif: ${activeBranch?.name}`}
             aria-label="Pilih Cabang Aktif"
             aria-expanded={isBranchOpen}
           >
-            <Building2 className="w-4 h-4 text-emerald-400 shrink-0" />
+            {activeBranchId === ALL_BRANCHES_ID ? (
+              <span className="w-2.5 h-2.5 rounded-full bg-amber-400 animate-pulse shrink-0" />
+            ) : (
+              <Building2 className="w-4 h-4 text-emerald-400 shrink-0" />
+            )}
             <div className="hidden sm:flex flex-col text-left leading-tight">
-              <span className="text-[10px] text-zinc-500 font-bold uppercase">Cabang</span>
-              <span className="text-xs font-bold text-white max-w-[110px] lg:max-w-[140px] truncate">
+              <span className="text-[10px] text-zinc-500 font-bold uppercase flex items-center gap-1">
+                <span>{activeBranchId === ALL_BRANCHES_ID ? 'Holding HQ' : 'Cabang'}</span>
+                {activeBranchId === ALL_BRANCHES_ID && (
+                  <span className="px-1 py-0 text-[8px] bg-amber-500/20 text-amber-300 border border-amber-500/30 rounded font-black">
+                    ALL
+                  </span>
+                )}
+              </span>
+              <span className="text-xs font-bold text-white max-w-[110px] lg:max-w-[150px] truncate">
                 {activeBranch?.name || 'Cabang'}
               </span>
             </div>
@@ -214,9 +193,9 @@ export const Header: React.FC<HeaderProps> = ({
                 <div>
                   <p className="text-xs font-bold text-white flex items-center gap-1.5">
                     <Building2 className="w-3.5 h-3.5 text-emerald-400" />
-                    <span>Pilih Cabang Aktif</span>
+                    <span>Multi-Branch Unit Switcher</span>
                   </p>
-                  <p className="text-[10px] text-zinc-400">Transaksi & kasir terhubung ke cabang ini</p>
+                  <p className="text-[10px] text-zinc-400">Pilih unit kerja atau mode konsolidasi holding</p>
                 </div>
                 <span className="px-1.5 py-0.5 rounded text-[10px] font-mono bg-zinc-800 text-zinc-300">
                   {branches.length} Outlet
@@ -224,9 +203,66 @@ export const Header: React.FC<HeaderProps> = ({
               </div>
 
               {/* Branch List */}
-              <div className="max-h-60 overflow-y-auto py-1 space-y-1">
+              <div className="max-h-64 overflow-y-auto py-1 space-y-1">
+                {/* 1. Option: Semua Cabang (Konsolidasi Pusat / Holding) - Only Admin / Manager */}
+                {isSuperUser && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setActiveBranchId(ALL_BRANCHES_ID);
+                      setIsBranchOpen(false);
+                    }}
+                    className={`w-full p-2.5 rounded-xl text-left transition flex items-center justify-between gap-2 cursor-pointer ${
+                      activeBranchId === ALL_BRANCHES_ID
+                        ? 'bg-amber-500/15 border border-amber-500/30 text-white'
+                        : 'hover:bg-zinc-800/80 text-zinc-300 hover:text-white'
+                    }`}
+                  >
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-xs font-black truncate text-amber-300">
+                          🌐 Semua Cabang (Konsolidasi)
+                        </span>
+                        <span className="px-1.5 py-0.2 text-[9px] font-black uppercase bg-amber-500/20 text-amber-300 border border-amber-500/40 rounded shrink-0">
+                          HQ
+                        </span>
+                      </div>
+                      <p className="text-[10px] text-zinc-400 truncate">
+                        Monitoring, keuangan & laporan gabungan seluruh outlet
+                      </p>
+                    </div>
+                    {activeBranchId === ALL_BRANCHES_ID ? (
+                      <div className="w-5 h-5 rounded-full bg-amber-500 text-black flex items-center justify-center shrink-0">
+                        <Check className="w-3 h-3 stroke-[3]" />
+                      </div>
+                    ) : (
+                      <span className="text-[10px] text-zinc-500 font-medium shrink-0 hover:text-amber-400">
+                        Pilih
+                      </span>
+                    )}
+                  </button>
+                )}
+
+                {isSuperUser && <div className="my-1 border-t border-zinc-800/80" />}
+
+                {isBranchLocked && (
+                  <div className="p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-300 text-xs flex items-center gap-2">
+                    <span className="text-base">🔒</span>
+                    <div>
+                      <p className="font-bold">Penugasan Unit Kerja Staf</p>
+                      <p className="text-[10px] text-amber-400/80">
+                        Akun Anda ditugaskan khusus di {activeBranch.name}. Hubungi Admin untuk mutasi cabang.
+                      </p>
+                    </div>
+                  </div>
+                )}
+
+                {/* 2. Individual Branches */}
                 {branches.map((b) => {
                   const isCurrent = b.id === activeBranchId;
+                  const canAccess = canUserAccessBranch(currentUser || null, b.id);
+                  if (!canAccess) return null;
+
                   return (
                     <button
                       key={b.id}
@@ -245,8 +281,8 @@ export const Header: React.FC<HeaderProps> = ({
                         <div className="flex items-center gap-1.5">
                           <span className="text-xs font-bold truncate">{b.name}</span>
                           {b.isMainBranch && (
-                            <span className="px-1.5 py-0.2 text-[9px] font-black uppercase bg-amber-500/20 text-amber-300 border border-amber-500/30 rounded shrink-0">
-                              HQ
+                            <span className="px-1.5 py-0.2 text-[9px] font-black uppercase bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 rounded shrink-0">
+                              Utama
                             </span>
                           )}
                         </div>
@@ -388,75 +424,30 @@ export const Header: React.FC<HeaderProps> = ({
                 </div>
               )}
 
-              {/* Theme Settings Shortcut in Dropdown */}
-              <div className="p-3 border-b border-zinc-800 bg-zinc-950/20 space-y-1">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setIsProfileOpen(false);
-                    openThemeModal();
-                  }}
-                  className="w-full flex items-center justify-between p-2 rounded-xl hover:bg-zinc-800/80 transition text-left text-zinc-200 cursor-pointer"
-                >
-                  <div className="flex items-center gap-2.5">
-                    <div className="p-1.5 rounded-lg bg-orange-500/10 text-orange-400 border border-orange-500/20">
-                      <Palette className="w-4 h-4" />
-                    </div>
-                    <div>
-                      <span className="text-xs font-bold block text-white">Setting Tema & Tampilan</span>
-                      <span className="text-[10px] text-zinc-400 block">Warna, mode gelap & kepadatan</span>
-                    </div>
-                  </div>
-                  <span className="flex items-center gap-1.5 text-[10px] px-2 py-0.5 rounded-md bg-zinc-800 text-zinc-300 font-mono font-bold">
-                    <span className="w-2 h-2 rounded-full" style={{ backgroundColor: currentAccent.hex }} />
-                    {theme.mode}
-                  </span>
-                </button>
-
-                {onOpenSettings && (
+              {/* Settings Shortcut in Dropdown */}
+              {onOpenSettings && (
+                <div className="p-3 border-b border-zinc-800 bg-zinc-950/20 space-y-1">
                   <button
                     type="button"
                     onClick={() => {
                       setIsProfileOpen(false);
-                      onOpenSettings('printer');
+                      onOpenSettings();
                     }}
                     className="w-full flex items-center justify-between p-2 rounded-xl hover:bg-zinc-800/80 transition text-left text-zinc-200 cursor-pointer"
                   >
                     <div className="flex items-center gap-2.5">
-                      <div className="p-1.5 rounded-lg bg-blue-500/10 text-blue-400 border border-blue-500/20">
-                        <Printer className="w-4 h-4" />
-                      </div>
-                      <div>
-                        <span className="text-xs font-bold block text-white">Setting Printer & Struk</span>
-                        <span className="text-[10px] text-zinc-400 block">Thermal 58/80mm & cetak struk</span>
-                      </div>
-                    </div>
-                    <span className="text-[10px] text-zinc-400 font-mono">POS</span>
-                  </button>
-                )}
-
-                {onOpenSettings && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setIsProfileOpen(false);
-                      onOpenSettings('roles');
-                    }}
-                    className="w-full flex items-center justify-between p-2 rounded-xl hover:bg-zinc-800/80 transition text-left text-zinc-200 cursor-pointer"
-                  >
-                    <div className="flex items-center gap-2.5">
-                      <div className="p-1.5 rounded-lg bg-purple-500/10 text-purple-400 border border-purple-500/20">
+                      <div className="p-1.5 rounded-lg bg-orange-500/10 text-orange-400 border border-orange-500/20">
                         <Settings className="w-4 h-4" />
                       </div>
                       <div>
-                        <span className="text-xs font-bold block text-white">Manajemen Role & Akses</span>
-                        <span className="text-[10px] text-zinc-400 block">Hak akses modul sistem (RBAC)</span>
+                        <span className="text-xs font-bold block text-white">Pengaturan Sistem</span>
+                        <span className="text-[10px] text-zinc-400 block">Tema, printer, outlet, & konfigurasi</span>
                       </div>
                     </div>
-                    <span className="text-[10px] text-zinc-400 font-mono">RBAC</span>
+                    <span className="text-[10px] text-zinc-400 font-mono">Buka →</span>
                   </button>
-                )}
-              </div>
+                </div>
+              )}
 
               {/* Account Quick Info */}
               <div className="p-3 space-y-1 text-xs text-zinc-300">

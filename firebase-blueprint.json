@@ -31,7 +31,9 @@
         "passCode": { "type": "string", "maxLength": 32 },
         "packageType": { "type": "string", "maxLength": 100 },
         "ptQuota": { "type": "number" },
-        "ptTrainer": { "type": "string", "maxLength": 150 }
+        "ptTrainer": { "type": "string", "maxLength": 150 },
+        "picId": { "type": "string", "maxLength": 128 },
+        "isPicLocked": { "type": "boolean" }
       },
       "required": ["id", "name", "phone", "status"]
     },

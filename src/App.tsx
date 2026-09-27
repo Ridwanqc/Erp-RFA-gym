@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   INITIAL_USERS,
   INITIAL_MEMBERS,
@@ -51,7 +51,8 @@ import {
   MembershipStatus,
   WorkSchedule,
   LeaveRequest,
-  LockerSlot
+  LockerSlot,
+  ALL_BRANCHES_ID
 } from './types';
 import { INITIAL_LOCKERS } from './data/lockerData';
 import {
@@ -104,6 +105,8 @@ import { ThemeSettingsModal } from './components/ThemeSettingsModal';
 import { SettingsView } from './components/SettingsView';
 import { GoogleSheetsSyncView } from './components/GoogleSheetsSyncView';
 import { AddBranchModal } from './components/AddBranchModal';
+import { MultiBranchBar } from './components/MultiBranchBar';
+import { StockTransferModal } from './components/StockTransferModal';
 import { useTheme } from './context/ThemeContext';
 import { useSettings } from './context/SettingsContext';
 import { LoginPage } from './components/LoginPage';
@@ -133,8 +136,20 @@ export default function App() {
   });
   const [firebaseConnected, setFirebaseConnected] = useState(true);
   const { isThemeModalOpen, closeThemeModal } = useTheme();
-  const { addBranch } = useSettings();
+  const {
+    branches,
+    activeBranchId,
+    activeBranch,
+    isAllBranches,
+    setActiveBranchId,
+    addBranch,
+    filterByBranch,
+    canUserAccessBranch,
+    stockTransfers,
+    recordStockTransfer
+  } = useSettings();
   const [isAddBranchModalOpen, setIsAddBranchModalOpen] = useState(false);
+  const [isStockTransferModalOpen, setIsStockTransferModalOpen] = useState(false);
 
   const handleToggleDesktopSidebar = () => {
     setIsDesktopCollapsed((prev) => {
@@ -201,7 +216,15 @@ export default function App() {
 
   const [packages, setPackages] = useState<PackageItem[]>(() => {
     const saved = localStorage.getItem('rfa_packages');
-    return saved ? JSON.parse(saved) : INITIAL_PACKAGES;
+    if (!saved) return INITIAL_PACKAGES;
+    try {
+      const parsed: PackageItem[] = JSON.parse(saved);
+      const existingIds = new Set(parsed.map((p) => p.id));
+      const missing = INITIAL_PACKAGES.filter((p) => !existingIds.has(p.id));
+      return missing.length > 0 ? [...parsed, ...missing] : parsed;
+    } catch {
+      return INITIAL_PACKAGES;
+    }
   });
 
   const [transactions, setTransactions] = useState<Transaction[]>(() => {
@@ -599,6 +622,79 @@ export default function App() {
     localStorage.setItem('rfa_approval_config', JSON.stringify(approvalConfig));
   }, [approvalConfig]);
 
+  // Synchronize and lock active branch when non-admin staff logs in
+  useEffect(() => {
+    if (currentUser?.branchId && currentUser.role !== 'admin' && currentUser.role !== 'manager') {
+      if (activeBranchId !== currentUser.branchId) {
+        setActiveBranchId(currentUser.branchId);
+      }
+    }
+  }, [currentUser, activeBranchId, setActiveBranchId]);
+
+  // Multi-Branch Scoped Data Partitioning
+  const scopedTransactions = useMemo(() => {
+    if (isAllBranches) return transactions;
+    return transactions.filter((t) => !t.branchId || t.branchId === activeBranchId);
+  }, [transactions, isAllBranches, activeBranchId]);
+
+  const scopedMembers = useMemo(() => {
+    if (isAllBranches) return members;
+    return members.filter((m) => !m.branchId || m.branchId === activeBranchId);
+  }, [members, isAllBranches, activeBranchId]);
+
+  const scopedStaffUsers = useMemo(() => {
+    if (isAllBranches) return staffUsers;
+    return staffUsers.filter(
+      (u) =>
+        !u.branchId ||
+        u.branchId === activeBranchId ||
+        (u.allowedBranchIds && u.allowedBranchIds.includes(activeBranchId))
+    );
+  }, [staffUsers, isAllBranches, activeBranchId]);
+
+  const scopedPettyCashList = useMemo(() => {
+    if (isAllBranches) return pettyCashList;
+    return pettyCashList.filter((p) => !p.branchId || p.branchId === activeBranchId);
+  }, [pettyCashList, isAllBranches, activeBranchId]);
+
+  const scopedClosingRecords = useMemo(() => {
+    if (isAllBranches) return closingRecords;
+    return closingRecords.filter((c) => !c.branchId || c.branchId === activeBranchId);
+  }, [closingRecords, isAllBranches, activeBranchId]);
+
+  const scopedAttendances = useMemo(() => {
+    if (isAllBranches) return attendances;
+    return attendances.filter((a) => !a.branchId || a.branchId === activeBranchId);
+  }, [attendances, isAllBranches, activeBranchId]);
+
+  const scopedStaffAttendances = useMemo(() => {
+    if (isAllBranches) return staffAttendances;
+    return staffAttendances.filter((sa) => !sa.branchId || sa.branchId === activeBranchId);
+  }, [staffAttendances, isAllBranches, activeBranchId]);
+
+  const scopedLeads = useMemo(() => {
+    if (isAllBranches) return leads;
+    return leads.filter((l) => !l.branchId || l.branchId === activeBranchId);
+  }, [leads, isAllBranches, activeBranchId]);
+
+  const scopedGymAssets = useMemo(() => {
+    if (isAllBranches) return gymAssets;
+    return gymAssets.filter((a) => !a.branchId || a.branchId === activeBranchId);
+  }, [gymAssets, isAllBranches, activeBranchId]);
+
+  const scopedProducts = useMemo(() => {
+    if (isAllBranches) return products;
+    return products.map((p) => {
+      if (p.branchStocks && p.branchStocks[activeBranchId] !== undefined) {
+        return {
+          ...p,
+          stock: p.branchStocks[activeBranchId]
+        };
+      }
+      return p;
+    });
+  }, [products, isAllBranches, activeBranchId]);
+
   // Inventory Helper: Add Audit Log
   const addInventoryAuditLog = (
     action: string,
@@ -809,10 +905,64 @@ export default function App() {
     showToast('Konfigurasi Disimpan', 'Batas nominal persetujuan pengadaan berhasil diubah.', 'success');
   };
 
-  // Daily closing status
-  const [isStoreClosed, setIsStoreClosed] = useState<boolean>(() => {
-    return closingRecords.some((c) => c.date === APP_TODAY);
-  });
+  // Daily closing status scoped per branch
+  const isStoreClosed = useMemo(() => {
+    if (isAllBranches) return false;
+    return closingRecords.some(
+      (c) => c.date === APP_TODAY && (c.branchId === activeBranchId || (!c.branchId && activeBranchId === 'BR-001'))
+    );
+  }, [closingRecords, isAllBranches, activeBranchId]);
+
+  // Multi-branch ERP filtered state projections
+  const activeBranchFilteredMembers = useMemo(() => {
+    if (isAllBranches) return members;
+    return members.filter((m) => m.branchId === activeBranchId || (!m.branchId && activeBranchId === 'BR-001'));
+  }, [members, isAllBranches, activeBranchId]);
+
+  const activeBranchFilteredTransactions = useMemo(() => {
+    if (isAllBranches) return transactions;
+    return transactions.filter((t) => t.branchId === activeBranchId || (!t.branchId && activeBranchId === 'BR-001'));
+  }, [transactions, isAllBranches, activeBranchId]);
+
+  const activeBranchFilteredAttendances = useMemo(() => {
+    if (isAllBranches) return attendances;
+    return attendances.filter((a) => a.branchId === activeBranchId || (!a.branchId && activeBranchId === 'BR-001'));
+  }, [attendances, isAllBranches, activeBranchId]);
+
+  const activeBranchFilteredStaffAttendances = useMemo(() => {
+    if (isAllBranches) return staffAttendances;
+    return staffAttendances.filter((s) => s.branchId === activeBranchId || (!s.branchId && activeBranchId === 'BR-001'));
+  }, [staffAttendances, isAllBranches, activeBranchId]);
+
+  const activeBranchFilteredStaffUsers = useMemo(() => {
+    if (isAllBranches) return staffUsers;
+    return staffUsers.filter(
+      (s) =>
+        s.branchId === activeBranchId ||
+        (!s.branchId && activeBranchId === 'BR-001') ||
+        (s.allowedBranchIds && s.allowedBranchIds.includes(activeBranchId))
+    );
+  }, [staffUsers, isAllBranches, activeBranchId]);
+
+  const activeBranchFilteredPettyCash = useMemo(() => {
+    if (isAllBranches) return pettyCashList;
+    return pettyCashList.filter((p) => p.branchId === activeBranchId || (!p.branchId && activeBranchId === 'BR-001'));
+  }, [pettyCashList, isAllBranches, activeBranchId]);
+
+  const activeBranchFilteredClosings = useMemo(() => {
+    if (isAllBranches) return closingRecords;
+    return closingRecords.filter((c) => c.branchId === activeBranchId || (!c.branchId && activeBranchId === 'BR-001'));
+  }, [closingRecords, isAllBranches, activeBranchId]);
+
+  const activeBranchFilteredAssets = useMemo(() => {
+    if (isAllBranches) return gymAssets;
+    return gymAssets.filter((a) => a.branchId === activeBranchId || (!a.branchId && activeBranchId === 'BR-001'));
+  }, [gymAssets, isAllBranches, activeBranchId]);
+
+  const activeBranchFilteredLeads = useMemo(() => {
+    if (isAllBranches) return leads;
+    return leads.filter((l) => l.branchId === activeBranchId || (!l.branchId && activeBranchId === 'BR-001'));
+  }, [leads, isAllBranches, activeBranchId]);
 
   // Global Modals
   const [activeReceipt, setActiveReceipt] = useState<Transaction | null>(null);
@@ -883,7 +1033,6 @@ export default function App() {
 
   useEffect(() => {
     localStorage.setItem('rfa_closing', JSON.stringify(closingRecords));
-    setIsStoreClosed(closingRecords.some((c) => c.date === APP_TODAY));
   }, [closingRecords]);
 
   useEffect(() => {
@@ -971,6 +1120,9 @@ export default function App() {
     if (found) {
       setCurrentUser(found);
       localStorage.setItem('rfa_current_user_id', found.id);
+      if (found.branchId && found.role !== 'admin' && found.role !== 'manager') {
+        setActiveBranchId(found.branchId);
+      }
       if (found.role === 'leader_pt') {
         setActiveTab('leader-pt');
       } else if (found.role === 'pt') {
@@ -992,6 +1144,9 @@ export default function App() {
       localStorage.setItem('rfa_current_user_id', user.id);
     }
     setCurrentUser(user);
+    if (user.branchId && user.role !== 'admin' && user.role !== 'manager') {
+      setActiveBranchId(user.branchId);
+    }
     if (user.role === 'leader_pt') {
       setActiveTab('leader-pt');
     } else if (user.role === 'pt') {
@@ -1131,12 +1286,26 @@ export default function App() {
 
   // Handler: Purchase Package
   const handlePurchasePackage = (newTrx: Transaction, updatedMembersList: Member[]) => {
-    setTransactions([newTrx, ...transactions]);
+    const branchIdToTag = newTrx.branchId || (isAllBranches ? (branches[0]?.id || 'BR-001') : activeBranchId);
+    const branchNameToTag = newTrx.branchName || (activeBranchId === ALL_BRANCHES_ID ? (branches[0]?.name || 'GymPro Flagship Kelapa Gading') : activeBranch.name);
+
+    const stampedTrx: Transaction = {
+      ...newTrx,
+      branchId: branchIdToTag,
+      branchName: branchNameToTag
+    };
+
+    setTransactions([stampedTrx, ...transactions]);
 
     // Cloud Firestore Sync
-    saveTransactionToFirestore(newTrx).catch(() => {});
+    saveTransactionToFirestore(stampedTrx).catch(() => {});
     updatedMembersList.forEach((m) => {
-      saveMemberToFirestore(m).catch(() => {});
+      const stampedMem: Member = {
+        ...m,
+        branchId: m.branchId || branchIdToTag,
+        branchName: m.branchName || branchNameToTag
+      };
+      saveMemberToFirestore(stampedMem).catch(() => {});
     });
 
     // If this is a PT package, record it in ptPurchases for performance tracking & generate trainer commissions
@@ -1202,6 +1371,52 @@ export default function App() {
 
       if (newPtCommissions.length > 0) {
         setTrainerCommissions((prev) => [...newPtCommissions, ...prev]);
+      }
+    }
+
+    // If this is a Class package, generate Instructor Commission records
+    if (newTrx.type === 'Class') {
+      const matchedPkg = packages.find((p) => newTrx.desc.includes(p.name)) || packages.find((p) => p.cat === 'Class' && p.id === newTrx.classPackageId);
+      const totalSess = matchedPkg?.sessionCount || matchedPkg?.value || 1;
+      const commRate = matchedPkg?.trainerCommissionRate || 35;
+
+      const newClassCommissions: TrainerCommissionRecord[] = [];
+      updatedMembersList.forEach((mem) => {
+        const participantPrice = Math.round(newTrx.amount / (updatedMembersList.length || 1));
+        const commAmt = matchedPkg?.trainerCommissionNominal
+          ? Math.round(matchedPkg.trainerCommissionNominal / (updatedMembersList.length || 1))
+          : Math.round((participantPrice * commRate) / 100);
+        const perSessAmt = matchedPkg?.trainerCommissionPerSession || Math.round(commAmt / (totalSess || 1));
+        const instructorObj = staffUsers.find((u) => u.id === mem.picId) || staffUsers.find((u) => u.role === 'pt' || u.role === 'leader_pt') || currentUser;
+
+        newClassCommissions.push({
+          id: 'COMM-CLS-' + Math.floor(100000 + Math.random() * 900000),
+          commissionId: 'COMM-CLS-' + Math.floor(100000 + Math.random() * 900000),
+          trxId: newTrx.id,
+          transactionId: newTrx.id,
+          bundleId: matchedPkg?.id || 'PKG-CLASS',
+          bundleCode: matchedPkg?.id || 'CLASS',
+          bundleName: matchedPkg?.name || newTrx.desc,
+          trainerId: instructorObj?.id || 'S03',
+          trainerName: instructorObj?.name || 'Instruktur Kelas Studio',
+          memberId: mem.id,
+          memberName: mem.name,
+          date: newTrx.date || APP_TODAY,
+          ptComponentValue: participantPrice,
+          commissionRate: commRate,
+          commissionAmount: commAmt,
+          commissionPerSession: perSessAmt,
+          totalSessions: totalSess,
+          paymentStatus: 'LUNAS',
+          validationStatus: 'PENDING',
+          valStatus: 'PENDING',
+          status: 'ACTIVE',
+          notes: `Komisi Instruktur Kelas (${matchedPkg?.classCategory || 'Studio'}) dari ${matchedPkg?.name || newTrx.desc}`
+        });
+      });
+
+      if (newClassCommissions.length > 0) {
+        setTrainerCommissions((prev) => [...newClassCommissions, ...prev]);
       }
     }
 
@@ -1388,10 +1603,39 @@ export default function App() {
 
   // Handler: POS Checkout
   const handleProcessCheckout = (newTrx: Transaction, updatedProducts: Product[]) => {
-    setTransactions([newTrx, ...transactions]);
-    setProducts(updatedProducts);
-    saveTransactionToFirestore(newTrx).catch(() => {});
-    setActiveReceipt(newTrx);
+    const branchIdToTag = newTrx.branchId || (isAllBranches ? (branches[0]?.id || 'BR-001') : activeBranchId);
+    const branchNameToTag = newTrx.branchName || (activeBranchId === ALL_BRANCHES_ID ? (branches[0]?.name || 'GymPro Flagship Kelapa Gading') : activeBranch.name);
+
+    const stampedTrx: Transaction = {
+      ...newTrx,
+      branchId: branchIdToTag,
+      branchName: branchNameToTag
+    };
+
+    setTransactions([stampedTrx, ...transactions]);
+
+    // Keep per-branch stock accurate
+    setProducts((prev) =>
+      prev.map((origProd) => {
+        const updated = updatedProducts.find((up) => up.id === origProd.id);
+        if (!updated) return origProd;
+        const diff = origProd.stock - updated.stock;
+        if (diff > 0 && origProd.branchStocks) {
+          const curBranchStock = origProd.branchStocks[branchIdToTag] ?? origProd.stock;
+          return {
+            ...updated,
+            branchStocks: {
+              ...origProd.branchStocks,
+              [branchIdToTag]: Math.max(0, curBranchStock - diff)
+            }
+          };
+        }
+        return updated;
+      })
+    );
+
+    saveTransactionToFirestore(stampedTrx).catch(() => {});
+    setActiveReceipt(stampedTrx);
   };
 
   // Handler: Pay Installment
@@ -1399,6 +1643,15 @@ export default function App() {
   // Updates original transaction's amountRemaining and amountPaid.
   // Inserts a separate PAY-* transaction for today's cash inflow.
   const handlePayInstallment = (payTrx: Transaction, originalTrxId: string, paidAmount: number) => {
+    const orig = transactions.find((t) => t.id === originalTrxId);
+    const branchIdToTag = orig?.branchId || payTrx.branchId || (isAllBranches ? (branches[0]?.id || 'BR-001') : activeBranchId);
+    const branchNameToTag = orig?.branchName || payTrx.branchName || activeBranch.name;
+    const stampedPayTrx: Transaction = {
+      ...payTrx,
+      branchId: branchIdToTag,
+      branchName: branchNameToTag
+    };
+
     setTransactions((prev) => {
       const updatedOriginals = prev.map((t) => {
         if (t.id === originalTrxId) {
@@ -1416,11 +1669,11 @@ export default function App() {
         }
         return t;
       });
-      return [payTrx, ...updatedOriginals];
+      return [stampedPayTrx, ...updatedOriginals];
     });
 
-    saveTransactionToFirestore(payTrx).catch(() => {});
-    setActiveReceipt(payTrx);
+    saveTransactionToFirestore(stampedPayTrx).catch(() => {});
+    setActiveReceipt(stampedPayTrx);
   };
 
   // Handler: Batch Pay Installments (Multi-Tagihan / Bayar Semua)
@@ -1605,17 +1858,36 @@ export default function App() {
 
   // Handler: Daily Closing Execution
   const handleExecuteDailyClosing = (record: DailyClosingRecord) => {
-    setClosingRecords([record, ...closingRecords]);
-    setIsStoreClosed(true);
+    const branchIdToTag = record.branchId || (isAllBranches ? (branches[0]?.id || 'BR-001') : activeBranchId);
+    const branchNameToTag = record.branchName || (activeBranchId === ALL_BRANCHES_ID ? (branches[0]?.name || 'GymPro Flagship Kelapa Gading') : activeBranch.name);
+    const stampedRecord: DailyClosingRecord = {
+      ...record,
+      branchId: branchIdToTag,
+      branchName: branchNameToTag
+    };
+    setClosingRecords([stampedRecord, ...closingRecords]);
+    showToast('Tutup Kasir Berhasil', `Closing harian cabang ${branchNameToTag} telah tersimpan.`, 'success');
   };
 
   // Handler: Member Attendance & Locker Assignment
   const handleAddAttendance = (newAtt: Attendance, updatedMember?: Member) => {
-    setAttendances([newAtt, ...attendances]);
-    saveAttendanceToFirestore(newAtt).catch(() => {});
+    const branchIdToTag = newAtt.branchId || (isAllBranches ? (branches[0]?.id || 'BR-001') : activeBranchId);
+    const branchNameToTag = newAtt.branchName || (activeBranchId === ALL_BRANCHES_ID ? (branches[0]?.name || 'GymPro Flagship Kelapa Gading') : activeBranch.name);
+    const stampedAtt: Attendance = {
+      ...newAtt,
+      branchId: branchIdToTag,
+      branchName: branchNameToTag
+    };
+    setAttendances([stampedAtt, ...attendances]);
+    saveAttendanceToFirestore(stampedAtt).catch(() => {});
     if (updatedMember) {
-      setMembers((prev) => prev.map((m) => (m.id === updatedMember.id ? updatedMember : m)));
-      saveMemberToFirestore(updatedMember).catch(() => {});
+      const stampedMember: Member = {
+        ...updatedMember,
+        branchId: updatedMember.branchId || branchIdToTag,
+        branchName: updatedMember.branchName || branchNameToTag
+      };
+      setMembers((prev) => prev.map((m) => (m.id === stampedMember.id ? stampedMember : m)));
+      saveMemberToFirestore(stampedMember).catch(() => {});
     }
 
     // Auto-occupy assigned locker
@@ -2062,12 +2334,29 @@ export default function App() {
         return c;
       })
     );
-    showToast('Booking Kelas Sukses', `${memberName} berhasil memesan tempat di kelas.`, 'success');
+
+    // If member has class quota, deduct 1 session
+    setMembers((prev) =>
+      prev.map((m) => {
+        if (m.name.toLowerCase() === memberName.toLowerCase() || m.id === memberName) {
+          const curQuota = m.classQuota || 0;
+          return {
+            ...m,
+            classQuota: Math.max(0, curQuota - 1)
+          };
+        }
+        return m;
+      })
+    );
+
+    showToast('Booking Kelas Sukses', `${memberName} berhasil memesan tempat di kelas. Kuota dipotong 1 sesi.`, 'success');
   };
 
   // Handler: CRM Convert Lead to Member
   const handleConvertLeadToMember = (lead: Lead) => {
     const newMemberId = 'M' + Math.floor(100 + Math.random() * 900);
+    const branchIdToTag = lead.branchId || (isAllBranches ? (branches[0]?.id || 'BR-001') : activeBranchId);
+    const branchNameToTag = lead.branchName || (activeBranchId === ALL_BRANCHES_ID ? (branches[0]?.name || 'GymPro Flagship Kelapa Gading') : activeBranch.name);
     const newMember: Member = {
       id: newMemberId,
       name: lead.name,
@@ -2078,15 +2367,18 @@ export default function App() {
       ptQuota: 0,
       picId: lead.picId || 'S01',
       picName: staffUsers.find((s) => s.id === lead.picId)?.name || 'Admin',
+      isPicLocked: true,
       followUpStatus: 'TERDAFTAR MEMBER',
-      joinDate: APP_TODAY
+      joinDate: APP_TODAY,
+      branchId: branchIdToTag,
+      branchName: branchNameToTag
     };
 
     setMembers([newMember, ...members]);
     saveMemberToFirestore(newMember).catch(() => {});
     showToast(
       'Member Baru Terdaftar',
-      `Lead ${lead.name} berhasil dikonversi menjadi Member (${newMemberId}).`,
+      `Lead ${lead.name} berhasil dikonversi menjadi Member (${newMemberId}) di ${branchNameToTag}.`,
       'success'
     );
   };
@@ -2151,6 +2443,18 @@ export default function App() {
         }}
       />
 
+      {/* Multi-Branch ERP Status Bar */}
+      <MultiBranchBar
+        memberCount={activeBranchFilteredMembers.length}
+        transactionCount={activeBranchFilteredTransactions.filter((t) => t.date === APP_TODAY).length}
+        staffCount={activeBranchFilteredStaffUsers.length}
+        currentUser={currentUser}
+        onOpenBranchManager={() => {
+          setActiveTab('settings-branches' as any);
+        }}
+        onOpenStockTransfer={() => setIsStockTransferModalOpen(true)}
+      />
+
       <div className="flex flex-1 overflow-hidden relative">
         {/* Navigation Sidebar */}
         <Sidebar
@@ -2173,10 +2477,10 @@ export default function App() {
         <main className="flex-1 overflow-y-auto overflow-x-hidden p-3 sm:p-5 md:p-6 lg:p-8 bg-zinc-950/50 scrollbar-thin scrollbar-thumb-zinc-800 w-full min-w-0">
           {activeTab === 'dashboard' && (
             <DashboardView
-              transactions={transactions}
-              attendances={attendances}
+              transactions={activeBranchFilteredTransactions}
+              attendances={activeBranchFilteredAttendances}
               schedules={schedules}
-              members={members}
+              members={activeBranchFilteredMembers}
               products={products}
               onAddStock={(id, qty) =>
                 setProducts(products.map((p) => (p.id === id ? { ...p, stock: p.stock + qty } : p)))
@@ -2191,15 +2495,15 @@ export default function App() {
 
           {activeTab === 'leader-pt' && (
             <LeaderPTDashboardView
-              members={members}
+              members={activeBranchFilteredMembers}
               schedules={schedules}
-              staffUsers={staffUsers}
-              staffAttendances={staffAttendances}
-              attendances={attendances}
+              staffUsers={activeBranchFilteredStaffUsers}
+              staffAttendances={activeBranchFilteredStaffAttendances}
+              attendances={activeBranchFilteredAttendances}
               currentUser={currentUser}
               ptPurchases={ptPurchases}
               bundlePackages={bundlePackages}
-              transactions={transactions}
+              transactions={activeBranchFilteredTransactions}
               trainerCommissions={trainerCommissions}
               onUpdateMember={(upMem) => {
                 setMembers((prev) => prev.map((m) => (m.id === upMem.id ? upMem : m)));
@@ -2221,9 +2525,9 @@ export default function App() {
           {activeTab === 'pt-package-performance' && (
             <TrainerPackagePerformanceView
               ptPurchases={ptPurchases}
-              staffUsers={staffUsers}
+              staffUsers={activeBranchFilteredStaffUsers}
               packages={packages}
-              members={members}
+              members={activeBranchFilteredMembers}
               schedules={schedules}
               currentUser={currentUser}
               onNavigateTab={(tab) => setActiveTab(tab)}
@@ -2233,14 +2537,14 @@ export default function App() {
           {activeTab === 'trainer-portal' && (
             <TrainerPortalView
               currentUser={currentUser}
-              staffUsers={staffUsers}
+              staffUsers={activeBranchFilteredStaffUsers}
               onSwitchUser={handleSwitchUser}
               schedules={schedules}
               onAddSchedule={(newSch) => setSchedules([...schedules, newSch])}
               onUpdateSchedule={(upSch) =>
                 setSchedules(schedules.map((s) => (s.id === upSch.id ? upSch : s)))
               }
-              members={members}
+              members={activeBranchFilteredMembers}
               onUpdateMember={(upMem) =>
                 setMembers(members.map((m) => (m.id === upMem.id ? upMem : m)))
               }
@@ -2253,8 +2557,8 @@ export default function App() {
 
           {activeTab === 'front-desk-portal' && (
             <FrontDeskPortalView
-              members={members}
-              attendances={attendances}
+              members={activeBranchFilteredMembers}
+              attendances={activeBranchFilteredAttendances}
               lockers={lockers}
               onUpdateLockers={setLockers}
               onReleaseLocker={handleReleaseLocker}
@@ -2271,13 +2575,13 @@ export default function App() {
               }}
               packages={packages}
               bundlePackages={bundlePackages}
-              transactions={transactions}
+              transactions={activeBranchFilteredTransactions}
               onAddTransaction={(trx) => {
                 setTransactions((prev) => [trx, ...prev]);
                 saveTransactionToFirestore(trx).catch(console.error);
               }}
               currentUser={currentUser}
-              staffUsers={staffUsers}
+              staffUsers={activeBranchFilteredStaffUsers}
               schedules={schedules}
               freezeRecords={freezeRecords}
               onOpenFreezeModal={(mem) => {
@@ -2301,8 +2605,8 @@ export default function App() {
             <MembershipView
               packages={packages}
               bundlePackages={bundlePackages}
-              members={members}
-              staffUsers={staffUsers}
+              members={activeBranchFilteredMembers}
+              staffUsers={activeBranchFilteredStaffUsers}
               currentUser={currentUser}
               onPurchasePackage={handlePurchasePackage}
               onAddPackage={(pkg) => setPackages([...packages, pkg])}
@@ -2318,13 +2622,13 @@ export default function App() {
           {activeTab === 'bundling-reports' && (
             <BundlingReportsView
               bundlePackages={bundlePackages}
-              transactions={transactions}
-              members={members}
+              transactions={activeBranchFilteredTransactions}
+              members={activeBranchFilteredMembers}
               schedules={schedules}
               memberMemberships={memberMemberships}
               ptPurchases={ptPurchases}
               trainerCommissions={trainerCommissions}
-              staffUsers={staffUsers}
+              staffUsers={activeBranchFilteredStaffUsers}
               showToast={showToast}
               onNavigateTab={(tab: any) => setActiveTab(tab)}
               onOpenBundlingManager={() => setIsBundlingModalOpen(true)}
@@ -2359,7 +2663,7 @@ export default function App() {
           {activeTab === 'products' && (
             <ProductManagementView
               products={products}
-              transactions={transactions}
+              transactions={activeBranchFilteredTransactions}
               onSaveProduct={(updatedProduct, isNew) => {
                 if (isNew) {
                   setProducts([...products, updatedProduct]);
@@ -2385,10 +2689,10 @@ export default function App() {
 
           {activeTab === 'absen' && (
             <AttendanceView
-              members={members}
-              staffUsers={staffUsers}
-              attendances={attendances}
-              staffAttendances={staffAttendances}
+              members={activeBranchFilteredMembers}
+              staffUsers={activeBranchFilteredStaffUsers}
+              attendances={activeBranchFilteredAttendances}
+              staffAttendances={activeBranchFilteredStaffAttendances}
               lockers={lockers}
               onUpdateLockers={setLockers}
               onReleaseLocker={handleReleaseLocker}
@@ -2396,7 +2700,7 @@ export default function App() {
               onAddAttendance={handleAddAttendance}
               onCheckoutMember={handleCheckoutMember}
               onStaffClock={handleStaffClock}
-              transactions={transactions}
+              transactions={activeBranchFilteredTransactions}
               showToast={showToast}
             />
           )}
@@ -2405,9 +2709,12 @@ export default function App() {
             <JadwalPTView
               schedules={schedules}
               studioClasses={studioClasses}
-              members={members}
-              trainers={staffUsers.filter((s) => s.role === 'pt' || s.role === 'leader_pt')}
+              members={activeBranchFilteredMembers}
+              trainers={activeBranchFilteredStaffUsers.filter((s) => s.role === 'pt' || s.role === 'leader_pt')}
               currentUser={currentUser}
+              packages={packages}
+              staffUsers={activeBranchFilteredStaffUsers}
+              onPurchasePackage={handlePurchasePackage}
               onAddSchedule={(newSch) => setSchedules([...schedules, newSch])}
               onUpdateSchedule={(upSch) =>
                 setSchedules(schedules.map((s) => (s.id === upSch.id ? upSch : s)))
@@ -2422,10 +2729,10 @@ export default function App() {
 
           {activeTab === 'freeze' && (
             <MembershipFreezeView
-              members={members}
+              members={activeBranchFilteredMembers}
               freezeRecords={freezeRecords}
               currentUser={currentUser}
-              staffUsers={staffUsers}
+              staffUsers={activeBranchFilteredStaffUsers}
               onOpenFreezeModal={(member) => {
                 setActiveFreezeMember(member || null);
                 setIsFreezeModalOpen(true);
@@ -2442,11 +2749,11 @@ export default function App() {
 
           {activeTab === 'crm' && (
             <CRMView
-              leads={leads}
-              members={members}
-              staffUsers={staffUsers}
+              leads={activeBranchFilteredLeads}
+              members={activeBranchFilteredMembers}
+              staffUsers={activeBranchFilteredStaffUsers}
               followUps={followUps}
-              transactions={transactions}
+              transactions={activeBranchFilteredTransactions}
               currentUser={currentUser}
               onAddLead={(l) => setLeads([l, ...leads])}
               onUpdateLeadStatus={(lid, nStatus) =>
@@ -2471,8 +2778,9 @@ export default function App() {
 
           {activeTab === 'master-data' && (
             <MasterDataView
-              members={members}
-              staffUsers={staffUsers}
+              members={activeBranchFilteredMembers}
+              staffUsers={activeBranchFilteredStaffUsers}
+              currentUser={currentUser}
               onOpenMemberDetail={(m) => setActiveDetailMember(m)}
               onOpenIDCard={(m) => setActiveIDCardMember(m)}
               onSaveMember={(m) => {
@@ -2505,7 +2813,7 @@ export default function App() {
 
           {activeTab === 'inventaris' && (
             <InventoryView
-              assets={gymAssets}
+              assets={activeBranchFilteredAssets}
               maintenances={assetMaintenances}
               damageReports={damageReports}
               workOrders={workOrders}
@@ -2532,8 +2840,8 @@ export default function App() {
             <LockerManagementView
               lockers={lockers}
               onUpdateLockers={setLockers}
-              members={members}
-              attendances={attendances}
+              members={activeBranchFilteredMembers}
+              attendances={activeBranchFilteredAttendances}
               onAddAttendance={handleAddAttendance}
               onCheckoutMember={handleCheckoutMember}
               onReleaseLocker={handleReleaseLocker}
@@ -2544,9 +2852,9 @@ export default function App() {
 
           {activeTab === 'piutang' && (
             <FinanceView
-              transactions={transactions}
-              pettyCashList={pettyCashList}
-              closingRecords={closingRecords}
+              transactions={activeBranchFilteredTransactions}
+              pettyCashList={activeBranchFilteredPettyCash}
+              closingRecords={activeBranchFilteredClosings}
               currentUser={currentUser}
               isStoreClosed={isStoreClosed}
               initialSubTab="piutang"
@@ -2571,9 +2879,9 @@ export default function App() {
 
           {activeTab === 'laporan' && (
             <FinanceView
-              transactions={transactions}
-              pettyCashList={pettyCashList}
-              closingRecords={closingRecords}
+              transactions={activeBranchFilteredTransactions}
+              pettyCashList={activeBranchFilteredPettyCash}
+              closingRecords={activeBranchFilteredClosings}
               currentUser={currentUser}
               isStoreClosed={isStoreClosed}
               initialSubTab="bukubesar"
@@ -2591,9 +2899,9 @@ export default function App() {
 
           {activeTab === 'laporan-bulanan' && (
             <FinanceView
-              transactions={transactions}
-              pettyCashList={pettyCashList}
-              closingRecords={closingRecords}
+              transactions={activeBranchFilteredTransactions}
+              pettyCashList={activeBranchFilteredPettyCash}
+              closingRecords={activeBranchFilteredClosings}
               currentUser={currentUser}
               isStoreClosed={isStoreClosed}
               initialSubTab="bulanan"
@@ -2611,9 +2919,9 @@ export default function App() {
 
           {activeTab === 'tutup-toko' && (
             <FinanceView
-              transactions={transactions}
-              pettyCashList={pettyCashList}
-              closingRecords={closingRecords}
+              transactions={activeBranchFilteredTransactions}
+              pettyCashList={activeBranchFilteredPettyCash}
+              closingRecords={activeBranchFilteredClosings}
               currentUser={currentUser}
               isStoreClosed={isStoreClosed}
               initialSubTab="closing"
@@ -2631,9 +2939,9 @@ export default function App() {
 
           {activeTab === 'hr-payroll' && (
             <HRPayrollView
-              staffUsers={staffUsers}
-              staffAttendance={staffAttendances}
-              transactions={transactions}
+              staffUsers={activeBranchFilteredStaffUsers}
+              staffAttendance={activeBranchFilteredStaffAttendances}
+              transactions={activeBranchFilteredTransactions}
               schedules={schedules}
               workSchedules={workSchedules}
               leaveRequests={leaveRequests}
@@ -2678,6 +2986,7 @@ export default function App() {
 
           {(activeTab === 'settings' ||
             activeTab === 'settings-printer' ||
+            activeTab === 'settings-theme' ||
             activeTab === 'settings-roles' ||
             activeTab === 'settings-branches' ||
             activeTab === 'settings-profile' ||
@@ -2719,6 +3028,8 @@ export default function App() {
               initialSubTab={
                 activeTab === 'settings-printer'
                   ? 'printer'
+                  : activeTab === 'settings-theme'
+                  ? 'theme'
                   : activeTab === 'settings-roles'
                   ? 'roles'
                   : activeTab === 'settings-branches'
@@ -2877,6 +3188,22 @@ export default function App() {
           showToast(
             'Cabang Baru Ditambahkan',
             `Cabang ${created.name} (${created.code}) telah terdaftar dalam sistem.`,
+            'success'
+          );
+        }}
+      />
+
+      {/* 7. Inter-Branch Stock Transfer Modal */}
+      <StockTransferModal
+        isOpen={isStockTransferModalOpen}
+        onClose={() => setIsStockTransferModalOpen(false)}
+        products={products}
+        currentUser={currentUser}
+        onTransferSuccess={(transfer, updatedProducts) => {
+          setProducts(updatedProducts);
+          showToast(
+            'Transfer Stok Berhasil',
+            `Berhasil memindahkan ${transfer.quantity} unit ${transfer.productName} dari ${transfer.fromBranchName} ke ${transfer.toBranchName}.`,
             'success'
           );
         }}

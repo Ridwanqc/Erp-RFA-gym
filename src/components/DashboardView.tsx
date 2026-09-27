@@ -31,12 +31,15 @@ import {
   ArrowRight,
   Boxes,
   Plus,
-  Snowflake
+  Snowflake,
+  Globe,
+  Building2
 } from 'lucide-react';
-import { Transaction, Attendance, Schedule, Member, Product } from '../types';
+import { Transaction, Attendance, Schedule, Member, Product, ALL_BRANCHES_ID } from '../types';
 import { formatRp, APP_TODAY, formatDateIndo, getDayDiff } from '../utils/formatters';
 import { getMemberStatus } from '../utils/memberStatus';
 import { BusinessHealth } from './BusinessHealth';
+import { useSettings } from '../context/SettingsContext';
 
 interface DashboardViewProps {
   transactions: Transaction[];

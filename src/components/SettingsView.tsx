@@ -19,6 +19,7 @@ import {
   Sliders,
   Users,
   Eye,
+  EyeOff,
   Plus,
   Trash2,
   Download,
@@ -31,7 +32,19 @@ import {
   PhoneCall,
   Clock,
   Sparkles,
-  FileSpreadsheet
+  FileSpreadsheet,
+  Lock,
+  Unlock,
+  Key,
+  KeyRound,
+  ShieldAlert,
+  Palette,
+  Moon,
+  Sun,
+  Monitor,
+  Grid,
+  CircleDot,
+  Layers
 } from 'lucide-react';
 import {
   User,
@@ -42,7 +55,16 @@ import {
   RoleActionPermissions
 } from '../types';
 import { useSettings } from '../context/SettingsContext';
-import { SYSTEM_MODULES } from '../data/settingsData';
+import {
+  useTheme,
+  THEME_MODE_OPTIONS,
+  ACCENT_OPTIONS,
+  ThemeMode,
+  AccentColor,
+  ContentDensity,
+  BackgroundPattern
+} from '../context/ThemeContext';
+import { SYSTEM_MODULES, DEFAULT_PIC_PROTECTION } from '../data/settingsData';
 import { formatRp } from '../utils/formatters';
 import { BranchManagementView } from './BranchManagementView';
 
@@ -53,11 +75,11 @@ interface SettingsViewProps {
   allSystemData?: any;
   onRestoreSystemData?: (data: any) => void;
   showToast?: (title: string, message: string, type: 'success' | 'info' | 'warning' | 'error') => void;
-  initialSubTab?: 'printer' | 'roles' | 'profile' | 'branches' | 'finance' | 'templates' | 'backup';
+  initialSubTab?: 'printer' | 'theme' | 'roles' | 'security' | 'profile' | 'branches' | 'finance' | 'templates' | 'backup';
   onNavigateToGoogleSheets?: () => void;
 }
 
-type SettingsSubTab = 'printer' | 'roles' | 'profile' | 'branches' | 'finance' | 'templates' | 'backup';
+type SettingsSubTab = 'printer' | 'theme' | 'roles' | 'security' | 'profile' | 'branches' | 'finance' | 'templates' | 'backup';
 
 export const SettingsView: React.FC<SettingsViewProps> = ({
   currentUser,
@@ -79,13 +101,37 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
     updateProfileConfig,
     updatePaymentAndTaxConfig,
     updateTemplatesConfig,
+    updatePicProtectionConfig,
+    verifyPicPassword,
     updateRolePermission,
     resetRolePermissionsToDefault,
     resetSettingsToDefault,
     executeTestPrint
   } = useSettings();
 
+  const {
+    theme,
+    setMode,
+    setAccent,
+    setDensity,
+    setPattern,
+    resetTheme,
+    currentAccent,
+    openThemeModal
+  } = useTheme();
+
   const [activeTab, setActiveTab] = useState<SettingsSubTab>(initialSubTab);
+
+  // PIC Security Password Form State
+  const picProtection = settings.picProtection || DEFAULT_PIC_PROTECTION;
+  const [newPicPassword, setNewPicPassword] = useState('');
+  const [confirmPicPassword, setConfirmPicPassword] = useState('');
+  const [showCurrentPicPass, setShowCurrentPicPass] = useState(false);
+  const [showNewPicPass, setShowNewPicPass] = useState(false);
+
+  // Test Password state
+  const [testPasswordInput, setTestPasswordInput] = useState('');
+  const [testPasswordResult, setTestPasswordResult] = useState<'idle' | 'valid' | 'invalid'>('idle');
 
   // Selected Role for Role Matrix Tab
   const [selectedRoleKey, setSelectedRoleKey] = useState<UserRole>('kasir');
@@ -232,6 +278,39 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   };
 
   // -------------------------------------------------------------
+  // PIC SECURITY & AUTHORIZATION PASSWORD HANDLERS
+  // -------------------------------------------------------------
+  const handleSaveNewPicPassword = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newPicPassword.trim()) {
+      if (showToast) showToast('Password Kosong', 'Password otorisasi tidak boleh kosong.', 'warning');
+      return;
+    }
+    if (newPicPassword !== confirmPicPassword) {
+      if (showToast) showToast('Password Tidak Cocok', 'Konfirmasi password tidak sesuai dengan password baru.', 'error');
+      return;
+    }
+    updatePicProtectionConfig({ picChangePassword: newPicPassword.trim() });
+    setNewPicPassword('');
+    setConfirmPicPassword('');
+    notifySuccess('Password Otorisasi Disimpan 🔒', 'Password untuk otorisasi ganti PIC berhasil diperbarui.');
+  };
+
+  const handleResetPicPassword = () => {
+    updatePicProtectionConfig({ picChangePassword: '123' });
+    setNewPicPassword('');
+    setConfirmPicPassword('');
+    notifySuccess('Password Di-reset 🔄', 'Password otorisasi PIC dikembalikan ke default bawaan: 123');
+  };
+
+  const handleTestPassword = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!testPasswordInput.trim()) return;
+    const isValid = verifyPicPassword(testPasswordInput);
+    setTestPasswordResult(isValid ? 'valid' : 'invalid');
+  };
+
+  // -------------------------------------------------------------
   // BACKUP & RESTORE HANDLERS
   // -------------------------------------------------------------
   const handleExportBackup = () => {
@@ -271,6 +350,9 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
           updateProfileConfig(parsed.settings.profile || {});
           updatePaymentAndTaxConfig(parsed.settings.paymentAndTax || {});
           updateTemplatesConfig(parsed.settings.templates || {});
+          if (parsed.settings.picProtection) {
+            updatePicProtectionConfig(parsed.settings.picProtection);
+          }
         }
         if (parsed.appData && onRestoreSystemData) {
           onRestoreSystemData(parsed.appData);
@@ -343,7 +425,9 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
         <div className="flex items-center gap-2 mt-6 pt-5 border-t border-zinc-800/80 overflow-x-auto no-scrollbar">
           {[
             { id: 'printer', label: 'Printer & Struk POS', icon: Printer, badge: settings.printer.paperWidth },
+            { id: 'theme', label: 'Tema & Tampilan', icon: Palette, badge: `${theme.mode}` },
             { id: 'roles', label: 'Manajemen Role & Akses', icon: ShieldCheck, badge: 'RBAC' },
+            { id: 'security', label: 'Keamanan & Password PIC', icon: KeyRound, badge: picProtection.requirePasswordToChangePic ? 'Aktif 🔒' : 'Off' },
             { id: 'branches', label: 'Kelola Cabang & Outlet', icon: Building2, badge: `${branches.length} Outlet` },
             { id: 'profile', label: 'Profil Usaha', icon: Sliders },
             { id: 'finance', label: 'Pajak & Rekening Kas', icon: CreditCard },
@@ -769,6 +853,337 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
       )}
 
       {/* ========================================================================= */}
+      {/* 2. SUB-TAB: TEMA & TAMPILAN SISTEM (ERP THEMING)                         */}
+      {/* ========================================================================= */}
+      {activeTab === 'theme' && (
+        <div className="space-y-6">
+          {/* Header Banner */}
+          <div className="bg-zinc-900 border border-zinc-800 rounded-3xl p-5 sm:p-6 space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div className="flex items-center gap-3">
+                <div className="p-3 rounded-2xl bg-orange-500/10 text-orange-400 border border-orange-500/20">
+                  <Palette className="w-6 h-6" />
+                </div>
+                <div>
+                  <h3 className="text-base font-black text-white flex items-center gap-2">
+                    <span>Pengaturan Tema & Desain Antarmuka</span>
+                    <span
+                      className="w-3 h-3 rounded-full shrink-0 shadow-sm"
+                      style={{ backgroundColor: currentAccent.hex }}
+                      title={`Aksen Aktif: ${currentAccent.name}`}
+                    />
+                  </h3>
+                  <p className="text-xs text-zinc-400">
+                    Kustomisasi suasana mode gelap/terang, palet warna brand GymPro, kepadatan layout, dan pola latar.
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2 shrink-0">
+                <button
+                  type="button"
+                  onClick={() => {
+                    resetTheme();
+                    notifySuccess('Tema Direset', 'Tema dikembalikan ke pengaturan default GymPro.');
+                  }}
+                  className="px-3.5 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-white text-xs font-bold transition flex items-center gap-2 border border-zinc-700 cursor-pointer"
+                >
+                  <RotateCcw className="w-3.5 h-3.5" />
+                  <span>Reset Default</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={openThemeModal}
+                  className="px-4 py-2 rounded-xl bg-orange-500 hover:bg-orange-600 text-white text-xs font-bold transition flex items-center gap-2 shadow-md cursor-pointer"
+                >
+                  <Sparkles className="w-3.5 h-3.5" />
+                  <span>Buka Dialog Lengkap</span>
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+            {/* Left Column: Theme Modes & Accents */}
+            <div className="lg:col-span-8 space-y-6">
+              {/* 1. Mode Tampilan */}
+              <div className="bg-zinc-900 border border-zinc-800 rounded-3xl p-5 sm:p-6 space-y-4">
+                <div className="flex items-center justify-between">
+                  <h4 className="text-xs font-bold uppercase tracking-wider text-zinc-300 flex items-center gap-2">
+                    <Moon className="w-4 h-4 text-orange-400" />
+                    <span>Mode Tampilan Sistem</span>
+                  </h4>
+                  <span className="text-[11px] font-mono text-zinc-500">
+                    Aktif: <strong className="text-orange-400 uppercase">{theme.mode}</strong>
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {THEME_MODE_OPTIONS.map((opt) => {
+                    const isSelected = theme.mode === opt.id;
+                    const ModeIcon =
+                      opt.iconType === 'moon'
+                        ? Moon
+                        : opt.iconType === 'sparkles'
+                        ? Sparkles
+                        : opt.iconType === 'monitor'
+                        ? Monitor
+                        : Sun;
+
+                    return (
+                      <button
+                        key={opt.id}
+                        type="button"
+                        onClick={() => {
+                          setMode(opt.id);
+                          notifySuccess('Mode Tampilan Diubah', `Tema diatur ke ${opt.name}.`);
+                        }}
+                        className={`p-4 rounded-2xl text-left border transition relative cursor-pointer ${
+                          isSelected
+                            ? 'bg-zinc-800/90 border-orange-500/80 shadow-lg ring-1 ring-orange-500/30'
+                            : 'bg-zinc-950/60 border-zinc-800 hover:border-zinc-700 hover:bg-zinc-900/80 text-zinc-400'
+                        }`}
+                      >
+                        {isSelected && (
+                          <span className="absolute top-3 right-3 w-5 h-5 rounded-full bg-orange-500 text-black flex items-center justify-center">
+                            <Check className="w-3 h-3 stroke-[3]" />
+                          </span>
+                        )}
+                        <div className="flex items-center gap-2.5 mb-1.5">
+                          <div
+                            className={`p-2 rounded-xl ${
+                              isSelected ? 'bg-orange-500/20 text-orange-400' : 'bg-zinc-800 text-zinc-400'
+                            }`}
+                          >
+                            <ModeIcon className="w-4 h-4" />
+                          </div>
+                          <div>
+                            <h5 className="text-xs font-black text-white">{opt.name}</h5>
+                            <span className="text-[10px] font-mono text-zinc-500 uppercase">{opt.id}</span>
+                          </div>
+                        </div>
+                        <p className="text-[11px] text-zinc-400 leading-relaxed">{opt.desc}</p>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* 2. Palet Warna Aksen */}
+              <div className="bg-zinc-900 border border-zinc-800 rounded-3xl p-5 sm:p-6 space-y-4">
+                <div className="flex items-center justify-between">
+                  <h4 className="text-xs font-bold uppercase tracking-wider text-zinc-300 flex items-center gap-2">
+                    <Palette className="w-4 h-4 text-orange-400" />
+                    <span>Warna Aksen & Identitas Brand</span>
+                  </h4>
+                  <span className="text-[11px] font-mono text-zinc-500">
+                    Aksen: <strong className="text-white">{currentAccent.name}</strong> ({currentAccent.hex})
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                  {ACCENT_OPTIONS.map((acc) => {
+                    const isSelected = theme.accent === acc.id;
+                    return (
+                      <button
+                        key={acc.id}
+                        type="button"
+                        onClick={() => {
+                          setAccent(acc.id);
+                          notifySuccess('Aksen Warna Diperbarui', `Aksen diubah ke ${acc.name}.`);
+                        }}
+                        className={`p-3.5 rounded-2xl border text-left transition relative cursor-pointer ${
+                          isSelected
+                            ? 'bg-zinc-800/90 border-white/40 shadow-md ring-1'
+                            : 'bg-zinc-950/60 border-zinc-800 hover:border-zinc-700 hover:bg-zinc-900/60'
+                        }`}
+                        style={{
+                          borderColor: isSelected ? acc.hex : undefined
+                        }}
+                      >
+                        <div className="flex items-center justify-between mb-2">
+                          <div
+                            className="w-7 h-7 rounded-xl shadow-inner flex items-center justify-center"
+                            style={{ backgroundColor: acc.hex }}
+                          >
+                            {isSelected && <Check className="w-4 h-4 text-black stroke-[3]" />}
+                          </div>
+                          <span className="text-[10px] font-mono font-bold text-zinc-400 uppercase">
+                            {acc.hex}
+                          </span>
+                        </div>
+                        <p className="text-xs font-black text-white">{acc.name}</p>
+                        <p className="text-[10px] text-zinc-400 truncate mt-0.5">{acc.label}</p>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* 3. Kepadatan Layout & Pola Latar */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                {/* Density */}
+                <div className="bg-zinc-900 border border-zinc-800 rounded-3xl p-5 space-y-3">
+                  <h4 className="text-xs font-bold uppercase tracking-wider text-zinc-300 flex items-center gap-2">
+                    <Layers className="w-4 h-4 text-orange-400" />
+                    <span>Kepadatan Tampilan (Density)</span>
+                  </h4>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setDensity('comfortable');
+                        notifySuccess('Kepadatan Diubah', 'Layout diatur ke Mode Luas & Nyaman.');
+                      }}
+                      className={`p-3 rounded-2xl border text-left transition cursor-pointer ${
+                        theme.density === 'comfortable'
+                          ? 'bg-orange-500/15 border-orange-500/60 text-white'
+                          : 'bg-zinc-950/60 border-zinc-800 text-zinc-400 hover:bg-zinc-900'
+                      }`}
+                    >
+                      <span className="text-xs font-bold block">Luas & Nyaman</span>
+                      <span className="text-[10px] text-zinc-500 block mt-0.5">Padding standar lega</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setDensity('compact');
+                        notifySuccess('Kepadatan Diubah', 'Layout diatur ke Mode Ringkas & Padat.');
+                      }}
+                      className={`p-3 rounded-2xl border text-left transition cursor-pointer ${
+                        theme.density === 'compact'
+                          ? 'bg-orange-500/15 border-orange-500/60 text-white'
+                          : 'bg-zinc-950/60 border-zinc-800 text-zinc-400 hover:bg-zinc-900'
+                      }`}
+                    >
+                      <span className="text-xs font-bold block">Ringkas & Padat</span>
+                      <span className="text-[10px] text-zinc-500 block mt-0.5">Muat lebih banyak data</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Background Pattern */}
+                <div className="bg-zinc-900 border border-zinc-800 rounded-3xl p-5 space-y-3">
+                  <h4 className="text-xs font-bold uppercase tracking-wider text-zinc-300 flex items-center gap-2">
+                    <Grid className="w-4 h-4 text-orange-400" />
+                    <span>Pola Latar Belakang</span>
+                  </h4>
+                  <div className="grid grid-cols-3 gap-2">
+                    {(
+                      [
+                        { id: 'none', label: 'Polos' },
+                        { id: 'grid', label: 'Grid Kotak' },
+                        { id: 'dots', label: 'Dot Matrix' }
+                      ] as { id: BackgroundPattern; label: string }[]
+                    ).map((p) => (
+                      <button
+                        key={p.id}
+                        type="button"
+                        onClick={() => {
+                          setPattern(p.id);
+                          notifySuccess('Pola Diperbarui', `Latar belakang diubah ke ${p.label}.`);
+                        }}
+                        className={`p-2.5 rounded-2xl border text-center transition cursor-pointer ${
+                          theme.pattern === p.id
+                            ? 'bg-orange-500/15 border-orange-500/60 text-white'
+                            : 'bg-zinc-950/60 border-zinc-800 text-zinc-400 hover:bg-zinc-900'
+                        }`}
+                      >
+                        <span className="text-[11px] font-bold block">{p.label}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Right Column: Live Interactive Preview */}
+            <div className="lg:col-span-4 space-y-6">
+              <div className="bg-zinc-900 border border-zinc-800 rounded-3xl p-5 sm:p-6 space-y-4 sticky top-20">
+                <div className="flex items-center justify-between">
+                  <h4 className="text-xs font-bold uppercase tracking-wider text-white flex items-center gap-2">
+                    <Eye className="w-4 h-4 text-orange-400" />
+                    <span>Live Pratinjau Desain</span>
+                  </h4>
+                  <span className="text-[10px] px-2 py-0.5 rounded-md bg-zinc-800 text-zinc-400 font-mono">
+                    Real-time
+                  </span>
+                </div>
+
+                {/* Simulated UI Card */}
+                <div className="rounded-2xl border border-zinc-700/80 bg-zinc-950 p-4 space-y-3 shadow-xl relative overflow-hidden">
+                  <div
+                    className="absolute top-0 right-0 w-32 h-32 rounded-full blur-2xl pointer-events-none opacity-20"
+                    style={{ backgroundColor: currentAccent.hex }}
+                  />
+
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <div
+                        className="w-8 h-8 rounded-xl flex items-center justify-center font-black text-black text-xs"
+                        style={{ backgroundColor: currentAccent.hex }}
+                      >
+                        GP
+                      </div>
+                      <div>
+                        <p className="text-xs font-black text-white">GymPro POS Enterprise</p>
+                        <p className="text-[10px] text-zinc-400">Cabang {activeBranch?.name}</p>
+                      </div>
+                    </div>
+                    <span
+                      className="text-[10px] font-bold px-2 py-0.5 rounded-md border"
+                      style={{
+                        backgroundColor: `rgba(${currentAccent.rgb}, 0.15)`,
+                        borderColor: `rgba(${currentAccent.rgb}, 0.35)`,
+                        color: currentAccent.hex
+                      }}
+                    >
+                      Aktif
+                    </span>
+                  </div>
+
+                  <div className="p-3 rounded-xl bg-zinc-900/80 border border-zinc-800 space-y-1.5">
+                    <div className="flex justify-between text-xs">
+                      <span className="text-zinc-400">Total Transaksi Hari Ini</span>
+                      <span className="font-bold text-white">Rp 2.450.000</span>
+                    </div>
+                    <div className="flex justify-between text-xs">
+                      <span className="text-zinc-400">Aksen Warna</span>
+                      <span className="font-mono text-[11px]" style={{ color: currentAccent.hex }}>
+                        {currentAccent.name}
+                      </span>
+                    </div>
+                  </div>
+
+                  <button
+                    type="button"
+                    className="w-full py-2.5 rounded-xl text-xs font-black text-black transition flex items-center justify-center gap-2 shadow-md cursor-pointer"
+                    style={{ backgroundColor: currentAccent.hex }}
+                  >
+                    <span>Tombol Aksi Utama</span>
+                    <ChevronRight className="w-3.5 h-3.5" />
+                  </button>
+
+                  <div className="pt-2 border-t border-zinc-800/80 flex items-center justify-between text-[10px] text-zinc-400">
+                    <span>Mode: <strong className="text-zinc-200">{theme.mode}</strong></span>
+                    <span>Pola: <strong className="text-zinc-200">{theme.pattern}</strong></span>
+                    <span>Kepadatan: <strong className="text-zinc-200">{theme.density}</strong></span>
+                  </div>
+                </div>
+
+                <div className="p-3.5 rounded-2xl bg-zinc-950/40 border border-zinc-800/80 text-[11px] text-zinc-400 space-y-1">
+                  <p className="font-bold text-zinc-300">💡 Informasi Penataan:</p>
+                  <p>
+                    Pengaturan tema dan printer kini terpusat rapi di halaman Pengaturan ini untuk memberikan ruang kerja Header yang lebih lega dan nyaman di tablet maupun desktop.
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
       {/* 2. SUB-TAB: MANAJEMEN ROLE & HAK AKSES (RBAC)                            */}
       {/* ========================================================================= */}
       {activeTab === 'roles' && (
@@ -1054,6 +1469,352 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                   </div>
                 );
               })}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* 2.2 SUB-TAB: KEAMANAN & PASSWORD GANTI PIC                                */}
+      {/* ========================================================================= */}
+      {activeTab === 'security' && (
+        <div className="space-y-6">
+          {/* Main Status & Hero Banner */}
+          <div className="bg-zinc-900 border border-zinc-800 rounded-3xl p-6 sm:p-8 shadow-xl relative overflow-hidden">
+            <div className="absolute top-0 right-0 w-96 h-96 bg-amber-500/10 rounded-full blur-3xl pointer-events-none" />
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 relative z-10">
+              <div className="flex items-center gap-4">
+                <div className="w-16 h-16 rounded-2xl bg-amber-500/20 text-amber-400 border border-amber-500/30 flex items-center justify-center shrink-0 shadow-inner">
+                  <KeyRound className="w-8 h-8" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2.5 flex-wrap">
+                    <h2 className="text-xl sm:text-2xl font-black text-white">
+                      Otorisasi & Password Ganti PIC Member
+                    </h2>
+                    <span
+                      className={`px-3 py-1 rounded-full text-xs font-bold border flex items-center gap-1.5 ${
+                        picProtection.requirePasswordToChangePic
+                          ? 'bg-amber-500/20 text-amber-300 border-amber-500/40'
+                          : 'bg-zinc-800 text-zinc-400 border-zinc-700'
+                      }`}
+                    >
+                      {picProtection.requirePasswordToChangePic ? (
+                        <>
+                          <Lock className="w-3.5 h-3.5 text-amber-400" /> Proteksi Aktif (Wajib Password)
+                        </>
+                      ) : (
+                        <>
+                          <Unlock className="w-3.5 h-3.5" /> Proteksi Nonaktif (Bebas)
+                        </>
+                      )}
+                    </span>
+                  </div>
+                  <p className="text-xs sm:text-sm text-zinc-400 mt-1 max-w-2xl leading-relaxed">
+                    Atur password otorisasi keamanan yang wajib dimasukkan staf atau kasir saat ingin membuka kunci dan mengubah PIC (Person In Charge / Sales / Trainer) yang telah dipilih pada form pendaftaran member.
+                  </p>
+                </div>
+              </div>
+
+              {/* Master Switch Toggle */}
+              <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 bg-zinc-950/80 p-4 rounded-2xl border border-zinc-800 shrink-0">
+                <div>
+                  <span className="text-xs font-bold text-white block">Proteksi Password PIC</span>
+                  <span className="text-[11px] text-zinc-400">
+                    {picProtection.requirePasswordToChangePic ? 'Wajib password' : 'Bebas ganti'}
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const nextVal = !picProtection.requirePasswordToChangePic;
+                    updatePicProtectionConfig({ requirePasswordToChangePic: nextVal });
+                    notifySuccess(
+                      nextVal ? 'Proteksi PIC Diaktifkan 🔒' : 'Proteksi PIC Dinonaktifkan 🔓',
+                      nextVal
+                        ? 'Penggantian PIC sekarang mewajibkan input password otorisasi.'
+                        : 'Kunci PIC kini dapat dibuka tanpa perlu memasukkan password.'
+                    );
+                  }}
+                  className={`relative inline-flex h-7 w-14 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                    picProtection.requirePasswordToChangePic ? 'bg-amber-500' : 'bg-zinc-800'
+                  }`}
+                >
+                  <span
+                    className={`pointer-events-none inline-block h-6 w-6 transform rounded-full bg-white shadow-lg ring-0 transition duration-200 ease-in-out ${
+                      picProtection.requirePasswordToChangePic ? 'translate-x-7' : 'translate-x-0'
+                    }`}
+                  />
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+            {/* Left Column (7 cols): Password Configuration Form */}
+            <div className="lg:col-span-7 space-y-6">
+              {/* Box 1: Ubah Password Otorisasi */}
+              <div className="bg-zinc-900 border border-zinc-800 rounded-3xl p-6 shadow-xl space-y-5">
+                <div className="flex items-center justify-between pb-3 border-b border-zinc-800">
+                  <div className="flex items-center gap-2.5">
+                    <Key className="w-5 h-5 text-orange-400" />
+                    <div>
+                      <h3 className="text-sm font-bold text-white">Konfigurasi Password Otorisasi</h3>
+                      <p className="text-xs text-zinc-400">Kelola password kunci untuk staf front desk & kasir</p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleResetPicPassword}
+                    className="text-xs text-zinc-400 hover:text-amber-400 flex items-center gap-1 transition underline cursor-pointer"
+                    title="Kembalikan password ke default (123)"
+                  >
+                    <RotateCcw className="w-3.5 h-3.5" />
+                    <span>Reset ke '123'</span>
+                  </button>
+                </div>
+
+                {/* Status Password Saat Ini */}
+                <div className="p-4 rounded-2xl bg-zinc-950/70 border border-zinc-800 flex items-center justify-between gap-4">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2.5 bg-zinc-900 rounded-xl text-zinc-400 border border-zinc-800">
+                      <Lock className="w-4 h-4 text-amber-400" />
+                    </div>
+                    <div>
+                      <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider block">
+                        Password Otorisasi Saat Ini
+                      </span>
+                      <div className="font-mono text-sm font-bold text-white tracking-widest mt-0.5">
+                        {showCurrentPicPass ? picProtection.picChangePassword : '••••••••'}
+                      </div>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setShowCurrentPicPass(!showCurrentPicPass)}
+                    className="p-2 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-zinc-400 hover:text-white transition border border-zinc-800 cursor-pointer flex items-center gap-1.5 text-xs"
+                  >
+                    {showCurrentPicPass ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    <span>{showCurrentPicPass ? 'Sembunyikan' : 'Lihat'}</span>
+                  </button>
+                </div>
+
+                {/* Form Ubah Password Baru */}
+                <form onSubmit={handleSaveNewPicPassword} className="space-y-4 pt-2">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider block mb-1.5">
+                        Password Baru <span className="text-orange-400">*</span>
+                      </label>
+                      <div className="relative">
+                        <input
+                          type={showNewPicPass ? 'text' : 'password'}
+                          required
+                          value={newPicPassword}
+                          onChange={(e) => setNewPicPassword(e.target.value)}
+                          placeholder="Masukkan password baru..."
+                          className="w-full px-3.5 py-2.5 bg-zinc-950 border border-zinc-700 rounded-xl text-xs font-semibold text-white focus:outline-none focus:border-orange-500"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowNewPicPass(!showNewPicPass)}
+                          className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-white transition p-1"
+                        >
+                          {showNewPicPass ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                        </button>
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider block mb-1.5">
+                        Konfirmasi Password Baru <span className="text-orange-400">*</span>
+                      </label>
+                      <input
+                        type={showNewPicPass ? 'text' : 'password'}
+                        required
+                        value={confirmPicPassword}
+                        onChange={(e) => setConfirmPicPassword(e.target.value)}
+                        placeholder="Ulangi password baru..."
+                        className="w-full px-3.5 py-2.5 bg-zinc-950 border border-zinc-700 rounded-xl text-xs font-semibold text-white focus:outline-none focus:border-orange-500"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-between pt-2">
+                    <p className="text-[11px] text-zinc-500">
+                      Gunakan kombinasi minimal 3-6 karakter yang mudah diingat oleh Manager / Supervisor.
+                    </p>
+                    <button
+                      type="submit"
+                      className="px-5 py-2.5 bg-orange-500 hover:bg-orange-600 text-white rounded-xl text-xs font-bold transition shadow-lg shadow-orange-500/20 active:scale-95 flex items-center gap-2 cursor-pointer"
+                    >
+                      <Save className="w-4 h-4" />
+                      <span>Simpan Password Baru</span>
+                    </button>
+                  </div>
+                </form>
+              </div>
+
+              {/* Box 2: Uji Coba Password (Live Test Simulator) */}
+              <div className="bg-zinc-900 border border-zinc-800 rounded-3xl p-6 shadow-xl space-y-4">
+                <div className="flex items-center gap-2.5 pb-3 border-b border-zinc-800">
+                  <ShieldCheck className="w-5 h-5 text-emerald-400" />
+                  <div>
+                    <h3 className="text-sm font-bold text-white">Uji Coba Password Otorisasi (Live Test)</h3>
+                    <p className="text-xs text-zinc-400">Verifikasi apakah password yang telah diatur berjalan dengan baik</p>
+                  </div>
+                </div>
+
+                <form onSubmit={handleTestPassword} className="space-y-3">
+                  <div className="flex gap-2">
+                    <input
+                      type="password"
+                      value={testPasswordInput}
+                      onChange={(e) => {
+                        setTestPasswordInput(e.target.value);
+                        setTestPasswordResult('idle');
+                      }}
+                      placeholder="Ketik password untuk menguji..."
+                      className="flex-1 px-3.5 py-2.5 bg-zinc-950 border border-zinc-700 rounded-xl text-xs text-white focus:outline-none focus:border-orange-500"
+                    />
+                    <button
+                      type="submit"
+                      className="px-4 py-2.5 bg-zinc-800 hover:bg-zinc-700 text-white rounded-xl text-xs font-bold transition cursor-pointer flex items-center gap-1.5"
+                    >
+                      <Check className="w-4 h-4 text-emerald-400" />
+                      <span>Cek Validitas</span>
+                    </button>
+                  </div>
+
+                  {testPasswordResult === 'valid' && (
+                    <div className="p-3 bg-emerald-500/10 border border-emerald-500/30 rounded-xl flex items-center gap-2.5 text-xs text-emerald-300 animate-in fade-in-50">
+                      <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                      <span><strong>Password Valid!</strong> Password cocok dan siap digunakan untuk membuka kunci PIC.</span>
+                    </div>
+                  )}
+
+                  {testPasswordResult === 'invalid' && (
+                    <div className="p-3 bg-rose-500/10 border border-rose-500/30 rounded-xl flex items-center gap-2.5 text-xs text-rose-300 animate-in fade-in-50">
+                      <ShieldAlert className="w-4 h-4 text-rose-400 shrink-0" />
+                      <span><strong>Password Salah!</strong> Password yang Anda ketikkan tidak sesuai dengan konfigurasi sistem.</span>
+                    </div>
+                  )}
+                </form>
+              </div>
+            </div>
+
+            {/* Right Column (5 cols): Rules & Scope Settings */}
+            <div className="lg:col-span-5 space-y-6">
+              {/* Box 3: Kebijakan Otorisasi & Hak Akses Role */}
+              <div className="bg-zinc-900 border border-zinc-800 rounded-3xl p-6 shadow-xl space-y-5">
+                <div className="flex items-center gap-2.5 pb-3 border-b border-zinc-800">
+                  <ShieldCheck className="w-5 h-5 text-orange-400" />
+                  <div>
+                    <h3 className="text-sm font-bold text-white">Kebijakan Hak Akses & Cakupan</h3>
+                    <p className="text-xs text-zinc-400">Aturan pembatasan dan bypass role sistem</p>
+                  </div>
+                </div>
+
+                <div className="space-y-4">
+                  {/* Bypass Admin Option */}
+                  <div className="p-3.5 bg-zinc-950/70 border border-zinc-800 rounded-2xl flex items-start justify-between gap-3">
+                    <div className="space-y-1">
+                      <label className="text-xs font-bold text-white block">
+                        Bypass Otorisasi Administrator & Manager
+                      </label>
+                      <p className="text-[11px] text-zinc-400 leading-snug">
+                        Pengguna yang sedang login sebagai <strong>System Admin</strong> atau <strong>Manager</strong> dapat langsung membuka kunci PIC tanpa perlu mengetikkan password.
+                      </p>
+                    </div>
+                    <input
+                      type="checkbox"
+                      checked={Boolean(picProtection.allowAdminBypass)}
+                      onChange={(e) => {
+                        updatePicProtectionConfig({ allowAdminBypass: e.target.checked });
+                        notifySuccess('Kebijakan Diperbarui', `Bypass admin ${e.target.checked ? 'diaktifkan' : 'dinonaktifkan'}.`);
+                      }}
+                      className="w-4 h-4 mt-1 accent-orange-500 rounded cursor-pointer shrink-0"
+                    />
+                  </div>
+
+                  {/* Scope 1: Form Input Member Master Data */}
+                  <div className="p-3.5 bg-zinc-950/70 border border-zinc-800 rounded-2xl flex items-start justify-between gap-3">
+                    <div className="space-y-1">
+                      <label className="text-xs font-bold text-white block">
+                        Proteksi Form Master Data Member
+                      </label>
+                      <p className="text-[11px] text-zinc-400 leading-snug">
+                        Wajibkan password saat staf mengubah PIC di form <em>Tambah Member</em> atau <em>Edit Member</em> di Master Data.
+                      </p>
+                    </div>
+                    <input
+                      type="checkbox"
+                      checked={picProtection.requirePasswordOnMemberForm !== false}
+                      onChange={(e) => {
+                        updatePicProtectionConfig({ requirePasswordOnMemberForm: e.target.checked });
+                        notifySuccess('Cakupan Diperbarui', 'Pengaturan form member diperbarui.');
+                      }}
+                      className="w-4 h-4 mt-1 accent-orange-500 rounded cursor-pointer shrink-0"
+                    />
+                  </div>
+
+                  {/* Scope 2: Form Front Desk Quick Reg & Renewal */}
+                  <div className="p-3.5 bg-zinc-950/70 border border-zinc-800 rounded-2xl flex items-start justify-between gap-3">
+                    <div className="space-y-1">
+                      <label className="text-xs font-bold text-white block">
+                        Proteksi Front Desk Meja Kasir
+                      </label>
+                      <p className="text-[11px] text-zinc-400 leading-snug">
+                        Wajibkan password saat kasir membuka kunci PIC pada modal <em>Registrasi Cepat</em> dan <em>Perpanjangan (Renewal)</em>.
+                      </p>
+                    </div>
+                    <input
+                      type="checkbox"
+                      checked={picProtection.requirePasswordOnRenewal !== false}
+                      onChange={(e) => {
+                        updatePicProtectionConfig({ requirePasswordOnRenewal: e.target.checked });
+                        notifySuccess('Cakupan Diperbarui', 'Pengaturan meja kasir diperbarui.');
+                      }}
+                      className="w-4 h-4 mt-1 accent-orange-500 rounded cursor-pointer shrink-0"
+                    />
+                  </div>
+
+                  {/* Scope 3: Form Transaksi Membership & PT */}
+                  <div className="p-3.5 bg-zinc-950/70 border border-zinc-800 rounded-2xl flex items-start justify-between gap-3">
+                    <div className="space-y-1">
+                      <label className="text-xs font-bold text-white block">
+                        Proteksi Form Membership & PT
+                      </label>
+                      <p className="text-[11px] text-zinc-400 leading-snug">
+                        Wajibkan password saat memilih peserta & pelatih personal trainer di menu <em>Membership & Paket PT</em>.
+                      </p>
+                    </div>
+                    <input
+                      type="checkbox"
+                      checked={picProtection.requirePasswordOnTransaction !== false}
+                      onChange={(e) => {
+                        updatePicProtectionConfig({ requirePasswordOnTransaction: e.target.checked });
+                        notifySuccess('Cakupan Diperbarui', 'Pengaturan form membership diperbarui.');
+                      }}
+                      className="w-4 h-4 mt-1 accent-orange-500 rounded cursor-pointer shrink-0"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Box 4: Edukasi & SOP Bisnis Gym */}
+              <div className="p-5 rounded-3xl bg-amber-500/10 border border-amber-500/25 space-y-2.5 text-xs text-amber-200">
+                <div className="flex items-center gap-2 font-bold text-amber-400">
+                  <Info className="w-4 h-4" />
+                  <span>Mengapa Proteksi PIC Diperlukan?</span>
+                </div>
+                <p className="leading-relaxed text-amber-200/90 text-[11px]">
+                  Di industri fitness center, setiap member baru dan perpanjangan paket menghasilkan <strong>komisi closing sales</strong> dan <strong>komisi sesi personal trainer (PT)</strong>.
+                </p>
+                <p className="leading-relaxed text-amber-200/90 text-[11px]">
+                  Mengunci PIC dengan password otorisasi manajer mencegah staf kasir nakal mengalihkan atribusi member kepada teman staf lain atau mengambil alih klien PT tanpa persetujuan resmi.
+                </p>
+              </div>
             </div>
           </div>
         </div>

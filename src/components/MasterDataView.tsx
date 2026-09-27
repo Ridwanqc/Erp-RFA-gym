@@ -1,14 +1,18 @@
 import React, { useState, useMemo } from 'react';
-import { Users, Plus, IdCard, Eye, PenTool, Trash2, Camera, ShieldCheck, FileText, CheckCircle2, Upload, Download, X, Search, Filter, ArrowUpDown, RotateCcw, FileSpreadsheet, Lock, Unlock } from 'lucide-react';
-import { Member, User, UserRole } from '../types';
+import { Users, Plus, IdCard, Eye, PenTool, Trash2, Camera, ShieldCheck, FileText, CheckCircle2, Upload, Download, X, Search, Filter, ArrowUpDown, RotateCcw, FileSpreadsheet, Lock, Unlock, Building2 } from 'lucide-react';
+import { Member, User, UserRole, ALL_BRANCHES_ID } from '../types';
 import { APP_TODAY } from '../utils/formatters';
 import { IdentityCardModal } from './IdentityCardModal';
 import { DataImportModal } from './DataImportModal';
 import { DataExportModal } from './DataExportModal';
+import { PicPasswordModal } from './PicPasswordModal';
+import { useSettings } from '../context/SettingsContext';
+import { DEFAULT_PIC_PROTECTION } from '../data/settingsData';
 
 interface MasterDataViewProps {
   members: Member[];
   staffUsers: User[];
+  currentUser?: User | null;
   onOpenMemberDetail: (member: Member) => void;
   onOpenIDCard: (member: Member) => void;
   onSaveMember: (member: Member) => void;
@@ -23,6 +27,7 @@ interface MasterDataViewProps {
 export const MasterDataView: React.FC<MasterDataViewProps> = ({
   members,
   staffUsers,
+  currentUser,
   onOpenMemberDetail,
   onOpenIDCard,
   onSaveMember,
@@ -33,6 +38,12 @@ export const MasterDataView: React.FC<MasterDataViewProps> = ({
   onImportStaff,
   showToast
 }) => {
+  const { settings, branches, activeBranchId, isAllBranches } = useSettings();
+  const defaultBranchId = activeBranchId === ALL_BRANCHES_ID ? (branches[0]?.id || 'BR-001') : activeBranchId;
+  const [personBranchId, setPersonBranchId] = useState<string>(defaultBranchId);
+  const [allowedBranchIds, setAllowedBranchIds] = useState<string[]>([defaultBranchId]);
+  const picProtection = settings?.picProtection || DEFAULT_PIC_PROTECTION;
+  const [isPicPasswordModalOpen, setIsPicPasswordModalOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<'member' | 'staff'>('member');
 
   // Import & Export Modal State
@@ -99,6 +110,9 @@ export const MasterDataView: React.FC<MasterDataViewProps> = ({
     setStaffRole('kasir');
     setMemberPicId('');
     setIsPicLocked(false);
+    const defBranch = activeBranchId === ALL_BRANCHES_ID ? (branches[0]?.id || 'BR-001') : activeBranchId;
+    setPersonBranchId(defBranch);
+    setAllowedBranchIds([defBranch]);
     setIsModalOpen(true);
   };
 
@@ -115,6 +129,14 @@ export const MasterDataView: React.FC<MasterDataViewProps> = ({
     setAddress(item.address || '');
     setBirthDate(item.birthDate || '');
     setEmergencyContact(item.emergencyContact || '');
+
+    const defBranch = item.branchId || (branches[0]?.id || 'BR-001');
+    setPersonBranchId(defBranch);
+    if ('allowedBranchIds' in item && item.allowedBranchIds && item.allowedBranchIds.length > 0) {
+      setAllowedBranchIds(item.allowedBranchIds);
+    } else {
+      setAllowedBranchIds([defBranch]);
+    }
 
     if ('role' in item) {
       // Staff
@@ -163,12 +185,15 @@ export const MasterDataView: React.FC<MasterDataViewProps> = ({
         return;
       }
       const picObj = staffUsers.find((s) => s.id === memberPicId);
+      const targetBranch = branches.find((b) => b.id === personBranchId) || branches[0];
       const memberData: Member = {
         id: targetId,
         name: name.trim(),
         phone: phone.trim(),
         gender,
         photo: finalPhoto,
+        branchId: targetBranch?.id || 'BR-001',
+        branchName: targetBranch?.name || 'Cabang Utama',
         expired: isEditMode
           ? members.find((m) => m.id === targetId)?.expired || APP_TODAY
           : APP_TODAY,
@@ -189,7 +214,7 @@ export const MasterDataView: React.FC<MasterDataViewProps> = ({
       };
 
       onSaveMember(memberData);
-      showToast('Data Member Disimpan', `Member ${name} berhasil ${isEditMode ? 'diperbarui' : 'didaftarkan'} lengkap dengan data identitas.`, 'success');
+      showToast('Data Member Disimpan', `Member ${name} (${targetBranch?.name}) berhasil ${isEditMode ? 'diperbarui' : 'didaftarkan'} lengkap dengan data identitas.`, 'success');
     } else {
       const roleName =
         staffRole === 'admin'
@@ -200,6 +225,7 @@ export const MasterDataView: React.FC<MasterDataViewProps> = ({
           ? 'Leader PT'
           : 'Pelatih PT';
 
+      const targetBranch = branches.find((b) => b.id === personBranchId) || branches[0];
       const staffData: User = {
         id: targetId,
         accId: accId || name.toLowerCase().replace(/\s+/g, '_'),
@@ -212,6 +238,9 @@ export const MasterDataView: React.FC<MasterDataViewProps> = ({
         roleName,
         shift: 'Pagi',
         baseSalary: staffRole === 'kasir' ? 3500000 : 5000000,
+        branchId: targetBranch?.id || 'BR-001',
+        branchName: targetBranch?.name || 'Cabang Utama',
+        allowedBranchIds: allowedBranchIds.length > 0 ? allowedBranchIds : [targetBranch?.id || 'BR-001'],
         idType,
         idNumber: idNumber.trim() || undefined,
         idPhoto: idPhoto || undefined,
@@ -221,7 +250,7 @@ export const MasterDataView: React.FC<MasterDataViewProps> = ({
       };
 
       onSaveStaff(staffData);
-      showToast('Data Staf Disimpan', `Karyawan ${name} berhasil ${isEditMode ? 'diperbarui' : 'didaftarkan'} lengkap dengan data identitas.`, 'success');
+      showToast('Data Staf Disimpan', `Karyawan ${name} (${targetBranch?.name}) berhasil ${isEditMode ? 'diperbarui' : 'didaftarkan'} lengkap dengan data identitas.`, 'success');
     }
 
     setIsModalOpen(false);
@@ -580,6 +609,17 @@ export const MasterDataView: React.FC<MasterDataViewProps> = ({
                         </span>
                       </div>
 
+                      {/* Branch Badge */}
+                      <div className="flex items-center justify-between text-[11px]">
+                        <span className="text-zinc-500 flex items-center gap-1">
+                          <Building2 className="w-3 h-3 text-orange-400" />
+                          <span>Cabang:</span>
+                        </span>
+                        <span className="font-semibold text-zinc-300 truncate max-w-[130px]" title={m.branchName || 'Cabang Utama'}>
+                          {m.branchName || 'Cabang Utama'}
+                        </span>
+                      </div>
+
                       <div className="flex justify-between text-[11px]">
                         <span className="text-zinc-500">Exp Date:</span>
                         <span className={`font-semibold ${isExpired ? 'text-rose-400' : 'text-zinc-300'}`}>
@@ -757,6 +797,7 @@ export const MasterDataView: React.FC<MasterDataViewProps> = ({
                   <th className="py-3 px-4 w-16 text-center">Foto</th>
                   <th className="py-3 px-4">Nama Staf & ID</th>
                   <th className="py-3 px-4">Role & Posisi</th>
+                  <th className="py-3 px-4">Cabang Penugasan</th>
                   <th className="py-3 px-4">Kartu Identitas (KTP)</th>
                   <th className="py-3 px-4">Shift</th>
                   <th className="py-3 px-4 text-right">Aksi</th>
@@ -765,7 +806,7 @@ export const MasterDataView: React.FC<MasterDataViewProps> = ({
               <tbody className="divide-y divide-zinc-800 bg-zinc-950/30 text-xs">
                 {filteredStaff.length === 0 ? (
                   <tr>
-                    <td colSpan={6} className="py-10 text-center text-zinc-500">
+                    <td colSpan={7} className="py-10 text-center text-zinc-500">
                       <div className="flex flex-col items-center justify-center space-y-2">
                         <Search className="w-6 h-6 text-zinc-600" />
                         <p className="font-semibold text-zinc-400">Tidak ada staf ditemukan</p>
@@ -795,6 +836,19 @@ export const MasterDataView: React.FC<MasterDataViewProps> = ({
                       <span className="bg-orange-500/10 border border-orange-500/20 text-orange-400 px-2.5 py-1 rounded-xl text-[10px] font-bold">
                         {s.roleName}
                       </span>
+                    </td>
+                    <td className="py-3 px-4">
+                      <div className="space-y-0.5">
+                        <div className="flex items-center gap-1.5 text-xs text-zinc-200 font-semibold">
+                          <Building2 className="w-3.5 h-3.5 text-orange-400 shrink-0" />
+                          <span className="truncate max-w-[140px]">{s.branchName || 'Cabang Utama'}</span>
+                        </div>
+                        {s.allowedBranchIds && s.allowedBranchIds.length > 1 && (
+                          <span className="text-[10px] text-zinc-400 bg-zinc-800/80 px-1.5 py-0.2 rounded font-mono">
+                            Akses: {s.allowedBranchIds.length} Outlet
+                          </span>
+                        )}
+                      </div>
                     </td>
                     <td className="py-3 px-4">
                       <div className="flex items-center gap-2">
@@ -947,6 +1001,25 @@ export const MasterDataView: React.FC<MasterDataViewProps> = ({
                   </div>
                 </div>
 
+                {/* Branch Selection (Multi-Branch ERP) */}
+                <div>
+                  <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-wider mb-1 flex items-center gap-1.5">
+                    <Building2 className="w-3.5 h-3.5 text-orange-400" />
+                    <span>{activeTab === 'member' ? 'Cabang / Home Outlet Member *' : 'Penugasan Cabang Utama *'}</span>
+                  </label>
+                  <select
+                    value={personBranchId}
+                    onChange={(e) => setPersonBranchId(e.target.value)}
+                    className="w-full bg-zinc-900 border border-zinc-700 rounded-xl px-3 py-2 text-xs text-white outline-none focus:border-orange-500 font-medium"
+                  >
+                    {branches.map((b) => (
+                      <option key={b.id} value={b.id}>
+                        [{b.code}] {b.name} ({b.city})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
                 {activeTab === 'member' ? (
                   <div className="space-y-1.5 p-3 rounded-2xl bg-zinc-950/70 border border-zinc-800">
                     <div className="flex items-center justify-between">
@@ -967,12 +1040,19 @@ export const MasterDataView: React.FC<MasterDataViewProps> = ({
                           <button
                             type="button"
                             onClick={() => {
-                              const nextLocked = !isPicLocked;
-                              setIsPicLocked(nextLocked);
-                              if (nextLocked) {
-                                showToast('PIC Dikunci 🔒', 'Pilihan PIC berhasil dikunci.', 'info');
+                              if (isPicLocked) {
+                                const isProtected = picProtection.requirePasswordToChangePic && (picProtection.requirePasswordOnMemberForm !== false);
+                                const canBypass = (currentUser?.role === 'admin' || currentUser?.role === 'manager') && picProtection.allowAdminBypass;
+
+                                if (isProtected && !canBypass) {
+                                  setIsPicPasswordModalOpen(true);
+                                } else {
+                                  setIsPicLocked(false);
+                                  showToast('Kunci PIC Dibuka 🔓', 'Anda sekarang dapat memilih atau mengganti staf PIC.', 'info');
+                                }
                               } else {
-                                showToast('Kunci PIC Dibuka 🔓', 'Anda sekarang dapat memilih atau mengganti staf PIC.', 'info');
+                                setIsPicLocked(true);
+                                showToast('PIC Dikunci 🔒', 'Pilihan PIC berhasil dikunci.', 'info');
                               }
                             }}
                             className="text-[10px] text-zinc-400 hover:text-amber-400 font-semibold underline transition ml-1"
@@ -1071,6 +1151,48 @@ export const MasterDataView: React.FC<MasterDataViewProps> = ({
                           placeholder="Default 123"
                           className="w-full bg-zinc-900 border border-zinc-700 rounded-xl px-3 py-2 text-xs text-white outline-none focus:border-orange-500"
                         />
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-wider mb-1 flex items-center justify-between">
+                        <span>Hak Akses Cabang (Multi-Branch Permission)</span>
+                        <span className="text-[10px] text-orange-400 font-normal">
+                          {allowedBranchIds.length === branches.length ? 'Semua Cabang' : `${allowedBranchIds.length} Cabang`}
+                        </span>
+                      </label>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 p-2.5 rounded-xl bg-zinc-900 border border-zinc-800">
+                        {branches.map((b) => {
+                          const isChecked = allowedBranchIds.includes(b.id);
+                          return (
+                            <label
+                              key={b.id}
+                              className={`flex items-center gap-2 p-2 rounded-lg cursor-pointer transition text-xs ${
+                                isChecked
+                                  ? 'bg-orange-500/10 border border-orange-500/30 text-white font-medium'
+                                  : 'hover:bg-zinc-800 text-zinc-400 border border-transparent'
+                              }`}
+                            >
+                              <input
+                                type="checkbox"
+                                checked={isChecked}
+                                onChange={(e) => {
+                                  if (e.target.checked) {
+                                    setAllowedBranchIds([...allowedBranchIds, b.id]);
+                                  } else {
+                                    if (allowedBranchIds.length > 1) {
+                                      setAllowedBranchIds(allowedBranchIds.filter((id) => id !== b.id));
+                                    } else {
+                                      showToast('Peringatan', 'Minimal harus memilih satu cabang yang diizinkan.', 'warning');
+                                    }
+                                  }
+                                }}
+                                className="accent-orange-500 rounded"
+                              />
+                              <span className="truncate">[{b.code}] {b.name}</span>
+                            </label>
+                          );
+                        })}
                       </div>
                     </div>
                   </>
@@ -1265,6 +1387,19 @@ export const MasterDataView: React.FC<MasterDataViewProps> = ({
             ? `${memberStatusFilter !== 'all' ? `Status: ${memberStatusFilter.toUpperCase()} ` : ''}${memberSearchQuery ? `Pencarian: "${memberSearchQuery}"` : ''}`
             : `${staffRoleFilter !== 'all' ? `Posisi: ${staffRoleFilter} ` : ''}${staffSearchQuery ? `Pencarian: "${staffSearchQuery}"` : ''}`
         }
+        showToast={showToast}
+      />
+
+      {/* MODAL: VERIFIKASI PASSWORD OTORISASI GANTI PIC */}
+      <PicPasswordModal
+        isOpen={isPicPasswordModalOpen}
+        onClose={() => setIsPicPasswordModalOpen(false)}
+        onSuccess={() => {
+          setIsPicLocked(false);
+          showToast('Kunci PIC Dibuka 🔓', 'Otorisasi berhasil. Anda sekarang dapat memilih atau mengganti staf PIC.', 'success');
+        }}
+        currentStaffName={staffUsers.find((s) => s.id === memberPicId)?.name}
+        currentUser={currentUser}
         showToast={showToast}
       />
     </div>

@@ -7,6 +7,7 @@ import {
   PaymentAndTaxConfig,
   WhatsAppTemplateConfig,
   SystemSettings,
+  PicProtectionConfig,
   UserRole
 } from '../types';
 
@@ -342,10 +343,20 @@ Masa aktif membership Anda di *[STORE_NAME]* akan berakhir pada *[EXPIRY_DATE]* 
 Dapatkan promo perpanjangan menarik sebelum masa aktif habis! Hubungi front desk kami untuk informasi paket renewal. 🏋️‍♂️`
 };
 
+export const DEFAULT_PIC_PROTECTION: PicProtectionConfig = {
+  requirePasswordToChangePic: true,
+  picChangePassword: '123',
+  allowAdminBypass: true,
+  requirePasswordOnTransaction: true,
+  requirePasswordOnMemberForm: true,
+  requirePasswordOnRenewal: true
+};
+
 export const DEFAULT_SYSTEM_SETTINGS: SystemSettings = {
   printer: DEFAULT_PRINTER_CONFIG,
   profile: DEFAULT_GYM_PROFILE,
   paymentAndTax: DEFAULT_PAYMENT_AND_TAX,
   templates: DEFAULT_WHATSAPP_TEMPLATES,
+  picProtection: DEFAULT_PIC_PROTECTION,
   updatedAt: new Date().toISOString()
 };

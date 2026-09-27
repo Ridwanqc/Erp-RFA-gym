@@ -8,7 +8,11 @@ import {
   WhatsAppTemplateConfig,
   RoleDefinition,
   RoleActionPermissions,
-  UserRole
+  PicProtectionConfig,
+  UserRole,
+  User,
+  StockTransferRecord,
+  ALL_BRANCHES_ID
 } from '../types';
 import {
   DEFAULT_SYSTEM_SETTINGS,
@@ -17,6 +21,7 @@ import {
   DEFAULT_BRANCHES,
   DEFAULT_PAYMENT_AND_TAX,
   DEFAULT_WHATSAPP_TEMPLATES,
+  DEFAULT_PIC_PROTECTION,
   DEFAULT_ROLE_DEFINITIONS,
   SYSTEM_MODULES
 } from '../data/settingsData';
@@ -31,6 +36,7 @@ const SETTINGS_STORAGE_KEY = 'gympro_system_settings';
 const ROLES_STORAGE_KEY = 'gympro_role_definitions';
 const BRANCHES_STORAGE_KEY = 'gympro_branches';
 const ACTIVE_BRANCH_STORAGE_KEY = 'gympro_active_branch_id';
+const STOCK_TRANSFERS_STORAGE_KEY = 'gympro_stock_transfers';
 
 interface SettingsContextType {
   settings: SystemSettings;
@@ -38,10 +44,13 @@ interface SettingsContextType {
   branches: GymBranch[];
   activeBranchId: string;
   activeBranch: GymBranch;
+  isAllBranches: boolean;
   updatePrinterConfig: (newPrinter: Partial<PrinterConfig>) => void;
   updateProfileConfig: (newProfile: Partial<GymBusinessProfile>) => void;
   updatePaymentAndTaxConfig: (newConfig: Partial<PaymentAndTaxConfig>) => void;
   updateTemplatesConfig: (newTemplates: Partial<WhatsAppTemplateConfig>) => void;
+  updatePicProtectionConfig: (newConfig: Partial<PicProtectionConfig>) => void;
+  verifyPicPassword: (inputPassword: string) => boolean;
   updateRolePermission: (
     role: UserRole,
     moduleId: string,
@@ -62,6 +71,10 @@ interface SettingsContextType {
   deleteBranch: (id: string) => { success: boolean; message: string };
   setActiveBranchId: (id: string) => void;
   setMainBranch: (id: string) => void;
+  filterByBranch: <T extends { branchId?: string }>(items: T[], customBranchId?: string) => T[];
+  canUserAccessBranch: (user: User | null, targetBranchId: string) => boolean;
+  stockTransfers: StockTransferRecord[];
+  recordStockTransfer: (transfer: Omit<StockTransferRecord, 'id' | 'createdAt'>) => StockTransferRecord;
 }
 
 const SettingsContext = createContext<SettingsContextType | null>(null);
@@ -73,13 +86,14 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       const saved = localStorage.getItem(SETTINGS_STORAGE_KEY);
       if (saved) {
         const parsed = JSON.parse(saved);
-        return {
-          printer: { ...DEFAULT_PRINTER_CONFIG, ...parsed.printer },
-          profile: { ...DEFAULT_GYM_PROFILE, ...parsed.profile },
-          paymentAndTax: { ...DEFAULT_PAYMENT_AND_TAX, ...parsed.paymentAndTax },
-          templates: { ...DEFAULT_WHATSAPP_TEMPLATES, ...parsed.templates },
-          updatedAt: parsed.updatedAt || new Date().toISOString()
-        };
+          return {
+            printer: { ...DEFAULT_PRINTER_CONFIG, ...parsed.printer },
+            profile: { ...DEFAULT_GYM_PROFILE, ...parsed.profile },
+            paymentAndTax: { ...DEFAULT_PAYMENT_AND_TAX, ...parsed.paymentAndTax },
+            templates: { ...DEFAULT_WHATSAPP_TEMPLATES, ...parsed.templates },
+            picProtection: { ...DEFAULT_PIC_PROTECTION, ...parsed.picProtection },
+            updatedAt: parsed.updatedAt || new Date().toISOString()
+          };
       }
     } catch (e) {
       console.warn('Gagal memuat system settings dari storage:', e);
@@ -127,6 +141,43 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     }
     return DEFAULT_ROLE_DEFINITIONS;
   });
+
+  // Load Stock Transfers
+  const [stockTransfers, setStockTransfers] = useState<StockTransferRecord[]>(() => {
+    try {
+      const saved = localStorage.getItem(STOCK_TRANSFERS_STORAGE_KEY);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) return parsed;
+      }
+    } catch (e) {}
+    return [
+      {
+        id: 'TRF-20260915-001',
+        date: '2026-09-15',
+        productId: 'P03',
+        productName: 'Whey Protein Isolate Sachet',
+        fromBranchId: 'BR-001',
+        fromBranchName: 'GymPro Flagship Kelapa Gading',
+        toBranchId: 'BR-002',
+        toBranchName: 'GymPro Hub Senopati Lifestyle',
+        quantity: 10,
+        transferredBy: 'Budi Santoso (Admin)',
+        notes: 'Penyeimbangan stok suplemen untuk member Senopati',
+        status: 'COMPLETED',
+        createdAt: '2026-09-15T10:30:00Z'
+      }
+    ];
+  });
+
+  // Persist Stock Transfers
+  useEffect(() => {
+    try {
+      localStorage.setItem(STOCK_TRANSFERS_STORAGE_KEY, JSON.stringify(stockTransfers));
+    } catch (e) {
+      console.warn('Gagal menyimpan mutasi stok:', e);
+    }
+  }, [stockTransfers]);
 
   // Persist Settings
   useEffect(() => {
@@ -194,11 +245,54 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     }
   }, [activeBranchId]);
 
+  // Consolidated Holding virtual branch object
+  const ALL_BRANCHES_OBJECT: GymBranch = {
+    id: ALL_BRANCHES_ID,
+    name: 'Semua Cabang (Konsolidasi Pusat)',
+    code: 'ALL',
+    address: 'Seluruh Outlet & Cabang Terpadu GymPro',
+    city: 'Konsolidasi Multi-Unit',
+    phone: 'Pusat Operasional Holding',
+    whatsapp: '-',
+    email: 'hq@gympro.id',
+    openHoursWeekday: '05:30 - 22:30 WIB',
+    openHoursWeekend: '06:30 - 21:00 WIB',
+    status: 'Aktif',
+    isMainBranch: false,
+    facilities: ['Multi-Branch Centralized ERP', 'Konsolidasi Laporan Laba Rugi', 'Sentralisasi Member & Aset'],
+    createdAt: '2024-01-01',
+    notes: 'Mode Konsolidasi Seluruh Outlet Gym'
+  };
+
+  const isAllBranches = activeBranchId === ALL_BRANCHES_ID;
+
   // Current active branch object
   const activeBranch: GymBranch =
-    branches.find((b) => b.id === activeBranchId) || branches[0] || DEFAULT_BRANCHES[0];
+    activeBranchId === ALL_BRANCHES_ID
+      ? ALL_BRANCHES_OBJECT
+      : branches.find((b) => b.id === activeBranchId) || branches[0] || DEFAULT_BRANCHES[0];
 
   const setActiveBranchId = (id: string) => {
+    if (id === ALL_BRANCHES_ID) {
+      setActiveBranchIdState(ALL_BRANCHES_ID);
+      setSettings((prev) => ({
+        ...prev,
+        profile: {
+          ...prev.profile,
+          branchName: ALL_BRANCHES_OBJECT.name,
+          address: ALL_BRANCHES_OBJECT.address,
+          city: ALL_BRANCHES_OBJECT.city
+        },
+        printer: {
+          ...prev.printer,
+          storeAddress: ALL_BRANCHES_OBJECT.address,
+          storeCity: ALL_BRANCHES_OBJECT.city
+        },
+        updatedAt: new Date().toISOString()
+      }));
+      return;
+    }
+
     const targetBranch = branches.find((b) => b.id === id);
     if (!targetBranch) return;
 
@@ -351,6 +445,34 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     );
   };
 
+  const filterByBranch = <T extends { branchId?: string }>(items: T[], customBranchId?: string): T[] => {
+    const targetId = customBranchId !== undefined ? customBranchId : activeBranchId;
+    if (targetId === ALL_BRANCHES_ID) return items;
+    return items.filter((item) => !item.branchId || item.branchId === targetId);
+  };
+
+  const canUserAccessBranch = (user: User | null, targetBranchId: string): boolean => {
+    if (!user) return true;
+    if (user.role === 'admin' || user.role === 'manager') return true;
+    if (targetBranchId === ALL_BRANCHES_ID) return false;
+    if (!user.branchId) return true;
+    if (user.branchId === targetBranchId) return true;
+    if (user.allowedBranchIds && user.allowedBranchIds.includes(targetBranchId)) return true;
+    return false;
+  };
+
+  const recordStockTransfer = (transferData: Omit<StockTransferRecord, 'id' | 'createdAt'>): StockTransferRecord => {
+    const nextNumber = stockTransfers.length + 1;
+    const todayStr = new Date().toISOString().split('T')[0];
+    const newRecord: StockTransferRecord = {
+      ...transferData,
+      id: `TRF-${todayStr.replace(/-/g, '')}-${String(nextNumber).padStart(3, '0')}`,
+      createdAt: new Date().toISOString()
+    };
+    setStockTransfers((prev) => [newRecord, ...prev]);
+    return newRecord;
+  };
+
   const updatePrinterConfig = (newPrinter: Partial<PrinterConfig>) => {
     setSettings((prev) => ({
       ...prev,
@@ -381,6 +503,22 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       templates: { ...prev.templates, ...newTemplates },
       updatedAt: new Date().toISOString()
     }));
+  };
+
+  const updatePicProtectionConfig = (newConfig: Partial<PicProtectionConfig>) => {
+    setSettings((prev) => ({
+      ...prev,
+      picProtection: {
+        ...(prev.picProtection || DEFAULT_PIC_PROTECTION),
+        ...newConfig
+      },
+      updatedAt: new Date().toISOString()
+    }));
+  };
+
+  const verifyPicPassword = (inputPassword: string): boolean => {
+    const activePass = settings.picProtection?.picChangePassword ?? DEFAULT_PIC_PROTECTION.picChangePassword;
+    return inputPassword.trim() === activePass.trim();
   };
 
   const updateRolePermission = (
@@ -615,10 +753,13 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         branches,
         activeBranchId,
         activeBranch,
+        isAllBranches,
         updatePrinterConfig,
         updateProfileConfig,
         updatePaymentAndTaxConfig,
         updateTemplatesConfig,
+        updatePicProtectionConfig,
+        verifyPicPassword,
         updateRolePermission,
         resetRolePermissionsToDefault,
         resetSettingsToDefault,
@@ -628,7 +769,11 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         updateBranch,
         deleteBranch,
         setActiveBranchId,
-        setMainBranch
+        setMainBranch,
+        filterByBranch,
+        canUserAccessBranch,
+        stockTransfers,
+        recordStockTransfer
       }}
     >
       {children}

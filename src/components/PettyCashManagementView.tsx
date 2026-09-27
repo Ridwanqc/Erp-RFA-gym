@@ -18,6 +18,7 @@ import {
   FileText,
   CreditCard,
   Building,
+  Building2,
   UserCheck,
   ChevronRight,
   TrendingDown,
@@ -25,8 +26,9 @@ import {
   Receipt,
   HelpCircle
 } from 'lucide-react';
-import { PettyCash, PettyCashExpense, PettyCashStatus, User } from '../types';
+import { PettyCash, PettyCashExpense, PettyCashStatus, User, ALL_BRANCHES_ID } from '../types';
 import { formatRp, formatDateIndo, APP_TODAY } from '../utils/formatters';
+import { useSettings } from '../context/SettingsContext';
 
 interface PettyCashManagementViewProps {
   pettyCashList: PettyCash[];
@@ -41,6 +43,9 @@ export const PettyCashManagementView: React.FC<PettyCashManagementViewProps> = (
   currentUser,
   showToast
 }) => {
+  const { branches, activeBranchId, activeBranch, isAllBranches } = useSettings();
+  const defaultBranchId = activeBranchId === ALL_BRANCHES_ID ? (branches[0]?.id || 'BR-001') : activeBranchId;
+
   // Navigation: null = List View, string = Detail View of a Petty Cash session ID
   const [selectedPettyCashId, setSelectedPettyCashId] = useState<string | null>(
     pettyCashList.length > 0 ? pettyCashList[0].id : null
@@ -48,6 +53,7 @@ export const PettyCashManagementView: React.FC<PettyCashManagementViewProps> = (
 
   // List View Filters
   const [statusFilter, setStatusFilter] = useState<'ALL' | PettyCashStatus>('ALL');
+  const [branchFilter, setBranchFilter] = useState<'ALL' | string>('ALL');
   const [searchQuery, setSearchQuery] = useState('');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
@@ -58,6 +64,7 @@ export const PettyCashManagementView: React.FC<PettyCashManagementViewProps> = (
   // Modals for Petty Cash Session (Add / Edit)
   const [isSessionModalOpen, setIsSessionModalOpen] = useState(false);
   const [editingSession, setEditingSession] = useState<PettyCash | null>(null);
+  const [sessionBranchId, setSessionBranchId] = useState<string>(defaultBranchId);
   const [sessionFormDate, setSessionFormDate] = useState('');
   const [sessionFormInitialAmount, setSessionFormInitialAmount] = useState('');
   const [sessionFormPaymentMethod, setSessionFormPaymentMethod] = useState<'Transfer' | 'Tunai' | 'Bank'>('Transfer');
@@ -126,6 +133,10 @@ export const PettyCashManagementView: React.FC<PettyCashManagementViewProps> = (
     return pettyCashList.filter((session) => {
       if (statusFilter !== 'ALL' && session.status !== statusFilter) {
         return false;
+      }
+      if (branchFilter !== 'ALL') {
+        const sBranch = session.branchId || 'BR-001';
+        if (sBranch !== branchFilter) return false;
       }
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase().trim();
@@ -215,6 +226,7 @@ export const PettyCashManagementView: React.FC<PettyCashManagementViewProps> = (
   // Open Create Petty Cash Session Modal
   const handleOpenCreateSession = () => {
     setEditingSession(null);
+    setSessionBranchId(activeBranchId === ALL_BRANCHES_ID ? (branches[0]?.id || 'BR-001') : activeBranchId);
     setSessionFormDate(getCurrentFormattedDateTime());
     setSessionFormInitialAmount('');
     setSessionFormPaymentMethod('Transfer');
@@ -226,6 +238,7 @@ export const PettyCashManagementView: React.FC<PettyCashManagementViewProps> = (
   // Open Edit Petty Cash Session Modal
   const handleOpenEditSession = (session: PettyCash) => {
     setEditingSession(session);
+    setSessionBranchId(session.branchId || (branches[0]?.id || 'BR-001'));
     setSessionFormDate(session.date);
     setSessionFormInitialAmount(String(session.initial_amount));
     setSessionFormPaymentMethod((session.payment_method as any) || 'Transfer');
@@ -243,6 +256,10 @@ export const PettyCashManagementView: React.FC<PettyCashManagementViewProps> = (
       return;
     }
 
+    const selectedBranchObj = branches.find((b) => b.id === sessionBranchId) || branches[0];
+    const targetBranchId = sessionBranchId || (isAllBranches ? (branches[0]?.id || 'BR-001') : activeBranchId);
+    const targetBranchName = selectedBranchObj?.name || (activeBranchId === ALL_BRANCHES_ID ? (branches[0]?.name || 'GymPro Flagship Kelapa Gading') : activeBranch.name);
+
     if (editingSession) {
       // Validate that new initial_amount is not less than total_expense already spent
       if (initialAmt < (editingSession.total_expense || 0)) {
@@ -259,6 +276,8 @@ export const PettyCashManagementView: React.FC<PettyCashManagementViewProps> = (
         if (item.id === editingSession.id) {
           return {
             ...item,
+            branchId: targetBranchId,
+            branchName: targetBranchName,
             date: sessionFormDate,
             initial_amount: initialAmt,
             payment_method: sessionFormPaymentMethod,
@@ -279,6 +298,8 @@ export const PettyCashManagementView: React.FC<PettyCashManagementViewProps> = (
       const nowIso = new Date().toISOString();
       const newSession: PettyCash = {
         id: newId,
+        branchId: targetBranchId,
+        branchName: targetBranchName,
         date: sessionFormDate,
         initial_amount: initialAmt,
         payment_method: sessionFormPaymentMethod,
@@ -299,7 +320,7 @@ export const PettyCashManagementView: React.FC<PettyCashManagementViewProps> = (
       const updatedList = [newSession, ...pettyCashList];
       onUpdatePettyCashList(updatedList);
       setSelectedPettyCashId(newId);
-      showToast('Petty Cash Dibuat', `Sesi Petty Cash baru dengan modal ${formatRp(initialAmt)} berhasil dibuat.`, 'success');
+      showToast('Petty Cash Dibuat', `Sesi Petty Cash baru dengan modal ${formatRp(initialAmt)} (${targetBranchName}) berhasil dibuat.`, 'success');
     }
 
     setIsSessionModalOpen(false);
@@ -672,7 +693,7 @@ export const PettyCashManagementView: React.FC<PettyCashManagementViewProps> = (
                   {renderStatusBadge(activeSession.status)}
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-5">
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 mt-5">
                   <div className="bg-zinc-950/60 border border-zinc-800/80 rounded-2xl p-4">
                     <span className="text-[11px] text-zinc-400 font-medium flex items-center gap-1.5">
                       <Calendar className="w-3.5 h-3.5 text-orange-400" /> Tanggal Petty Cash
@@ -688,6 +709,17 @@ export const PettyCashManagementView: React.FC<PettyCashManagementViewProps> = (
                     </span>
                     <p className="text-xl font-black text-emerald-400 mt-0.5">
                       {formatRp(activeSession.initial_amount)}
+                    </p>
+                  </div>
+
+                  <div className="bg-zinc-950/60 border border-zinc-800/80 rounded-2xl p-4">
+                    <span className="text-[11px] text-zinc-400 font-medium flex items-center gap-1.5">
+                      <Building2 className="w-3.5 h-3.5 text-amber-400" /> Unit / Cabang
+                    </span>
+                    <p className="text-sm font-bold text-white mt-1 flex items-center gap-1.5 truncate">
+                      <span className="px-2 py-0.5 bg-amber-500/10 text-amber-300 rounded-lg text-xs border border-amber-500/20 font-semibold truncate">
+                        {activeSession.branchName || 'Cabang Utama'}
+                      </span>
                     </p>
                   </div>
 
@@ -1062,6 +1094,25 @@ export const PettyCashManagementView: React.FC<PettyCashManagementViewProps> = (
                     <option value="Selesai">Selesai</option>
                   </select>
                 </div>
+
+                {/* Multi-Branch Filter */}
+                {branches.length > 1 && (
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-xs font-bold text-zinc-400">Cabang:</span>
+                    <select
+                      value={branchFilter}
+                      onChange={(e) => setBranchFilter(e.target.value)}
+                      className="bg-zinc-950 border border-zinc-700/80 text-xs font-semibold rounded-xl px-3 py-2 text-amber-300 outline-none focus:border-orange-500 font-medium"
+                    >
+                      <option value="ALL">Semua Cabang ({branches.length})</option>
+                      {branches.map((b) => (
+                        <option key={b.id} value={b.id}>
+                          {b.name} ({b.code})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
               </div>
 
               {/* Date Range Picker */}
@@ -1107,6 +1158,7 @@ export const PettyCashManagementView: React.FC<PettyCashManagementViewProps> = (
                 <thead className="bg-zinc-950 text-zinc-400 border-b border-zinc-800 text-[10px] uppercase font-bold">
                   <tr>
                     <th className="py-3.5 px-4">ID / Tanggal</th>
+                    <th className="py-3.5 px-4">Cabang</th>
                     <th className="py-3.5 px-4">Metode</th>
                     <th className="py-3.5 px-4 text-right">Modal Awal</th>
                     <th className="py-3.5 px-4 text-right">Total Pengeluaran</th>
@@ -1119,7 +1171,7 @@ export const PettyCashManagementView: React.FC<PettyCashManagementViewProps> = (
                 <tbody className="divide-y divide-zinc-800 bg-zinc-950/30 text-xs">
                   {filteredSessions.length === 0 ? (
                     <tr>
-                      <td colSpan={8} className="py-12 text-center text-zinc-500">
+                      <td colSpan={9} className="py-12 text-center text-zinc-500">
                         <div className="flex flex-col items-center justify-center space-y-2">
                           <Wallet className="w-8 h-8 text-zinc-600" />
                           <p className="text-sm font-semibold text-zinc-400">
@@ -1140,6 +1192,12 @@ export const PettyCashManagementView: React.FC<PettyCashManagementViewProps> = (
                           </div>
                           <span className="block font-sans font-normal text-[11px] text-zinc-500 mt-0.5">
                             {session.date}
+                          </span>
+                        </td>
+                        <td className="py-3.5 px-4 text-zinc-300">
+                          <span className="px-2 py-0.5 rounded-lg bg-zinc-900 text-xs font-semibold text-amber-300 border border-amber-500/30 flex items-center gap-1 w-fit">
+                            <Building2 className="w-3 h-3 text-amber-400 shrink-0" />
+                            <span className="truncate max-w-[120px]">{session.branchName || 'Cabang Utama'}</span>
                           </span>
                         </td>
                         <td className="py-3.5 px-4 text-zinc-300">
@@ -1227,6 +1285,23 @@ export const PettyCashManagementView: React.FC<PettyCashManagementViewProps> = (
             </div>
 
             <form onSubmit={handleSaveSession} className="p-5 space-y-4">
+              <div>
+                <label className="block text-xs font-bold text-zinc-400 mb-1.5 flex items-center gap-1.5">
+                  <Building2 className="w-3.5 h-3.5 text-amber-400" /> Cabang / Unit Operasional *
+                </label>
+                <select
+                  value={sessionBranchId}
+                  onChange={(e) => setSessionBranchId(e.target.value)}
+                  className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3.5 py-2.5 text-xs text-white outline-none focus:border-orange-500 font-semibold"
+                >
+                  {branches.map((b) => (
+                    <option key={b.id} value={b.id}>
+                      {b.name} ({b.code})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
               <div>
                 <label className="block text-xs font-bold text-zinc-400 mb-1.5">
                   Tanggal Petty Cash (Format Indonesia)

@@ -1,5 +1,7 @@
 export type UserRole = 'admin' | 'kasir' | 'leader_pt' | 'pt' | 'teknisi' | 'manager';
 
+export const ALL_BRANCHES_ID = 'ALL';
+
 export interface User {
   id: string;
   accId: string;
@@ -13,6 +15,10 @@ export interface User {
   photo?: string;
   gender?: 'L' | 'P';
   phone?: string;
+  // Multi-Branch Assignment
+  branchId?: string;
+  branchName?: string;
+  allowedBranchIds?: string[]; // If roving or multi-branch manager
   // Kartu Identitas Resmi Karyawan
   idType?: 'KTP' | 'SIM' | 'Paspor' | 'Kartu Pelajar';
   idNumber?: string;
@@ -27,6 +33,35 @@ export interface User {
   leaveQuota?: number;
   bankName?: string;
   bankAccount?: string;
+  // BPJS & Payroll Deductions
+  bpjsKesehatan?: number;              // Potongan BPJS Kesehatan (misal 1% atau nominal pasti)
+  bpjsKetenagakerjaan?: number;        // Potongan BPJS Ketenagakerjaan / JHT (misal 2-3% atau nominal pasti)
+  bpjsKesehatanActive?: boolean;       // Status aktif BPJS Kesehatan
+  bpjsKetenagakerjaanActive?: boolean; // Status aktif BPJS TK
+  bpjsNumber?: string;                 // Nomor Kartu BPJS Karyawan
+  taxDeduction?: number;               // PPh 21 bulanan
+  loanDeduction?: number;              // Potongan pinjaman / kasbon staf
+}
+
+export interface PayrollAdjustment {
+  staffId: string;
+  month: string;                       // Format YYYY-MM
+  baseSalary?: number;
+  allowance?: number;
+  ptCommissionAdjustment?: number;
+  salesBonusAdjustment?: number;
+  overtimePayAdjustment?: number;
+  bpjsKesehatan?: number;
+  bpjsKetenagakerjaan?: number;
+  lateDeductionAdjustment?: number;
+  otherDeductions?: number;
+  otherDeductionNotes?: string;
+  bonusAdjustment?: number;
+  bonusNotes?: string;
+  taxDeduction?: number;
+  notes?: string;
+  updatedAt?: string;
+  updatedBy?: string;
 }
 
 export type MembershipStatus = 'AKTIF' | 'FREEZE' | 'MASA TENGGANG' | 'EXPIRED' | 'VISIT';
@@ -66,6 +101,10 @@ export interface Member {
   phone: string;
   expired: string; // YYYY-MM-DD
   ptQuota: number;
+  classQuota?: number; // Sisa kuota sesi kelas studio
+  classPackageName?: string; // Nama paket kelas studio aktif
+  classPackageExpired?: string; // Tanggal kadaluarsa kuota kelas (YYYY-MM-DD)
+  classCategoryAllowed?: string; // Kategori kelas yang diizinkan (misal: 'Semua Kelas', 'Zumba', 'Pilates')
   picId: string;
   picName: string;
   isPicLocked?: boolean;
@@ -88,6 +127,9 @@ export interface Member {
   freezeStaffName?: string;
   freezeNotes?: string;
   membershipType?: 'MEMBER' | 'VISIT';
+  // Multi-Branch Home Assignment
+  branchId?: string;
+  branchName?: string;
   // Kartu Identitas Resmi Member
   idType?: 'KTP' | 'SIM' | 'Paspor' | 'Kartu Pelajar';
   idNumber?: string;
@@ -105,24 +147,31 @@ export interface Product {
   price: number;
   stock: number;
   img: string;
+  // Multi-Branch Stock Tracking
+  branchId?: string;
+  branchName?: string;
+  branchStocks?: Record<string, number>; // Specific stock per branch ID (e.g. { "BR-001": 50, "BR-002": 30 })
 }
 
 export interface PackageItem {
   id: string;
-  cat: 'Membership' | 'PT';
+  cat: 'Membership' | 'PT' | 'Class';
   type: 'Personal' | 'Couple' | 'Trio';
   name: string;
   price: number;
-  value: number; // days or sessions
-  // Pengaturan Komisi Produk Member & Personal Trainer
+  value: number; // days (Membership) or sessions (PT / Class)
+  sessionCount?: number; // Sesi kelas studio jika paket kelas
+  validityDays?: number; // Masa berlaku kuota dalam hari (misal 7, 30, 45, 60 hari)
+  classCategory?: string; // Kategori kelas (misal: 'Semua Kelas', 'Zumba', 'Yoga', 'Pilates Reformer', dll)
+  // Pengaturan Komisi Produk Member, PT & Instruktur Kelas
   commissionType?: 'PERCENT' | 'NOMINAL'; // 'PERCENT' (default) atau 'NOMINAL'
-  // 1. Komisi Penjualan untuk Kasir / Sales Consultant yang closing produk member / PT
+  // 1. Komisi Penjualan untuk Kasir / Sales Consultant yang closing produk member / PT / Kelas
   salesCommissionRate?: number; // Cth: 3% atau 5%
   salesCommissionNominal?: number; // Cth: Rp 25.000
-  // 2. Komisi Personal Trainer (Coach / Pelatih)
-  trainerCommissionRate?: number; // Cth: 40% dari harga paket PT
+  // 2. Komisi Personal Trainer (Coach / Pelatih) & Instruktur Kelas
+  trainerCommissionRate?: number; // Cth: 40% dari harga paket PT/Kelas
   trainerCommissionNominal?: number; // Cth: Rp 360.000 total
-  trainerCommissionPerSession?: number; // Cth: Rp 45.000 / sesi latihan
+  trainerCommissionPerSession?: number; // Cth: Rp 45.000 / sesi latihan atau fee kelas
   // 3. Insentif Tambahan / Bonus Produk
   productBonusNominal?: number;
   // Catatan Kebijakan & Saran
@@ -257,7 +306,7 @@ export interface Transaction {
   id: string;
   date: string; // YYYY-MM-DD
   time: string; // e.g. 14:30 WIB
-  type: 'POS' | 'Membership' | 'PT' | 'Pelunasan Cicilan' | 'Bundling';
+  type: 'POS' | 'Membership' | 'PT' | 'Pelunasan Cicilan' | 'Bundling' | 'Class';
   desc: string;
   customer: string;
   memberId?: string;
@@ -268,7 +317,7 @@ export interface Transaction {
   dueDate?: string;          // YYYY-MM-DD
   cogs?: number;
   profit?: number;
-  method: 'Tunai' | 'QRIS' | 'Transfer' | 'EDC' | 'Kasbon' | 'Cicilan 2x' | string;
+  method: 'Tunai' | 'QRIS' | 'Transfer' | 'EDC' | 'Kasbon' | 'Cicilan 2x' | 'Split Payment' | string;
   status: 'Paid' | 'DP 50%' | 'BELUM LUNAS' | 'VOID';
   cashier: string;
   bankDest?: 'Artha Graha' | 'Mandiri' | string;
@@ -281,6 +330,17 @@ export interface Transaction {
   initialCashPaid?: number;  // Cash or bank inflow that happened specifically on transaction creation date
   bundleId?: string;
   bundleCode?: string;
+  // Class Package fields
+  classPackageId?: string;
+  classSessionsGranted?: number;
+  classValidityDays?: number;
+  paymentScheme?: 'LUNAS' | 'DP_CICILAN' | 'SPLIT_PAYMENT';
+  splitCashAmount?: number;
+  splitNonCashAmount?: number;
+  splitNonCashMethod?: string;
+  // Multi-Branch Unit Identifier
+  branchId?: string;
+  branchName?: string;
 }
 
 export interface Schedule {
@@ -425,6 +485,8 @@ export interface Attendance {
   hasTowel?: boolean;
   lockerReturned?: boolean;
   notes?: string;
+  branchId?: string;
+  branchName?: string;
 }
 
 export type ShiftType = 'Pagi' | 'Siang' | 'Malam' | 'Off';
@@ -466,6 +528,8 @@ export interface StaffAttendance {
   notes?: string;
   verifiedBy?: string;
   location?: string;
+  branchId?: string;
+  branchName?: string;
 }
 
 export interface LeadFollowUpRecord {
@@ -514,6 +578,8 @@ export interface Lead {
   handoverHistory?: LeadHandoverRecord[];
   lostReason?: string;
   tags?: string[];
+  branchId?: string;
+  branchName?: string;
 }
 
 export interface FollowUpLog {
@@ -581,9 +647,28 @@ export interface PettyCash {
   submitted_by_name?: string;
   pic?: string;
   cat?: 'Operasional' | 'ATK' | 'Kebersihan' | 'Maintenance' | 'Konsumsi' | string;
+  // Multi-Branch Scoping
+  branchId?: string;
+  branchName?: string;
 }
 
 export type PettyCashItem = PettyCash;
+
+export interface StockTransferRecord {
+  id: string; // e.g. "TRF-202609-001"
+  date: string;
+  productId: string;
+  productName: string;
+  fromBranchId: string;
+  fromBranchName: string;
+  toBranchId: string;
+  toBranchName: string;
+  quantity: number;
+  transferredBy: string;
+  notes?: string;
+  status: 'COMPLETED' | 'IN_TRANSIT' | 'CANCELLED';
+  createdAt: string;
+}
 
 export interface DailyClosingRecord {
   id: string;
@@ -616,6 +701,8 @@ export interface DailyClosingRecord {
   mandiriTF?: number;
   mandiriEDC?: number;
   notes?: string;
+  branchId?: string;
+  branchName?: string;
 }
 
 // ============================================================================
@@ -755,6 +842,8 @@ export interface GymAsset {
   nextMaintenanceDate?: string;
   nextMaintenance?: string;
   disposalDetails?: AssetDisposal;
+  branchId?: string;
+  branchName?: string;
 }
 
 export interface UsedSparepartItem {
@@ -1095,11 +1184,21 @@ export interface WhatsAppTemplateConfig {
   expiryReminderTemplate: string;
 }
 
+export interface PicProtectionConfig {
+  requirePasswordToChangePic: boolean;
+  picChangePassword: string;
+  allowAdminBypass: boolean;
+  requirePasswordOnTransaction?: boolean;
+  requirePasswordOnMemberForm?: boolean;
+  requirePasswordOnRenewal?: boolean;
+}
+
 export interface SystemSettings {
   printer: PrinterConfig;
   profile: GymBusinessProfile;
   paymentAndTax: PaymentAndTaxConfig;
   templates: WhatsAppTemplateConfig;
+  picProtection?: PicProtectionConfig;
   updatedAt?: string;
 }
 

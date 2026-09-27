@@ -14,10 +14,13 @@ import {
   Search,
   X,
   RotateCcw,
-  Sparkles
+  Sparkles,
+  AlertCircle,
+  Crown
 } from 'lucide-react';
-import { Schedule, StudioClass, Member, User as UserType } from '../types';
+import { Schedule, StudioClass, Member, User as UserType, PackageItem, Transaction } from '../types';
 import { APP_TODAY, formatDateIndo } from '../utils/formatters';
+import { ClassPaymentModal } from './ClassPaymentModal';
 
 interface JadwalPTViewProps {
   schedules: Schedule[];
@@ -25,6 +28,9 @@ interface JadwalPTViewProps {
   members: Member[];
   trainers: UserType[];
   currentUser: UserType | null;
+  packages?: PackageItem[];
+  staffUsers?: UserType[];
+  onPurchasePackage?: (trx: Transaction, updatedMembers: Member[]) => void;
   onAddSchedule: (schedule: Schedule) => void;
   onUpdateSchedule: (schedule: Schedule) => void;
   onAddStudioClass: (newClass: StudioClass) => void;
@@ -40,6 +46,9 @@ export const JadwalPTView: React.FC<JadwalPTViewProps> = ({
   members,
   trainers,
   currentUser,
+  packages = [],
+  staffUsers = [],
+  onPurchasePackage,
   onAddSchedule,
   onUpdateSchedule,
   onAddStudioClass,
@@ -87,6 +96,11 @@ export const JadwalPTView: React.FC<JadwalPTViewProps> = ({
   // Book Class Modal
   const [bookingClassTarget, setBookingClassTarget] = useState<StudioClass | null>(null);
   const [bookingMemberId, setBookingMemberId] = useState('');
+
+  // Class Payment Modal State
+  const [isClassPaymentModalOpen, setIsClassPaymentModalOpen] = useState(false);
+  const [classPaymentPreselectedMemberId, setClassPaymentPreselectedMemberId] = useState<string>('');
+  const [classPaymentTargetClass, setClassPaymentTargetClass] = useState<StudioClass | null>(null);
 
   // Calendar Week Offset
   const [weekOffset, setWeekOffset] = useState(0);
@@ -751,12 +765,28 @@ export const JadwalPTView: React.FC<JadwalPTViewProps> = ({
               )}
             </div>
 
-            <button
-              onClick={() => setIsAddClassModalOpen(true)}
-              className="bg-blue-600 hover:bg-blue-500 text-white font-bold px-4 py-2 rounded-xl text-xs shadow-md transition flex items-center gap-1.5 self-end sm:self-auto shrink-0 cursor-pointer"
-            >
-              <Plus className="w-4 h-4" /> Buat Kelas Baru
-            </button>
+            <div className="flex items-center gap-2 self-end sm:self-auto shrink-0">
+              {onPurchasePackage && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setClassPaymentPreselectedMemberId('');
+                    setClassPaymentTargetClass(null);
+                    setIsClassPaymentModalOpen(true);
+                  }}
+                  className="bg-orange-500/15 hover:bg-orange-500/25 text-orange-300 font-bold px-3.5 py-2 rounded-xl text-xs border border-orange-500/40 shadow-sm transition flex items-center gap-1.5 cursor-pointer"
+                >
+                  <Sparkles className="w-4 h-4 text-orange-400" /> Beli Paket Kelas
+                </button>
+              )}
+
+              <button
+                onClick={() => setIsAddClassModalOpen(true)}
+                className="bg-blue-600 hover:bg-blue-500 text-white font-bold px-4 py-2 rounded-xl text-xs shadow-md transition flex items-center gap-1.5 cursor-pointer"
+              >
+                <Plus className="w-4 h-4" /> Buat Kelas Baru
+              </button>
+            </div>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -1244,11 +1274,62 @@ export const JadwalPTView: React.FC<JadwalPTViewProps> = ({
                   <option value="">-- Pilih Member --</option>
                   {members.map((m) => (
                     <option key={m.id} value={m.id}>
-                      {m.name} ({m.id})
+                      {m.name} ({m.id}) {m.classQuota && m.classQuota > 0 ? `• [${m.classQuota} Sesi]` : '• [0 Sesi]'}
                     </option>
                   ))}
                 </select>
               </div>
+
+              {/* Status Kuota Kelas Member & Opsi Beli Langsung */}
+              {(() => {
+                const targetMember = members.find((m) => m.id === bookingMemberId);
+                if (!targetMember) return null;
+
+                const hasQuota = targetMember.classQuota && targetMember.classQuota > 0;
+                return (
+                  <div className="space-y-2">
+                    {hasQuota ? (
+                      <div className="p-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-xs text-emerald-300">
+                        <div className="flex items-center justify-between font-bold">
+                          <span>✓ Kuota Tersedia: {targetMember.classQuota} Sesi</span>
+                          <span className="text-[10px] text-zinc-400 font-normal">
+                            Exp: {targetMember.classPackageExpired || '-'}
+                          </span>
+                        </div>
+                        <span className="text-[11px] text-emerald-400/80 mt-0.5 block">
+                          Paket: {targetMember.classPackageName || 'Studio Pass'} • 1 sesi akan dipotong saat booking.
+                        </span>
+                      </div>
+                    ) : (
+                      <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 text-xs space-y-2">
+                        <div className="flex items-start gap-1.5 text-amber-300">
+                          <AlertCircle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+                          <div>
+                            <strong className="block text-white">Member Belum Memiliki Kuota Kelas</strong>
+                            <p className="text-[11px] text-zinc-400 mt-0.5">
+                              Sisa kuota: 0 sesi. Member dapat membeli Single Pass Drop-in atau Paket Kelas Studio dengan skema Lunas, DP Cicilan, atau Split Payment.
+                            </p>
+                          </div>
+                        </div>
+                        {onPurchasePackage && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setClassPaymentPreselectedMemberId(targetMember.id);
+                              setClassPaymentTargetClass(bookingClassTarget);
+                              setBookingClassTarget(null);
+                              setIsClassPaymentModalOpen(true);
+                            }}
+                            className="w-full py-2 px-3 rounded-lg bg-orange-500 hover:bg-orange-600 text-white font-bold text-xs shadow-md transition flex items-center justify-center gap-1.5 cursor-pointer"
+                          >
+                            <Sparkles className="w-3.5 h-3.5" /> Beli Paket Kelas / Drop-In untuk Member Ini
+                          </button>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
 
               <div className="flex gap-2 pt-2">
                 <button
@@ -1268,6 +1349,26 @@ export const JadwalPTView: React.FC<JadwalPTViewProps> = ({
             </form>
           </div>
         </div>
+      )}
+
+      {/* MODAL 5: PURCHASE CLASS PACKAGE & PAYMENT SCHEME */}
+      {onPurchasePackage && (
+        <ClassPaymentModal
+          isOpen={isClassPaymentModalOpen}
+          onClose={() => {
+            setIsClassPaymentModalOpen(false);
+            setClassPaymentTargetClass(null);
+          }}
+          members={members}
+          packages={packages}
+          staffUsers={staffUsers}
+          currentUser={currentUser}
+          preselectedMemberId={classPaymentPreselectedMemberId}
+          classTargetForAutoBook={classPaymentTargetClass}
+          onPurchasePackage={onPurchasePackage}
+          onSuccessBooking={onBookStudioClass}
+          showToast={showToast}
+        />
       )}
     </div>
   );

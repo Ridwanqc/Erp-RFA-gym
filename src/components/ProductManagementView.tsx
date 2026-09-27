@@ -27,10 +27,14 @@ import {
   Clock,
   ChevronRight,
   TrendingDown,
-  Info
+  Info,
+  Building2,
+  ArrowRightLeft
 } from 'lucide-react';
 import { Product, Transaction } from '../types';
 import { formatRp, formatDateIndo, APP_TODAY } from '../utils/formatters';
+import { useSettings } from '../context/SettingsContext';
+import { StockTransferModal } from './StockTransferModal';
 
 interface ProductManagementViewProps {
   products: Product[];
@@ -72,8 +76,10 @@ export const ProductManagementView: React.FC<ProductManagementViewProps> = ({
   onAddStock,
   onNavigateTab
 }) => {
+  const { branches, activeBranchId, activeBranch, isAllBranches, stockTransfers } = useSettings();
   // Top Level View Switcher
-  const [activeSubTab, setActiveSubTab] = useState<'inventory' | 'sales-report'>('inventory');
+  const [activeSubTab, setActiveSubTab] = useState<'inventory' | 'sales-report' | 'transfers'>('inventory');
+  const [isTransferModalOpen, setIsTransferModalOpen] = useState(false);
 
   // ==========================================
   // INVENTORY TAB STATE
@@ -695,6 +701,15 @@ export const ProductManagementView: React.FC<ProductManagementViewProps> = ({
           </button>
 
           <button
+            onClick={() => setIsTransferModalOpen(true)}
+            className="px-3.5 py-2.5 rounded-xl bg-orange-500/10 hover:bg-orange-500/20 text-orange-400 border border-orange-500/30 text-xs font-bold transition flex items-center gap-2 shadow-sm"
+            title="Mutasi / Transfer Stok Antar Cabang"
+          >
+            <ArrowRightLeft className="w-4 h-4" />
+            <span>Mutasi Stok</span>
+          </button>
+
+          <button
             onClick={handleOpenAddModal}
             className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-orange-600 to-orange-500 hover:from-orange-500 hover:to-orange-400 text-white text-xs font-black transition flex items-center gap-2 shadow-lg shadow-orange-600/30 active:scale-95"
           >
@@ -704,7 +719,7 @@ export const ProductManagementView: React.FC<ProductManagementViewProps> = ({
         </div>
       </div>
 
-      {/* Main Mode Navigation Tabs (Katalog vs Laporan Penjualan) */}
+      {/* Main Mode Navigation Tabs (Katalog vs Laporan Penjualan vs Mutasi Stok) */}
       <div className="bg-zinc-900/90 border border-zinc-800 rounded-2xl p-1.5 flex items-center gap-2 shadow-md">
         <button
           onClick={() => setActiveSubTab('inventory')}
@@ -737,6 +752,23 @@ export const ProductManagementView: React.FC<ProductManagementViewProps> = ({
             activeSubTab === 'sales-report' ? 'bg-black/30 text-white' : 'bg-zinc-800 text-zinc-400'
           }`}>
             {filteredSalesData.transactions.length} Trx
+          </span>
+        </button>
+
+        <button
+          onClick={() => setActiveSubTab('transfers')}
+          className={`flex-1 py-2.5 px-4 rounded-xl text-xs sm:text-sm font-black transition flex items-center justify-center gap-2 ${
+            activeSubTab === 'transfers'
+              ? 'bg-gradient-to-r from-blue-600 to-blue-500 text-white shadow-md'
+              : 'text-zinc-400 hover:text-white hover:bg-zinc-800/60'
+          }`}
+        >
+          <ArrowRightLeft className="w-4 h-4" />
+          <span>Mutasi Antar Cabang</span>
+          <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+            activeSubTab === 'transfers' ? 'bg-black/30 text-white' : 'bg-zinc-800 text-zinc-400'
+          }`}>
+            {stockTransfers.length} Log
           </span>
         </button>
       </div>
@@ -1103,6 +1135,15 @@ export const ProductManagementView: React.FC<ProductManagementViewProps> = ({
                               >
                                 {p.stock} Unit
                               </span>
+                              {p.branchStocks && (
+                                <div className="flex items-center justify-center gap-1 mt-1 text-[9px] text-zinc-400 font-mono">
+                                  {branches.map((b) => (
+                                    <span key={b.id} title={`${b.name}: ${p.branchStocks?.[b.id] ?? 0} unit`} className="bg-zinc-950 px-1 py-0.2 rounded border border-zinc-800">
+                                      {b.code}: <strong className="text-white">{p.branchStocks?.[b.id] ?? 0}</strong>
+                                    </span>
+                                  ))}
+                                </div>
+                              )}
                               <span className="text-[10px] text-zinc-500 mt-0.5 font-medium">
                                 {isZero ? 'Habis (0)' : isLow ? 'Stok Rendah' : 'Tersedia'}
                               </span>
@@ -1750,6 +1791,157 @@ export const ProductManagementView: React.FC<ProductManagementViewProps> = ({
       )}
 
       {/* ========================================================================= */}
+      {/* VIEW 3: MUTASI STOK ANTAR CABANG (MULTI-BRANCH ERP)                      */}
+      {/* ========================================================================= */}
+      {activeSubTab === 'transfers' && (
+        <div className="space-y-6">
+          {/* Header Action & Overview */}
+          <div className="bg-zinc-900/90 border border-zinc-800 rounded-3xl p-5 shadow-sm flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+            <div className="flex items-center gap-3.5">
+              <div className="w-12 h-12 rounded-2xl bg-blue-500/10 border border-blue-500/20 text-blue-400 flex items-center justify-center shrink-0">
+                <ArrowRightLeft className="w-6 h-6" />
+              </div>
+              <div>
+                <h3 className="text-base sm:text-lg font-black text-white flex items-center gap-2">
+                  Riwayat Mutasi Stok Antar Cabang
+                  <span className="text-[10px] bg-blue-500/20 text-blue-300 border border-blue-500/30 px-2 py-0.5 rounded-full font-bold uppercase">
+                    Audit Log ERP
+                  </span>
+                </h3>
+                <p className="text-xs text-zinc-400">
+                  Pencatatan resmi perpindahan stok barang dan produk FnB antar outlet / cabang gym
+                </p>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => setIsTransferModalOpen(true)}
+              className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-500 hover:to-blue-400 text-white text-xs font-black transition flex items-center gap-2 shadow-lg shadow-blue-600/30 active:scale-95"
+            >
+              <Plus className="w-4 h-4 stroke-[3]" />
+              <span>Buat Mutasi Stok Baru</span>
+            </button>
+          </div>
+
+          {/* Metric Cards */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
+            <div className="bg-zinc-900/80 border border-zinc-800 rounded-2xl p-4 flex items-center justify-between">
+              <div>
+                <p className="text-xs font-bold text-zinc-400">Total Mutasi Tercatat</p>
+                <p className="text-2xl font-black text-white mt-1">{stockTransfers.length}</p>
+                <p className="text-[11px] text-zinc-500 mt-0.5">Transaksi transfer antar outlet</p>
+              </div>
+              <div className="w-10 h-10 rounded-2xl bg-blue-500/10 text-blue-400 flex items-center justify-center">
+                <ArrowRightLeft className="w-5 h-5" />
+              </div>
+            </div>
+
+            <div className="bg-zinc-900/80 border border-zinc-800 rounded-2xl p-4 flex items-center justify-between">
+              <div>
+                <p className="text-xs font-bold text-zinc-400">Total Unit Dipindahkan</p>
+                <p className="text-2xl font-black text-emerald-400 mt-1">
+                  {stockTransfers.reduce((sum, t) => sum + (t.quantity || 0), 0)} Unit
+                </p>
+                <p className="text-[11px] text-zinc-500 mt-0.5">Produk berhasil dialokasikan</p>
+              </div>
+              <div className="w-10 h-10 rounded-2xl bg-emerald-500/10 text-emerald-400 flex items-center justify-center">
+                <Package className="w-5 h-5" />
+              </div>
+            </div>
+
+            <div className="bg-zinc-900/80 border border-zinc-800 rounded-2xl p-4 flex items-center justify-between">
+              <div>
+                <p className="text-xs font-bold text-zinc-400">Outlet Terintegrasi</p>
+                <p className="text-2xl font-black text-orange-400 mt-1">{branches.length} Cabang</p>
+                <p className="text-[11px] text-zinc-500 mt-0.5">Database multi-unit real-time</p>
+              </div>
+              <div className="w-10 h-10 rounded-2xl bg-orange-500/10 text-orange-400 flex items-center justify-center">
+                <Building2 className="w-5 h-5" />
+              </div>
+            </div>
+          </div>
+
+          {/* Table of Transfers */}
+          <div className="bg-zinc-900/90 border border-zinc-800 rounded-3xl overflow-hidden shadow-sm">
+            <div className="overflow-x-auto scrollbar-thin scrollbar-thumb-zinc-800">
+              <table className="w-full text-left whitespace-nowrap min-w-[760px]">
+                <thead className="bg-zinc-950 text-zinc-400 border-b border-zinc-800 text-[10px] uppercase font-bold">
+                  <tr>
+                    <th className="py-3 px-4">Waktu / Tanggal</th>
+                    <th className="py-3 px-4">ID Mutasi</th>
+                    <th className="py-3 px-4">Produk</th>
+                    <th className="py-3 px-4">Dari Cabang (Asal)</th>
+                    <th className="py-3 px-4">Ke Cabang (Tujuan)</th>
+                    <th className="py-3 px-4 text-center">Jumlah</th>
+                    <th className="py-3 px-4">Petugas</th>
+                    <th className="py-3 px-4">Alasan / Catatan</th>
+                    <th className="py-3 px-4 text-center">Status</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-zinc-800 bg-zinc-950/30 text-xs">
+                  {stockTransfers.length === 0 ? (
+                    <tr>
+                      <td colSpan={9} className="py-12 text-center text-zinc-500">
+                        <div className="flex flex-col items-center justify-center space-y-2">
+                          <ArrowRightLeft className="w-8 h-8 text-zinc-700" />
+                          <p className="font-semibold text-zinc-400 text-sm">Belum ada riwayat mutasi stok</p>
+                          <p className="text-xs text-zinc-500">
+                            Gunakan tombol &quot;Buat Mutasi Stok Baru&quot; untuk memindahkan barang antar cabang.
+                          </p>
+                        </div>
+                      </td>
+                    </tr>
+                  ) : (
+                    stockTransfers.map((t) => (
+                      <tr key={t.id} className="hover:bg-zinc-800/30 transition">
+                        <td className="py-3 px-4 text-zinc-400 text-[11px] font-mono">
+                          {formatDateIndo(t.createdAt)}
+                        </td>
+                        <td className="py-3 px-4 font-mono font-bold text-orange-400 text-xs">
+                          {t.id}
+                        </td>
+                        <td className="py-3 px-4 font-bold text-white">
+                          {t.productName}
+                        </td>
+                        <td className="py-3 px-4">
+                          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-rose-500/10 text-rose-300 border border-rose-500/20 text-xs font-semibold">
+                            <Building2 className="w-3 h-3 text-rose-400 shrink-0" />
+                            <span>{t.fromBranchName}</span>
+                          </span>
+                        </td>
+                        <td className="py-3 px-4">
+                          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-emerald-500/10 text-emerald-300 border border-emerald-500/20 text-xs font-semibold">
+                            <Building2 className="w-3 h-3 text-emerald-400 shrink-0" />
+                            <span>{t.toBranchName}</span>
+                          </span>
+                        </td>
+                        <td className="py-3 px-4 text-center font-mono font-black text-white text-sm">
+                          {t.quantity} unit
+                        </td>
+                        <td className="py-3 px-4 text-zinc-300 text-xs">
+                          {t.transferredBy}
+                        </td>
+                        <td className="py-3 px-4 text-zinc-400 text-xs max-w-xs truncate" title={t.notes}>
+                          {t.notes || '-'}
+                        </td>
+                        <td className="py-3 px-4 text-center">
+                          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 uppercase">
+                            <CheckCircle2 className="w-3 h-3" />
+                            <span>Selesai</span>
+                          </span>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
       {/* MODAL 1: ADD / EDIT PRODUCT                                              */}
       {/* ========================================================================= */}
       {isProductModalOpen && (
@@ -2142,6 +2334,18 @@ export const ProductManagementView: React.FC<ProductManagementViewProps> = ({
           </div>
         </div>
       )}
+
+      {/* Mutasi Stok Antar Cabang Modal */}
+      <StockTransferModal
+        isOpen={isTransferModalOpen}
+        onClose={() => setIsTransferModalOpen(false)}
+        products={products}
+        onTransferSuccess={(transferRecord, updatedProducts) => {
+          updatedProducts.forEach((p) => {
+            onSaveProduct(p, false);
+          });
+        }}
+      />
     </div>
   );
 };

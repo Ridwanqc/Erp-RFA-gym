@@ -41,6 +41,7 @@ import {
 } from 'lucide-react';
 import { Transaction } from '../types';
 import { formatRp, APP_TODAY, formatDateIndo } from '../utils/formatters';
+import { useSettings } from '../context/SettingsContext';
 
 interface MonthlySalesReportViewProps {
   transactions: Transaction[];
