@@ -845,10 +845,37 @@ const EditPayrollModal: React.FC<EditPayrollModalProps> = ({ item, month, onClos
   const [specialBonus, setSpecialBonus] = useState<number>(item.specialBonus || 0);
   const [specialBonusNotes, setSpecialBonusNotes] = useState<string>(item.specialBonusNotes || '');
 
-  // POTONGAN BPJS
+  // POTONGAN BPJS & AUTOMATIC CALCULATOR STATE
+  const [calcMode, setCalcMode] = useState<'auto_percent' | 'manual'>('auto_percent');
+  const [kesPercent, setKesPercent] = useState<number>(1.0);
+  const [tkJhtPercent, setTkJhtPercent] = useState<number>(2.0);
+  const [includeJp, setIncludeJp] = useState<boolean>(false);
+  const [tkJpPercent, setTkJpPercent] = useState<number>(1.0);
+  const [applySalaryCap, setApplySalaryCap] = useState<boolean>(true);
+  const [showCompanyShareInfo, setShowCompanyShareInfo] = useState<boolean>(false);
+
+  // Plafon batas upah regulasi nasional (Perpres 64/2020 & Regulasi Kemenaker)
+  const BPJS_KES_MAX_SALARY = 12000000; // Rp 12 Juta
+  const BPJS_JP_MAX_SALARY = 10042300;  // Rp 10.042.300
+
   const [bpjsKesehatan, setBpjsKesehatan] = useState<number>(item.bpjsKesehatan || Math.round((item.baseSalary || 3000000) * 0.01));
   const [bpjsKetenagakerjaan, setBpjsKetenagakerjaan] = useState<number>(item.bpjsKetenagakerjaan || Math.round((item.baseSalary || 3000000) * 0.02));
   const [bpjsNumber, setBpjsNumber] = useState<string>(item.bpjsNumber || '');
+
+  // Auto-calculate whenever baseSalary or percentages change (when in auto_percent mode)
+  useEffect(() => {
+    if (calcMode === 'auto_percent') {
+      const salaryForKes = applySalaryCap ? Math.min(baseSalary, BPJS_KES_MAX_SALARY) : baseSalary;
+      const salaryForJp = applySalaryCap ? Math.min(baseSalary, BPJS_JP_MAX_SALARY) : baseSalary;
+
+      const newKes = Math.round((salaryForKes * kesPercent) / 100);
+      const newJht = Math.round((baseSalary * tkJhtPercent) / 100);
+      const newJp = includeJp ? Math.round((salaryForJp * tkJpPercent) / 100) : 0;
+
+      setBpjsKesehatan(newKes);
+      setBpjsKetenagakerjaan(newJht + newJp);
+    }
+  }, [baseSalary, kesPercent, tkJhtPercent, includeJp, tkJpPercent, applySalaryCap, calcMode]);
 
   // POTONGAN LAINNYA
   const [lateDeduction, setLateDeduction] = useState<number>(item.lateDeduction || 0);
@@ -861,15 +888,32 @@ const EditPayrollModal: React.FC<EditPayrollModalProps> = ({ item, month, onClos
   // Quick BPJS Presets
   const applyBpjsPreset = (type: 'standard_1_2' | 'standard_1_3' | 'flat_50_100' | 'free') => {
     if (type === 'standard_1_2') {
-      setBpjsKesehatan(Math.round(baseSalary * 0.01)); // 1%
-      setBpjsKetenagakerjaan(Math.round(baseSalary * 0.02)); // 2% JHT
+      setCalcMode('auto_percent');
+      setKesPercent(1.0);
+      setTkJhtPercent(2.0);
+      setIncludeJp(false);
+      const salaryForKes = applySalaryCap ? Math.min(baseSalary, BPJS_KES_MAX_SALARY) : baseSalary;
+      setBpjsKesehatan(Math.round(salaryForKes * 0.01));
+      setBpjsKetenagakerjaan(Math.round(baseSalary * 0.02));
     } else if (type === 'standard_1_3') {
-      setBpjsKesehatan(Math.round(baseSalary * 0.01)); // 1%
-      setBpjsKetenagakerjaan(Math.round(baseSalary * 0.03)); // 3% JHT + JP
+      setCalcMode('auto_percent');
+      setKesPercent(1.0);
+      setTkJhtPercent(2.0);
+      setIncludeJp(true);
+      setTkJpPercent(1.0);
+      const salaryForKes = applySalaryCap ? Math.min(baseSalary, BPJS_KES_MAX_SALARY) : baseSalary;
+      const salaryForJp = applySalaryCap ? Math.min(baseSalary, BPJS_JP_MAX_SALARY) : baseSalary;
+      setBpjsKesehatan(Math.round(salaryForKes * 0.01));
+      setBpjsKetenagakerjaan(Math.round(baseSalary * 0.02) + Math.round(salaryForJp * 0.01));
     } else if (type === 'flat_50_100') {
+      setCalcMode('manual');
       setBpjsKesehatan(50000);
       setBpjsKetenagakerjaan(100000);
     } else if (type === 'free') {
+      setCalcMode('auto_percent');
+      setKesPercent(0);
+      setTkJhtPercent(0);
+      setIncludeJp(false);
       setBpjsKesehatan(0);
       setBpjsKetenagakerjaan(0);
     }
@@ -1070,56 +1114,305 @@ const EditPayrollModal: React.FC<EditPayrollModalProps> = ({ item, month, onClos
             </div>
           </div>
 
-          {/* SECTION 3: POTONGAN BPJS (KESEHATAN & KETENAGAKERJAAN) */}
-          <div className="p-3.5 bg-blue-950/20 border border-blue-500/30 rounded-2xl space-y-3">
+          {/* SECTION 3: POTONGAN BPJS (KESEHATAN & KETENAGAKERJAAN) DENGAN KALKULATOR OTOMATIS */}
+          <div className="p-3.5 bg-blue-950/25 border border-blue-500/35 rounded-2xl space-y-3.5">
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
-              <h4 className="text-xs font-black text-blue-400 uppercase tracking-wider flex items-center gap-1.5">
-                <HeartPulse className="w-4 h-4 text-blue-400" /> 3. Potongan Iuran BPJS Karyawan
-              </h4>
+              <div className="flex items-center gap-2">
+                <div className="w-6 h-6 rounded-lg bg-blue-500/20 text-blue-400 flex items-center justify-center">
+                  <Calculator className="w-3.5 h-3.5" />
+                </div>
+                <div>
+                  <h4 className="text-xs font-black text-blue-400 uppercase tracking-wider flex items-center gap-1.5">
+                    3. Potongan Iuran BPJS Karyawan
+                  </h4>
+                  <p className="text-[10px] text-zinc-400">
+                    Kalkulator persentase iuran otomatis berdasarkan gaji pokok ({formatRp(baseSalary)})
+                  </p>
+                </div>
+              </div>
 
-              {/* Preset Buttons */}
-              <div className="flex flex-wrap items-center gap-1">
-                <span className="text-[10px] text-zinc-400">Preset:</span>
+              {/* Mode Switcher Tabs */}
+              <div className="flex items-center bg-zinc-900 p-0.5 rounded-xl border border-zinc-700/80 shrink-0">
                 <button
                   type="button"
-                  onClick={() => applyBpjsPreset('standard_1_2')}
-                  className="px-2 py-0.5 rounded-lg bg-blue-500/20 hover:bg-blue-500/30 text-blue-300 border border-blue-500/30 text-[10px] font-bold cursor-pointer"
-                  title="Standar Nasional: 1% BPJS Kesehatan + 2% BPJS Ketenagakerjaan (JHT)"
+                  onClick={() => setCalcMode('auto_percent')}
+                  className={`px-2.5 py-1 rounded-lg text-[10px] font-bold transition cursor-pointer flex items-center gap-1 ${
+                    calcMode === 'auto_percent'
+                      ? 'bg-blue-600 text-white shadow-xs'
+                      : 'text-zinc-400 hover:text-white'
+                  }`}
                 >
-                  Standar 1% + 2%
+                  <Percent className="w-3 h-3" /> Hitung Otomatis (%)
                 </button>
                 <button
                   type="button"
-                  onClick={() => applyBpjsPreset('standard_1_3')}
-                  className="px-2 py-0.5 rounded-lg bg-blue-500/20 hover:bg-blue-500/30 text-blue-300 border border-blue-500/30 text-[10px] font-bold cursor-pointer"
-                  title="Standar Lengkap: 1% BPJS Kesehatan + 3% BPJS Ketenagakerjaan (JHT + JP)"
+                  onClick={() => setCalcMode('manual')}
+                  className={`px-2.5 py-1 rounded-lg text-[10px] font-bold transition cursor-pointer flex items-center gap-1 ${
+                    calcMode === 'manual'
+                      ? 'bg-zinc-700 text-white shadow-xs'
+                      : 'text-zinc-400 hover:text-white'
+                  }`}
                 >
-                  Lengkap 1% + 3%
-                </button>
-                <button
-                  type="button"
-                  onClick={() => applyBpjsPreset('free')}
-                  className="px-2 py-0.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-[10px] font-bold cursor-pointer"
-                >
-                  Nol (0)
+                  <Edit3 className="w-3 h-3" /> Input Manual (Rp)
                 </button>
               </div>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {/* Quick Presets Strip */}
+            <div className="flex flex-wrap items-center gap-1.5 pt-1">
+              <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Preset Cepat:</span>
+              <button
+                type="button"
+                onClick={() => applyBpjsPreset('standard_1_2')}
+                className="px-2.5 py-1 rounded-lg bg-blue-500/15 hover:bg-blue-500/25 text-blue-300 border border-blue-500/30 text-[10px] font-bold transition cursor-pointer flex items-center gap-1"
+                title="Standar Regulasi: BPJS Kesehatan 1% + BPJS Ketenagakerjaan JHT 2%"
+              >
+                <span>Standar UU (1% Kes + 2% JHT)</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => applyBpjsPreset('standard_1_3')}
+                className="px-2.5 py-1 rounded-lg bg-blue-500/15 hover:bg-blue-500/25 text-blue-300 border border-blue-500/30 text-[10px] font-bold transition cursor-pointer flex items-center gap-1"
+                title="Standar Lengkap: BPJS Kesehatan 1% + BPJS Ketenagakerjaan JHT 2% + JP 1%"
+              >
+                <span>Lengkap (1% Kes + 3% JHT+JP)</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => applyBpjsPreset('flat_50_100')}
+                className="px-2 py-1 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-300 border border-zinc-700 text-[10px] font-bold transition cursor-pointer"
+                title="Nominal Flat: Rp 50.000 Kes + Rp 100.000 TK"
+              >
+                Flat Rp 150rb
+              </button>
+              <button
+                type="button"
+                onClick={() => applyBpjsPreset('free')}
+                className="px-2 py-1 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-300 border border-zinc-700 text-[10px] font-bold transition cursor-pointer"
+                title="Non-aktifkan potongan BPJS"
+              >
+                Nol (0)
+              </button>
+            </div>
+
+            {/* INTERACTIVE BPJS PERCENTAGE CALCULATOR CARD */}
+            {calcMode === 'auto_percent' && (
+              <div className="p-3 bg-zinc-950/80 border border-blue-500/25 rounded-2xl space-y-3">
+                <div className="flex items-center justify-between border-b border-zinc-800/80 pb-2">
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px] font-bold text-blue-300 uppercase tracking-wider">
+                      Parameter Persentase Iuran Pekerja
+                    </span>
+                    <span className="px-1.5 py-0.5 rounded text-[9px] bg-emerald-500/20 text-emerald-400 font-mono font-bold">
+                      Basis: {formatRp(baseSalary)}
+                    </span>
+                  </div>
+
+                  {/* Plafon Cap Checkbox */}
+                  <label className="flex items-center gap-1.5 text-[10px] text-zinc-400 cursor-pointer hover:text-white">
+                    <input
+                      type="checkbox"
+                      checked={applySalaryCap}
+                      onChange={(e) => setApplySalaryCap(e.target.checked)}
+                      className="rounded bg-zinc-900 border-zinc-700 text-blue-500 w-3.5 h-3.5"
+                    />
+                    <span>Plafon Maksimal UU (Rp 12 Juta)</span>
+                  </label>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+                  {/* Kalkulator BPJS Kesehatan */}
+                  <div className="p-2.5 rounded-xl bg-blue-900/15 border border-blue-500/20 space-y-2">
+                    <div className="flex justify-between items-center">
+                      <span className="text-xs font-bold text-white flex items-center gap-1">
+                        <HeartPulse className="w-3.5 h-3.5 text-blue-400" /> BPJS Kesehatan
+                      </span>
+                      <span className="text-[11px] font-mono font-bold text-blue-300">
+                        {formatRp(bpjsKesehatan)}
+                      </span>
+                    </div>
+
+                    <div className="space-y-1">
+                      <div className="flex justify-between text-[10px] text-zinc-400">
+                        <span>Persentase Iuran Pekerja:</span>
+                        <span className="font-bold text-blue-300">{kesPercent}%</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="range"
+                          min="0"
+                          max="4"
+                          step="0.5"
+                          value={kesPercent}
+                          onChange={(e) => setKesPercent(Number(e.target.value))}
+                          className="flex-1 accent-blue-500 cursor-pointer"
+                        />
+                        <div className="flex items-center gap-1">
+                          {[0.5, 1.0, 2.0].map((rate) => (
+                            <button
+                              key={rate}
+                              type="button"
+                              onClick={() => setKesPercent(rate)}
+                              className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${
+                                kesPercent === rate
+                                  ? 'bg-blue-500 text-white'
+                                  : 'bg-zinc-800 text-zinc-400 hover:text-white'
+                              }`}
+                            >
+                              {rate}%
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+
+                    <p className="text-[9px] text-zinc-500 leading-tight">
+                      Kalkulasi: {formatRp(applySalaryCap ? Math.min(baseSalary, BPJS_KES_MAX_SALARY) : baseSalary)} × {kesPercent}% = <strong className="text-blue-200">{formatRp(bpjsKesehatan)}</strong>
+                      {applySalaryCap && baseSalary > BPJS_KES_MAX_SALARY && ' (Dibatasi plafon upah Rp 12 Juta)'}
+                    </p>
+                  </div>
+
+                  {/* Kalkulator BPJS Ketenagakerjaan */}
+                  <div className="p-2.5 rounded-xl bg-blue-900/15 border border-blue-500/20 space-y-2">
+                    <div className="flex justify-between items-center">
+                      <span className="text-xs font-bold text-white flex items-center gap-1">
+                        <ShieldCheck className="w-3.5 h-3.5 text-blue-400" /> BPJS Ketenagakerjaan
+                      </span>
+                      <span className="text-[11px] font-mono font-bold text-blue-300">
+                        {formatRp(bpjsKetenagakerjaan)}
+                      </span>
+                    </div>
+
+                    <div className="space-y-1">
+                      <div className="flex justify-between text-[10px] text-zinc-400">
+                        <span>Iuran Jaminan Hari Tua (JHT):</span>
+                        <span className="font-bold text-blue-300">{tkJhtPercent}%</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="range"
+                          min="0"
+                          max="5"
+                          step="0.5"
+                          value={tkJhtPercent}
+                          onChange={(e) => setTkJhtPercent(Number(e.target.value))}
+                          className="flex-1 accent-blue-500 cursor-pointer"
+                        />
+                        <div className="flex items-center gap-1">
+                          {[1.0, 2.0, 3.0].map((rate) => (
+                            <button
+                              key={rate}
+                              type="button"
+                              onClick={() => setTkJhtPercent(rate)}
+                              className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${
+                                tkJhtPercent === rate
+                                  ? 'bg-blue-500 text-white'
+                                  : 'bg-zinc-800 text-zinc-400 hover:text-white'
+                              }`}
+                            >
+                              {rate}%
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Jaminan Pensiun Toggle */}
+                    <div className="pt-1 border-t border-zinc-800/80 flex items-center justify-between text-[10px]">
+                      <label className="flex items-center gap-1.5 text-zinc-300 cursor-pointer hover:text-white">
+                        <input
+                          type="checkbox"
+                          checked={includeJp}
+                          onChange={(e) => setIncludeJp(e.target.checked)}
+                          className="rounded bg-zinc-900 border-zinc-700 text-blue-500 w-3.5 h-3.5"
+                        />
+                        <span>Tambah Jaminan Pensiun (JP +{tkJpPercent}%)</span>
+                      </label>
+                      <span className="text-zinc-500 font-mono">
+                        {includeJp ? `+${formatRp(Math.round(((applySalaryCap ? Math.min(baseSalary, BPJS_JP_MAX_SALARY) : baseSalary) * tkJpPercent) / 100))}` : 'Non-aktif'}
+                      </span>
+                    </div>
+
+                    <p className="text-[9px] text-zinc-500 leading-tight">
+                      Kalkulasi: JHT {tkJhtPercent}% ({formatRp(Math.round((baseSalary * tkJhtPercent) / 100))})
+                      {includeJp ? ` + JP 1% (${formatRp(Math.round(((applySalaryCap ? Math.min(baseSalary, BPJS_JP_MAX_SALARY) : baseSalary) * tkJpPercent) / 100))})` : ''}
+                      {' = '}<strong className="text-blue-200">{formatRp(bpjsKetenagakerjaan)}</strong>
+                    </p>
+                  </div>
+                </div>
+
+                {/* Collapsible Info: Beban Perusahaan (Pemberi Kerja) */}
+                <div className="pt-1 border-t border-zinc-800/80">
+                  <button
+                    type="button"
+                    onClick={() => setShowCompanyShareInfo(!showCompanyShareInfo)}
+                    className="text-[10px] text-zinc-400 hover:text-blue-300 flex items-center gap-1 font-bold cursor-pointer transition"
+                  >
+                    <Info className="w-3 h-3 text-blue-400" />
+                    <span>Lihat Rincian Iuran yang Ditanggung Perusahaan / Gym</span>
+                    {showCompanyShareInfo ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+                  </button>
+
+                  {showCompanyShareInfo && (
+                    <div className="mt-2 p-2.5 rounded-xl bg-zinc-900 border border-zinc-800 text-[10px] space-y-1 font-mono text-zinc-400 animate-in fade-in duration-100">
+                      <div className="flex justify-between">
+                        <span>• BPJS Kesehatan Pemberi Kerja (4%):</span>
+                        <span className="text-white font-bold">{formatRp(Math.round(((applySalaryCap ? Math.min(baseSalary, BPJS_KES_MAX_SALARY) : baseSalary) * 4) / 100))}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>• BPJSTK JHT Perusahaan (3.7%):</span>
+                        <span className="text-white font-bold">{formatRp(Math.round((baseSalary * 3.7) / 100))}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>• BPJSTK JKK (Kecelakaan Kerja 0.24%):</span>
+                        <span className="text-white">{formatRp(Math.round((baseSalary * 0.24) / 100))}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>• BPJSTK JKM (Kematian 0.3%):</span>
+                        <span className="text-white">{formatRp(Math.round((baseSalary * 0.3) / 100))}</span>
+                      </div>
+                      {includeJp && (
+                        <div className="flex justify-between">
+                          <span>• BPJSTK JP Perusahaan (2%):</span>
+                          <span className="text-white">{formatRp(Math.round(((applySalaryCap ? Math.min(baseSalary, BPJS_JP_MAX_SALARY) : baseSalary) * 2) / 100))}</span>
+                        </div>
+                      )}
+                      <div className="pt-1 border-t border-zinc-800 flex justify-between text-blue-300 font-bold">
+                        <span>Total Iuran BPJS dari Gym (Perusahaan):</span>
+                        <span>
+                          {formatRp(
+                            Math.round(((applySalaryCap ? Math.min(baseSalary, BPJS_KES_MAX_SALARY) : baseSalary) * 4) / 100) +
+                            Math.round((baseSalary * (3.7 + 0.24 + 0.3)) / 100) +
+                            (includeJp ? Math.round(((applySalaryCap ? Math.min(baseSalary, BPJS_JP_MAX_SALARY) : baseSalary) * 2) / 100) : 0)
+                          )}
+                        </span>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* NOMINAL INPUTS (AUTO-SYNCED OR DIRECT MANUAL EDIT) */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
               <div>
                 <label className="block text-[10px] font-bold text-blue-300 uppercase tracking-wider mb-1 flex justify-between">
-                  <span>Potongan BPJS Kesehatan</span>
-                  <span className="text-zinc-400 font-mono">(1% Gaji: {formatRp(Math.round(baseSalary * 0.01))})</span>
+                  <span>Potongan BPJS Kesehatan (Final)</span>
+                  <span className="text-zinc-400 font-mono text-[9px]">
+                    {calcMode === 'auto_percent' ? `${kesPercent}% dari Gaji` : 'Input Manual'}
+                  </span>
                 </label>
                 <div className="relative">
                   <span className="absolute left-3 top-2.5 text-xs text-zinc-500 font-bold">Rp</span>
                   <input
                     type="number"
                     min="0"
-                    step="1000"
+                    step="500"
                     value={bpjsKesehatan}
-                    onChange={(e) => setBpjsKesehatan(Number(e.target.value))}
+                    onChange={(e) => {
+                      setBpjsKesehatan(Number(e.target.value));
+                      if (calcMode === 'auto_percent') setCalcMode('manual');
+                    }}
                     className="w-full bg-zinc-900 border border-blue-500/40 rounded-xl pl-9 pr-3 py-2 text-xs font-mono font-bold text-blue-300 focus:border-blue-400 outline-none"
                     required
                   />
@@ -1128,17 +1421,22 @@ const EditPayrollModal: React.FC<EditPayrollModalProps> = ({ item, month, onClos
 
               <div>
                 <label className="block text-[10px] font-bold text-blue-300 uppercase tracking-wider mb-1 flex justify-between">
-                  <span>Potongan BPJS Ketenagakerjaan</span>
-                  <span className="text-zinc-400 font-mono">(2% JHT: {formatRp(Math.round(baseSalary * 0.02))})</span>
+                  <span>Potongan BPJS Ketenagakerjaan (Final)</span>
+                  <span className="text-zinc-400 font-mono text-[9px]">
+                    {calcMode === 'auto_percent' ? `${tkJhtPercent + (includeJp ? tkJpPercent : 0)}% dari Gaji` : 'Input Manual'}
+                  </span>
                 </label>
                 <div className="relative">
                   <span className="absolute left-3 top-2.5 text-xs text-zinc-500 font-bold">Rp</span>
                   <input
                     type="number"
                     min="0"
-                    step="1000"
+                    step="500"
                     value={bpjsKetenagakerjaan}
-                    onChange={(e) => setBpjsKetenagakerjaan(Number(e.target.value))}
+                    onChange={(e) => {
+                      setBpjsKetenagakerjaan(Number(e.target.value));
+                      if (calcMode === 'auto_percent') setCalcMode('manual');
+                    }}
                     className="w-full bg-zinc-900 border border-blue-500/40 rounded-xl pl-9 pr-3 py-2 text-xs font-mono font-bold text-blue-300 focus:border-blue-400 outline-none"
                     required
                   />
@@ -1146,6 +1444,7 @@ const EditPayrollModal: React.FC<EditPayrollModalProps> = ({ item, month, onClos
               </div>
             </div>
 
+            {/* BPJS CARD NUMBER & SUMMARY BADGE */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2 border-t border-blue-500/20 items-center">
               <div>
                 <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-wider mb-1">
@@ -1161,7 +1460,12 @@ const EditPayrollModal: React.FC<EditPayrollModalProps> = ({ item, month, onClos
               </div>
 
               <div className="p-2.5 bg-blue-900/30 rounded-xl border border-blue-500/30 flex justify-between items-center text-xs">
-                <span className="font-bold text-blue-200">Total Potongan BPJS:</span>
+                <div>
+                  <span className="font-bold text-blue-200 block">Total Potongan BPJS:</span>
+                  <span className="text-[10px] text-zinc-400 font-mono">
+                    {baseSalary > 0 ? `${((totalBpjs / baseSalary) * 100).toFixed(1)}% dari Gaji Pokok` : ''}
+                  </span>
+                </div>
                 <span className="font-mono font-black text-blue-300 text-sm">
                   -{formatRp(totalBpjs)}
                 </span>

@@ -98,52 +98,7 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({
     return activeBranch || branches[0];
   }, [transaction, closingRecord, branches, activeBranch]);
 
-  if (!isOpen || (!transaction && !closingRecord)) return null;
-
-  // Execute clean print with specialized body class
-  const handleExecutePrint = () => {
-    document.body.classList.add('printing-receipt');
-
-    setTimeout(() => {
-      window.print();
-      // Remove class after print dialog is closed
-      const handleAfterPrint = () => {
-        document.body.classList.remove('printing-receipt');
-        window.removeEventListener('afterprint', handleAfterPrint);
-      };
-      window.addEventListener('afterprint', handleAfterPrint);
-
-      // Fallback cleanup
-      setTimeout(() => {
-        document.body.classList.remove('printing-receipt');
-      }, 3000);
-    }, 50);
-  };
-
-  // Parse transaction items
-  let parsedItems: {
-    name: string;
-    price: number;
-    qty?: number;
-    category?: string;
-    code?: string;
-    sessions?: number;
-    validityDays?: number;
-    items?: any[];
-  }[] = [];
-
-  if (transaction?.itemsJSON) {
-    try {
-      const parsed = JSON.parse(transaction.itemsJSON);
-      if (Array.isArray(parsed)) {
-        parsedItems = parsed;
-      }
-    } catch {
-      parsedItems = [];
-    }
-  }
-
-  // Determine standardized receipt category title & badge
+  // Determine standardized receipt category title & badge (Called unconditionally before any early returns)
   const receiptTitleInfo = useMemo(() => {
     if (closingRecord) {
       return {
@@ -209,6 +164,51 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({
         };
     }
   }, [transaction, closingRecord, printer?.headerNote]);
+
+  if (!isOpen || (!transaction && !closingRecord)) return null;
+
+  // Execute clean print with specialized body class
+  const handleExecutePrint = () => {
+    document.body.classList.add('printing-receipt');
+
+    setTimeout(() => {
+      window.print();
+      // Remove class after print dialog is closed
+      const handleAfterPrint = () => {
+        document.body.classList.remove('printing-receipt');
+        window.removeEventListener('afterprint', handleAfterPrint);
+      };
+      window.addEventListener('afterprint', handleAfterPrint);
+
+      // Fallback cleanup
+      setTimeout(() => {
+        document.body.classList.remove('printing-receipt');
+      }, 3000);
+    }, 50);
+  };
+
+  // Parse transaction items
+  let parsedItems: {
+    name: string;
+    price: number;
+    qty?: number;
+    category?: string;
+    code?: string;
+    sessions?: number;
+    validityDays?: number;
+    items?: any[];
+  }[] = [];
+
+  if (transaction?.itemsJSON) {
+    try {
+      const parsed = JSON.parse(transaction.itemsJSON);
+      if (Array.isArray(parsed)) {
+        parsedItems = parsed;
+      }
+    } catch {
+      parsedItems = [];
+    }
+  }
 
   // Brand Name, Tagline & Outlet details
   const companyName = profile?.gymName || printer?.storeName || 'GYMPRO FITNESS & WELLNESS';

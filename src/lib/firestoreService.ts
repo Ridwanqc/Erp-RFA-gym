@@ -10,6 +10,7 @@ import {
 } from 'firebase/firestore';
 import { db, handleFirestoreError, OperationType, auth } from './firebase';
 import { Member, Transaction, Attendance, Lead, GymBranch } from '../types';
+import { OnlineReservation } from '../types/landingTypes';
 
 // Collections constants
 export const COLLECTIONS = {
@@ -20,7 +21,8 @@ export const COLLECTIONS = {
   LEADS: 'leads',
   ADMINS: 'admins',
   BRANCHES: 'branches',
-  SETTINGS: 'settings'
+  SETTINGS: 'settings',
+  RESERVATIONS: 'reservations'
 };
 
 // 1. Members Cloud Operations
@@ -267,7 +269,63 @@ export function subscribeBranches(
   );
 }
 
-// 6. Initial Data Cloud Sync
+// 6. Online Reservations Cloud Operations
+export async function saveReservationToFirestore(res: OnlineReservation): Promise<void> {
+  const path = `${COLLECTIONS.RESERVATIONS}/${res.id}`;
+  try {
+    const payload = {
+      id: String(res.id),
+      bookingDate: res.bookingDate || '',
+      targetDate: res.targetDate || '',
+      timeSlot: res.timeSlot || '',
+      programName: res.programName || '',
+      programCategory: res.programCategory || '',
+      branchId: res.branchId || '',
+      branchName: res.branchName || '',
+      memberId: res.memberId || '',
+      customerName: String(res.customerName || '').slice(0, 150),
+      customerPhone: String(res.customerPhone || '').slice(0, 30),
+      customerEmail: String(res.customerEmail || '').slice(0, 150),
+      trainerName: res.trainerName || '',
+      notes: res.notes || '',
+      status: res.status || 'CONFIRMED',
+      qrCodeData: res.qrCodeData || '',
+      ticketPassCode: res.ticketPassCode || '',
+      type: res.type || 'class',
+      classId: res.classId || '',
+      updatedAt: new Date().toISOString()
+    };
+    await setDoc(doc(db, COLLECTIONS.RESERVATIONS, res.id), payload, { merge: true });
+  } catch (error) {
+    handleFirestoreError(error, OperationType.WRITE, path);
+  }
+}
+
+export function subscribeReservations(
+  onData: (reservations: OnlineReservation[]) => void,
+  onError?: (err: unknown) => void
+): () => void {
+  const path = COLLECTIONS.RESERVATIONS;
+  return onSnapshot(
+    collection(db, path),
+    (snapshot) => {
+      const items: OnlineReservation[] = [];
+      snapshot.forEach((d) => {
+        items.push(d.data() as OnlineReservation);
+      });
+      if (items.length > 0) {
+        onData(items);
+      }
+    },
+    (error) => {
+      console.warn('Firestore Reservations Subscribe Notice:', error.message);
+      if (onError) onError(error);
+      handleFirestoreError(error, OperationType.LIST, path);
+    }
+  );
+}
+
+// 7. Initial Data Cloud Sync
 export async function seedInitialFirestoreData(
   initialMembers: Member[],
   initialTransactions: Transaction[]

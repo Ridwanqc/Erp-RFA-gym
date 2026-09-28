@@ -110,7 +110,10 @@ import { StockTransferModal } from './components/StockTransferModal';
 import { useTheme } from './context/ThemeContext';
 import { useSettings } from './context/SettingsContext';
 import { LoginPage } from './components/LoginPage';
+import { LandingPage } from './components/landing/LandingPage';
 import { OfflineIndicator } from './components/OfflineIndicator';
+import { OnlineReservation } from './types/landingTypes';
+import { INITIAL_ONLINE_RESERVATIONS } from './data/landingData';
 import { APP_TODAY, formatRp } from './utils/formatters';
 import { testConnection, auth, onAuthStateChanged, logOutFirebase } from './lib/firebase';
 import {
@@ -118,13 +121,17 @@ import {
   saveTransactionToFirestore,
   saveAttendanceToFirestore,
   saveLeadToFirestore,
+  saveReservationToFirestore,
   subscribeMembers,
   subscribeTransactions,
+  subscribeReservations,
   seedInitialFirestoreData
 } from './lib/firestoreService';
 
 export default function App() {
-  // Navigation
+  // Navigation & Platform View State
+  const [guestView, setGuestView] = useState<'landing' | 'staff-login'>('landing');
+  const [staffViewMode, setStaffViewMode] = useState<'erp' | 'landing'>('erp');
   const [activeTab, setActiveTab] = useState<ActiveTab>('dashboard');
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isDesktopCollapsed, setIsDesktopCollapsed] = useState<boolean>(() => {
@@ -272,7 +279,15 @@ export default function App() {
 
   const [attendances, setAttendances] = useState<Attendance[]>(() => {
     const saved = localStorage.getItem('rfa_attendance');
-    return saved ? JSON.parse(saved) : INITIAL_ATTENDANCE;
+    if (!saved) return INITIAL_ATTENDANCE;
+    try {
+      const parsed: Attendance[] = JSON.parse(saved);
+      const existingIds = new Set(parsed.map((a) => a.id));
+      const missing = INITIAL_ATTENDANCE.filter((a) => !existingIds.has(a.id));
+      return missing.length > 0 ? [...parsed, ...missing] : parsed;
+    } catch {
+      return INITIAL_ATTENDANCE;
+    }
   });
 
   const [staffAttendances, setStaffAttendances] = useState<StaffAttendance[]>(() => {
@@ -302,6 +317,26 @@ export default function App() {
   useEffect(() => {
     localStorage.setItem('rfa_lockers', JSON.stringify(lockers));
   }, [lockers]);
+
+  // Online Reservations State (Integrated between Landing Page & ERP Front Desk)
+  const [reservations, setReservations] = useState<OnlineReservation[]>(() => {
+    const saved = localStorage.getItem('rfa_online_reservations');
+    if (!saved) return INITIAL_ONLINE_RESERVATIONS;
+    try {
+      const parsed: OnlineReservation[] = JSON.parse(saved);
+      const existingIds = new Set(parsed.map((r) => r.id));
+      const missing = INITIAL_ONLINE_RESERVATIONS.filter((r) => !existingIds.has(r.id));
+      return missing.length > 0 ? [...parsed, ...missing] : parsed;
+    } catch {
+      return INITIAL_ONLINE_RESERVATIONS;
+    }
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('rfa_online_reservations', JSON.stringify(reservations));
+    } catch {}
+  }, [reservations]);
 
   const [workSchedules, setWorkSchedules] = useState<WorkSchedule[]>(() => {
     const saved = localStorage.getItem('rfa_work_schedules');
@@ -1052,6 +1087,7 @@ export default function App() {
 
     let unsubMembers: (() => void) | undefined;
     let unsubTrx: (() => void) | undefined;
+    let unsubReservations: (() => void) | undefined;
 
     // 2. Auth State Listener - Only attach onSnapshot listeners if auth is ready and user is authenticated
     const unsubscribeAuth = onAuthStateChanged(auth, (fbUser) => {
@@ -1063,6 +1099,7 @@ export default function App() {
         // Clean up previous listeners if any
         if (unsubMembers) unsubMembers();
         if (unsubTrx) unsubTrx();
+        if (unsubReservations) unsubReservations();
 
         // 3. Real-Time Cloud Subscribers (merges cloud changes)
         try {
@@ -1091,6 +1128,19 @@ export default function App() {
             },
             () => {}
           );
+
+          unsubReservations = subscribeReservations(
+            (cloudRes) => {
+              if (cloudRes && cloudRes.length > 0) {
+                setReservations((prev) => {
+                  const map = new Map(prev.map((r) => [r.id, r]));
+                  cloudRes.forEach((cr) => map.set(cr.id, { ...map.get(cr.id), ...cr }));
+                  return Array.from(map.values());
+                });
+              }
+            },
+            () => {}
+          );
         } catch (e) {
           console.warn('Firestore subscription initialized in local fallback mode:', e);
         }
@@ -1104,6 +1154,10 @@ export default function App() {
           unsubTrx();
           unsubTrx = undefined;
         }
+        if (unsubReservations) {
+          unsubReservations();
+          unsubReservations = undefined;
+        }
       }
     });
 
@@ -1111,6 +1165,7 @@ export default function App() {
       unsubscribeAuth();
       if (unsubMembers) unsubMembers();
       if (unsubTrx) unsubTrx();
+      if (unsubReservations) unsubReservations();
     };
   }, []);
 
@@ -2389,11 +2444,80 @@ export default function App() {
 
   const freezeCount = members.filter((m) => m.isFrozen || m.status === 'FREEZE').length;
 
-  // If user is not logged in, render the dedicated Login Page
+  // Handlers for Online Reservations
+  const handleCompleteReservation = (newRes: OnlineReservation) => {
+    setReservations((prev) => [newRes, ...prev]);
+    saveReservationToFirestore(newRes).catch(() => {});
+
+    // If it's a studio class, also book slot
+    if (newRes.classId) {
+      handleBookStudioClass(newRes.classId, newRes.customerName);
+    }
+
+    // Also auto-add to CRM Leads if not an existing member
+    if (!newRes.memberId) {
+      const newLead: Lead = {
+        id: 'L-' + Math.floor(1000 + Math.random() * 9000),
+        name: newRes.customerName,
+        phone: newRes.customerPhone,
+        source: 'Google / Website',
+        status: 'Baru',
+        date: APP_TODAY,
+        interest: `${newRes.programName} (${newRes.branchName})`,
+        notes: `Online Booking: ${newRes.id} - ${newRes.targetDate} (${newRes.timeSlot})`,
+        branchId: newRes.branchId,
+        branchName: newRes.branchName,
+        picId: 'S01'
+      };
+      setLeads((prev) => [newLead, ...prev]);
+      saveLeadToFirestore(newLead).catch(() => {});
+    }
+
+    showToast('Reservasi Berhasil', `Tiket ${newRes.id} (${newRes.customerName}) telah tersimpan & slot diamankan.`, 'success');
+  };
+
+  const handleCheckinReservation = (resId: string) => {
+    setReservations((prev) => {
+      const updated = prev.map((r) => (r.id === resId ? { ...r, status: 'COMPLETED' as const } : r));
+      const target = updated.find((r) => r.id === resId);
+      if (target) saveReservationToFirestore(target).catch(() => {});
+      return updated;
+    });
+  };
+
+  const handleCancelReservation = (resId: string) => {
+    setReservations((prev) => {
+      const updated = prev.map((r) => (r.id === resId ? { ...r, status: 'CANCELLED' as const } : r));
+      const target = updated.find((r) => r.id === resId);
+      if (target) saveReservationToFirestore(target).catch(() => {});
+      return updated;
+    });
+  };
+
+  // If user is not logged in as staff, render Landing Page or Staff Login Page
   if (!currentUser) {
     return (
       <div className="min-h-screen bg-zinc-950 font-sans selection:bg-orange-500 selection:text-white">
-        <LoginPage onLogin={handleLogin} staffUsers={staffUsers} />
+        {guestView === 'landing' ? (
+          <LandingPage
+            members={members}
+            attendances={attendances}
+            studioClasses={studioClasses}
+            staffUsers={staffUsers}
+            onOpenStaffLogin={() => setGuestView('staff-login')}
+            isStaffLoggedIn={false}
+            onBookStudioClass={handleBookStudioClass}
+            reservations={reservations}
+            onCompleteReservation={handleCompleteReservation}
+            onCancelReservation={handleCancelReservation}
+          />
+        ) : (
+          <LoginPage
+            onLogin={handleLogin}
+            staffUsers={staffUsers}
+            onBackToLanding={() => setGuestView('landing')}
+          />
+        )}
 
         {/* FLOATING TOAST NOTIFICATION */}
         {toast.show && (
@@ -2420,6 +2544,42 @@ export default function App() {
     );
   }
 
+  // If staff user is in Landing Page preview mode
+  if (staffViewMode === 'landing') {
+    return (
+      <div className="min-h-screen bg-zinc-950 font-sans selection:bg-orange-500 selection:text-white flex flex-col">
+        {/* Top ERP Staff Navigation Bar */}
+        <div className="bg-gradient-to-r from-orange-600 via-amber-600 to-orange-600 px-4 py-2 text-white text-xs font-bold flex items-center justify-between shadow-xl sticky top-0 z-60">
+          <div className="flex items-center gap-2">
+            <span className="w-2.5 h-2.5 rounded-full bg-white animate-pulse" />
+            <span>
+              Mode Pratinjau Portal Publik RFA Gym — Akun Staf: <strong>{currentUser.name}</strong> ({currentUser.roleName || currentUser.role})
+            </span>
+          </div>
+          <button
+            onClick={() => setStaffViewMode('erp')}
+            className="px-3.5 py-1.5 rounded-xl bg-zinc-950 hover:bg-zinc-900 text-white font-black text-xs flex items-center gap-1.5 transition active:scale-95 shadow-md border border-white/20"
+          >
+            <span>← Kembali ke Ruang Kerja ERP</span>
+          </button>
+        </div>
+        <LandingPage
+          members={members}
+          attendances={attendances}
+          studioClasses={studioClasses}
+          staffUsers={staffUsers}
+          onOpenStaffLogin={() => {}}
+          isStaffLoggedIn={true}
+          onReturnToERP={() => setStaffViewMode('erp')}
+          onBookStudioClass={handleBookStudioClass}
+          reservations={reservations}
+          onCompleteReservation={handleCompleteReservation}
+          onCancelReservation={handleCancelReservation}
+        />
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-zinc-950 text-zinc-100 flex flex-col font-sans selection:bg-orange-500 selection:text-white">
       {/* Top Header */}
@@ -2434,6 +2594,7 @@ export default function App() {
         onToggleMobileSidebar={() => setIsSidebarOpen(!isSidebarOpen)}
         isSidebarCollapsed={isDesktopCollapsed}
         onOpenAddBranchModal={() => setIsAddBranchModalOpen(true)}
+        onOpenLandingPage={() => setStaffViewMode('landing')}
         onOpenSettings={(subTab) => {
           if (subTab) {
             setActiveTab(`settings-${subTab}` as any);
@@ -2598,6 +2759,9 @@ export default function App() {
               onNavigateTab={(tab) => setActiveTab(tab)}
               showToast={showToast}
               isStoreClosed={isStoreClosed}
+              onlineReservations={reservations}
+              onCheckinReservation={handleCheckinReservation}
+              onCancelReservation={handleCancelReservation}
             />
           )}
 

@@ -14,7 +14,8 @@ import {
   Building2,
   Check,
   Plus,
-  X
+  X,
+  Globe
 } from 'lucide-react';
 import { User, ALL_BRANCHES_ID } from '../types';
 import { formatDateIndo, APP_TODAY } from '../utils/formatters';
@@ -35,6 +36,7 @@ interface HeaderProps {
   firebaseConnected?: boolean;
   onOpenSettings?: (subTab?: 'printer' | 'theme' | 'roles' | 'profile' | 'branches' | 'finance' | 'templates' | 'backup') => void;
   onOpenAddBranchModal?: () => void;
+  onOpenLandingPage?: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -49,7 +51,8 @@ export const Header: React.FC<HeaderProps> = ({
   onLogout,
   firebaseConnected = true,
   onOpenSettings,
-  onOpenAddBranchModal
+  onOpenAddBranchModal,
+  onOpenLandingPage
 }) => {
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [isBranchOpen, setIsBranchOpen] = useState(false);
@@ -146,6 +149,19 @@ export const Header: React.FC<HeaderProps> = ({
 
         {/* PWA Install Button (Android / iOS / Desktop) */}
         <PWAInstallButton variant="compact" />
+
+        {/* Public Landing Page Portal Button */}
+        {onOpenLandingPage && (
+          <button
+            type="button"
+            onClick={onOpenLandingPage}
+            className="flex items-center gap-1.5 p-1.5 sm:px-2.5 sm:py-1.5 rounded-xl border bg-orange-500/10 hover:bg-orange-500/20 border-orange-500/30 text-orange-300 transition active:scale-95 text-xs font-bold min-h-[44px]"
+            title="Lihat Landing Page Publik RFA Gym Platform"
+          >
+            <Globe className="w-4 h-4 text-orange-400 shrink-0" />
+            <span className="hidden xl:inline">Landing Page</span>
+          </button>
+        )}
 
         {/* Branch Selector Dropdown */}
         <div className="relative" ref={branchMenuRef}>
@@ -445,6 +461,31 @@ export const Header: React.FC<HeaderProps> = ({
                       </div>
                     </div>
                     <span className="text-[10px] text-zinc-400 font-mono">Buka →</span>
+                  </button>
+                </div>
+              )}
+
+              {/* Landing Page Shortcut */}
+              {onOpenLandingPage && (
+                <div className="p-3 border-b border-zinc-800 bg-zinc-950/20">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsProfileOpen(false);
+                      onOpenLandingPage();
+                    }}
+                    className="w-full flex items-center justify-between p-2 rounded-xl hover:bg-zinc-800/80 transition text-left text-zinc-200 cursor-pointer"
+                  >
+                    <div className="flex items-center gap-2.5">
+                      <div className="p-1.5 rounded-lg bg-orange-500/10 text-orange-400 border border-orange-500/20">
+                        <Globe className="w-4 h-4" />
+                      </div>
+                      <div>
+                        <span className="text-xs font-bold block text-white">Buka Landing Page</span>
+                        <span className="text-[10px] text-zinc-400 block">Lihat tampilan portal publik gym</span>
+                      </div>
+                    </div>
+                    <span className="text-[10px] text-orange-400 font-mono">Lihat →</span>
                   </button>
                 </div>
               )}

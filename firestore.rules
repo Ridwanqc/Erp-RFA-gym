@@ -65,6 +65,14 @@ service cloud.firestore {
              data.phone is string && data.phone.size() <= 30;
     }
 
+    // Validation Blueprint for Reservation
+    function isValidReservation(data) {
+      return data.id is string && isValidId(data.id) &&
+             data.customerName is string && data.customerName.size() <= 150 &&
+             data.customerPhone is string && data.customerPhone.size() <= 30 &&
+             data.status in ['CONFIRMED', 'PENDING', 'COMPLETED', 'CANCELLED'];
+    }
+
     // Admins Collection
     match /admins/{adminId} {
       allow get: if isSignedIn() && (request.auth.uid == adminId || isAdmin());
@@ -129,6 +137,14 @@ service cloud.firestore {
       allow list: if isSignedIn();
       allow create, update: if isSignedIn() && isValidId(settingId);
       allow delete: if isAdmin() && isValidId(settingId);
+    }
+
+    // Reservations Collection (Online Bookings)
+    match /reservations/{reservationId} {
+      allow get: if isSignedIn() && isValidId(reservationId);
+      allow list: if isSignedIn();
+      allow create, update: if isValidId(reservationId) && isValidReservation(incoming());
+      allow delete: if isAdmin() && isValidId(reservationId);
     }
   }
 }

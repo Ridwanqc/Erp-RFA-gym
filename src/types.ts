@@ -99,6 +99,7 @@ export interface Member {
   id: string;
   name: string;
   phone: string;
+  email?: string;
   expired: string; // YYYY-MM-DD
   ptQuota: number;
   classQuota?: number; // Sisa kuota sesi kelas studio
@@ -478,7 +479,7 @@ export interface Attendance {
   timeOut?: string;
   memberId?: string;
   memberName: string;
-  type: 'Reguler' | 'PT';
+  type: 'Reguler' | 'PT' | 'Studio Class';
   badge: string;
   lockerNumber?: number | string;
   lockerGender?: 'Pria' | 'Wanita';

@@ -86,6 +86,27 @@
         "role": { "type": "string", "maxLength": 50 }
       },
       "required": ["email"]
+    },
+    "Reservation": {
+      "title": "Reservation",
+      "description": "Online class and PT bookings submitted via RFA Gym Platform",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "bookingDate": { "type": "string", "maxLength": 50 },
+        "targetDate": { "type": "string", "maxLength": 50 },
+        "timeSlot": { "type": "string", "maxLength": 50 },
+        "programName": { "type": "string", "maxLength": 150 },
+        "programCategory": { "type": "string", "maxLength": 100 },
+        "branchId": { "type": "string", "maxLength": 128 },
+        "branchName": { "type": "string", "maxLength": 150 },
+        "customerName": { "type": "string", "maxLength": 150 },
+        "customerPhone": { "type": "string", "maxLength": 30 },
+        "customerEmail": { "type": "string", "maxLength": 150 },
+        "status": { "type": "string", "enum": ["CONFIRMED", "PENDING", "COMPLETED", "CANCELLED"] },
+        "ticketPassCode": { "type": "string", "maxLength": 50 }
+      },
+      "required": ["id", "targetDate", "customerName", "customerPhone", "status"]
     }
   },
   "firestore": {
@@ -112,6 +133,10 @@
     "/admins/{adminId}": {
       "schema": { "$ref": "Admin" },
       "description": "Verified system administrators"
+    },
+    "/reservations/{reservationId}": {
+      "schema": { "$ref": "Reservation" },
+      "description": "Online customer bookings"
     }
   }
 }

@@ -1,0 +1,264 @@
+import React, { useState, useEffect } from 'react';
+import { Member, StudioClass, User, Attendance } from '../../types';
+import { LandingProgram, OnlineReservation } from '../../types/landingTypes';
+import { INITIAL_ONLINE_RESERVATIONS } from '../../data/landingData';
+import { APP_TODAY } from '../../utils/formatters';
+import { LandingHeader } from './LandingHeader';
+import { HeroSection } from './HeroSection';
+import { WhyChooseUsSection } from './WhyChooseUsSection';
+import { LiveStatisticsSection } from './LiveStatisticsSection';
+import { AboutUsSection } from './AboutUsSection';
+import { VisiMisiSection } from './VisiMisiSection';
+import { ProgramsSection } from './ProgramsSection';
+import { ScheduleSection } from './ScheduleSection';
+import { BMICalculatorSection } from './BMICalculatorSection';
+import { FitnessTipsSection } from './FitnessTipsSection';
+import { FAQSection } from './FAQSection';
+import { ContactLocationSection } from './ContactLocationSection';
+import { ReservationFlowModal } from './ReservationFlowModal';
+import { MemberPortalModal } from './MemberPortalModal';
+
+interface LandingPageProps {
+  members: Member[];
+  attendances?: Attendance[];
+  studioClasses: StudioClass[];
+  staffUsers: User[];
+  onOpenStaffLogin: () => void;
+  isStaffLoggedIn?: boolean;
+  onReturnToERP?: () => void;
+  onBookStudioClass?: (classId: string, memberName: string) => void;
+  reservations?: OnlineReservation[];
+  onCompleteReservation?: (newRes: OnlineReservation) => void;
+  onCancelReservation?: (resId: string) => void;
+}
+
+export const LandingPage: React.FC<LandingPageProps> = ({
+  members,
+  attendances = [],
+  studioClasses,
+  staffUsers,
+  onOpenStaffLogin,
+  isStaffLoggedIn,
+  onReturnToERP,
+  onBookStudioClass,
+  reservations: propReservations,
+  onCompleteReservation: propOnCompleteReservation,
+  onCancelReservation: propOnCancelReservation
+}) => {
+  const [activeSection, setActiveSection] = useState<string>('hero');
+
+  // Compute live active members in gym
+  const todayAttendances = attendances.filter((a) => a.date === APP_TODAY);
+  const activeInGymMembers = todayAttendances.filter((a) => !a.timeOut || a.timeOut.trim() === '');
+  const activeInGymCount = activeInGymMembers.length;
+
+  // Reservation Modal State
+  const [isReservationModalOpen, setIsReservationModalOpen] = useState(false);
+  const [prefilledProgram, setPrefilledProgram] = useState<LandingProgram | null>(null);
+  const [prefilledClass, setPrefilledClass] = useState<StudioClass | null>(null);
+  const [prefilledTrainer, setPrefilledTrainer] = useState<string | null>(null);
+
+  // Member Portal State
+  const [isMemberModalOpen, setIsMemberModalOpen] = useState(false);
+  const [loggedInMember, setLoggedInMember] = useState<Member | null>(() => {
+    try {
+      const savedMemberId = localStorage.getItem('rfa_logged_member_id');
+      if (savedMemberId) {
+        const found = members.find((m) => m.id === savedMemberId);
+        if (found) return found;
+      }
+    } catch {}
+    return null;
+  });
+
+  // Local fallback if propReservations is not provided
+  const [localReservations, setLocalReservations] = useState<OnlineReservation[]>(() => {
+    try {
+      const saved = localStorage.getItem('rfa_online_reservations');
+      if (saved) {
+        return JSON.parse(saved);
+      }
+    } catch {}
+    return INITIAL_ONLINE_RESERVATIONS;
+  });
+
+  const reservations = propReservations || localReservations;
+
+  // Save reservations to localStorage
+  useEffect(() => {
+    try {
+      localStorage.setItem('rfa_online_reservations', JSON.stringify(reservations));
+    } catch {}
+  }, [reservations]);
+
+  // Section smooth navigation
+  const handleNavigateSection = (sectionId: string) => {
+    setActiveSection(sectionId);
+    const element = document.getElementById(sectionId);
+    if (element) {
+      element.scrollIntoView({ behavior: 'smooth' });
+    }
+  };
+
+  // Trigger Online Booking
+  const handleOpenReservation = (program?: LandingProgram, sc?: StudioClass, trainer?: string) => {
+    setPrefilledProgram(program || null);
+    setPrefilledClass(sc || null);
+    setPrefilledTrainer(trainer || null);
+    setIsReservationModalOpen(true);
+  };
+
+  // Complete Reservation callback
+  const handleCompleteReservation = (newRes: OnlineReservation) => {
+    if (propOnCompleteReservation) {
+      propOnCompleteReservation(newRes);
+    } else {
+      setLocalReservations((prev) => [newRes, ...prev]);
+    }
+
+    // If reservation is for studio class, also call ERP handler if provided
+    if (newRes.classId && onBookStudioClass) {
+      onBookStudioClass(newRes.classId, newRes.customerName);
+    }
+  };
+
+  // Cancel reservation
+  const handleCancelReservation = (resId: string) => {
+    if (propOnCancelReservation) {
+      propOnCancelReservation(resId);
+    } else {
+      setLocalReservations((prev) =>
+        prev.map((r) => (r.id === resId ? { ...r, status: 'CANCELLED' } : r))
+      );
+    }
+  };
+
+  // Member Authentication
+  const handleLoginMember = (member: Member) => {
+    setLoggedInMember(member);
+    try {
+      localStorage.setItem('rfa_logged_member_id', member.id);
+    } catch {}
+  };
+
+  const handleLogoutMember = () => {
+    setLoggedInMember(null);
+    try {
+      localStorage.removeItem('rfa_logged_member_id');
+    } catch {}
+  };
+
+  const trainerCount = staffUsers.filter((u) => u.role === 'pt').length || 4;
+
+  return (
+    <div className="min-h-screen bg-zinc-950 text-zinc-100 font-sans selection:bg-orange-500 selection:text-white relative">
+      {/* 1. Global Sticky Header & Navigation */}
+      <LandingHeader
+        activeSection={activeSection}
+        onNavigateSection={handleNavigateSection}
+        onOpenReservation={() => handleOpenReservation()}
+        onOpenMemberArea={() => setIsMemberModalOpen(true)}
+        onOpenStaffLogin={onOpenStaffLogin}
+        loggedInMember={loggedInMember}
+        onLogoutMember={handleLogoutMember}
+        isStaffLoggedIn={isStaffLoggedIn}
+        onReturnToERP={onReturnToERP}
+        activeInGymCount={activeInGymCount}
+      />
+
+      <main>
+        {/* 2. Landing Page (Home) */}
+        {/* Hero Section */}
+        <HeroSection
+          onStartBooking={() => handleOpenReservation()}
+          onExplorePrograms={() => handleNavigateSection('programs')}
+          memberCount={members.length}
+          activeInGymCount={activeInGymCount}
+        />
+
+        {/* Why Choose Us (6 Nilai Unggulan) */}
+        <WhyChooseUsSection onLearnMore={() => handleNavigateSection('about-us')} />
+
+        {/* Live Statistics & Real-Time In-Gym Attendance / Occupancy Monitor */}
+        <LiveStatisticsSection
+          memberCount={members.length}
+          studioClassCount={studioClasses.length}
+          trainerCount={trainerCount}
+          branchCount={3}
+          attendances={attendances}
+          onCtaClick={() => handleOpenReservation()}
+        />
+
+        {/* 3. About Us (Profil, Sejarah, Galeri Fasilitas & Trainer) */}
+        <AboutUsSection
+          onSelectTrainerForBooking={(trainerName) =>
+            handleOpenReservation(undefined, undefined, trainerName)
+          }
+        />
+
+        {/* 4. Visi & Misi (Interactive Card Highlight) */}
+        <VisiMisiSection />
+
+        {/* 5. Program Latihan (6 Program Utama + CTA Auto-fill Reservasi) */}
+        <ProgramsSection
+          onSelectProgramForBooking={(program) => handleOpenReservation(program)}
+        />
+
+        {/* 6. Jadwal Latihan & Kalender Slot */}
+        <ScheduleSection
+          studioClasses={studioClasses}
+          onBookClassSlot={(sc) => handleOpenReservation(undefined, sc)}
+        />
+
+        {/* 8. Fitur Pendukung: BMI Calculator */}
+        <BMICalculatorSection
+          onSelectRecommendedProgram={(program) => handleOpenReservation(program)}
+        />
+
+        {/* 8. Fitur Pendukung: Tips Fitness */}
+        <FitnessTipsSection />
+
+        {/* 8. Fitur Pendukung: FAQ */}
+        <FAQSection />
+
+        {/* 8. Fitur Pendukung: Contact & Lokasi */}
+        <ContactLocationSection
+          onOpenStaffLogin={onOpenStaffLogin}
+          onOpenMemberArea={() => setIsMemberModalOpen(true)}
+          onOpenReservation={() => handleOpenReservation()}
+        />
+      </main>
+
+      {/* 7. Reservasi Online (Multi-step Booking Flow Modal) */}
+      <ReservationFlowModal
+        isOpen={isReservationModalOpen}
+        onClose={() => setIsReservationModalOpen(false)}
+        prefilledProgram={prefilledProgram}
+        prefilledClass={prefilledClass}
+        prefilledTrainer={prefilledTrainer}
+        members={members}
+        onCompleteReservation={handleCompleteReservation}
+        onOpenMemberDashboard={(member) => {
+          handleLoginMember(member);
+          setIsMemberModalOpen(true);
+        }}
+      />
+
+      {/* 9. Autentikasi & Member Area Modal */}
+      <MemberPortalModal
+        isOpen={isMemberModalOpen}
+        onClose={() => setIsMemberModalOpen(false)}
+        members={members}
+        loggedInMember={loggedInMember}
+        onLoginMember={handleLoginMember}
+        onLogoutMember={handleLogoutMember}
+        reservations={reservations}
+        onCancelReservation={handleCancelReservation}
+        onOpenNewReservation={() => {
+          setIsMemberModalOpen(false);
+          handleOpenReservation();
+        }}
+      />
+    </div>
+  );
+};

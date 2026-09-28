@@ -30,9 +30,10 @@ import { useTheme } from '../context/ThemeContext';
 interface LoginPageProps {
   onLogin: (user: User, rememberMe: boolean) => void;
   staffUsers: User[];
+  onBackToLanding?: () => void;
 }
 
-export const LoginPage: React.FC<LoginPageProps> = ({ onLogin, staffUsers }) => {
+export const LoginPage: React.FC<LoginPageProps> = ({ onLogin, staffUsers, onBackToLanding }) => {
   const { openThemeModal, currentAccent, theme } = useTheme();
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
@@ -219,6 +220,16 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin, staffUsers }) => 
         </div>
 
         <div className="flex items-center gap-3">
+          {onBackToLanding && (
+            <button
+              type="button"
+              onClick={onBackToLanding}
+              className="text-xs font-bold text-orange-400 hover:text-white flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-orange-500/10 hover:bg-orange-500/20 border border-orange-500/30 transition cursor-pointer"
+            >
+              <span>← Landing Page RFA Gym</span>
+            </button>
+          )}
+
           <div className="flex items-center gap-1.5 text-xs text-amber-300 bg-amber-500/10 px-2.5 py-1 rounded-xl border border-amber-500/25">
             <Flame className="w-3.5 h-3.5 text-amber-400" />
             <span className="font-semibold text-[11px]">Firebase Cloud Connected</span>

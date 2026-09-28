@@ -29,7 +29,8 @@ import {
   PanelLeftOpen,
   Palette,
   Settings,
-  FileSpreadsheet
+  FileSpreadsheet,
+  Globe
 } from 'lucide-react';
 import { User, UserRole } from '../types';
 import { PWAInstallButton } from './PWAInstallButton';

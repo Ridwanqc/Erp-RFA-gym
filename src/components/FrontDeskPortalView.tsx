@@ -78,6 +78,7 @@ import { ReceiptModal } from './ReceiptModal';
 import { RealTimeClock } from './RealTimeClock';
 import { useSettings } from '../context/SettingsContext';
 import { DEFAULT_PIC_PROTECTION } from '../data/settingsData';
+import { OnlineReservation } from '../types/landingTypes';
 
 interface FrontDeskPortalViewProps {
   members: Member[];
@@ -106,6 +107,9 @@ interface FrontDeskPortalViewProps {
   onNavigateTab: (tab: any) => void;
   showToast: (title: string, message: string, type: 'success' | 'error' | 'warning' | 'info') => void;
   isStoreClosed?: boolean;
+  onlineReservations?: OnlineReservation[];
+  onCheckinReservation?: (resId: string) => void;
+  onCancelReservation?: (resId: string) => void;
 }
 
 // Quick Desk POS Catalog Item
@@ -256,10 +260,17 @@ export const FrontDeskPortalView: React.FC<FrontDeskPortalViewProps> = ({
   onOpenQRCode,
   onNavigateTab,
   showToast,
-  isStoreClosed = false
+  isStoreClosed = false,
+  onlineReservations = [],
+  onCheckinReservation,
+  onCancelReservation
 }) => {
   // Main Sub-Tab Mode
-  const [activeTab, setActiveTab] = useState<'radar' | 'checkin' | 'members' | 'lockers' | 'pos_desk' | 'helpdesk' | 'suggestions'>('radar');
+  const [activeTab, setActiveTab] = useState<'radar' | 'checkin' | 'members' | 'lockers' | 'pos_desk' | 'helpdesk' | 'suggestions' | 'reservations'>('radar');
+
+  // Online Reservation Search & Status Filter
+  const [reservationSearchQuery, setReservationSearchQuery] = useState('');
+  const [reservationStatusFilter, setReservationStatusFilter] = useState<'ALL' | 'CONFIRMED' | 'COMPLETED' | 'CANCELLED'>('ALL');
 
   // Search & Filter State
   const [searchQuery, setSearchQuery] = useState('');
@@ -1445,6 +1456,24 @@ export const FrontDeskPortalView: React.FC<FrontDeskPortalViewProps> = ({
 
         <button
           type="button"
+          onClick={() => setActiveTab('reservations')}
+          className={`px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 shrink-0 ${
+            activeTab === 'reservations'
+              ? 'bg-orange-500 text-white shadow-md'
+              : 'text-zinc-400 hover:text-white hover:bg-zinc-800/50'
+          }`}
+        >
+          <Calendar className="w-4 h-4 text-amber-400" />
+          Tiket Reservasi Online
+          {onlineReservations.filter((r) => r.status === 'CONFIRMED').length > 0 && (
+            <span className="px-1.5 py-0.2 rounded-full bg-orange-500 text-white text-[10px] font-black animate-pulse">
+              {onlineReservations.filter((r) => r.status === 'CONFIRMED').length}
+            </span>
+          )}
+        </button>
+
+        <button
+          type="button"
           onClick={() => setActiveTab('pos_desk')}
           className={`px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 shrink-0 ${
             activeTab === 'pos_desk'
@@ -2432,6 +2461,257 @@ export const FrontDeskPortalView: React.FC<FrontDeskPortalViewProps> = ({
                 <p className="text-[11px] text-zinc-400">Ucapkan "Selamat berlatih, semoga sehat selalu!"</p>
               </div>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* ------------------------------------------------------------------ */}
+      {/* 6.5 SUB-VIEW: TIKET RESERVASI ONLINE RFA GYM (RESERVATIONS) */}
+      {/* ------------------------------------------------------------------ */}
+      {activeTab === 'reservations' && (
+        <div className="space-y-6 animate-in fade-in-50 duration-300">
+          {/* Header Banner */}
+          <div className="bg-zinc-900 border border-zinc-800 rounded-3xl p-5 shadow-lg">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-4 border-b border-zinc-800">
+              <div className="flex items-center gap-3">
+                <div className="p-2.5 bg-orange-500/15 text-orange-400 rounded-2xl border border-orange-500/30">
+                  <Calendar className="w-6 h-6" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-white">Tiket Reservasi Online RFA Gym Platform</h3>
+                  <p className="text-xs text-zinc-400">
+                    Verifikasi tiket booking online, scan passcode turnstile, dan check-in kedatangan tamu/member secara terpadu.
+                  </p>
+                </div>
+              </div>
+
+              {/* Fast Lookup Input */}
+              <div className="relative min-w-[260px] sm:min-w-[320px]">
+                <Search className="w-4 h-4 text-zinc-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                <input
+                  type="text"
+                  placeholder="Scan / Cari No. Booking, Nama, No. HP..."
+                  value={reservationSearchQuery}
+                  onChange={(e) => setReservationSearchQuery(e.target.value)}
+                  className="w-full pl-10 pr-4 py-2.5 bg-zinc-950 border border-zinc-700/80 rounded-2xl text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-orange-500"
+                />
+                {reservationSearchQuery && (
+                  <button
+                    onClick={() => setReservationSearchQuery('')}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-white"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Metrics Cards */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-4">
+              <div className="p-3.5 rounded-2xl bg-zinc-950 border border-zinc-800">
+                <span className="text-[10px] text-zinc-400 uppercase font-bold block">Total Reservasi</span>
+                <span className="text-xl font-black text-white mt-1 block">
+                  {onlineReservations.length}
+                </span>
+              </div>
+
+              <div className="p-3.5 rounded-2xl bg-zinc-950 border border-zinc-800">
+                <span className="text-[10px] text-zinc-400 uppercase font-bold block">Menunggu Hadir</span>
+                <span className="text-xl font-black text-orange-400 mt-1 block">
+                  {onlineReservations.filter((r) => r.status === 'CONFIRMED').length}
+                </span>
+              </div>
+
+              <div className="p-3.5 rounded-2xl bg-zinc-950 border border-zinc-800">
+                <span className="text-[10px] text-zinc-400 uppercase font-bold block">Sudah Check-In</span>
+                <span className="text-xl font-black text-emerald-400 mt-1 block">
+                  {onlineReservations.filter((r) => r.status === 'COMPLETED').length}
+                </span>
+              </div>
+
+              <div className="p-3.5 rounded-2xl bg-zinc-950 border border-zinc-800">
+                <span className="text-[10px] text-zinc-400 uppercase font-bold block">Dibatalkan</span>
+                <span className="text-xl font-black text-zinc-400 mt-1 block">
+                  {onlineReservations.filter((r) => r.status === 'CANCELLED').length}
+                </span>
+              </div>
+            </div>
+          </div>
+
+          {/* Filter Bar */}
+          <div className="flex items-center gap-2 overflow-x-auto pb-1">
+            {[
+              { id: 'ALL', label: `Semua (${onlineReservations.length})` },
+              { id: 'CONFIRMED', label: `Terkonfirmasi (${onlineReservations.filter((r) => r.status === 'CONFIRMED').length})` },
+              { id: 'COMPLETED', label: `Selesai (${onlineReservations.filter((r) => r.status === 'COMPLETED').length})` },
+              { id: 'CANCELLED', label: `Dibatalkan (${onlineReservations.filter((r) => r.status === 'CANCELLED').length})` }
+            ].map((f) => (
+              <button
+                key={f.id}
+                type="button"
+                onClick={() => setReservationStatusFilter(f.id as any)}
+                className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition whitespace-nowrap ${
+                  reservationStatusFilter === f.id
+                    ? 'bg-orange-500 text-white shadow-sm'
+                    : 'bg-zinc-900 border border-zinc-800 text-zinc-400 hover:text-white'
+                }`}
+              >
+                {f.label}
+              </button>
+            ))}
+          </div>
+
+          {/* Reservations List */}
+          <div className="space-y-3">
+            {onlineReservations
+              .filter((res) => {
+                if (reservationStatusFilter !== 'ALL' && res.status !== reservationStatusFilter) {
+                  return false;
+                }
+                if (reservationSearchQuery.trim()) {
+                  const q = reservationSearchQuery.toLowerCase();
+                  const matchId = res.id.toLowerCase().includes(q);
+                  const matchName = res.customerName.toLowerCase().includes(q);
+                  const matchPhone = res.customerPhone.includes(q);
+                  const matchCode = res.ticketPassCode.toLowerCase().includes(q);
+                  const matchProgram = res.programName.toLowerCase().includes(q);
+                  return matchId || matchName || matchPhone || matchCode || matchProgram;
+                }
+                return true;
+              })
+              .map((res) => {
+                const isConfirmed = res.status === 'CONFIRMED';
+                const isCompleted = res.status === 'COMPLETED';
+                const isCancelled = res.status === 'CANCELLED';
+
+                return (
+                  <div
+                    key={res.id}
+                    className="p-5 rounded-3xl bg-zinc-900 border border-zinc-800 hover:border-zinc-700 transition flex flex-col md:flex-row md:items-center justify-between gap-4"
+                  >
+                    <div className="space-y-1.5 min-w-0">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="font-mono text-xs font-extrabold text-orange-400">
+                          {res.id}
+                        </span>
+                        <span className="px-2 py-0.5 rounded-md bg-zinc-800 text-[10px] font-mono text-zinc-300 border border-zinc-700">
+                          PASS: {res.ticketPassCode}
+                        </span>
+                        <span
+                          className={`px-2 py-0.5 rounded-md text-[10px] font-bold border ${
+                            isConfirmed
+                              ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30'
+                              : isCompleted
+                              ? 'bg-blue-500/15 text-blue-400 border-blue-500/30'
+                              : 'bg-rose-500/15 text-rose-400 border-rose-500/30'
+                          }`}
+                        >
+                          {res.status}
+                        </span>
+                        <span className="text-[10px] px-2 py-0.5 rounded bg-zinc-800 text-zinc-400">
+                          {res.programCategory}
+                        </span>
+                      </div>
+
+                      <h4 className="text-base font-extrabold text-white">
+                        {res.programName}
+                      </h4>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs text-zinc-300 pt-1">
+                        <div>
+                          <span className="text-zinc-500 block text-[10px] uppercase font-bold">Pemesan:</span>
+                          <span className="font-semibold text-white">{res.customerName}</span>{' '}
+                          {res.memberId && <span className="text-zinc-400 font-mono">({res.memberId})</span>}
+                        </div>
+                        <div>
+                          <span className="text-zinc-500 block text-[10px] uppercase font-bold">Waktu Latihan:</span>
+                          <span>{res.targetDate} ({res.timeSlot})</span>
+                        </div>
+                        <div>
+                          <span className="text-zinc-500 block text-[10px] uppercase font-bold">Lokasi / Trainer:</span>
+                          <span>{res.branchName} {res.trainerName ? `• Coach ${res.trainerName}` : ''}</span>
+                        </div>
+                      </div>
+
+                      {res.notes && (
+                        <p className="text-[11px] text-zinc-400 italic pt-1">
+                          Catatan: "{res.notes}"
+                        </p>
+                      )}
+                    </div>
+
+                    {/* Action Buttons */}
+                    <div className="flex flex-wrap items-center gap-2 shrink-0 pt-2 md:pt-0">
+                      {isConfirmed && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (onCheckinReservation) {
+                              onCheckinReservation(res.id);
+                            }
+                            const matchedMember = members.find(
+                              (m) =>
+                                m.id.toLowerCase() === (res.memberId || '').toLowerCase() ||
+                                m.phone.replace(/[^0-9]/g, '') === res.customerPhone.replace(/[^0-9]/g, '') ||
+                                m.name.toLowerCase() === res.customerName.toLowerCase()
+                            );
+                            const now = new Date();
+                            const timeNow = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')} WIB`;
+                            const newAtt: Attendance = {
+                              id: `ATT-RES-${Date.now()}`,
+                              date: APP_TODAY,
+                              timeIn: timeNow,
+                              timeOut: '',
+                              memberId: matchedMember?.id || 'GUEST-ONLINE',
+                              memberName: res.customerName,
+                              type: res.type === 'pt' ? 'PT' : res.type === 'daypass' ? 'Reguler' : 'Studio Class',
+                              badge: res.programName || 'Online Booking',
+                              lockerNumber: 'Loker Harian'
+                            };
+                            onAddAttendance(newAtt, matchedMember);
+                            showToast('Check-In Berhasil', `Tiket ${res.id} (${res.customerName}) telah diverifikasi & check-in masuk gym.`, 'success');
+                          }}
+                          className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs flex items-center gap-1.5 shadow-md active:scale-95 transition"
+                        >
+                          <CheckCircle2 className="w-4 h-4" />
+                          <span>Check-In Tamu</span>
+                        </button>
+                      )}
+
+                      {/* WhatsApp CS Chat */}
+                      <a
+                        href={`https://wa.me/${res.customerPhone.replace(/[^0-9]/g, '').startsWith('0') ? '62' + res.customerPhone.replace(/[^0-9]/g, '').slice(1) : res.customerPhone.replace(/[^0-9]/g, '')}?text=Halo%20Kak%20${encodeURIComponent(res.customerName)},%20kami%20dari%20Front%20Desk%20RFA%20Gym%20mengonfirmasi%20reservasi%20${encodeURIComponent(res.programName)}%20(${res.id})`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="p-2.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-emerald-400 transition"
+                        title="Chat Tamu via WhatsApp"
+                      >
+                        <MessageCircle className="w-4 h-4" />
+                      </a>
+
+                      {isConfirmed && onCancelReservation && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            onCancelReservation(res.id);
+                            showToast('Reservasi Dibatalkan', `Tiket ${res.id} berhasil dibatalkan.`, 'info');
+                          }}
+                          className="p-2.5 rounded-xl bg-rose-500/15 hover:bg-rose-500/25 text-rose-400 transition"
+                          title="Batalkan Tiket Ini"
+                        >
+                          <XCircle className="w-4 h-4" />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+
+            {onlineReservations.length === 0 && (
+              <div className="p-8 rounded-3xl bg-zinc-900/40 border border-zinc-800 text-center text-zinc-500 text-xs">
+                Belum ada tiket reservasi online yang masuk hari ini.
+              </div>
+            )}
           </div>
         </div>
       )}
