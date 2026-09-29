@@ -44,7 +44,7 @@ export interface MilestoneItem {
 }
 
 export interface OnlineReservation {
-  id: string; // e.g. RFA-BK-2026-9821
+  id: string; // e.g. RFA-BK-2026-9821 or RFA-REG-2026-9821
   bookingDate: string;
   targetDate: string;
   timeSlot: string;
@@ -61,8 +61,10 @@ export interface OnlineReservation {
   status: 'CONFIRMED' | 'PENDING' | 'COMPLETED' | 'CANCELLED';
   qrCodeData: string;
   ticketPassCode: string;
-  type: 'class' | 'pt' | 'daypass';
+  type: 'class' | 'pt' | 'daypass' | 'membership' | 'inquiry';
   classId?: string;
+  membershipPlan?: string;
+  inquiryTopic?: string;
 }
 
 export interface FitnessTip {

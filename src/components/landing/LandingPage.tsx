@@ -15,7 +15,7 @@ import { BMICalculatorSection } from './BMICalculatorSection';
 import { FitnessTipsSection } from './FitnessTipsSection';
 import { FAQSection } from './FAQSection';
 import { ContactLocationSection } from './ContactLocationSection';
-import { ReservationFlowModal } from './ReservationFlowModal';
+import { ReservationFlowModal, FlowModalMode } from './ReservationFlowModal';
 import { MemberPortalModal } from './MemberPortalModal';
 
 interface LandingPageProps {
@@ -52,8 +52,12 @@ export const LandingPage: React.FC<LandingPageProps> = ({
   const activeInGymMembers = todayAttendances.filter((a) => !a.timeOut || a.timeOut.trim() === '');
   const activeInGymCount = activeInGymMembers.length;
 
-  // Reservation Modal State
+  // Reservation & Flow Modal State
   const [isReservationModalOpen, setIsReservationModalOpen] = useState(false);
+  const [modalMode, setModalMode] = useState<FlowModalMode>('registration');
+  const [prefilledPlan, setPrefilledPlan] = useState<string | null>(null);
+  const [prefilledBranchId, setPrefilledBranchId] = useState<string | null>(null);
+  const [prefilledInquiryTopic, setPrefilledInquiryTopic] = useState<string | null>(null);
   const [prefilledProgram, setPrefilledProgram] = useState<LandingProgram | null>(null);
   const [prefilledClass, setPrefilledClass] = useState<StudioClass | null>(null);
   const [prefilledTrainer, setPrefilledTrainer] = useState<string | null>(null);
@@ -100,11 +104,39 @@ export const LandingPage: React.FC<LandingPageProps> = ({
     }
   };
 
-  // Trigger Online Booking
-  const handleOpenReservation = (program?: LandingProgram, sc?: StudioClass, trainer?: string) => {
+  // Trigger Join Now (Direct Registration Flow for Prospective Members)
+  const handleOpenJoinNow = (plan?: string, branchId?: string) => {
+    setModalMode('registration');
+    setPrefilledPlan(plan || 'All-Access Pro (3 Bulan)');
+    setPrefilledBranchId(branchId || null);
+    setPrefilledInquiryTopic(null);
+    setPrefilledProgram(null);
+    setPrefilledClass(null);
+    setPrefilledTrainer(null);
+    setIsReservationModalOpen(true);
+  };
+
+  // Trigger Inquiry (Direct Inquiry / Free Trial Flow for Prospective Members)
+  const handleOpenInquiry = (topic?: string, branchId?: string) => {
+    setModalMode('inquiry');
+    setPrefilledInquiryTopic(topic || 'Klaim Free 1-Day Trial Pass');
+    setPrefilledBranchId(branchId || null);
+    setPrefilledPlan(null);
+    setPrefilledProgram(null);
+    setPrefilledClass(null);
+    setPrefilledTrainer(null);
+    setIsReservationModalOpen(true);
+  };
+
+  // Trigger Online Booking (Studio Class / PT / Day Pass)
+  const handleOpenReservation = (program?: LandingProgram, sc?: StudioClass, trainer?: string, branchId?: string) => {
+    setModalMode('booking');
     setPrefilledProgram(program || null);
     setPrefilledClass(sc || null);
     setPrefilledTrainer(trainer || null);
+    setPrefilledBranchId(branchId || null);
+    setPrefilledPlan(null);
+    setPrefilledInquiryTopic(null);
     setIsReservationModalOpen(true);
   };
 
@@ -156,7 +188,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
       <LandingHeader
         activeSection={activeSection}
         onNavigateSection={handleNavigateSection}
-        onOpenReservation={() => handleOpenReservation()}
+        onOpenReservation={() => handleOpenJoinNow()}
         onOpenMemberArea={() => setIsMemberModalOpen(true)}
         onOpenStaffLogin={onOpenStaffLogin}
         loggedInMember={loggedInMember}
@@ -170,7 +202,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
         {/* 2. Landing Page (Home) */}
         {/* Hero Section */}
         <HeroSection
-          onStartBooking={() => handleOpenReservation()}
+          onStartBooking={() => handleOpenJoinNow()}
           onExplorePrograms={() => handleNavigateSection('programs')}
           memberCount={members.length}
           activeInGymCount={activeInGymCount}
@@ -179,14 +211,16 @@ export const LandingPage: React.FC<LandingPageProps> = ({
         {/* Why Choose Us (6 Nilai Unggulan) */}
         <WhyChooseUsSection onLearnMore={() => handleNavigateSection('about-us')} />
 
-        {/* Live Statistics & Real-Time In-Gym Attendance / Occupancy Monitor */}
+        {/* Prominent "Join Now" Banner & Real-Time Macro Statistics */}
         <LiveStatisticsSection
           memberCount={members.length}
           studioClassCount={studioClasses.length}
           trainerCount={trainerCount}
           branchCount={3}
           attendances={attendances}
-          onCtaClick={() => handleOpenReservation()}
+          onCtaClick={() => handleOpenJoinNow()}
+          onOpenJoinNow={(plan, branchId) => handleOpenJoinNow(plan, branchId)}
+          onOpenInquiry={(topic, branchId) => handleOpenInquiry(topic, branchId)}
         />
 
         {/* 3. About Us (Profil, Sejarah, Galeri Fasilitas & Trainer) */}
@@ -225,14 +259,18 @@ export const LandingPage: React.FC<LandingPageProps> = ({
         <ContactLocationSection
           onOpenStaffLogin={onOpenStaffLogin}
           onOpenMemberArea={() => setIsMemberModalOpen(true)}
-          onOpenReservation={() => handleOpenReservation()}
+          onOpenReservation={(branchId) => handleOpenJoinNow(undefined, branchId)}
         />
       </main>
 
-      {/* 7. Reservasi Online (Multi-step Booking Flow Modal) */}
+      {/* 7. Direct Registration / Inquiry / Reservation Multi-flow Modal */}
       <ReservationFlowModal
         isOpen={isReservationModalOpen}
         onClose={() => setIsReservationModalOpen(false)}
+        initialMode={modalMode}
+        prefilledPlan={prefilledPlan}
+        prefilledBranchId={prefilledBranchId}
+        prefilledInquiryTopic={prefilledInquiryTopic}
         prefilledProgram={prefilledProgram}
         prefilledClass={prefilledClass}
         prefilledTrainer={prefilledTrainer}

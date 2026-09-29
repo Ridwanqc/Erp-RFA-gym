@@ -75,8 +75,8 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
                 onClick={onStartBooking}
                 className="w-full sm:w-auto px-8 py-4 rounded-2xl bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white font-extrabold text-sm sm:text-base flex items-center justify-center gap-3 shadow-xl shadow-orange-500/25 hover:shadow-orange-500/40 hover:-translate-y-0.5 active:translate-y-0 transition-all duration-200 group"
               >
-                <Calendar className="w-5 h-5 text-white" />
-                <span>Mulai Latihan Sekarang</span>
+                <Flame className="w-5 h-5 text-amber-200" />
+                <span>Join Now • Mulai Latihan</span>
                 <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
               </button>
 

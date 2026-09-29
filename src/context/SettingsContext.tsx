@@ -585,12 +585,37 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
   const executeTestPrint = () => {
     const printer = settings.printer;
-    const widthStyle = printer.paperWidth === '58mm' ? 'max-width: 58mm;' : 'max-width: 80mm;';
+    const isThermal58 = printer.paperWidth === '58mm';
+    const isThermal80 = printer.paperWidth === '80mm';
+    const isLetter = (printer.paperWidth as any) === 'letter';
 
-    const printWindow = window.open('', '_blank', 'width=450,height=650');
-    if (!printWindow) {
-      alert('Pop-up terblokir oleh browser. Izinkan pop-up untuk mencetak struk thermal uji coba.');
-      return;
+    const pageSize = isThermal58
+      ? '58mm auto'
+      : isThermal80
+      ? '80mm auto'
+      : isLetter
+      ? 'letter portrait'
+      : 'A4 portrait';
+
+    const widthStyle = isThermal58
+      ? 'max-width: 52mm; font-size: 11px;'
+      : isThermal80
+      ? 'max-width: 74mm; font-size: 12.5px;'
+      : 'max-width: 185mm; font-size: 13px;';
+
+    const pageMargin = isThermal58 || isThermal80 ? '0' : '10mm 15mm';
+
+    let iframe = document.getElementById('silent-test-print-frame') as HTMLIFrameElement;
+    if (!iframe) {
+      iframe = document.createElement('iframe');
+      iframe.id = 'silent-test-print-frame';
+      iframe.style.position = 'fixed';
+      iframe.style.right = '0';
+      iframe.style.bottom = '0';
+      iframe.style.width = '0';
+      iframe.style.height = '0';
+      iframe.style.border = 'none';
+      document.body.appendChild(iframe);
     }
 
     const testContent = `
@@ -600,20 +625,21 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
           <title>Test Print Struk - ${printer.storeName}</title>
           <style>
             @page {
-              margin: 0;
-              size: ${printer.paperWidth === '58mm' ? '58mm auto' : '80mm auto'};
+              margin: ${pageMargin};
+              size: ${pageSize};
             }
             body {
-              font-family: 'Courier New', Courier, monospace;
-              font-size: ${printer.paperWidth === '58mm' ? '11px' : '13px'};
+              font-family: 'Courier New', Courier, monospace, -apple-system, sans-serif;
               line-height: 1.35;
               color: #000;
               background: #fff;
               margin: 0;
-              padding: 10px 8px;
+              padding: ${isThermal58 || isThermal80 ? '8px 4px' : '20px 24px'};
               ${widthStyle}
               margin-left: auto;
               margin-right: auto;
+              -webkit-print-color-adjust: exact;
+              print-color-adjust: exact;
             }
             .text-center { text-align: center; }
             .text-right { text-align: right; }
@@ -639,7 +665,7 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
           <div class="dashed"></div>
 
           <div class="text-center bold" style="font-size: 11px;">
-            ${printer.headerNote}
+            ${printer.headerNote || 'STRUK UJI COBA PRINTER RESMI'}
           </div>
 
           <div class="dashed"></div>
@@ -658,8 +684,8 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
             <span>Administrator (Test Mode)</span>
           </div>` : ''}
           <div class="flex-between">
-            <span>Ukuran Kertas:</span>
-            <span class="bold">${printer.paperWidth.toUpperCase()}</span>
+            <span>Target Printer:</span>
+            <span class="bold">${isThermal58 ? 'Thermal Roll 58mm' : isThermal80 ? 'Thermal Roll 80mm' : isLetter ? 'Standar Letter' : 'Standar A4 (Inkjet/Laser)'}</span>
           </div>
           <div class="flex-between">
             <span>Mode Koneksi:</span>
@@ -730,19 +756,21 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
           <div class="text-center bold" style="font-size: 9px; margin-top: 8px;">
             *** PRINTER TEST BERHASIL ***
           </div>
-          ${printer.autoCutPaper ? '<div style="margin-top: 24px; text-align: center; font-size: 8px;">[Auto Cut Position]</div>' : ''}
-          <script>
-            window.onload = function() {
-              window.print();
-            }
-          </script>
+          ${printer.autoCutPaper && (isThermal58 || isThermal80) ? '<div style="margin-top: 24px; text-align: center; font-size: 8px;">[Auto Cut Position]</div>' : ''}
         </body>
       </html>
     `;
 
-    printWindow.document.open();
-    printWindow.document.write(testContent);
-    printWindow.document.close();
+    const doc = iframe.contentWindow?.document;
+    if (doc) {
+      doc.open();
+      doc.write(testContent);
+      doc.close();
+      setTimeout(() => {
+        iframe.contentWindow?.focus();
+        iframe.contentWindow?.print();
+      }, 200);
+    }
   };
 
   return (

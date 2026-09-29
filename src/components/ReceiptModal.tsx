@@ -57,8 +57,13 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({
   // Sync default printer settings when opened
   useEffect(() => {
     if (isOpen) {
-      if (printer?.paperWidth === '58mm' || printer?.paperWidth === '80mm') {
+      if (printer?.paperWidth === '58mm' || printer?.paperWidth === '80mm' || printer?.paperWidth === 'a4') {
         setPaperWidth(printer.paperWidth);
+        if (printer.paperWidth === 'a4') {
+          setLayoutMode('invoice');
+        } else {
+          setLayoutMode('thermal');
+        }
       }
       setPrintTimestamp(getTimestamp(true));
       setCopiedWA(false);
@@ -167,15 +172,37 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({
 
   if (!isOpen || (!transaction && !closingRecord)) return null;
 
-  // Execute clean print with specialized body class
+  // Execute clean print with specialized body class & dynamic @page size
   const handleExecutePrint = () => {
+    // Inject dynamic @page rule so thermal printers (58mm/80mm) and A4 printers format accurately
+    const pageStyleId = 'dynamic-receipt-print-style';
+    let styleEl = document.getElementById(pageStyleId) as HTMLStyleElement;
+    if (!styleEl) {
+      styleEl = document.createElement('style');
+      styleEl.id = pageStyleId;
+      document.head.appendChild(styleEl);
+    }
+
+    if (paperWidth === '58mm') {
+      styleEl.textContent = `@media print { @page { size: 58mm auto !important; margin: 0mm !important; } }`;
+    } else if (paperWidth === '80mm') {
+      styleEl.textContent = `@media print { @page { size: 80mm auto !important; margin: 0mm !important; } }`;
+    } else {
+      styleEl.textContent = `@media print { @page { size: A4 portrait !important; margin: 10mm 15mm !important; } }`;
+    }
+
     document.body.classList.add('printing-receipt');
+    document.body.classList.add(`printing-paper-${paperWidth}`);
 
     setTimeout(() => {
       window.print();
       // Remove class after print dialog is closed
       const handleAfterPrint = () => {
         document.body.classList.remove('printing-receipt');
+        document.body.classList.remove(`printing-paper-${paperWidth}`);
+        if (styleEl && styleEl.parentNode) {
+          styleEl.parentNode.removeChild(styleEl);
+        }
         window.removeEventListener('afterprint', handleAfterPrint);
       };
       window.addEventListener('afterprint', handleAfterPrint);
@@ -183,6 +210,10 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({
       // Fallback cleanup
       setTimeout(() => {
         document.body.classList.remove('printing-receipt');
+        document.body.classList.remove(`printing-paper-${paperWidth}`);
+        if (styleEl && styleEl.parentNode) {
+          styleEl.parentNode.removeChild(styleEl);
+        }
       }, 3000);
     }, 50);
   };

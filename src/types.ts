@@ -1066,7 +1066,7 @@ export interface ApprovalThresholdConfig {
 // SYSTEM SETTINGS & CONFIGURATION INTERFACES
 // ==========================================
 
-export type PrinterPaperWidth = '58mm' | '80mm' | 'a4';
+export type PrinterPaperWidth = '58mm' | '80mm' | 'a4' | 'letter';
 export type PrinterConnectionType = 'browser' | 'bluetooth' | 'usb' | 'network';
 
 export interface PrinterConfig {

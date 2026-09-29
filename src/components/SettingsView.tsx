@@ -44,7 +44,9 @@ import {
   Monitor,
   Grid,
   CircleDot,
-  Layers
+  Layers,
+  Copy,
+  Receipt
 } from 'lucide-react';
 import {
   User,
@@ -52,9 +54,11 @@ import {
   PrinterPaperWidth,
   PrinterConnectionType,
   BankAccountConfig,
-  RoleActionPermissions
+  RoleActionPermissions,
+  Transaction
 } from '../types';
 import { useSettings } from '../context/SettingsContext';
+import { ReceiptModal } from './ReceiptModal';
 import {
   useTheme,
   THEME_MODE_OPTIONS,
@@ -65,8 +69,12 @@ import {
   BackgroundPattern
 } from '../context/ThemeContext';
 import { SYSTEM_MODULES, DEFAULT_PIC_PROTECTION } from '../data/settingsData';
-import { formatRp } from '../utils/formatters';
+import { formatRp, APP_TODAY } from '../utils/formatters';
 import { BranchManagementView } from './BranchManagementView';
+import {
+  BranchWhatsAppVerificationModal,
+  validateIndonesianWhatsApp
+} from './BranchWhatsAppVerificationModal';
 
 interface SettingsViewProps {
   currentUser: User | null;
@@ -106,7 +114,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
     updateRolePermission,
     resetRolePermissionsToDefault,
     resetSettingsToDefault,
-    executeTestPrint
+    executeTestPrint,
+    updateBranch
   } = useSettings();
 
   const {
@@ -121,6 +130,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   } = useTheme();
 
   const [activeTab, setActiveTab] = useState<SettingsSubTab>(initialSubTab);
+  const [isBranchWaModalOpen, setIsBranchWaModalOpen] = useState(false);
+  const [testReceiptTrx, setTestReceiptTrx] = useState<Transaction | null>(null);
 
   // PIC Security Password Form State
   const picProtection = settings.picProtection || DEFAULT_PIC_PROTECTION;
@@ -186,6 +197,33 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
       setConnectedDevice('POS-Thermal-BT (Ready)');
       notifySuccess('Perangkat Ditemukan', 'Berhasil mendeteksi printer thermal terdekat.');
     }, 1500);
+  };
+
+  const handleOpenReceiptSimulation = () => {
+    const mockTrx: Transaction = {
+      id: `TRX-SIM-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`,
+      date: APP_TODAY,
+      time: new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }),
+      customer: 'Akbar Hanif (Member VIP)',
+      amount: 420000,
+      amountPaid: 420000,
+      amountRemaining: 0,
+      type: 'POS',
+      status: 'Paid',
+      method: 'QRIS',
+      cashier: 'Siti Kasir (Front Desk)',
+      branchId: activeBranch?.id || 'BR-001',
+      branchName: activeBranch?.name || settings.profile.branchName || 'Cabang Utama Flagship',
+      desc: 'Penjualan Produk Fitness & Kafe POS',
+      itemsJSON: JSON.stringify([
+        { name: '1x Whey Protein Isolate RTD (Cokelat)', price: 70000, qty: 1, category: 'Supplement' },
+        { name: '2x Pocari Sweat 500ml Can', price: 15000, qty: 2, category: 'Beverage' },
+        { name: '1x Handuk Gym Microfiber Premium', price: 70000, qty: 1, category: 'Merchandise' },
+        { name: '1x Daily Gym Visitor Pass', price: 250000, qty: 1, category: 'Access' }
+      ])
+    };
+    setTestReceiptTrx(mockTrx);
+    notifySuccess('Simulasi Struk POS Dibuka', `Memuat ReceiptModal dengan format ${settings.printer.paperWidth.toUpperCase()}`);
   };
 
   // -------------------------------------------------------------
@@ -366,6 +404,80 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
     event.target.value = '';
   };
 
+  const handleCopyBranchWaSummary = () => {
+    const lines = [
+      `*DAFTAR KONTAK WHATSAPP RESMI UNIT CABANG RFA GYM*`,
+      `Tanggal Pembaruan: ${APP_TODAY}`,
+      `Total Cabang: ${branches.length} Outlet`,
+      `--------------------------------------------------`,
+      ...branches.map((b, idx) => {
+        const val = validateIndonesianWhatsApp(b.whatsapp);
+        return (
+          `${idx + 1}. *${b.name}* [${b.code}]\n` +
+          `   • Status: ${b.status} ${b.isMainBranch ? '(KANTOR PUSAT)' : ''}\n` +
+          `   • No. WhatsApp Resmi: ${val.displayFormatted} (+${val.internationalNumber})\n` +
+          `   • Link Chat Langsung: https://wa.me/${val.internationalNumber}\n` +
+          `   • Alamat: ${b.address}, ${b.city}`
+        );
+      }),
+      `--------------------------------------------------`,
+      `Nomor WhatsApp di atas terintegrasi langsung dengan landing page reservasi online & pendaftaran calon member.`
+    ];
+    navigator.clipboard.writeText(lines.join('\n\n'));
+    if (showToast) {
+      showToast('Kontak Disalin', 'Seluruh kontak WhatsApp cabang berhasil disalin ke clipboard!', 'success');
+    }
+  };
+
+  const handleExportBranchWaCsv = () => {
+    const headers = [
+      'ID Cabang',
+      'Kode Cabang',
+      'Nama Cabang',
+      'Status Operasional',
+      'Kantor Pusat',
+      'Nomor WhatsApp Resmi',
+      'Format WA Internasional',
+      'Link Direct Chat WA',
+      'Telepon Kantor',
+      'Alamat Lengkap',
+      'Kota',
+      'Status Validasi WA'
+    ];
+
+    const rows = branches.map((b) => {
+      const val = validateIndonesianWhatsApp(b.whatsapp);
+      return [
+        `"${b.id}"`,
+        `"${b.code}"`,
+        `"${b.name.replace(/"/g, '""')}"`,
+        `"${b.status}"`,
+        `"${b.isMainBranch ? 'Ya (HQ)' : 'Tidak'}"`,
+        `"${b.whatsapp}"`,
+        `"+${val.internationalNumber}"`,
+        `"https://wa.me/${val.internationalNumber}"`,
+        `"${b.phone || ''}"`,
+        `"${b.address.replace(/"/g, '""')}"`,
+        `"${b.city.replace(/"/g, '""')}"`,
+        `"${val.isValid ? 'Terverifikasi' : 'Perlu Koreksi'}"`
+      ];
+    });
+
+    const csvContent = '\uFEFF' + [headers.join(','), ...rows.map((r) => r.join(','))].join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', `Kontak_WhatsApp_Resmi_Cabang_RFA_Gym_${APP_TODAY}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+
+    if (showToast) {
+      showToast('Export CSV Berhasil', `File CSV kontak WhatsApp cabang berhasil diunduh.`, 'success');
+    }
+  };
+
   // Filter modules
   const filteredModules = SYSTEM_MODULES.filter(
     (m) =>
@@ -401,7 +513,16 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
             </div>
           </div>
 
-          <div className="flex items-center gap-2 shrink-0">
+          <div className="flex items-center gap-2 shrink-0 flex-wrap">
+            <button
+              type="button"
+              onClick={() => setIsBranchWaModalOpen(true)}
+              className="px-4 py-2.5 bg-emerald-950/70 hover:bg-emerald-900/90 text-emerald-300 border border-emerald-500/40 rounded-xl text-xs font-bold transition flex items-center gap-2 active:scale-95 cursor-pointer shadow-sm"
+              title="Verifikasi validitas nomor WhatsApp seluruh unit cabang dan ekspor ke CSV / Clipboard"
+            >
+              <MessageSquare className="w-4 h-4 text-emerald-400" />
+              <span>Verifikasi WA Cabang</span>
+            </button>
             <button
               type="button"
               onClick={executeTestPrint}
@@ -597,34 +718,135 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                 </div>
               )}
 
-              {/* Ukuran Kertas Thermal */}
-              <div>
-                <label className="text-xs font-bold uppercase tracking-wider text-zinc-300 block mb-2">
-                  Lebar Kertas Struk Thermal
-                </label>
-                <div className="grid grid-cols-3 gap-2.5">
+              {/* Format & Ukuran Kertas Thermal / Standar */}
+              <div className="space-y-3 pt-3 border-t border-zinc-800/80">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <label className="text-xs font-bold uppercase tracking-wider text-zinc-200 block">
+                      Format Kertas Printer & Struk Kasir
+                    </label>
+                    <p className="text-[11px] text-zinc-400 mt-0.5">
+                      Pilih format roll thermal (58mm/80mm) atau kertas standar A4 untuk struk POS & invoice resmi.
+                    </p>
+                  </div>
+                  <span className="px-2.5 py-1 rounded-full text-[10px] font-mono font-bold bg-orange-500/20 text-orange-400 border border-orange-500/30">
+                    Aktif: {settings.printer.paperWidth.toUpperCase()}
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                   {[
-                    { id: '58mm', name: '58 mm', desc: 'Mini / Kasir Mobile (32 Col)' },
-                    { id: '80mm', name: '80 mm', desc: 'Standar POS Kasir (48 Col)' },
-                    { id: 'a4', name: 'A4 / Invoice', desc: 'Faktur Lembar Penuh' }
+                    {
+                      id: '58mm',
+                      name: '58 mm Thermal',
+                      badge: '32 Kolom (Mini POS)',
+                      desc: 'Printer Bluetooth / Mobile Kasir',
+                      widthSpec: 'Lebar Kertas: 58mm • Area Cetak: 48mm',
+                      icon: Receipt,
+                      note: 'Hemat kertas roll mini, ringkas untuk booth/event.'
+                    },
+                    {
+                      id: '80mm',
+                      name: '80 mm Thermal',
+                      badge: '48 Kolom (Standar POS)',
+                      desc: 'Printer Desktop Kasir Gym Utama',
+                      widthSpec: 'Lebar Kertas: 80mm • Area Cetak: 72mm',
+                      icon: Printer,
+                      note: 'Standar resmi POS kasir Epson TM-T82, Xprinter, Panda.'
+                    },
+                    {
+                      id: 'a4',
+                      name: 'A4 / Invoice',
+                      badge: 'Lembar Penuh (Formal)',
+                      desc: 'Printer Standar Inkjet/Laser & PDF',
+                      widthSpec: 'Dimensi: 210 x 297 mm • Margin 12mm',
+                      icon: FileText,
+                      note: 'Kwitansi membership & faktur resmi bertanda tangan.'
+                    }
                   ].map((size) => {
                     const isSel = settings.printer.paperWidth === size.id;
+                    const Icon = size.icon;
                     return (
                       <button
                         key={size.id}
                         type="button"
                         onClick={() => handlePaperWidthChange(size.id as PrinterPaperWidth)}
-                        className={`p-3 rounded-2xl border text-center transition cursor-pointer ${
+                        className={`p-3.5 rounded-2xl border text-left transition cursor-pointer relative flex flex-col justify-between ${
                           isSel
-                            ? 'bg-zinc-800 border-orange-500 ring-2 ring-orange-500/30'
-                            : 'bg-zinc-950/60 border-zinc-800 hover:border-zinc-700'
+                            ? 'bg-zinc-800 border-orange-500 ring-2 ring-orange-500/40 shadow-lg shadow-orange-500/10'
+                            : 'bg-zinc-950/70 border-zinc-800/90 hover:border-zinc-700 hover:bg-zinc-900/50'
                         }`}
                       >
-                        <p className="text-xs font-bold text-white">{size.name}</p>
-                        <p className="text-[10px] text-zinc-400 mt-0.5">{size.desc}</p>
+                        <div>
+                          <div className="flex items-center justify-between mb-1.5">
+                            <span className="p-2 rounded-xl bg-orange-500/15 text-orange-400">
+                              <Icon className="w-4 h-4" />
+                            </span>
+                            <span
+                              className={`text-[9px] font-bold px-1.5 py-0.5 rounded-md ${
+                                isSel
+                                  ? 'bg-orange-500 text-white'
+                                  : 'bg-zinc-800 text-zinc-400'
+                              }`}
+                            >
+                              {size.badge}
+                            </span>
+                          </div>
+
+                          <p className="text-xs font-bold text-white">{size.name}</p>
+                          <p className="text-[11px] text-orange-400 font-semibold mt-0.5">{size.desc}</p>
+                          <p className="text-[10px] text-zinc-400 mt-1 leading-tight">{size.note}</p>
+                        </div>
+
+                        <div className="pt-2 mt-2 border-t border-zinc-800/80 text-[9.5px] text-zinc-500 font-mono">
+                          {size.widthSpec}
+                        </div>
                       </button>
                     );
                   })}
+                </div>
+
+                {/* Proportional Width Visual Indicator */}
+                <div className="bg-zinc-950 p-3 rounded-2xl border border-zinc-800 space-y-2">
+                  <div className="flex items-center justify-between text-[11px]">
+                    <span className="text-zinc-400 font-medium">Perbandingan Skala Fisik Kertas:</span>
+                    <span className="text-zinc-300 font-bold">
+                      {settings.printer.paperWidth === '58mm'
+                        ? 'Lebar Efektif: 48 mm (384 dots)'
+                        : settings.printer.paperWidth === '80mm'
+                        ? 'Lebar Efektif: 72 mm (576 dots)'
+                        : 'Lebar Efektif: 185 mm (A4 Full Width)'}
+                    </span>
+                  </div>
+
+                  <div className="w-full bg-zinc-900 h-3 rounded-full overflow-hidden flex border border-zinc-800 p-0.5">
+                    <div
+                      className={`h-full rounded-full transition-all duration-300 ${
+                        settings.printer.paperWidth === '58mm'
+                          ? 'w-[28%] bg-amber-500'
+                          : settings.printer.paperWidth === '80mm'
+                          ? 'w-[45%] bg-orange-500'
+                          : 'w-full bg-blue-500'
+                      }`}
+                    />
+                  </div>
+
+                  <div className="flex justify-between text-[9px] text-zinc-500 px-0.5 font-mono">
+                    <span>58mm (Mobile POS)</span>
+                    <span>80mm (Desktop Kasir)</span>
+                    <span>A4 (Lembar Penuh)</span>
+                  </div>
+                </div>
+
+                {/* Integration Status Callout */}
+                <div className="bg-orange-500/10 border border-orange-500/25 rounded-2xl p-3 flex items-start gap-2.5 text-xs">
+                  <Sparkles className="w-4 h-4 text-orange-400 shrink-0 mt-0.5" />
+                  <div className="text-zinc-300 leading-relaxed text-[11px]">
+                    <strong className="text-white">Sinkronisasi Penuh Kasir POS & ReceiptModal:</strong> Format{' '}
+                    <span className="text-orange-400 font-bold uppercase">{settings.printer.paperWidth}</span>{' '}
+                    yang dipilih otomatis diterapkan pada seluruh struk penjualan POS kafe, faktur membership,
+                    slip check-in loker, dan tiket sesi Personal Trainer tanpa perlu konfigurasi ulang.
+                  </div>
                 </div>
               </div>
             </div>
@@ -733,119 +955,249 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
             </div>
           </div>
 
-          {/* Right Live Preview: Thermal Receipt */}
+          {/* Right Live Preview: Thermal Receipt & A4 Invoice */}
           <div className="lg:col-span-5 space-y-4">
             <div className="bg-zinc-900 border border-zinc-800 rounded-3xl p-5 sm:p-6 space-y-4">
               <div className="flex items-center justify-between">
                 <span className="text-xs font-bold uppercase tracking-wider text-zinc-300 flex items-center gap-1.5">
                   <Eye className="w-4 h-4 text-orange-400" />
-                  Pratinjau Struk Thermal Nyata
+                  <span>Pratinjau Hasil Cetak Kasir</span>
                 </span>
-                <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-zinc-800 text-zinc-300">
-                  {settings.printer.paperWidth.toUpperCase()}
+                <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-orange-500/20 text-orange-400 border border-orange-500/30">
+                  {settings.printer.paperWidth === 'a4' ? 'A4 INVOICE (210mm)' : `THERMAL ${settings.printer.paperWidth.toUpperCase()}`}
                 </span>
               </div>
 
-              {/* Thermal Paper Realistic Mockup */}
-              <div className="bg-zinc-950 p-4 sm:p-6 rounded-2xl flex justify-center border border-zinc-800 shadow-inner">
-                <div
-                  className={`bg-white text-zinc-900 rounded-lg p-4 font-mono shadow-2xl border-t-4 border-orange-500 transition-all ${
-                    settings.printer.paperWidth === '58mm' ? 'w-full max-w-[260px] text-[11px]' : 'w-full max-w-[340px] text-xs'
-                  }`}
-                >
-                  {/* Header */}
-                  <div className="text-center pb-2 border-b border-dashed border-zinc-400">
-                    {settings.printer.showLogo && (
-                      <div className="w-8 h-8 rounded-lg bg-orange-600 text-white font-black italic flex items-center justify-center mx-auto mb-1.5 text-base shadow-sm">
-                        R
+              {/* Realistic Paper Mockup Container */}
+              <div className="bg-zinc-950 p-4 sm:p-6 rounded-2xl flex justify-center border border-zinc-800 shadow-inner max-h-[480px] overflow-y-auto">
+                {settings.printer.paperWidth === 'a4' ? (
+                  /* Formal A4 / Letter Mockup */
+                  <div className="bg-white text-zinc-900 rounded-lg p-5 font-sans shadow-2xl border-t-4 border-blue-500 w-full max-w-[400px] text-xs transition-all select-none">
+                    {/* A4 Header Letterhead */}
+                    <div className="flex justify-between items-start border-b-2 border-zinc-900 pb-3 mb-3">
+                      <div>
+                        {settings.printer.showLogo && (
+                          <div className="w-7 h-7 rounded bg-orange-600 text-white font-black italic flex items-center justify-center mb-1 text-sm shadow-sm">
+                            R
+                          </div>
+                        )}
+                        <h4 className="font-black text-sm uppercase tracking-tight text-zinc-900">
+                          {settings.printer.storeName}
+                        </h4>
+                        <p className="text-[9px] text-zinc-600">{settings.printer.storeTagline}</p>
+                        <p className="text-[9px] text-zinc-600">{settings.printer.storeAddress}</p>
+                        <p className="text-[9px] text-zinc-600">Telp: {settings.printer.storePhone}</p>
                       </div>
-                    )}
-                    <p className="font-black text-sm tracking-tight">{settings.printer.storeName}</p>
-                    <p className="text-[9px] text-zinc-600">{settings.printer.storeTagline}</p>
-                    <p className="text-[9px] text-zinc-600 mt-1">{settings.printer.storeAddress}</p>
-                    <p className="text-[9px] text-zinc-600">{settings.printer.storeCity}</p>
-                    <p className="text-[9px] text-zinc-600">Telp: {settings.printer.storePhone}</p>
-                  </div>
+                      <div className="text-right">
+                        <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded bg-blue-100 text-blue-800 border border-blue-200">
+                          FAKTUR PENJUALAN RESMI
+                        </span>
+                        <p className="text-[10px] font-mono font-bold mt-1 text-zinc-800">TRX-202609-088</p>
+                        <p className="text-[9px] text-zinc-500">22/09/2026 14:30 WIB</p>
+                      </div>
+                    </div>
 
-                  <div className="py-2 text-center text-[10px] font-bold text-orange-600 uppercase border-b border-dashed border-zinc-400">
-                    {settings.printer.headerNote}
-                  </div>
+                    {/* Metadata */}
+                    <div className="grid grid-cols-2 gap-2 p-2 bg-zinc-50 rounded border border-zinc-200 text-[10px] mb-3">
+                      <div>
+                        <span className="text-zinc-500 block">Diterbitkan Untuk:</span>
+                        <strong className="text-zinc-800">Akbar Hanif (VIP Member)</strong>
+                        <span className="text-zinc-500 block text-[9px]">ID: MBR-2026-0042</span>
+                      </div>
+                      <div className="text-right">
+                        <span className="text-zinc-500 block">Kasir / Front Desk:</span>
+                        <strong className="text-zinc-800">Siti Kasir</strong>
+                        <span className="text-zinc-500 block text-[9px]">Status: LUNAS (QRIS)</span>
+                      </div>
+                    </div>
 
-                  {/* Metadata */}
-                  <div className="py-2 space-y-0.5 border-b border-dashed border-zinc-400 text-[10px]">
-                    <div className="flex justify-between">
-                      <span className="text-zinc-600">Waktu:</span>
-                      <span className="font-semibold">22/09/2026 14:30 WIB</span>
+                    {/* Items Table */}
+                    <table className="w-full text-[10px] border-collapse mb-3">
+                      <thead>
+                        <tr className="border-b border-t border-zinc-300 bg-zinc-100 text-zinc-700">
+                          <th className="py-1 px-1 text-left">Deskripsi Produk/Layanan</th>
+                          <th className="py-1 px-1 text-center">Qty</th>
+                          <th className="py-1 px-1 text-right">Harga</th>
+                          <th className="py-1 px-1 text-right">Total</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-zinc-200">
+                        <tr>
+                          <td className="py-1 px-1 font-medium">1x Membership Gold (1 Bln)</td>
+                          <td className="py-1 px-1 text-center">1</td>
+                          <td className="py-1 px-1 text-right">Rp 350.000</td>
+                          <td className="py-1 px-1 text-right font-bold">Rp 350.000</td>
+                        </tr>
+                        <tr>
+                          <td className="py-1 px-1 font-medium">2x Pocari Sweat 500ml</td>
+                          <td className="py-1 px-1 text-center">2</td>
+                          <td className="py-1 px-1 text-right">Rp 10.000</td>
+                          <td className="py-1 px-1 text-right font-bold">Rp 20.000</td>
+                        </tr>
+                      </tbody>
+                    </table>
+
+                    {/* Summary Totals */}
+                    <div className="border-t-2 border-zinc-900 pt-2 text-[10px] space-y-0.5">
+                      <div className="flex justify-between text-zinc-600">
+                        <span>Subtotal Transaksi:</span>
+                        <span>Rp 370.000</span>
+                      </div>
+                      <div className="flex justify-between font-bold text-xs text-zinc-900 pt-0.5 border-t border-zinc-200">
+                        <span>TOTAL AKHIR:</span>
+                        <span className="text-blue-700">Rp 370.000</span>
+                      </div>
                     </div>
-                    <div className="flex justify-between">
-                      <span className="text-zinc-600">No. Nota:</span>
-                      <span className="font-bold">TRX-202609-088</span>
+
+                    {/* Signatures */}
+                    <div className="grid grid-cols-2 gap-4 mt-4 pt-2 border-t border-dashed border-zinc-300 text-center text-[9px]">
+                      <div>
+                        <span className="text-zinc-500">Petugas Kasir</span>
+                        <div className="mt-5 border-t border-zinc-400 font-bold">( Siti Kasir )</div>
+                      </div>
+                      <div>
+                        <span className="text-zinc-500">Member Penerima</span>
+                        <div className="mt-5 border-t border-zinc-400 font-bold">( Akbar Hanif )</div>
+                      </div>
                     </div>
-                    <div className="flex justify-between">
-                      <span className="text-zinc-600">Member:</span>
-                      <span className="font-semibold truncate max-w-[140px]">Akbar Hanif (VIP)</span>
+
+                    {/* Footer */}
+                    <div className="mt-3 text-center text-[8.5px] text-zinc-500 border-t border-zinc-200 pt-1">
+                      {settings.printer.footerNote}
                     </div>
-                    {settings.printer.showCashierName && (
+                  </div>
+                ) : (
+                  /* Thermal Roll Realistic Mockup (58mm or 80mm) */
+                  <div
+                    className={`bg-white text-zinc-900 rounded-lg p-4 font-mono shadow-2xl border-t-4 border-orange-500 transition-all select-none ${
+                      settings.printer.paperWidth === '58mm'
+                        ? 'w-full max-w-[250px] text-[10.5px] leading-tight'
+                        : 'w-full max-w-[340px] text-xs leading-normal'
+                    }`}
+                  >
+                    {/* Header */}
+                    <div className="text-center pb-2 border-b border-dashed border-zinc-400">
+                      {settings.printer.showLogo && (
+                        <div className="w-8 h-8 rounded-lg bg-orange-600 text-white font-black italic flex items-center justify-center mx-auto mb-1.5 text-base shadow-sm">
+                          R
+                        </div>
+                      )}
+                      <p className="font-black text-sm tracking-tight">{settings.printer.storeName}</p>
+                      <p className="text-[9px] text-zinc-600">{settings.printer.storeTagline}</p>
+                      <p className="text-[9px] text-zinc-600 mt-1">{settings.printer.storeAddress}</p>
+                      <p className="text-[9px] text-zinc-600">{settings.printer.storeCity}</p>
+                      <p className="text-[9px] text-zinc-600">Telp: {settings.printer.storePhone}</p>
+                    </div>
+
+                    <div className="py-2 text-center text-[10px] font-bold text-orange-600 uppercase border-b border-dashed border-zinc-400">
+                      {settings.printer.headerNote}
+                    </div>
+
+                    {/* Metadata */}
+                    <div className="py-2 space-y-0.5 border-b border-dashed border-zinc-400 text-[10px]">
                       <div className="flex justify-between">
-                        <span className="text-zinc-600">Kasir:</span>
-                        <span className="font-medium">Siti Kasir</span>
+                        <span className="text-zinc-600">Waktu:</span>
+                        <span className="font-semibold">22/09/2026 14:30 WIB</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-zinc-600">No. Nota:</span>
+                        <span className="font-bold">TRX-202609-088</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-zinc-600">Member:</span>
+                        <span className="font-semibold truncate max-w-[140px]">Akbar Hanif (VIP)</span>
+                      </div>
+                      {settings.printer.showCashierName && (
+                        <div className="flex justify-between">
+                          <span className="text-zinc-600">Kasir:</span>
+                          <span className="font-medium">Siti Kasir</span>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Items */}
+                    <div className="py-2 space-y-1.5 border-b border-dashed border-zinc-400 text-[11px]">
+                      <div className="flex justify-between items-start">
+                        <span className="font-medium">1x Membership Gold (1 Bln)</span>
+                        <span className="font-bold">Rp 350.000</span>
+                      </div>
+                      <div className="flex justify-between items-start">
+                        <span className="font-medium">2x Pocari Sweat 500ml</span>
+                        <span className="font-bold">Rp 20.000</span>
+                      </div>
+                    </div>
+
+                    {/* Total */}
+                    <div className="py-2 space-y-1 border-b border-dashed border-zinc-400 text-[11px]">
+                      <div className="flex justify-between">
+                        <span className="text-zinc-600">Subtotal:</span>
+                        <span>Rp 370.000</span>
+                      </div>
+                      <div className="flex justify-between font-bold text-xs pt-1">
+                        <span>TOTAL BAYAR:</span>
+                        <span className="text-orange-600">Rp 370.000</span>
+                      </div>
+                      <div className="flex justify-between text-[10px]">
+                        <span className="text-zinc-600">Metode:</span>
+                        <span className="font-bold">QRIS MANDIRI (LUNAS)</span>
+                      </div>
+                    </div>
+
+                    {/* Barcode */}
+                    {settings.printer.showBarcode && (
+                      <div className="py-2 text-center">
+                        <div className="text-[13px] tracking-widest font-black">||||| | |||| || ||| | |||</div>
+                        <span className="text-[9px] text-zinc-500">*TRX-202609-088*</span>
+                      </div>
+                    )}
+
+                    {/* Footer Note */}
+                    <div className="pt-2 text-center text-[9px] text-zinc-500 leading-tight">
+                      {settings.printer.footerNote}
+                    </div>
+
+                    {settings.printer.autoCutPaper && (
+                      <div className="mt-3 text-center text-[8px] text-zinc-400 border-t border-dashed border-zinc-300 pt-1">
+                        -- [Potong Kertas Disini] --
                       </div>
                     )}
                   </div>
-
-                  {/* Items */}
-                  <div className="py-2 space-y-1.5 border-b border-dashed border-zinc-400 text-[11px]">
-                    <div className="flex justify-between items-start">
-                      <span className="font-medium">1x Membership Gold (1 Bln)</span>
-                      <span className="font-bold">Rp 350.000</span>
-                    </div>
-                    <div className="flex justify-between items-start">
-                      <span className="font-medium">2x Pocari Sweat 500ml</span>
-                      <span className="font-bold">Rp 20.000</span>
-                    </div>
-                  </div>
-
-                  {/* Total */}
-                  <div className="py-2 space-y-1 border-b border-dashed border-zinc-400 text-[11px]">
-                    <div className="flex justify-between">
-                      <span className="text-zinc-600">Subtotal:</span>
-                      <span>Rp 370.000</span>
-                    </div>
-                    <div className="flex justify-between font-bold text-xs pt-1">
-                      <span>TOTAL BAYAR:</span>
-                      <span className="text-orange-600">Rp 370.000</span>
-                    </div>
-                    <div className="flex justify-between text-[10px]">
-                      <span className="text-zinc-600">Metode:</span>
-                      <span className="font-bold">QRIS MANDIRI (LUNAS)</span>
-                    </div>
-                  </div>
-
-                  {/* Barcode */}
-                  {settings.printer.showBarcode && (
-                    <div className="py-2 text-center">
-                      <div className="text-[13px] tracking-widest font-black">||||| | |||| || ||| | |||</div>
-                      <span className="text-[9px] text-zinc-500">*TRX-202609-088*</span>
-                    </div>
-                  )}
-
-                  {/* Footer Note */}
-                  <div className="pt-2 text-center text-[9px] text-zinc-500 leading-tight">
-                    {settings.printer.footerNote}
-                  </div>
-                </div>
+                )}
               </div>
 
-              {/* Action Buttons */}
-              <div className="flex items-center gap-2">
+              {/* Action Buttons: Test Print & Open ReceiptModal Simulation */}
+              <div className="space-y-2">
                 <button
                   type="button"
                   onClick={executeTestPrint}
-                  className="flex-1 py-2.5 bg-orange-500 hover:bg-orange-600 text-white rounded-xl text-xs font-black transition flex items-center justify-center gap-2 shadow-md cursor-pointer"
+                  className="w-full py-2.5 bg-orange-500 hover:bg-orange-600 text-white rounded-xl text-xs font-black transition flex items-center justify-center gap-2 shadow-lg shadow-orange-500/20 active:scale-95 cursor-pointer"
+                  title="Kirim cetakan struk langsung ke printer fisik yang terhubung"
                 >
                   <Printer className="w-4 h-4" />
-                  <span>Cetak Struk Uji Coba</span>
+                  <span>Cetak Struk Uji Coba Fisik (Print)</span>
                 </button>
+
+                <button
+                  type="button"
+                  onClick={handleOpenReceiptSimulation}
+                  className="w-full py-2.5 bg-zinc-800 hover:bg-zinc-700 text-white rounded-xl text-xs font-bold transition flex items-center justify-center gap-2 border border-zinc-700 hover:border-orange-500/40 cursor-pointer active:scale-95"
+                  title="Buka dialog ReceiptModal lengkap dengan transaksi contoh kasir"
+                >
+                  <Receipt className="w-4 h-4 text-orange-400" />
+                  <span>Buka Simulasi Modal Struk Kasir (ReceiptModal)</span>
+                </button>
+              </div>
+
+              <div className="p-3 rounded-2xl bg-zinc-950 border border-zinc-800/80 text-[11px] text-zinc-400 space-y-1">
+                <div className="font-bold text-zinc-300 flex items-center gap-1.5">
+                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                  <span>Status Integrasi POS & ReceiptModal: Siap</span>
+                </div>
+                <p className="text-[10px] leading-relaxed">
+                  Format <strong className="text-orange-400 uppercase">{settings.printer.paperWidth}</strong> aktif{' '}
+                  akan langsung dipakai oleh dialog ReceiptModal saat kasir menyelesaikan transaksi POS, reprint struk,
+                  atau mengirim via WhatsApp.
+                </p>
               </div>
             </div>
           </div>
@@ -2283,6 +2635,57 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
             </button>
           </div>
 
+          {/* Operational WhatsApp Sync Banner */}
+          <div className="p-4 sm:p-5 rounded-2xl bg-gradient-to-r from-emerald-950/40 via-zinc-950 to-zinc-950 border border-emerald-500/30 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+            <div className="flex items-start gap-3">
+              <div className="w-10 h-10 rounded-xl bg-emerald-500/20 border border-emerald-500/30 flex items-center justify-center text-emerald-400 shrink-0">
+                <MessageSquare className="w-5 h-5" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <h4 className="text-sm font-bold text-white">Kontak WhatsApp Resmi Unit Cabang & Landing Page</h4>
+                  <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                    {branches.filter((b) => validateIndonesianWhatsApp(b.whatsapp).isValid).length} / {branches.length} Terverifikasi
+                  </span>
+                </div>
+                <p className="text-xs text-zinc-400 mt-0.5">
+                  Seluruh pesan WhatsApp calon member dari pendaftaran landing page langsung terhubung ke nomor unit cabang masing-masing.
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2 flex-wrap w-full md:w-auto justify-end">
+              <button
+                type="button"
+                onClick={handleCopyBranchWaSummary}
+                className="px-3.5 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs font-bold transition flex items-center gap-1.5 border border-zinc-700 active:scale-95 cursor-pointer"
+                title="Salin rekapitulasi kontak seluruh cabang ke clipboard"
+              >
+                <Copy className="w-3.5 h-3.5 text-zinc-400" />
+                <span>Salin Clipboard</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={handleExportBranchWaCsv}
+                className="px-3.5 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs font-bold transition flex items-center gap-1.5 border border-zinc-700 active:scale-95 cursor-pointer"
+                title="Unduh daftar kontak WhatsApp cabang format CSV"
+              >
+                <Download className="w-3.5 h-3.5 text-zinc-400" />
+                <span>Unduh CSV</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setIsBranchWaModalOpen(true)}
+                className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold transition flex items-center gap-1.5 shadow-md shadow-emerald-600/20 active:scale-95 cursor-pointer"
+              >
+                <ShieldCheck className="w-3.5 h-3.5" />
+                <span>Verifikasi & Edit</span>
+              </button>
+            </div>
+          </div>
+
           {/* Quick Variable Reference */}
           <div className="p-4 rounded-2xl bg-zinc-950/80 border border-zinc-800 flex flex-wrap items-center gap-2 text-[11px]">
             <span className="font-bold text-zinc-300">Variabel Tersedia:</span>
@@ -2470,6 +2873,24 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
             </button>
           </div>
         </div>
+      )}
+
+      {/* Modal Verifikasi & Ekspor Kontak WhatsApp Cabang */}
+      <BranchWhatsAppVerificationModal
+        isOpen={isBranchWaModalOpen}
+        onClose={() => setIsBranchWaModalOpen(false)}
+        branches={branches}
+        onUpdateBranch={updateBranch}
+        showToast={showToast}
+      />
+
+      {/* Modal Simulasi Struk POS & ReceiptModal */}
+      {testReceiptTrx && (
+        <ReceiptModal
+          isOpen={Boolean(testReceiptTrx)}
+          transaction={testReceiptTrx}
+          onClose={() => setTestReceiptTrx(null)}
+        />
       )}
     </div>
   );

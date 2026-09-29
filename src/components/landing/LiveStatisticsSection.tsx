@@ -11,12 +11,19 @@ import {
   Flame,
   Sparkles,
   Activity,
-  Clock,
   MapPin,
-  UserCheck,
-  Filter
+  ShieldCheck,
+  Zap,
+  Dumbbell,
+  MessageSquare,
+  HelpCircle,
+  Clock,
+  ChevronRight,
+  MessageCircle,
+  ExternalLink
 } from 'lucide-react';
 import { Attendance } from '../../types';
+import { BRANCH_CONTACTS, getDynamicBranchContacts } from '../../data/landingData';
 import { APP_TODAY } from '../../utils/formatters';
 
 interface LiveStatisticsSectionProps {
@@ -25,7 +32,9 @@ interface LiveStatisticsSectionProps {
   trainerCount: number;
   branchCount: number;
   attendances?: Attendance[];
-  onCtaClick: () => void;
+  onCtaClick?: () => void;
+  onOpenJoinNow?: (plan?: string, branchId?: string) => void;
+  onOpenInquiry?: (topic?: string, branchId?: string) => void;
 }
 
 export const LiveStatisticsSection: React.FC<LiveStatisticsSectionProps> = ({
@@ -34,11 +43,16 @@ export const LiveStatisticsSection: React.FC<LiveStatisticsSectionProps> = ({
   trainerCount,
   branchCount,
   attendances = [],
-  onCtaClick
+  onCtaClick,
+  onOpenJoinNow,
+  onOpenInquiry
 }) => {
   const [isSyncing, setIsSyncing] = useState(false);
   const [lastSyncTime, setLastSyncTime] = useState('Baru saja (Real-Time)');
-  const [branchFilter, setBranchFilter] = useState<'ALL' | 'BR-001' | 'BR-002' | 'BR-003'>('ALL');
+  const [selectedWaBranchId, setSelectedWaBranchId] = useState<string>('BR-001');
+
+  // Dynamic branch contacts synced with Settings
+  const branchContacts = getDynamicBranchContacts();
 
   const handleManualSync = () => {
     setIsSyncing(true);
@@ -51,51 +65,38 @@ export const LiveStatisticsSection: React.FC<LiveStatisticsSectionProps> = ({
           .toString()
           .padStart(2, '0')}:${now.getSeconds().toString().padStart(2, '0')} WIB`
       );
-    }, 600);
+    }, 500);
   };
 
-  // Calculations for real-time gym attendance
+  // Calculations for real-time gym attendance / members currently in gym
   const todayAttendances = attendances.filter((a) => a.date === APP_TODAY);
   const activeInGymMembers = todayAttendances.filter((a) => !a.timeOut || a.timeOut.trim() === '');
   const activeCount = activeInGymMembers.length;
 
-  // Branch statistics
-  const sudirmanActive = activeInGymMembers.filter(
-    (a) => !a.branchId || a.branchId === 'BR-001' || a.branchName?.includes('Sudirman')
-  );
-  const senopatiActive = activeInGymMembers.filter(
-    (a) => a.branchId === 'BR-002' || a.branchName?.includes('Senopati')
-  );
-  const bsdActive = activeInGymMembers.filter(
-    (a) => a.branchId === 'BR-003' || a.branchName?.includes('BSD')
-  );
+  const handleJoinClick = (planName?: string, branchId?: string) => {
+    if (onOpenJoinNow) {
+      onOpenJoinNow(planName, branchId);
+    } else if (onCtaClick) {
+      onCtaClick();
+    }
+  };
 
-  // Branch occupancy capacity estimations
-  const sudirmanCap = 35;
-  const senopatiCap = 30;
-  const bsdCap = 25;
-  const totalMaxCap = sudirmanCap + senopatiCap + bsdCap;
-  const overallOccupancyPct = Math.min(100, Math.round((activeCount / totalMaxCap) * 100));
+  const handleInquiryClick = (topicName?: string, branchId?: string) => {
+    if (onOpenInquiry) {
+      onOpenInquiry(topicName, branchId);
+    } else if (onCtaClick) {
+      onCtaClick();
+    }
+  };
 
-  // Determine overall vibe / crowd density
-  let crowdStatusText = 'Suasana Sangat Nyaman & Lengang';
-  let crowdStatusColor = 'text-emerald-400 bg-emerald-500/10 border-emerald-500/30';
-  if (overallOccupancyPct > 70) {
-    crowdStatusText = 'Kapasitas Ramai & Energik';
-    crowdStatusColor = 'text-orange-400 bg-orange-500/10 border-orange-500/30';
-  } else if (overallOccupancyPct > 35) {
-    crowdStatusText = 'Suasana Nyaman & Kondusif';
-    crowdStatusColor = 'text-emerald-400 bg-emerald-500/10 border-emerald-500/30';
-  }
-
-  // Filtered attendance feed
-  const filteredFeed = todayAttendances.filter((a) => {
-    if (branchFilter === 'ALL') return true;
-    if (branchFilter === 'BR-001') return !a.branchId || a.branchId === 'BR-001' || a.branchName?.includes('Sudirman');
-    if (branchFilter === 'BR-002') return a.branchId === 'BR-002' || a.branchName?.includes('Senopati');
-    if (branchFilter === 'BR-003') return a.branchId === 'BR-003' || a.branchName?.includes('BSD');
-    return true;
-  });
+  // Open WhatsApp directly targeting the chosen branch's official number
+  const handleOpenBranchWhatsApp = (branchId: string) => {
+    const branch = branchContacts.find((b) => b.id === branchId) || branchContacts[0];
+    const text = encodeURIComponent(
+      `Halo Admin & Front Desk RFA Gym ${branch.name}, saya ingin konsultasi pendaftaran membership & jadwal Free Trial Pass.`
+    );
+    window.open(`https://wa.me/${branch.whatsapp}?text=${text}`, '_blank');
+  };
 
   const stats = [
     {
@@ -132,6 +133,9 @@ export const LiveStatisticsSection: React.FC<LiveStatisticsSectionProps> = ({
     }
   ];
 
+  const selectedWaBranch =
+    branchContacts.find((b) => b.id === selectedWaBranchId) || branchContacts[0];
+
   return (
     <section className="py-20 bg-zinc-950 relative overflow-hidden border-t border-zinc-900">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -144,12 +148,13 @@ export const LiveStatisticsSection: React.FC<LiveStatisticsSectionProps> = ({
             <div>
               <div className="flex items-center gap-2">
                 <span className="text-xs font-semibold text-white">
-                  Sinkronisasi Database Presensi & ERP Real-Time
+                  Statistik & Kapasitas Gym Real-Time
                 </span>
                 <span className="flex h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
               </div>
               <p className="text-xs text-zinc-400 mt-0.5">
-                Statistik terhubung dinamis dengan data keanggotaan dan jadwal reservasi RFA ERP Enterprise. Terakhir diperbarui: <span className="text-zinc-300 font-mono">{lastSyncTime}</span>
+                Data terhubung langsung dengan sistem reservasi & member RFA ERP Enterprise. Terakhir diperbarui:{' '}
+                <span className="text-zinc-300 font-mono">{lastSyncTime}</span>
               </p>
             </div>
           </div>
@@ -187,325 +192,334 @@ export const LiveStatisticsSection: React.FC<LiveStatisticsSectionProps> = ({
         </div>
 
         {/* ========================================================================= */}
-        {/* LIVE GYM OCCUPANCY & ATTENDANCE MONITOR (INFO MEMBER SEDANG LATIHAN)      */}
+        {/* PROMINENT "JOIN NOW" CALL-TO-ACTION BANNER                                */}
+        {/* Direct registration and inquiry linking to branch WhatsApp numbers       */}
         {/* ========================================================================= */}
-        <div id="live-occupancy" className="scroll-mt-28 mb-16">
-          <div className="rounded-3xl bg-gradient-to-b from-zinc-900 to-zinc-950 border border-zinc-800 p-6 sm:p-10 shadow-2xl relative overflow-hidden">
-            {/* Ambient Lighting */}
-            <div className="absolute top-0 right-1/4 w-96 h-96 bg-emerald-500/5 rounded-full blur-3xl pointer-events-none" />
+        <div id="join-now" className="scroll-mt-28 mb-16 relative">
+          <span id="live-occupancy" className="absolute -top-28 left-0 pointer-events-none" />
 
-            {/* Header of Live Occupancy */}
-            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 pb-8 border-b border-zinc-800">
-              <div>
-                <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs font-bold uppercase tracking-wider mb-2">
+          <div className="relative rounded-3xl overflow-hidden bg-gradient-to-b from-zinc-900 via-zinc-950 to-black border-2 border-orange-500/40 p-6 sm:p-10 lg:p-12 shadow-2xl shadow-orange-500/10">
+            {/* Ambient Background Glows */}
+            <div className="absolute top-0 right-1/4 w-96 h-96 bg-orange-500/15 rounded-full blur-3xl pointer-events-none animate-pulse" />
+            <div className="absolute bottom-0 left-10 w-80 h-80 bg-amber-500/10 rounded-full blur-3xl pointer-events-none" />
+
+            {/* Top Bar: Social Proof Live Member Badge & Fast Activation Pill */}
+            <div className="relative z-10 flex flex-wrap items-center justify-between gap-4 pb-6 border-b border-zinc-800/80">
+              <div className="flex flex-wrap items-center gap-2.5">
+                <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 text-xs font-bold">
                   <span className="relative flex h-2 w-2">
                     <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
                     <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
                   </span>
-                  <span>Live Crowd & Attendance Tracker</span>
+                  <span>
+                    Live di Gym:{' '}
+                    <strong className="text-white font-mono tabular-nums">{activeCount} Member</strong> Sedang Latihan
+                    Saat Ini
+                  </span>
                 </div>
-                <h3 className="text-2xl sm:text-3xl font-black text-white tracking-tight">
-                  STATUS PRESENSI & KEPADATAN DI GYM HARI INI
-                </h3>
-                <p className="text-sm text-zinc-400 mt-1 max-w-2xl">
-                  Pantau jumlah member yang sedang aktif latihan atau absen masuk di seluruh cabang RFA Gym secara transparan. Rencanakan jam latihan terbaik Anda agar tidak perlu antre peralatan.
-                </p>
+                <span className="text-xs text-zinc-400 hidden sm:inline">• Suasana Sangat Nyaman & Bebas Antre</span>
               </div>
 
-              {/* Total Live Meter */}
-              <div className="p-4 sm:p-5 rounded-2xl bg-zinc-950 border border-zinc-800 flex items-center gap-5 shrink-0 shadow-lg">
-                <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-emerald-500/20 to-teal-500/10 border border-emerald-500/30 flex items-center justify-center text-emerald-400">
-                  <Activity className="w-7 h-7 animate-pulse" />
-                </div>
-                <div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-3xl sm:text-4xl font-black text-white font-mono tabular-nums">
-                      {activeCount}
-                    </span>
-                    <span className="text-xs font-bold text-zinc-400 uppercase tracking-wider">
-                      Orang di Gym
-                    </span>
-                  </div>
-                  <div className={`inline-block px-2.5 py-0.5 rounded-full border text-[11px] font-bold mt-1 ${crowdStatusColor}`}>
-                    {crowdStatusText}
-                  </div>
-                </div>
+              <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-orange-500/10 border border-orange-500/30 text-orange-400 text-xs font-black tracking-wider uppercase">
+                <Zap className="w-3.5 h-3.5" />
+                <span>Aktivasi Instan & WA Resmi Unit</span>
               </div>
             </div>
 
-            {/* 3 Branch Density Cards */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 my-8">
-              {/* Branch 1: Sudirman */}
-              <div className="p-6 rounded-2xl bg-zinc-950/70 border border-zinc-800/90 hover:border-orange-500/40 transition-all flex flex-col justify-between">
-                <div>
-                  <div className="flex items-center justify-between mb-3">
-                    <span className="text-xs font-bold text-orange-400 uppercase tracking-widest flex items-center gap-1.5">
-                      <MapPin className="w-3.5 h-3.5" />
-                      Flagship Hub
-                    </span>
-                    <span className="px-2 py-0.5 rounded-md bg-zinc-800 text-[11px] text-zinc-300 font-mono font-semibold">
-                      Max {sudirmanCap}
-                    </span>
-                  </div>
-                  <h4 className="text-base font-extrabold text-white">RFA Central Sudirman</h4>
-                  <p className="text-xs text-zinc-400 mt-0.5">Menara Sudirman Lt. 2 (Jakarta Pusat)</p>
-
-                  <div className="mt-5 flex items-baseline gap-2">
-                    <span className="text-3xl font-black text-white font-mono tabular-nums">
-                      {sudirmanActive.length}
-                    </span>
-                    <span className="text-xs text-zinc-400">Member Sedang Latihan</span>
-                  </div>
-
-                  {/* Progress Bar */}
-                  <div className="mt-3 space-y-1.5">
-                    <div className="flex justify-between text-[11px] text-zinc-400">
-                      <span>Kepadatan Studio & Gym</span>
-                      <span className="font-mono font-bold text-zinc-200">
-                        {Math.round((sudirmanActive.length / sudirmanCap) * 100)}%
-                      </span>
-                    </div>
-                    <div className="w-full h-2 rounded-full bg-zinc-800 overflow-hidden">
-                      <div
-                        className="h-full bg-gradient-to-r from-emerald-500 to-amber-500 rounded-full transition-all duration-500"
-                        style={{ width: `${Math.min(100, (sudirmanActive.length / sudirmanCap) * 100)}%` }}
-                      />
-                    </div>
-                  </div>
-                </div>
-
-                <div className="mt-5 pt-3 border-t border-zinc-800/80 text-[11px] text-zinc-400 flex items-center justify-between">
-                  <span>Area Aktif: Free Weight, Boxing</span>
-                  <span className="text-emerald-400 font-semibold">Kondusif</span>
-                </div>
+            {/* Headline and Value Proposition */}
+            <div className="relative z-10 my-8 text-center lg:text-left max-w-3xl">
+              <div className="inline-flex items-center gap-2 text-xs font-black uppercase tracking-widest text-orange-400 mb-3">
+                <Sparkles className="w-4 h-4" />
+                <span>Pendaftaran Membership & Chat WA Resmi RFA Gym</span>
               </div>
 
-              {/* Branch 2: Senopati */}
-              <div className="p-6 rounded-2xl bg-zinc-950/70 border border-zinc-800/90 hover:border-orange-500/40 transition-all flex flex-col justify-between">
-                <div>
-                  <div className="flex items-center justify-between mb-3">
-                    <span className="text-xs font-bold text-amber-400 uppercase tracking-widest flex items-center gap-1.5">
-                      <MapPin className="w-3.5 h-3.5" />
-                      Lifestyle Studio
-                    </span>
-                    <span className="px-2 py-0.5 rounded-md bg-zinc-800 text-[11px] text-zinc-300 font-mono font-semibold">
-                      Max {senopatiCap}
-                    </span>
-                  </div>
-                  <h4 className="text-base font-extrabold text-white">RFA Senopati Lifestyle</h4>
-                  <p className="text-xs text-zinc-400 mt-0.5">Jl. Senopati No. 42 (Jakarta Selatan)</p>
+              <h2 className="text-3xl sm:text-4xl lg:text-5xl font-black text-white tracking-tight leading-[1.15]">
+                SIAP MERAIH GOAL KEBUGARAN ANDA?{' '}
+                <span className="bg-gradient-to-r from-orange-400 via-amber-300 to-orange-500 bg-clip-text text-transparent">
+                  JOIN NOW
+                </span>{' '}
+                DI RFA GYM
+              </h2>
 
-                  <div className="mt-5 flex items-baseline gap-2">
-                    <span className="text-3xl font-black text-white font-mono tabular-nums">
-                      {senopatiActive.length}
-                    </span>
-                    <span className="text-xs text-zinc-400">Member Sedang Latihan</span>
-                  </div>
-
-                  {/* Progress Bar */}
-                  <div className="mt-3 space-y-1.5">
-                    <div className="flex justify-between text-[11px] text-zinc-400">
-                      <span>Kepadatan Studio & Gym</span>
-                      <span className="font-mono font-bold text-zinc-200">
-                        {Math.round((senopatiActive.length / senopatiCap) * 100)}%
-                      </span>
-                    </div>
-                    <div className="w-full h-2 rounded-full bg-zinc-800 overflow-hidden">
-                      <div
-                        className="h-full bg-gradient-to-r from-emerald-500 to-teal-500 rounded-full transition-all duration-500"
-                        style={{ width: `${Math.min(100, (senopatiActive.length / senopatiCap) * 100)}%` }}
-                      />
-                    </div>
-                  </div>
-                </div>
-
-                <div className="mt-5 pt-3 border-t border-zinc-800/80 text-[11px] text-zinc-400 flex items-center justify-between">
-                  <span>Area Aktif: Yoga, Pilates Reformer</span>
-                  <span className="text-emerald-400 font-semibold">Sangat Lengang</span>
-                </div>
-              </div>
-
-              {/* Branch 3: BSD City */}
-              <div className="p-6 rounded-2xl bg-zinc-950/70 border border-zinc-800/90 hover:border-orange-500/40 transition-all flex flex-col justify-between">
-                <div>
-                  <div className="flex items-center justify-between mb-3">
-                    <span className="text-xs font-bold text-orange-400 uppercase tracking-widest flex items-center gap-1.5">
-                      <MapPin className="w-3.5 h-3.5" />
-                      Express Performance
-                    </span>
-                    <span className="px-2 py-0.5 rounded-md bg-zinc-800 text-[11px] text-zinc-300 font-mono font-semibold">
-                      Max {bsdCap}
-                    </span>
-                  </div>
-                  <h4 className="text-base font-extrabold text-white">RFA Express BSD City</h4>
-                  <p className="text-xs text-zinc-400 mt-0.5">Ruko Foresta Business Loft 3 (BSD)</p>
-
-                  <div className="mt-5 flex items-baseline gap-2">
-                    <span className="text-3xl font-black text-white font-mono tabular-nums">
-                      {bsdActive.length}
-                    </span>
-                    <span className="text-xs text-zinc-400">Member Sedang Latihan</span>
-                  </div>
-
-                  {/* Progress Bar */}
-                  <div className="mt-3 space-y-1.5">
-                    <div className="flex justify-between text-[11px] text-zinc-400">
-                      <span>Kepadatan Studio & Gym</span>
-                      <span className="font-mono font-bold text-zinc-200">
-                        {Math.round((bsdActive.length / bsdCap) * 100)}%
-                      </span>
-                    </div>
-                    <div className="w-full h-2 rounded-full bg-zinc-800 overflow-hidden">
-                      <div
-                        className="h-full bg-gradient-to-r from-emerald-500 to-teal-500 rounded-full transition-all duration-500"
-                        style={{ width: `${Math.min(100, (bsdActive.length / bsdCap) * 100)}%` }}
-                      />
-                    </div>
-                  </div>
-                </div>
-
-                <div className="mt-5 pt-3 border-t border-zinc-800/80 text-[11px] text-zinc-400 flex items-center justify-between">
-                  <span>Area Aktif: Turf Track, Sled Push</span>
-                  <span className="text-emerald-400 font-semibold">Nyaman</span>
-                </div>
-              </div>
+              <p className="mt-4 text-zinc-300 text-sm sm:text-base lg:text-lg leading-relaxed max-w-2xl">
+                Nikmati akses ke 3 cabang strategis, peralatan biometrik berstandar dunia, puluhan studio classes, dan
+                bimbingan pelatih bersertifikasi. Saat mendaftar, tiket dan konfirmasi akan langsung terkirim ke{' '}
+                <strong className="text-emerald-400">WhatsApp resmi kantor cabang</strong> pilihan Anda.
+              </p>
             </div>
 
-            {/* Live Attendance Feed Section */}
-            <div className="mt-8 pt-8 border-t border-zinc-800">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+            {/* 3 Featured Membership Plan Cards with Direct CTA */}
+            <div className="relative z-10 grid grid-cols-1 md:grid-cols-3 gap-5 my-8">
+              {/* Plan 1: Starter */}
+              <div className="p-6 rounded-2xl bg-zinc-950/80 border border-zinc-800 hover:border-zinc-700 transition-all flex flex-col justify-between group">
                 <div>
-                  <h4 className="text-lg font-bold text-white flex items-center gap-2">
-                    <UserCheck className="w-5 h-5 text-emerald-400" />
-                    <span>Daftar Presensi & Absen Check-In Terkini di Gym</span>
+                  <div className="flex items-center justify-between mb-3">
+                    <span className="text-xs font-bold text-zinc-400 uppercase tracking-wider">Pemula & Fokus</span>
+                    <span className="px-2 py-0.5 rounded-full bg-zinc-800 text-[10px] font-bold text-zinc-300">
+                      1 Bulan
+                    </span>
+                  </div>
+                  <h4 className="text-lg font-black text-white group-hover:text-orange-400 transition-colors">
+                    Starter Pass
                   </h4>
-                  <p className="text-xs text-zinc-400 mt-0.5">
-                    Total kunjungan tercatat hari ini: <span className="font-mono font-bold text-zinc-200">{todayAttendances.length} sesi latihan</span>
-                  </p>
+                  <div className="mt-2 flex items-baseline gap-1">
+                    <span className="text-2xl sm:text-3xl font-black text-white">Rp 399.000</span>
+                    <span className="text-xs text-zinc-400">/bulan</span>
+                  </div>
+                  <p className="text-xs text-zinc-400 mt-2">Akses penuh area gym di 1 cabang pilihan Anda.</p>
+
+                  <div className="mt-4 pt-3 border-t border-zinc-800/80 space-y-2 text-xs text-zinc-300">
+                    <div className="flex items-center gap-2">
+                      <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                      <span>Akses Gym Cabang Pilihan</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                      <span>Loker Digital & Shower Mewah</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                      <span>Gratis 1x Tes Komposisi InBody</span>
+                    </div>
+                  </div>
                 </div>
 
-                {/* Filter Tabs by Branch */}
-                <div className="flex items-center gap-1.5 p-1 rounded-xl bg-zinc-950 border border-zinc-800 self-start sm:self-auto overflow-x-auto">
-                  <button
-                    onClick={() => setBranchFilter('ALL')}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-all ${
-                      branchFilter === 'ALL'
-                        ? 'bg-orange-500 text-white shadow-sm'
-                        : 'text-zinc-400 hover:text-white'
-                    }`}
-                  >
-                    Semua Cabang
-                  </button>
-                  <button
-                    onClick={() => setBranchFilter('BR-001')}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-all ${
-                      branchFilter === 'BR-001'
-                        ? 'bg-orange-500 text-white shadow-sm'
-                        : 'text-zinc-400 hover:text-white'
-                    }`}
-                  >
-                    Sudirman
-                  </button>
-                  <button
-                    onClick={() => setBranchFilter('BR-002')}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-all ${
-                      branchFilter === 'BR-002'
-                        ? 'bg-orange-500 text-white shadow-sm'
-                        : 'text-zinc-400 hover:text-white'
-                    }`}
-                  >
-                    Senopati
-                  </button>
-                  <button
-                    onClick={() => setBranchFilter('BR-003')}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-all ${
-                      branchFilter === 'BR-003'
-                        ? 'bg-orange-500 text-white shadow-sm'
-                        : 'text-zinc-400 hover:text-white'
-                    }`}
-                  >
-                    BSD City
-                  </button>
-                </div>
+                <button
+                  type="button"
+                  onClick={() => handleJoinClick('Starter Pass (1 Bulan)')}
+                  className="mt-6 w-full py-3 px-4 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-white font-bold text-xs flex items-center justify-center gap-2 transition-all border border-zinc-700"
+                >
+                  <span>Pilih Starter • Join Now</span>
+                  <ArrowRight className="w-3.5 h-3.5 text-orange-400" />
+                </button>
               </div>
 
-              {/* Attendance Table / Grid */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5 max-h-[380px] overflow-y-auto pr-1">
-                {filteredFeed.slice(0, 12).map((item) => {
-                  const isStillInGym = !item.timeOut || item.timeOut.trim() === '';
-                  return (
-                    <div
-                      key={item.id}
-                      className="p-3.5 rounded-2xl bg-zinc-950/80 border border-zinc-800/80 flex items-center justify-between gap-3 hover:border-zinc-700 transition-colors"
-                    >
-                      <div className="flex items-center gap-3 min-w-0">
-                        <div className="w-10 h-10 rounded-xl bg-zinc-800 text-zinc-300 font-extrabold text-xs flex items-center justify-center shrink-0 border border-zinc-700">
-                          {item.memberName.slice(0, 2).toUpperCase()}
-                        </div>
-                        <div className="min-w-0">
-                          <h5 className="text-xs font-bold text-white truncate">{item.memberName}</h5>
-                          <div className="flex items-center gap-2 text-[11px] text-zinc-400 mt-0.5">
-                            <span className="text-orange-400 font-semibold">{item.badge || item.type}</span>
-                            <span>•</span>
-                            <span className="flex items-center gap-1 font-mono">
-                              <Clock className="w-3 h-3 text-zinc-500" />
-                              {item.timeIn}
-                            </span>
-                          </div>
-                        </div>
-                      </div>
+              {/* Plan 2: All-Access Pro (Popular Highlight) */}
+              <div className="p-6 rounded-2xl bg-gradient-to-b from-orange-950/40 via-zinc-950 to-zinc-950 border-2 border-orange-500 shadow-xl shadow-orange-500/10 flex flex-col justify-between relative scale-100 lg:scale-[1.03] transition-all">
+                <div className="absolute -top-3.5 right-6 px-3 py-1 rounded-full bg-gradient-to-r from-orange-500 to-amber-500 text-white text-[10px] font-black uppercase tracking-wider shadow-md">
+                  Paling Populer & Rekomendasi
+                </div>
 
-                      <div className="shrink-0 text-right">
-                        {isStillInGym ? (
-                          <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 text-[10px] font-bold">
-                            <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                            Di Gym
-                          </span>
-                        ) : (
-                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-zinc-800 text-zinc-400 text-[10px] font-medium border border-zinc-700">
-                            Keluar ({item.timeOut})
-                          </span>
-                        )}
-                        {item.lockerNumber && (
-                          <div className="text-[10px] text-zinc-500 mt-0.5 font-mono">
-                            Loker #{item.lockerNumber}
-                          </div>
-                        )}
-                      </div>
+                <div>
+                  <div className="flex items-center justify-between mb-3">
+                    <span className="text-xs font-black text-orange-400 uppercase tracking-wider flex items-center gap-1">
+                      <Flame className="w-3.5 h-3.5" />
+                      All-Club Access
+                    </span>
+                    <span className="px-2 py-0.5 rounded-full bg-orange-500/20 text-[10px] font-bold text-orange-300 border border-orange-500/30">
+                      3 Bulan
+                    </span>
+                  </div>
+                  <h4 className="text-xl font-black text-white">All-Access Pro</h4>
+                  <div className="mt-2 flex items-baseline gap-1">
+                    <span className="text-3xl sm:text-4xl font-black text-white">Rp 699.000</span>
+                    <span className="text-xs text-zinc-400">/bulan</span>
+                  </div>
+                  <p className="text-xs text-zinc-300 mt-2">Bebas akses seluruh 3 cabang & semua kelas studio.</p>
+
+                  <div className="mt-4 pt-3 border-t border-zinc-800/80 space-y-2 text-xs text-zinc-200">
+                    <div className="flex items-center gap-2">
+                      <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                      <strong className="text-white">Akses 3 Cabang:</strong> Sudirman, Senopati & BSD
                     </div>
-                  );
-                })}
+                    <div className="flex items-center gap-2">
+                      <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                      <span>Unlimited Studio Classes (Yoga, HIIT, Combat)</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                      <span>Bonus 2 Sesi Privat Personal Trainer</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                      <span>Sauna & Luxury Hot Shower Access</span>
+                    </div>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => handleJoinClick('All-Access Pro (3 Bulan)')}
+                  className="mt-6 w-full py-3.5 px-4 rounded-xl bg-gradient-to-r from-orange-500 via-amber-500 to-orange-600 hover:from-orange-600 hover:to-amber-600 text-white font-black text-xs uppercase tracking-wider flex items-center justify-center gap-2 shadow-lg shadow-orange-500/30 hover:scale-[1.02] active:scale-[0.98] transition-all"
+                >
+                  <Sparkles className="w-4 h-4 text-amber-200" />
+                  <span>Daftar All-Access • Join Now</span>
+                  <ArrowRight className="w-4 h-4" />
+                </button>
+              </div>
+
+              {/* Plan 3: VIP Platinum */}
+              <div className="p-6 rounded-2xl bg-zinc-950/80 border border-zinc-800 hover:border-amber-500/50 transition-all flex flex-col justify-between group">
+                <div>
+                  <div className="flex items-center justify-between mb-3">
+                    <span className="text-xs font-bold text-amber-400 uppercase tracking-wider">VIP & Performance</span>
+                    <span className="px-2 py-0.5 rounded-full bg-amber-500/20 text-[10px] font-bold text-amber-300 border border-amber-500/30">
+                      12 Bulan
+                    </span>
+                  </div>
+                  <h4 className="text-lg font-black text-white group-hover:text-amber-400 transition-colors">
+                    VIP Platinum
+                  </h4>
+                  <div className="mt-2 flex items-baseline gap-1">
+                    <span className="text-2xl sm:text-3xl font-black text-white">Rp 1.199.000</span>
+                    <span className="text-xs text-zinc-400">/bulan</span>
+                  </div>
+                  <p className="text-xs text-zinc-400 mt-2">Paket tertinggi dengan 12 sesi PT privat & dedicated kit.</p>
+
+                  <div className="mt-4 pt-3 border-t border-zinc-800/80 space-y-2 text-xs text-zinc-300">
+                    <div className="flex items-center gap-2">
+                      <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                      <span>Multi-Club All Access 3 Cabang</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                      <strong className="text-white">12 Sesi Personal Trainer Privat</strong>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                      <span>Dedicated Locker & Free Merchandise Kit</span>
+                    </div>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => handleJoinClick('VIP Platinum (12 Bulan)')}
+                  className="mt-6 w-full py-3 px-4 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-white font-bold text-xs flex items-center justify-center gap-2 transition-all border border-zinc-700"
+                >
+                  <span>Join VIP • Daftar Sekarang</span>
+                  <ArrowRight className="w-3.5 h-3.5 text-amber-400" />
+                </button>
+              </div>
+            </div>
+
+            {/* Direct Action Hub Buttons */}
+            <div className="relative z-10 mt-8 pt-8 border-t border-zinc-800/80 flex flex-col lg:flex-row items-center justify-between gap-5">
+              <div className="flex flex-wrap items-center justify-center sm:justify-start gap-3 w-full lg:w-auto">
+                <button
+                  type="button"
+                  onClick={() => handleJoinClick('All-Access Pro (3 Bulan)')}
+                  className="w-full sm:w-auto px-7 py-3.5 rounded-2xl bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white font-black text-sm uppercase tracking-wider flex items-center justify-center gap-2.5 shadow-xl shadow-orange-500/25 active:scale-95 transition-all"
+                >
+                  <Flame className="w-5 h-5 text-amber-200" />
+                  <span>Join Now • Pendaftaran Member Baru</span>
+                  <ArrowRight className="w-4 h-4" />
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => handleInquiryClick('Klaim Free 1-Day Trial Pass')}
+                  className="w-full sm:w-auto px-6 py-3.5 rounded-2xl bg-zinc-900 hover:bg-zinc-800 text-zinc-200 hover:text-white font-bold text-sm border border-zinc-700 flex items-center justify-center gap-2.5 transition-all active:scale-95"
+                >
+                  <HelpCircle className="w-4 h-4 text-orange-400" />
+                  <span>Klaim Free Trial & Tanya Info (Inquiry)</span>
+                </button>
+              </div>
+
+              {/* Branch WhatsApp Direct Selector & Chat Button */}
+              <div className="flex flex-wrap items-center gap-2 w-full lg:w-auto justify-center lg:justify-end">
+                <select
+                  value={selectedWaBranchId}
+                  onChange={(e) => setSelectedWaBranchId(e.target.value)}
+                  className="px-3 py-2.5 rounded-xl bg-zinc-900 border border-zinc-700 text-white text-xs font-bold focus:outline-none focus:border-emerald-500"
+                >
+                  {branchContacts.map((b) => (
+                    <option key={b.id} value={b.id}>
+                      WA: {b.shortName} (+{b.whatsapp})
+                    </option>
+                  ))}
+                </select>
+
+                <button
+                  type="button"
+                  onClick={() => handleOpenBranchWhatsApp(selectedWaBranchId)}
+                  className="px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs flex items-center gap-2 transition-all shrink-0 active:scale-95 shadow-md shadow-emerald-600/30"
+                >
+                  <MessageCircle className="w-4 h-4" />
+                  <span>Chat WA Resmi Cabang</span>
+                </button>
+              </div>
+            </div>
+
+            {/* 4 Guarantees & Trust Badges */}
+            <div className="relative z-10 mt-6 pt-5 border-t border-zinc-800/60 grid grid-cols-2 lg:grid-cols-4 gap-3 text-zinc-400 text-xs">
+              <div className="flex items-center gap-2">
+                <ShieldCheck className="w-4 h-4 text-emerald-400 shrink-0" />
+                <span>Tanpa Biaya Tersembunyi</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <Zap className="w-4 h-4 text-orange-400 shrink-0" />
+                <span>Aktivasi Instan & E-Pass QR</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <Award className="w-4 h-4 text-amber-400 shrink-0" />
+                <span>Gratis Tes InBody & Konsultasi</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <MessageCircle className="w-4 h-4 text-emerald-400 shrink-0" />
+                <span>Langsung Chat WA Resmi Unit</span>
               </div>
             </div>
           </div>
         </div>
 
-        {/* Final CTA Banner */}
-        <div className="mt-16 relative rounded-3xl overflow-hidden p-8 sm:p-12 bg-gradient-to-r from-orange-600 via-amber-600 to-orange-700 shadow-2xl shadow-orange-500/20 text-white">
-          <div className="absolute -right-10 -bottom-10 w-80 h-80 bg-white/10 rounded-full blur-2xl pointer-events-none" />
-          <div className="relative z-10 max-w-3xl">
-            <div className="text-xs font-bold tracking-widest uppercase text-amber-200 mb-2">
-              Penawaran Khusus Member Baru
+        {/* 3 Branch Hubs: Displaying Official WhatsApp & Direct Action */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          {branchContacts.map((branch) => (
+            <div
+              key={branch.id}
+              className="p-6 rounded-2xl bg-zinc-900/60 border border-zinc-800 hover:border-zinc-700 transition-all flex flex-col justify-between"
+            >
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-[11px] font-bold text-orange-400 uppercase tracking-widest flex items-center gap-1.5">
+                    <MapPin className="w-3.5 h-3.5" />
+                    {branch.shortName}
+                  </span>
+                  {branch.isFlagship && (
+                    <span className="text-[9px] px-1.5 py-0.5 rounded bg-amber-400 text-zinc-950 font-black">
+                      FLAGSHIP HUB
+                    </span>
+                  )}
+                </div>
+
+                <h5 className="text-base font-extrabold text-white">{branch.name}</h5>
+                <p className="text-xs text-zinc-400 mt-1 line-clamp-2">{branch.address}</p>
+
+                {/* Official Branch WhatsApp Badge */}
+                <div className="mt-3 p-2.5 rounded-xl bg-zinc-950 border border-zinc-800 flex items-center justify-between text-xs">
+                  <span className="text-zinc-400 text-[11px]">WhatsApp Resmi:</span>
+                  <span className="font-mono font-bold text-emerald-400 flex items-center gap-1">
+                    <MessageCircle className="w-3 h-3" />
+                    +{branch.whatsapp}
+                  </span>
+                </div>
+              </div>
+
+              {/* Action Buttons: Direct WA Chat & Join Now at This Branch */}
+              <div className="mt-5 pt-3 border-t border-zinc-800 flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => handleOpenBranchWhatsApp(branch.id)}
+                  className="flex-1 py-2 px-3 rounded-xl bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 font-bold text-xs border border-emerald-500/40 flex items-center justify-center gap-1.5 transition-all"
+                  title={`Chat WhatsApp resmi ${branch.shortName}`}
+                >
+                  <MessageCircle className="w-3.5 h-3.5 text-emerald-400" />
+                  <span>Chat WA</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => handleJoinClick('All-Access Pro (3 Bulan)', branch.id)}
+                  className="flex-1 py-2 px-3 rounded-xl bg-orange-500 hover:bg-orange-600 text-white font-bold text-xs flex items-center justify-center gap-1.5 transition-all shadow-sm"
+                  title={`Daftar ke ${branch.shortName}`}
+                >
+                  <span>Join Cabang Ini</span>
+                  <ArrowRight className="w-3.5 h-3.5" />
+                </button>
+              </div>
             </div>
-            <h3 className="text-2xl sm:text-4xl font-black tracking-tight leading-tight">
-              SIAP MENEMBUS BATAS ANDA HARI INI?
-            </h3>
-            <p className="mt-3 text-orange-100 text-sm sm:text-base leading-relaxed">
-              Daftar online sekarang untuk klaim <strong>Free 1-Day All-Access Pass</strong> + Konsultasi Komposisi Tubuh InBody gratis bersama Master Coach RFA Gym.
-            </p>
-            <div className="mt-6 flex flex-wrap items-center gap-4">
-              <button
-                onClick={onCtaClick}
-                className="px-8 py-3.5 rounded-2xl bg-zinc-950 hover:bg-zinc-900 text-white font-extrabold text-sm flex items-center gap-2.5 shadow-xl transition-all hover:scale-105 active:scale-95"
-              >
-                <span>Klaim Free Pass & Reservasi</span>
-                <ArrowRight className="w-4 h-4 text-orange-400" />
-              </button>
-              <span className="text-xs text-orange-100 font-medium">
-                *Tanpa biaya tersembunyi & tanpa komitmen kartu kredit
-              </span>
-            </div>
-          </div>
+          ))}
         </div>
       </div>
     </section>

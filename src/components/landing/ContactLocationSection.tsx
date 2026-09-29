@@ -14,12 +14,12 @@ import {
   Facebook,
   Youtube
 } from 'lucide-react';
-import { BRANCH_CONTACTS } from '../../data/landingData';
+import { BRANCH_CONTACTS, getDynamicBranchContacts } from '../../data/landingData';
 
 interface ContactLocationSectionProps {
   onOpenStaffLogin: () => void;
   onOpenMemberArea: () => void;
-  onOpenReservation: () => void;
+  onOpenReservation: (branchId?: string) => void;
 }
 
 export const ContactLocationSection: React.FC<ContactLocationSectionProps> = ({
@@ -33,11 +33,27 @@ export const ContactLocationSection: React.FC<ContactLocationSectionProps> = ({
   const [contactMessage, setContactMessage] = useState('');
   const [messageSent, setMessageSent] = useState(false);
 
-  const activeBranch = BRANCH_CONTACTS.find((b) => b.id === selectedBranchId) || BRANCH_CONTACTS[0];
+  const branchContacts = getDynamicBranchContacts();
+  const activeBranch = branchContacts.find((b) => b.id === selectedBranchId) || branchContacts[0];
 
   const handleSendMessage = (e: React.FormEvent) => {
     e.preventDefault();
     if (!contactName.trim() || !contactPhone.trim()) return;
+
+    const targetWaNumber = activeBranch.whatsapp.replace(/[^0-9]/g, '');
+    const waMsg =
+      `*PESAN INQUIRY DARI WEBSITE - RFA GYM ${activeBranch.shortName.toUpperCase()}*%0A` +
+      `----------------------------------------%0A` +
+      `Halo Tim Front Desk & Admin *RFA Gym ${activeBranch.name}*,%0A` +
+      `Saya ingin berkonsultasi mengenai membership & fasilitas di cabang Anda:%0A%0A` +
+      `• *Nama Lengkap:* ${contactName.trim()}%0A` +
+      `• *No. WhatsApp:* ${contactPhone.trim()}%0A` +
+      `• *Unit Cabang:* ${activeBranch.name}%0A` +
+      `• *Pesan / Pertanyaan:* ${contactMessage.trim() || 'Konsultasi program latihan & jadwal orientasi'}%0A%0A` +
+      `Mohon informasinya lebih lanjut. Terima kasih!`;
+
+    const waUrl = `https://wa.me/${targetWaNumber}?text=${waMsg}`;
+    window.open(waUrl, '_blank');
 
     setMessageSent(true);
     setTimeout(() => {
@@ -68,7 +84,7 @@ export const ContactLocationSection: React.FC<ContactLocationSectionProps> = ({
         {/* Branch Selector Tabs */}
         <div className="flex justify-center mb-10 overflow-x-auto pb-2">
           <div className="flex items-center gap-2 p-1.5 rounded-2xl bg-zinc-900 border border-zinc-800">
-            {BRANCH_CONTACTS.map((branch) => (
+            {branchContacts.map((branch) => (
               <button
                 key={branch.id}
                 onClick={() => setSelectedBranchId(branch.id)}
@@ -123,16 +139,18 @@ export const ContactLocationSection: React.FC<ContactLocationSectionProps> = ({
                 <div className="flex items-start gap-3 p-3.5 rounded-2xl bg-zinc-950 border border-zinc-800/80">
                   <Phone className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
                   <div>
-                    <span className="font-bold text-white block mb-0.5">Telepon & WhatsApp</span>
+                    <span className="font-bold text-white block mb-0.5">Telepon & WhatsApp Resmi</span>
                     <span className="text-zinc-400 block">{activeBranch.phone}</span>
                     <a
-                      href={`https://wa.me/${activeBranch.whatsapp}`}
+                      href={`https://wa.me/${activeBranch.whatsapp}?text=${encodeURIComponent(
+                        `Halo Admin & Front Desk RFA Gym ${activeBranch.name}, saya ingin konsultasi keanggotaan & jadwal Free Trial Pass.`
+                      )}`}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="text-emerald-400 font-bold hover:underline inline-flex items-center gap-1 mt-1"
+                      className="text-emerald-400 font-bold hover:underline inline-flex items-center gap-1 mt-1 font-mono text-xs"
                     >
-                      <MessageCircle className="w-3 h-3" />
-                      Chat WhatsApp
+                      <MessageCircle className="w-3.5 h-3.5" />
+                      <span>Chat WA (+{activeBranch.whatsapp})</span>
                     </a>
                   </div>
                 </div>
@@ -155,14 +173,26 @@ export const ContactLocationSection: React.FC<ContactLocationSectionProps> = ({
               </div>
             </div>
 
-            <div className="pt-2">
+            <div className="pt-2 flex flex-wrap items-center gap-3">
               <button
-                onClick={onOpenReservation}
+                onClick={() => onOpenReservation(activeBranch.id)}
                 className="px-6 py-3 rounded-xl bg-orange-500 hover:bg-orange-600 text-white font-bold text-xs flex items-center gap-2 shadow-md shadow-orange-500/20 active:scale-95 transition-all"
               >
-                <span>Reservasi di Cabang Ini</span>
+                <span>Join Now di Cabang {activeBranch.shortName}</span>
                 <ArrowRight className="w-4 h-4" />
               </button>
+
+              <a
+                href={`https://wa.me/${activeBranch.whatsapp}?text=${encodeURIComponent(
+                  `Halo Front Desk RFA Gym ${activeBranch.name}, saya ingin konsultasi langsung via WhatsApp.`
+                )}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="px-5 py-3 rounded-xl bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 font-bold text-xs border border-emerald-500/40 flex items-center gap-2 transition-all active:scale-95"
+              >
+                <MessageCircle className="w-4 h-4 text-emerald-400" />
+                <span>Chat WA Resmi Unit</span>
+              </a>
             </div>
           </div>
 
@@ -292,7 +322,7 @@ export const ContactLocationSection: React.FC<ContactLocationSectionProps> = ({
               </li>
               <li>
                 <button
-                  onClick={onOpenReservation}
+                  onClick={() => onOpenReservation()}
                   className="hover:text-orange-400 transition-colors text-left"
                 >
                   Reservasi Single Day Pass

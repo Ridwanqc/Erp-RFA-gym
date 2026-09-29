@@ -16,11 +16,15 @@ import {
   RotateCcw,
   Sparkles,
   AlertCircle,
-  Crown
+  Crown,
+  Printer
 } from 'lucide-react';
 import { Schedule, StudioClass, Member, User as UserType, PackageItem, Transaction } from '../types';
 import { APP_TODAY, formatDateIndo } from '../utils/formatters';
 import { ClassPaymentModal } from './ClassPaymentModal';
+import { PTCalendarView } from './PTCalendarView';
+import { PTSchedulePrintModal } from './PTSchedulePrintModal';
+import { PTSessionSlipModal } from './PTSessionSlipModal';
 
 interface JadwalPTViewProps {
   schedules: Schedule[];
@@ -104,6 +108,10 @@ export const JadwalPTView: React.FC<JadwalPTViewProps> = ({
 
   // Calendar Week Offset
   const [weekOffset, setWeekOffset] = useState(0);
+
+  // Printing Modals State (Thermal & Standard Printers)
+  const [isPrintScheduleModalOpen, setIsPrintScheduleModalOpen] = useState(false);
+  const [slipTargetSchedule, setSlipTargetSchedule] = useState<Schedule | null>(null);
 
   // Date Calculations Helpers
   const getTomorrowStr = (base: string = APP_TODAY) => {
@@ -370,7 +378,7 @@ export const JadwalPTView: React.FC<JadwalPTViewProps> = ({
               activeSubTab === 'calendar' ? 'bg-orange-500 text-white shadow-md' : 'text-zinc-400 hover:text-white'
             }`}
           >
-            <CalendarDays className="w-3.5 h-3.5" /> Kalender Grid
+            <CalendarDays className="w-3.5 h-3.5" /> Kalender Jadwal PT
           </button>
         </div>
       </div>
@@ -461,15 +469,27 @@ export const JadwalPTView: React.FC<JadwalPTViewProps> = ({
                 </div>
               </div>
 
-              {/* Action Button */}
-              <button
-                type="button"
-                onClick={() => setIsAddSchModalOpen(true)}
-                className="bg-orange-500 hover:bg-orange-600 text-white font-bold px-4 py-2.5 rounded-xl text-xs shadow-md transition flex items-center justify-center gap-1.5 shrink-0 active:scale-95 cursor-pointer"
-              >
-                <Plus className="w-4 h-4" />
-                <span>Buat Jadwal PT Baru</span>
-              </button>
+              {/* Action Buttons: Cetak Jadwal & Buat Jadwal Baru */}
+              <div className="flex items-center gap-2 flex-wrap shrink-0">
+                <button
+                  type="button"
+                  onClick={() => setIsPrintScheduleModalOpen(true)}
+                  className="bg-zinc-800 hover:bg-zinc-700 text-white font-bold px-4 py-2.5 rounded-xl text-xs border border-zinc-700 hover:border-orange-500/50 shadow-md transition flex items-center justify-center gap-1.5 shrink-0 active:scale-95 cursor-pointer"
+                  title="Cetak jadwal sesi PT ke printer thermal (58mm/80mm) atau printer standar (A4/Letter)"
+                >
+                  <Printer className="w-4 h-4 text-orange-400" />
+                  <span>Cetak Jadwal PT</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setIsAddSchModalOpen(true)}
+                  className="bg-orange-500 hover:bg-orange-600 text-white font-bold px-4 py-2.5 rounded-xl text-xs shadow-md transition flex items-center justify-center gap-1.5 shrink-0 active:scale-95 cursor-pointer"
+                >
+                  <Plus className="w-4 h-4" />
+                  <span>Buat Jadwal PT Baru</span>
+                </button>
+              </div>
             </div>
 
             {/* Second Row: Date Filter Presets & Custom Date Inputs */}
@@ -685,33 +705,45 @@ export const JadwalPTView: React.FC<JadwalPTViewProps> = ({
                           </div>
                         </td>
                         <td className="py-3.5 px-4 text-right">
-                          {!isCompleted && s.status !== 'Batal' ? (
-                            <div className="flex justify-end gap-1.5">
-                              <button
-                                onClick={() => {
-                                  setRescheduleTarget(s);
-                                  setNewDate(s.date);
-                                  setNewTime(s.time);
-                                }}
-                                className="px-2.5 py-1 bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 border border-blue-500/30 rounded-lg text-[11px] font-bold transition"
-                              >
-                                Reschedule
-                              </button>
-                              <button
-                                onClick={() => {
-                                  if (confirm(`Batalkan sesi latihan ${s.memberName}?`)) {
-                                    onUpdateSchedule({ ...s, status: 'Batal' });
-                                    showToast('Sesi Dibatalkan', 'Jadwal ditandai Batal.', 'info');
-                                  }
-                                }}
-                                className="px-2.5 py-1 bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/30 rounded-lg text-[11px] font-bold transition"
-                              >
-                                Batal
-                              </button>
-                            </div>
-                          ) : (
-                            <span className="text-[10px] text-zinc-500 font-bold">Terkunci</span>
-                          )}
+                          <div className="flex justify-end items-center gap-1.5">
+                            <button
+                              type="button"
+                              onClick={() => setSlipTargetSchedule(s)}
+                              className="px-2 py-1 bg-zinc-800 hover:bg-orange-500/20 text-zinc-300 hover:text-orange-300 border border-zinc-700 hover:border-orange-500/40 rounded-lg text-[11px] font-bold transition flex items-center gap-1 cursor-pointer"
+                              title="Cetak slip sesi PT ke printer thermal atau voucher A4"
+                            >
+                              <Printer className="w-3 h-3 text-orange-400" />
+                              <span>Slip</span>
+                            </button>
+
+                            {!isCompleted && s.status !== 'Batal' ? (
+                              <>
+                                <button
+                                  onClick={() => {
+                                    setRescheduleTarget(s);
+                                    setNewDate(s.date);
+                                    setNewTime(s.time);
+                                  }}
+                                  className="px-2.5 py-1 bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 border border-blue-500/30 rounded-lg text-[11px] font-bold transition"
+                                >
+                                  Reschedule
+                                </button>
+                                <button
+                                  onClick={() => {
+                                    if (confirm(`Batalkan sesi latihan ${s.memberName}?`)) {
+                                      onUpdateSchedule({ ...s, status: 'Batal' });
+                                      showToast('Sesi Dibatalkan', 'Jadwal ditandai Batal.', 'info');
+                                    }
+                                  }}
+                                  className="px-2.5 py-1 bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/30 rounded-lg text-[11px] font-bold transition"
+                                >
+                                  Batal
+                                </button>
+                              </>
+                            ) : (
+                              <span className="text-[10px] text-zinc-500 font-bold">Terkunci</span>
+                            )}
+                          </div>
                         </td>
                       </tr>
                     );
@@ -890,116 +922,18 @@ export const JadwalPTView: React.FC<JadwalPTViewProps> = ({
         </div>
       )}
 
-      {/* VIEW 3: INTERACTIVE WEEKLY CALENDAR GRID (06:00 - 21:00) */}
+      {/* VIEW 3: DEDICATED PT CALENDAR VIEW WITH TRAINER & STATUS FILTER */}
       {activeSubTab === 'calendar' && (
-        <div className="bg-zinc-900/90 border border-zinc-800 rounded-3xl overflow-hidden shadow-sm flex flex-col">
-          {/* Calendar top controls */}
-          <div className="p-4 border-b border-zinc-800 bg-zinc-950/40 flex justify-between items-center">
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => setWeekOffset(weekOffset - 1)}
-                className="w-8 h-8 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-white flex items-center justify-center transition"
-              >
-                <ChevronLeft className="w-4 h-4" />
-              </button>
-              <div className="bg-zinc-900 border border-zinc-800 px-4 py-1.5 rounded-xl text-xs font-bold text-white flex items-center gap-2">
-                <CalendarIcon className="w-3.5 h-3.5 text-orange-500" />
-                <span>
-                  {weekDates[0]} s/d {weekDates[6]}
-                </span>
-              </div>
-              <button
-                onClick={() => setWeekOffset(weekOffset + 1)}
-                className="w-8 h-8 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-white flex items-center justify-center transition"
-              >
-                <ChevronRight className="w-4 h-4" />
-              </button>
-            </div>
-
-            <div className="flex items-center gap-4 text-xs font-semibold">
-              <span className="flex items-center gap-1.5">
-                <span className="w-2.5 h-2.5 rounded-full bg-purple-500"></span> Sesi PT
-              </span>
-              <span className="flex items-center gap-1.5">
-                <span className="w-2.5 h-2.5 rounded-full bg-blue-500"></span> Kelas Studio
-              </span>
-            </div>
-          </div>
-
-          {/* Calendar Grid Container */}
-          <div className="overflow-x-auto scrollbar-thin scrollbar-thumb-zinc-800 max-h-[600px] overflow-y-auto">
-            <div className="min-w-[900px]">
-              {/* Header row */}
-              <div className="grid grid-cols-8 border-b border-zinc-800 bg-zinc-950 sticky top-0 z-10">
-                <div className="p-2.5 text-center text-[10px] font-bold text-zinc-500 uppercase border-r border-zinc-800">
-                  Waktu
-                </div>
-                {weekDates.map((date, idx) => {
-                  const isToday = date === APP_TODAY;
-                  return (
-                    <div
-                      key={date}
-                      className={`p-2 text-center border-r border-zinc-800 ${
-                        isToday ? 'bg-orange-500/10 text-orange-400 font-bold' : 'text-zinc-400'
-                      }`}
-                    >
-                      <p className="text-xs font-bold">{dayNames[idx]}</p>
-                      <p className="text-[10px]">{date.substring(5)}</p>
-                    </div>
-                  );
-                })}
-              </div>
-
-              {/* Time Rows */}
-              {hours.map((hour) => {
-                const hourNum = hour.substring(0, 2);
-                return (
-                  <div key={hour} className="grid grid-cols-8 border-b border-zinc-800/60 min-h-[50px] hover:bg-zinc-800/20">
-                    <div className="p-2 text-center text-[10px] font-bold text-zinc-500 border-r border-zinc-800 bg-zinc-950/60 flex items-center justify-center">
-                      {hour}
-                    </div>
-                    {weekDates.map((date) => {
-                      // Find PT and Studio classes at this hour & date
-                      const ptItems = schedules.filter(
-                        (s) => s.date === date && s.time.startsWith(hourNum) && s.status !== 'Batal'
-                      );
-                      const classItems = studioClasses.filter(
-                        (c) => c.date === date && c.time.startsWith(hourNum)
-                      );
-
-                      return (
-                        <div key={date} className="p-1 border-r border-zinc-800/60 space-y-1">
-                          {ptItems.map((pt) => (
-                            <div
-                              key={pt.id}
-                              className="p-1.5 rounded-lg bg-purple-600/80 hover:bg-purple-600 text-white text-[10px] font-bold shadow-xs truncate cursor-pointer"
-                              title={`Sesi PT: ${pt.memberName} bersama ${pt.trainer}`}
-                            >
-                              <p className="truncate">{pt.memberName}</p>
-                              <p className="text-[9px] text-purple-200 truncate font-normal">PT: {pt.trainer}</p>
-                            </div>
-                          ))}
-                          {classItems.map((cls) => (
-                            <div
-                              key={cls.id}
-                              className="p-1.5 rounded-lg bg-blue-600/80 hover:bg-blue-600 text-white text-[10px] font-bold shadow-xs truncate cursor-pointer"
-                              title={`Kelas: ${cls.name} (${cls.booked.length}/${cls.capacity})`}
-                            >
-                              <p className="truncate">{cls.name}</p>
-                              <p className="text-[9px] text-blue-200 truncate font-normal">
-                                {cls.booked.length}/{cls.capacity} Org
-                              </p>
-                            </div>
-                          ))}
-                        </div>
-                      );
-                    })}
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        </div>
+        <PTCalendarView
+          schedules={schedules}
+          trainers={trainers}
+          members={members}
+          onAddSchedule={onAddSchedule}
+          onUpdateSchedule={onUpdateSchedule}
+          onOpenSignature={onOpenSignature}
+          showToast={showToast}
+          onOpenAddModal={() => setIsAddSchModalOpen(true)}
+        />
       )}
 
       {/* MODAL 1: ADD NEW SCHEDULE */}
@@ -1370,6 +1304,22 @@ export const JadwalPTView: React.FC<JadwalPTViewProps> = ({
           showToast={showToast}
         />
       )}
+
+      {/* UNIVERSAL PRINT MODALS: THERMAL & STANDARD PRINTERS */}
+      <PTSchedulePrintModal
+        isOpen={isPrintScheduleModalOpen}
+        onClose={() => setIsPrintScheduleModalOpen(false)}
+        schedules={filteredSchedules}
+        trainers={trainers}
+        currentTrainerFilter={filterTrainer}
+        currentPeriodLabel={getDateFilterLabel()}
+      />
+
+      <PTSessionSlipModal
+        isOpen={Boolean(slipTargetSchedule)}
+        onClose={() => setSlipTargetSchedule(null)}
+        schedule={slipTargetSchedule}
+      />
     </div>
   );
 };

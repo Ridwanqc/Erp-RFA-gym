@@ -384,6 +384,59 @@ export const BRANCH_CONTACTS: BranchContact[] = [
   }
 ];
 
+/**
+ * Returns dynamic branch contacts synchronizing live changes from Settings (Kelola Cabang & Outlet).
+ * If the user modifies WhatsApp numbers or branch names in Settings, this reflects instantly.
+ */
+export function getDynamicBranchContacts(): BranchContact[] {
+  try {
+    const raw = localStorage.getItem('gympro_branches');
+    if (raw) {
+      const storedBranches = JSON.parse(raw);
+      if (Array.isArray(storedBranches) && storedBranches.length > 0) {
+        return storedBranches.map((b: any) => {
+          const fallback = BRANCH_CONTACTS.find((fc) => fc.id === b.id || fc.name === b.name);
+          const rawWa = b.whatsapp || fallback?.whatsapp || '6281234567890';
+          const digits = rawWa.replace(/\D/g, '');
+          let international = digits;
+          if (digits.startsWith('0')) {
+            international = '62' + digits.slice(1);
+          } else if (digits.startsWith('62')) {
+            international = digits;
+          } else if (digits.startsWith('8')) {
+            international = '62' + digits;
+          }
+
+          return {
+            id: b.id,
+            name: b.name || fallback?.name || 'RFA Gym',
+            shortName:
+              b.code === 'SDR'
+                ? 'Sudirman Central'
+                : b.code === 'SNP'
+                ? 'Senopati Lifestyle'
+                : b.code === 'BSD'
+                ? 'BSD City Express'
+                : fallback?.shortName || b.name,
+            address: b.address ? (b.city ? `${b.address}, ${b.city}` : b.address) : (fallback?.address || ''),
+            phone: b.phone || fallback?.phone || '',
+            whatsapp: international || fallback?.whatsapp || '6281234567890',
+            hours:
+              b.openHoursWeekday && b.openHoursWeekend
+                ? `${b.openHoursWeekday} | ${b.openHoursWeekend}`
+                : fallback?.hours || '06:00 - 22:00 WIB',
+            facilities: b.facilities && b.facilities.length > 0 ? b.facilities : fallback?.facilities || [],
+            isFlagship: b.isMainBranch ?? fallback?.isFlagship ?? false
+          };
+        });
+      }
+    }
+  } catch (e) {
+    console.warn('Fallback to static BRANCH_CONTACTS', e);
+  }
+  return BRANCH_CONTACTS;
+}
+
 export const INITIAL_ONLINE_RESERVATIONS: OnlineReservation[] = [
   {
     id: 'RFA-BK-2026-9810',

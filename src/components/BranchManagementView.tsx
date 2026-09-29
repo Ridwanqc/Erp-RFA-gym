@@ -20,11 +20,17 @@ import {
   Info,
   Check,
   Building,
-  ArrowRight
+  ArrowRight,
+  MessageCircle,
+  FileSpreadsheet
 } from 'lucide-react';
 import { GymBranch, User as AppUser } from '../types';
 import { useSettings } from '../context/SettingsContext';
 import { AddBranchModal } from './AddBranchModal';
+import {
+  BranchWhatsAppVerificationModal,
+  validateIndonesianWhatsApp
+} from './BranchWhatsAppVerificationModal';
 
 interface BranchManagementViewProps {
   currentUser: AppUser | null;
@@ -49,6 +55,7 @@ export const BranchManagementView: React.FC<BranchManagementViewProps> = ({
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<'All' | 'Aktif' | 'Renovasi' | 'Nonaktif'>('All');
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [isWaModalOpen, setIsWaModalOpen] = useState(false);
   const [editingBranch, setEditingBranch] = useState<GymBranch | null>(null);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
 
@@ -159,17 +166,29 @@ export const BranchManagementView: React.FC<BranchManagementViewProps> = ({
             </div>
           </div>
 
-          {/* Action Button: Tambah Cabang */}
-          {isSuperAdmin && (
+          {/* Action Buttons: Verifikasi WA & Tambah Cabang */}
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 shrink-0 self-stretch sm:self-auto">
             <button
               type="button"
-              onClick={handleOpenAddModal}
-              className="px-5 py-3 rounded-2xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs shadow-lg shadow-emerald-600/25 transition flex items-center gap-2 shrink-0 cursor-pointer self-stretch sm:self-auto justify-center"
+              onClick={() => setIsWaModalOpen(true)}
+              className="px-4 py-3 rounded-2xl bg-zinc-800 hover:bg-zinc-700 text-emerald-400 hover:text-emerald-300 font-bold text-xs border border-emerald-500/30 transition flex items-center justify-center gap-2 cursor-pointer shadow-sm active:scale-95"
+              title="Verifikasi keabsahan nomor WhatsApp resmi unit cabang dan ekspor ke CSV / Clipboard"
             >
-              <Plus className="w-4 h-4" />
-              <span>Tambah Cabang Baru</span>
+              <MessageCircle className="w-4 h-4 text-emerald-400" />
+              <span>Verifikasi & Ekspor Kontak WA</span>
             </button>
-          )}
+
+            {isSuperAdmin && (
+              <button
+                type="button"
+                onClick={handleOpenAddModal}
+                className="px-5 py-3 rounded-2xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs shadow-lg shadow-emerald-600/25 transition flex items-center gap-2 shrink-0 cursor-pointer justify-center active:scale-95"
+              >
+                <Plus className="w-4 h-4" />
+                <span>Tambah Cabang Baru</span>
+              </button>
+            )}
+          </div>
         </div>
       </div>
 
@@ -520,6 +539,15 @@ export const BranchManagementView: React.FC<BranchManagementViewProps> = ({
           </div>
         </div>
       )}
+
+      {/* Modal Verifikasi & Ekspor Kontak WhatsApp Cabang */}
+      <BranchWhatsAppVerificationModal
+        isOpen={isWaModalOpen}
+        onClose={() => setIsWaModalOpen(false)}
+        branches={branches}
+        onUpdateBranch={updateBranch}
+        showToast={showToast}
+      />
     </div>
   );
 };
