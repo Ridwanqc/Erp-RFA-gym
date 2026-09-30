@@ -70,6 +70,7 @@ import {
   getRecommendedLocker,
   getLockerStats,
   getAvailableLockersByGender,
+  sortAttendancesByNewest,
   INITIAL_LOCKERS
 } from '../data/lockerData';
 import { LockerManagementView } from './LockerManagementView';
@@ -447,13 +448,14 @@ export const FrontDeskPortalView: React.FC<FrontDeskPortalViewProps> = ({
   const [selectedLockerNumber, setSelectedLockerNumber] = useState<number | null>(null);
 
   // ---------------------------------------------------------------------------
-  // ATTENDANCES & LIVE FLOOR LIST (TODAY)
+  // ATTENDANCES & LIVE FLOOR LIST (TODAY - URUT DARI YANG BARU DATANG)
   // ---------------------------------------------------------------------------
   const todayAttendances = useMemo(() => {
-    return attendances.filter((a) => a.date === APP_TODAY);
+    const list = attendances.filter((a) => a.date === APP_TODAY);
+    return sortAttendancesByNewest(list);
   }, [attendances]);
 
-  // Members currently inside the gym (no timeOut)
+  // Members currently inside the gym (no timeOut), berurut dari yang paling baru datang
   const currentlyInGymAttendances = useMemo(() => {
     return todayAttendances.filter((a) => !a.timeOut);
   }, [todayAttendances]);
@@ -688,13 +690,15 @@ export const FrontDeskPortalView: React.FC<FrontDeskPortalViewProps> = ({
     if (memberId || memberName) {
       setLockers((prev) =>
         prev.map((l) =>
-          (l.memberId === memberId || l.memberName === memberName)
+          ((memberId && l.memberId === memberId) || (memberName && l.memberName === memberName)) && l.status !== 'Perbaikan'
             ? {
                 ...l,
                 isOccupied: false,
                 memberId: undefined,
                 memberName: undefined,
-                timeIn: undefined
+                timeIn: undefined,
+                hasTowel: false,
+                status: 'Tersedia'
               }
             : l
         )
@@ -1936,7 +1940,16 @@ export const FrontDeskPortalView: React.FC<FrontDeskPortalViewProps> = ({
                 <div className="space-y-2.5 max-h-[480px] overflow-y-auto pr-1">
                   {currentlyInGymAttendances.map((att) => {
                     const memberObj = members.find((m) => m.id === att.memberId || m.name === att.memberName);
-                    const occupiedLocker = lockers.find((l) => l.memberId === att.memberId || l.memberName === att.memberName);
+                    const lockerNum =
+                      typeof att.lockerNumber === 'string'
+                        ? parseInt(att.lockerNumber.replace(/\D/g, ''), 10)
+                        : att.lockerNumber;
+                    const occupiedLocker = lockers.find(
+                      (l) =>
+                        (lockerNum && l.number === lockerNum) ||
+                        (att.memberId && l.memberId === att.memberId) ||
+                        (att.memberName && l.memberName === att.memberName)
+                    );
 
                     return (
                       <div

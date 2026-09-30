@@ -10,16 +10,18 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
-// Default to 3000 because AI Studio container Nginx listens on 8080 and reverse proxies to 3000
-const PORT = parseInt(process.env.APP_PORT || (process.env.PORT && process.env.PORT !== '8080' ? process.env.PORT : '3000'), 10);
+
+// Cloud Run specifies process.env.PORT (typically 8080) for production ingress and health checks.
+// In container environments, we must bind to process.env.PORT.
+const PORT = parseInt(process.env.PORT || process.env.APP_PORT || '8080', 10);
 const HOST = '0.0.0.0';
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Health check endpoint for Cloud Run
-app.get('/health', (_req, res) => {
-  res.status(200).json({ status: 'ok', timestamp: new Date().toISOString() });
+// Health check endpoints for Cloud Run & Kubernetes probes
+app.get(['/health', '/healthz', '/_healthz', '/api/health'], (_req, res) => {
+  res.status(200).json({ status: 'ok', service: 'GymPro ERP Enterprise', timestamp: new Date().toISOString() });
 });
 
 // Serve static assets from Vite build directory
@@ -49,18 +51,29 @@ if (fs.existsSync(distPath)) {
   });
 }
 
-const server = app.listen(PORT, HOST, () => {
-  console.log(`[GymPro Server] Server running on http://${HOST}:${PORT}`);
-});
+function startListening(port: number, attempt = 1) {
+  const srv = app.listen(port, HOST, () => {
+    console.log(`[GymPro Server] Server successfully running on http://${HOST}:${port}`);
+  });
 
-server.on('error', (err: any) => {
-  if (err.code === 'EADDRINUSE') {
-    console.warn(`[GymPro Server] Port ${PORT} already in use, trying fallback port 3001`);
-    app.listen(3001, HOST, () => {
-      console.log(`[GymPro Server] Fallback server running on http://${HOST}:3001`);
-    });
-  } else {
-    console.error('[GymPro Server] Server error:', err);
-  }
-});
+  srv.on('error', (err: any) => {
+    if (err.code === 'EADDRINUSE') {
+      console.warn(`[GymPro Server] Port ${port} is in use.`);
+      if (attempt < 3) {
+        const nextPort = port === 8080 ? 3000 : port + 1;
+        console.warn(`[GymPro Server] Attempting fallback to port ${nextPort}...`);
+        startListening(nextPort, attempt + 1);
+      } else {
+        console.error(`[GymPro Server] Failed to bind port after ${attempt} attempts.`);
+        process.exit(1);
+      }
+    } else {
+      console.error('[GymPro Server] Fatal server error:', err);
+      process.exit(1);
+    }
+  });
 
+  return srv;
+}
+
+startListening(PORT);

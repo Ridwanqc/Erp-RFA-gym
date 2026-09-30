@@ -17,12 +17,10 @@ import {
   KeyRound,
   Users,
   Dumbbell,
-  CreditCard,
-  Award,
   Flame,
   Palette
 } from 'lucide-react';
-import { User, UserRole } from '../types';
+import { User } from '../types';
 import { formatDateIndo, APP_TODAY } from '../utils/formatters';
 import { signInWithGoogle } from '../lib/firebase';
 import { useTheme } from '../context/ThemeContext';
@@ -80,11 +78,11 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin, staffUsers, onBac
         return;
       }
 
-      // Check password (default is '123' for initial users)
+      // Check password
       const expectedPassword = matchedUser.password || '123';
       if (cleanPassword !== expectedPassword) {
         setIsLoading(false);
-        setErrorMsg('Kata sandi yang Anda masukkan salah. Kata sandi bawaan demo: 123');
+        setErrorMsg('Kata sandi yang Anda masukkan salah. Silakan periksa kembali kata sandi Anda.');
         return;
       }
 
@@ -129,74 +127,6 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin, staffUsers, onBac
       setErrorMsg(`Gagal masuk dengan Google: ${msg}`);
     }
   };
-
-  // Quick 1-click Demo Login
-  const handleQuickDemoLogin = (userAccId: string) => {
-    setErrorMsg(null);
-    const target = staffUsers.find((u) => u.accId === userAccId) || staffUsers.find((u) => u.role === userAccId);
-    if (target) {
-      setUsername(target.accId);
-      setPassword(target.password || '123');
-      setIsLoading(true);
-      setTimeout(() => {
-        setIsLoading(false);
-        onLogin(target, true);
-      }, 200);
-    }
-  };
-
-  // Pre-fill fields for manual review
-  const handleFillDemo = (userAccId: string) => {
-    setErrorMsg(null);
-    const target = staffUsers.find((u) => u.accId === userAccId) || staffUsers.find((u) => u.role === userAccId);
-    if (target) {
-      setUsername(target.accId);
-      setPassword(target.password || '123');
-    }
-  };
-
-  // Role details metadata for quick demo cards
-  const roleBadges: {
-    role: UserRole;
-    accId: string;
-    title: string;
-    description: string;
-    icon: React.ReactNode;
-    color: string;
-  }[] = [
-    {
-      role: 'admin',
-      accId: 'admin',
-      title: 'Administrator',
-      description: 'Akses penuh Dashboard, Finansial, Payroll, Master Data & Pengaturan',
-      icon: <ShieldCheck className="w-4 h-4 text-emerald-400" />,
-      color: 'border-emerald-500/30 hover:border-emerald-500/60 bg-emerald-500/5'
-    },
-    {
-      role: 'kasir',
-      accId: 'kasir',
-      title: 'Kasir & Front Desk',
-      description: 'Kasir POS, Registrasi Membership, Presensi QR, & Kas Kecil',
-      icon: <CreditCard className="w-4 h-4 text-blue-400" />,
-      color: 'border-blue-500/30 hover:border-blue-500/60 bg-blue-500/5'
-    },
-    {
-      role: 'leader_pt',
-      accId: 'leader_pt',
-      title: 'Leader PT',
-      description: 'Monitoring Tim PT, Kinerja Target Trainer, & Penugasan Klien',
-      icon: <Award className="w-4 h-4 text-purple-400" />,
-      color: 'border-purple-500/30 hover:border-purple-500/60 bg-purple-500/5'
-    },
-    {
-      role: 'pt',
-      accId: 'pt',
-      title: 'Personal Trainer',
-      description: 'Portal Trainer, Log Sesi Member, Jadwal Kelas, & Performa',
-      icon: <Dumbbell className="w-4 h-4 text-orange-400" />,
-      color: 'border-orange-500/30 hover:border-orange-500/60 bg-orange-500/5'
-    }
-  ];
 
   return (
     <div className="min-h-screen bg-zinc-950 text-zinc-100 flex flex-col justify-between selection:bg-orange-500 selection:text-white relative overflow-hidden">
@@ -458,54 +388,6 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin, staffUsers, onBac
                   <span>Masuk dengan Google (Firebase Auth)</span>
                 </button>
               </form>
-
-              {/* Divider for Demo Accounts */}
-              <div className="relative my-6 text-center">
-                <div className="absolute inset-0 flex items-center">
-                  <div className="w-full border-t border-zinc-800"></div>
-                </div>
-                <span className="relative px-3 bg-zinc-900 text-[11px] font-bold uppercase tracking-wider text-zinc-500">
-                  Akses Demo Cepat (1-Klik)
-                </span>
-              </div>
-
-              {/* Quick Demo Role Cards Grid */}
-              <div className="grid grid-cols-2 gap-2 sm:gap-2.5">
-                {roleBadges.map((badge) => {
-                  const staff = staffUsers.find((u) => u.accId === badge.accId) || staffUsers.find((u) => u.role === badge.role);
-                  return (
-                    <button
-                      key={badge.accId}
-                      type="button"
-                      onClick={() => handleQuickDemoLogin(badge.accId)}
-                      className={`text-left p-2.5 sm:p-3 rounded-2xl border transition group flex flex-col justify-between ${badge.color}`}
-                    >
-                      <div className="flex items-center justify-between gap-1 mb-1">
-                        <div className="flex items-center gap-1.5">
-                          {badge.icon}
-                          <span className="text-xs font-bold text-white group-hover:text-orange-400 transition">
-                            {badge.title}
-                          </span>
-                        </div>
-                        <span className="text-[10px] text-zinc-400 bg-zinc-900/90 px-1.5 py-0.5 rounded font-mono border border-zinc-800">
-                          {badge.accId}
-                        </span>
-                      </div>
-                      <div className="flex items-center justify-between text-[10px] text-zinc-400 mt-1">
-                        <span className="truncate">{staff?.name || 'Staf'}</span>
-                        <span className="text-orange-400 font-bold group-hover:underline ml-1 shrink-0">Masuk &rarr;</span>
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
-
-              {/* Demo Password Hint */}
-              <div className="mt-4 text-center">
-                <p className="text-[11px] text-zinc-500">
-                  Password akun demo bawaan adalah: <strong className="text-zinc-300 font-mono">123</strong>
-                </p>
-              </div>
             </div>
 
             {/* Bottom Info Note */}
@@ -548,9 +430,9 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin, staffUsers, onBac
               <div className="flex items-start gap-2.5">
                 <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
                 <div>
-                  <span className="font-bold text-zinc-200">Akun Bawaan Demo:</span>
+                  <span className="font-bold text-zinc-200">Informasi Akun Staf:</span>
                   <p className="text-zinc-400 mt-0.5">
-                    Gunakan username <code className="text-orange-400">admin</code>, <code className="text-orange-400">kasir</code>, <code className="text-orange-400">leader_pt</code>, atau <code className="text-orange-400">pt</code> dengan password <code className="text-orange-400">123</code>.
+                    Gunakan ID pengguna resmi atau Username serta kata sandi yang telah didaftarkan oleh Administrator Sistem.
                   </p>
                 </div>
               </div>
@@ -560,7 +442,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin, staffUsers, onBac
                 <div>
                   <span className="font-bold text-zinc-200">Reset Sandi Mandiri:</span>
                   <p className="text-zinc-400 mt-0.5">
-                    Hubungi Admin Budi Santoso di meja operasional atau hubungi kontak darurat staf.
+                    Hubungi Admin atau PIC di meja operasional untuk bantuan pemulihan kata sandi akun Anda.
                   </p>
                 </div>
               </div>

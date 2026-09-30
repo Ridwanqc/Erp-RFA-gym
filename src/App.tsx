@@ -14,6 +14,7 @@ import {
   INITIAL_PETTY_CASH,
   INITIAL_CLOSING,
   INITIAL_PT_PURCHASES,
+  INITIAL_PT_ASSIGNMENTS,
   INITIAL_WORK_SCHEDULES,
   INITIAL_LEAVES
 } from './data/initialData';
@@ -32,6 +33,7 @@ import {
   PettyCash,
   DailyClosingRecord,
   PTPurchaseRecord,
+  PTTrainerAssignment,
   BundlePackage,
   BundleItem,
   MemberMembershipRecord,
@@ -54,7 +56,7 @@ import {
   LockerSlot,
   ALL_BRANCHES_ID
 } from './types';
-import { INITIAL_LOCKERS } from './data/lockerData';
+import { INITIAL_LOCKERS, sortAttendancesByNewest, syncLockersWithAttendances } from './data/lockerData';
 import {
   INITIAL_BUNDLE_PACKAGES,
   INITIAL_MEMBER_MEMBERSHIPS,
@@ -114,7 +116,7 @@ import { LandingPage } from './components/landing/LandingPage';
 import { OfflineIndicator } from './components/OfflineIndicator';
 import { OnlineReservation } from './types/landingTypes';
 import { INITIAL_ONLINE_RESERVATIONS } from './data/landingData';
-import { APP_TODAY, formatRp } from './utils/formatters';
+import { APP_TODAY, formatRp, getTimestamp } from './utils/formatters';
 import { testConnection, auth, onAuthStateChanged, logOutFirebase } from './lib/firebase';
 import {
   saveMemberToFirestore,
@@ -277,16 +279,17 @@ export default function App() {
     return saved ? JSON.parse(saved) : INITIAL_FOLLOW_UPS;
   });
 
-  const [attendances, setAttendances] = useState<Attendance[]>(() => {
+   const [attendances, setAttendances] = useState<Attendance[]>(() => {
     const saved = localStorage.getItem('rfa_attendance');
-    if (!saved) return INITIAL_ATTENDANCE;
+    if (!saved) return sortAttendancesByNewest(INITIAL_ATTENDANCE);
     try {
       const parsed: Attendance[] = JSON.parse(saved);
       const existingIds = new Set(parsed.map((a) => a.id));
       const missing = INITIAL_ATTENDANCE.filter((a) => !existingIds.has(a.id));
-      return missing.length > 0 ? [...parsed, ...missing] : parsed;
+      const merged = missing.length > 0 ? [...parsed, ...missing] : parsed;
+      return sortAttendancesByNewest(merged);
     } catch {
-      return INITIAL_ATTENDANCE;
+      return sortAttendancesByNewest(INITIAL_ATTENDANCE);
     }
   });
 
@@ -305,13 +308,28 @@ export default function App() {
 
   const [lockers, setLockers] = useState<LockerSlot[]>(() => {
     const saved = localStorage.getItem('rfa_lockers');
-    if (!saved) return INITIAL_LOCKERS;
-    try {
-      const parsed: LockerSlot[] = JSON.parse(saved);
-      return Array.isArray(parsed) && parsed.length > 0 ? parsed : INITIAL_LOCKERS;
-    } catch {
-      return INITIAL_LOCKERS;
+    let loadedLockers: LockerSlot[] = INITIAL_LOCKERS;
+    if (saved) {
+      try {
+        const parsed: LockerSlot[] = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          loadedLockers = parsed;
+        }
+      } catch {
+        loadedLockers = INITIAL_LOCKERS;
+      }
     }
+    // Auto-synchronize locker availability with active member attendance on load
+    const savedAtt = localStorage.getItem('rfa_attendance');
+    let effectiveAtts: Attendance[] = INITIAL_ATTENDANCE;
+    if (savedAtt) {
+      try {
+        effectiveAtts = JSON.parse(savedAtt);
+      } catch {
+        effectiveAtts = INITIAL_ATTENDANCE;
+      }
+    }
+    return syncLockersWithAttendances(loadedLockers, effectiveAtts, APP_TODAY);
   });
 
   useEffect(() => {
@@ -434,6 +452,28 @@ export default function App() {
   useEffect(() => {
     localStorage.setItem('rfa_pt_purchases', JSON.stringify(ptPurchases));
   }, [ptPurchases]);
+
+  // PT Trainer Assignments Audit Trail State
+  const [ptAssignments, setPtAssignments] = useState<PTTrainerAssignment[]>(() => {
+    const saved = localStorage.getItem('rfa_pt_assignments');
+    if (!saved) return INITIAL_PT_ASSIGNMENTS;
+    try {
+      const parsed: PTTrainerAssignment[] = JSON.parse(saved);
+      const existingIds = new Set(parsed.map((a) => a.assignmentId));
+      const missing = INITIAL_PT_ASSIGNMENTS.filter((a) => !existingIds.has(a.assignmentId));
+      return missing.length > 0 ? [...parsed, ...missing] : parsed;
+    } catch {
+      return INITIAL_PT_ASSIGNMENTS;
+    }
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('rfa_pt_assignments', JSON.stringify(ptAssignments));
+    } catch (e) {
+      console.error(e);
+    }
+  }, [ptAssignments]);
 
   // Bundling Package State & Modals
   const [bundlePackages, setBundlePackages] = useState<BundlePackage[]>(() => {
@@ -960,8 +1000,10 @@ export default function App() {
   }, [transactions, isAllBranches, activeBranchId]);
 
   const activeBranchFilteredAttendances = useMemo(() => {
-    if (isAllBranches) return attendances;
-    return attendances.filter((a) => a.branchId === activeBranchId || (!a.branchId && activeBranchId === 'BR-001'));
+    const list = isAllBranches
+      ? attendances
+      : attendances.filter((a) => a.branchId === activeBranchId || (!a.branchId && activeBranchId === 'BR-001'));
+    return sortAttendancesByNewest(list);
   }, [attendances, isAllBranches, activeBranchId]);
 
   const activeBranchFilteredStaffAttendances = useMemo(() => {
@@ -1363,70 +1405,55 @@ export default function App() {
       saveMemberToFirestore(stampedMem).catch(() => {});
     });
 
-    // If this is a PT package, record it in ptPurchases for performance tracking & generate trainer commissions
+    // If this is a PT package, record it in ptPurchases with status WAITING_ASSIGNMENT (Separation of PT purchase and trainer assignment)
     if (newTrx.type === 'PT') {
       const matchedPkg = packages.find((p) => newTrx.desc.includes(p.name));
       const totalSess = matchedPkg ? matchedPkg.value : 10;
-      const trainerObj = staffUsers.find((u) => u.id === newTrx.picId) || currentUser;
+      const isMulti = updatedMembersList.length > 1;
+      const ptNoGen = 'PT-2026-' + String(Math.floor(10000 + Math.random() * 90000));
+      const pType = isMulti ? (updatedMembersList.length === 2 ? 'Couple' : 'Trio') : 'Personal';
+      const isPaidValid = newTrx.status === 'Paid' || (newTrx.amountPaid && newTrx.amountPaid > 0);
 
-      const newPtCommissions: TrainerCommissionRecord[] = [];
+      const newPurchase: PTPurchaseRecord = {
+        id: ptNoGen,
+        ptNo: ptNoGen,
+        date: newTrx.date || APP_TODAY,
+        memberId: updatedMembersList[0]?.id || 'MEM-001',
+        memberName: updatedMembersList.map((m) => m.name).join(' & '),
+        memberPhone: updatedMembersList[0]?.phone || '-',
+        memberPhoto: updatedMembersList[0]?.photo,
+        members: updatedMembersList.map((m) => ({
+          id: m.id,
+          name: m.name,
+          phone: m.phone,
+          photo: m.photo,
+          gender: m.gender
+        })),
+        memberIds: updatedMembersList.map((m) => m.id),
+        memberNames: updatedMembersList.map((m) => m.name),
+        trainerId: undefined,
+        trainerName: '-',
+        packageId: matchedPkg?.id || 'PK09',
+        packageName: matchedPkg?.name || newTrx.desc.replace('Paket ', ''),
+        packageType: pType,
+        totalSessions: totalSess,
+        completedSessions: 0,
+        remainingSessions: totalSess,
+        price: newTrx.amount,
+        amountPaid: newTrx.amountPaid || newTrx.amount,
+        amountRemaining: newTrx.amountRemaining || 0,
+        paymentStatus: newTrx.status === 'Paid' ? 'LUNAS' : newTrx.amountRemaining > 0 ? 'CICILAN' : 'LUNAS',
+        paymentMethod: newTrx.method,
+        status: isPaidValid ? 'WAITING_ASSIGNMENT' : 'BELUM_LUNAS',
+        picSalesId: newTrx.picId,
+        picSalesName: newTrx.picNames || newTrx.cashier,
+        purchaseBy: currentUser?.name || newTrx.cashier || 'Kasir',
+        purchaseAt: `${newTrx.date || APP_TODAY} ${newTrx.time || getTimestamp()}`,
+        notes: `Pembelian baru via ${newTrx.method} [${newTrx.paymentScheme || 'LUNAS'}]. Menunggu penugasan pelatih resmi oleh Leader PT.`
+      };
 
-      updatedMembersList.forEach((mem) => {
-        const memberTrainer = staffUsers.find((u) => u.id === mem.picId) || trainerObj;
-        const participantPrice = Math.round(newTrx.amount / (updatedMembersList.length || 1));
-        const newPurchase: PTPurchaseRecord = {
-          id: 'PUR-' + Math.floor(100000 + Math.random() * 900000),
-          date: newTrx.date || APP_TODAY,
-          memberId: mem.id,
-          memberName: mem.name,
-          trainerId: memberTrainer?.id || mem.picId || 'S03',
-          trainerName: memberTrainer?.name || mem.picName || 'Citra Lestari',
-          packageId: matchedPkg?.id || 'PK09',
-          packageName: matchedPkg?.name || newTrx.desc.replace('Paket ', ''),
-          totalSessions: totalSess,
-          completedSessions: 0,
-          price: participantPrice,
-          status: 'Active',
-          notes: `Pembelian baru via ${newTrx.method}`
-        };
-        setPtPurchases((prev) => [newPurchase, ...prev]);
-
-        // Generate Trainer Commission record from package configuration
-        const commRate = matchedPkg?.trainerCommissionRate ?? 40;
-        const commAmt = matchedPkg?.trainerCommissionNominal
-          ? Math.round(matchedPkg.trainerCommissionNominal / (updatedMembersList.length || 1))
-          : Math.round((participantPrice * commRate) / 100);
-        const perSessAmt = matchedPkg?.trainerCommissionPerSession || Math.round(commAmt / (totalSess || 1));
-
-        newPtCommissions.push({
-          id: 'COMM-' + Math.floor(100000 + Math.random() * 900000),
-          commissionId: 'COMM-' + Math.floor(100000 + Math.random() * 900000),
-          trxId: newTrx.id,
-          transactionId: newTrx.id,
-          bundleId: matchedPkg?.id || 'PKG-PT',
-          bundleCode: matchedPkg?.id || 'PT',
-          bundleName: matchedPkg?.name || newTrx.desc,
-          trainerId: memberTrainer?.id || mem.picId || 'S03',
-          trainerName: memberTrainer?.name || mem.picName || 'Citra Lestari',
-          memberId: mem.id,
-          memberName: mem.name,
-          date: newTrx.date || APP_TODAY,
-          ptComponentValue: participantPrice,
-          commissionRate: commRate,
-          commissionAmount: commAmt,
-          commissionPerSession: perSessAmt,
-          totalSessions: totalSess,
-          paymentStatus: 'LUNAS',
-          validationStatus: 'PENDING',
-          valStatus: 'PENDING',
-          status: 'ACTIVE',
-          notes: `Komisi PT dari paket ${matchedPkg?.name || newTrx.desc}`
-        });
-      });
-
-      if (newPtCommissions.length > 0) {
-        setTrainerCommissions((prev) => [...newPtCommissions, ...prev]);
-      }
+      setPtPurchases((prev) => [newPurchase, ...prev]);
+      // Note: Trainer commission will be generated only when Leader PT assigns the trainer!
     }
 
     // If this is a Class package, generate Instructor Commission records
@@ -1506,26 +1533,33 @@ export default function App() {
         }));
         setMemberMemberships((prev) => [...newMemberships, ...prev]);
 
-        // 2. Create PTPurchaseRecord if bundle includes PT
+        // 2. Create PTPurchaseRecord if bundle includes PT (Status WAITING_ASSIGNMENT)
         const ptItem = bundle.items.find((i) => i.itemType === 'PT');
         if (ptItem) {
           const ptSessions = ptItem.sessionCount || 2;
+          const ptNoBnd = 'PT-BND-' + String(Math.floor(10000 + Math.random() * 90000));
           const newPtPurchases: PTPurchaseRecord[] = updatedMembersList.map((mem) => {
-            const memberTrainer = staffUsers.find((u) => u.id === mem.picId) || currentUser;
             return {
               id: 'PUR-BND-' + Math.floor(100000 + Math.random() * 900000),
+              ptNo: ptNoBnd,
               date: newTrx.date || APP_TODAY,
               memberId: mem.id,
               memberName: mem.name,
-              trainerId: memberTrainer?.id || mem.picId || 'S03',
-              trainerName: memberTrainer?.name || mem.picName || 'Citra Lestari',
+              memberPhone: mem.phone || '-',
+              memberPhoto: mem.photo,
+              trainerId: undefined,
+              trainerName: '-',
               packageId: bundle.bundleId,
               packageName: `${bundle.bundleName} (${ptSessions} Sesi PT)`,
+              packageType: (bundle.participantType || 'Personal') as any,
               totalSessions: ptSessions,
               completedSessions: 0,
+              remainingSessions: ptSessions,
               price: Math.round((bundle.ptComponentValue || 300000) / (updatedMembersList.length || 1)),
-              status: 'Active',
-              notes: `Paket Bundling ${bundle.bundleName} (${bundle.bundleCode})`,
+              amountPaid: Math.round((bundle.ptComponentValue || 300000) / (updatedMembersList.length || 1)),
+              paymentStatus: 'LUNAS',
+              status: 'WAITING_ASSIGNMENT',
+              notes: `Paket Bundling ${bundle.bundleName} (${bundle.bundleCode}). Menunggu penugasan pelatih resmi oleh Leader PT.`,
               source: 'BUNDLING',
               bundleId: bundle.bundleId,
               bundleCode: bundle.bundleCode,
@@ -1533,37 +1567,6 @@ export default function App() {
             };
           });
           setPtPurchases((prev) => [...newPtPurchases, ...prev]);
-
-          // 3. Create Trainer Commission record for the assigned trainer(s)
-          const newCommissions: TrainerCommissionRecord[] = updatedMembersList.map((mem) => {
-            const memberTrainer = staffUsers.find((u) => u.id === mem.picId) || currentUser;
-            const ptVal = Math.round((bundle.ptComponentValue || 300000) / (updatedMembersList.length || 1));
-            const rate = bundle.commissionRate || bundle.trainerCommissionRate || 20;
-            const commAmt = Math.round((ptVal * rate) / 100);
-
-            return {
-              id: 'COMM-' + Math.floor(100000 + Math.random() * 900000),
-              commissionId: 'COMM-' + Math.floor(100000 + Math.random() * 900000),
-              trxId: newTrx.id,
-              transactionId: newTrx.id,
-              bundleId: bundle.bundleId,
-              bundleCode: bundle.bundleCode,
-              bundleName: bundle.bundleName,
-              trainerId: memberTrainer?.id || mem.picId || 'S03',
-              trainerName: memberTrainer?.name || mem.picName || 'Trainer',
-              memberId: mem.id,
-              memberName: mem.name,
-              date: newTrx.date || APP_TODAY,
-              ptComponentValue: ptVal,
-              commissionRate: rate,
-              commissionAmount: commAmt,
-              paymentStatus: 'LUNAS',
-              validationStatus: 'PENDING',
-              valStatus: 'PENDING',
-              status: 'ACTIVE'
-            };
-          });
-          setTrainerCommissions((prev) => [...newCommissions, ...prev]);
         }
 
         // 4. Reduce stock for bonus product items
@@ -1857,6 +1860,150 @@ export default function App() {
     showToast('Bundling Dihapus', `Paket bundling ${target?.bundleName || ''} telah dihapus.`, 'warning');
   };
 
+  // Handler: Assign / Reassign Personal Trainer by Leader PT
+  const handleAssignPTTrainer = (
+    purchaseId: string,
+    trainerId: string,
+    reason: string = 'Penugasan Awal Program PT',
+    notes: string = '',
+    scheduleFirstSession: boolean = false,
+    firstDate?: string,
+    firstTime?: string
+  ) => {
+    const purchase = ptPurchases.find((p) => p.id === purchaseId);
+    if (!purchase) return;
+
+    const chosenTrainer = staffUsers.find((u) => u.id === trainerId);
+    if (!chosenTrainer) return;
+
+    const isReassignment = Boolean(purchase.trainerId && purchase.trainerId !== '-' && purchase.trainerId !== chosenTrainer.id);
+    const assignedByLabel = `${currentUser?.name || 'Leader PT'} (${currentUser?.roleName || 'Leader PT'})`;
+
+    // 1. Update purchase
+    const updatedPurchase: PTPurchaseRecord = {
+      ...purchase,
+      trainerId: chosenTrainer.id,
+      trainerName: chosenTrainer.name,
+      status: scheduleFirstSession ? 'SCHEDULED' : 'ASSIGNED',
+      assignedBy: assignedByLabel,
+      assignedAt: `${APP_TODAY} ${getTimestamp()}`,
+      notes: notes ? (purchase.notes ? purchase.notes + ' | ' + notes : notes) : purchase.notes
+    };
+
+    setPtPurchases((prev) => prev.map((p) => (p.id === purchaseId ? updatedPurchase : p)));
+
+    // 2. Audit Trail Assignment Record
+    if (isReassignment) {
+      setPtAssignments((prev) =>
+        prev.map((a) =>
+          a.ptPurchaseId === purchaseId && a.status === 'ACTIVE'
+            ? { ...a, status: 'CHANGED' as const, endDate: APP_TODAY }
+            : a
+        )
+      );
+    }
+
+    const newAssignment: PTTrainerAssignment = {
+      assignmentId: 'ASG-' + Date.now(),
+      ptPurchaseId: purchase.id,
+      ptNo: purchase.ptNo || purchase.id,
+      memberId: purchase.memberId,
+      memberName: purchase.memberName,
+      memberIds: purchase.memberIds || (purchase.members?.map((m) => m.id)) || [purchase.memberId],
+      memberNames: purchase.memberNames || (purchase.members?.map((m) => m.name)) || [purchase.memberName],
+      trainerId: chosenTrainer.id,
+      trainerName: chosenTrainer.name,
+      assignedBy: assignedByLabel,
+      assignedById: currentUser?.id,
+      assignedAt: `${APP_TODAY} ${getTimestamp()}`,
+      startDate: APP_TODAY,
+      status: 'ACTIVE',
+      reason: reason || (isReassignment ? 'Pergantian Pelatih' : 'Penugasan Awal'),
+      notes: notes || ''
+    };
+    setPtAssignments((prev) => [newAssignment, ...prev]);
+
+    // 3. Update Member(s)
+    const targetMemberIds = purchase.memberIds && purchase.memberIds.length > 0
+      ? purchase.memberIds
+      : [purchase.memberId];
+
+    setMembers((prev) =>
+      prev.map((m) => {
+        if (targetMemberIds.includes(m.id)) {
+          const updatedMem: Member = {
+            ...m,
+            picId: chosenTrainer.id,
+            picName: chosenTrainer.name,
+            notes: (m.notes ? m.notes + ' | ' : '') + `Ditugaskan ke Coach ${chosenTrainer.name} oleh ${assignedByLabel}`
+          };
+          saveMemberToFirestore(updatedMem).catch(console.error);
+          return updatedMem;
+        }
+        return m;
+      })
+    );
+
+    // 4. Generate Trainer Commission record for the assigned trainer
+    const matchedPkg = packages.find((p) => p.id === purchase.packageId || purchase.packageName.includes(p.name));
+    const commRate = matchedPkg?.trainerCommissionRate ?? purchase.commissionRate ?? 40;
+    const commAmt = matchedPkg?.trainerCommissionNominal ?? Math.round((purchase.price * commRate) / 100);
+    const perSessAmt = matchedPkg?.trainerCommissionPerSession ?? Math.round(commAmt / (purchase.totalSessions || 1));
+
+    const newCommRecord: TrainerCommissionRecord = {
+      id: 'COMM-' + Math.floor(100000 + Math.random() * 900000),
+      commissionId: 'COMM-' + Math.floor(100000 + Math.random() * 900000),
+      trxId: purchase.id,
+      transactionId: purchase.id,
+      bundleId: purchase.bundleId || purchase.packageId,
+      bundleCode: purchase.bundleCode || 'PT',
+      bundleName: purchase.packageName,
+      trainerId: chosenTrainer.id,
+      trainerName: chosenTrainer.name,
+      memberId: purchase.memberId,
+      memberName: purchase.memberName,
+      date: APP_TODAY,
+      ptComponentValue: purchase.price,
+      commissionRate: commRate,
+      commissionAmount: commAmt,
+      commissionPerSession: perSessAmt,
+      totalSessions: purchase.totalSessions,
+      paymentStatus: purchase.paymentStatus || 'LUNAS',
+      validationStatus: 'PENDING',
+      valStatus: 'PENDING',
+      status: 'ACTIVE',
+      notes: `Komisi PT ditugaskan oleh ${assignedByLabel} (${reason})`
+    };
+    setTrainerCommissions((prev) => [newCommRecord, ...prev]);
+
+    // 5. Create First Session Schedule if requested
+    if (scheduleFirstSession && firstDate && firstTime) {
+      const newSch: Schedule = {
+        id: 'SCH-' + Date.now(),
+        memberName: purchase.memberName,
+        memberId: purchase.memberId,
+        trainer: chosenTrainer.name,
+        trainerId: chosenTrainer.id,
+        date: firstDate,
+        time: firstTime,
+        status: 'Menunggu',
+        valStaf: false,
+        valTrainer: false,
+        valMember: false,
+        purchaseId: purchase.id,
+        sessionNumber: 1,
+        note: `Sesi Perdana Paket ${purchase.packageName}${notes ? ' - ' + notes : ''}`
+      };
+      setSchedules((prev) => [newSch, ...prev]);
+    }
+
+    showToast(
+      isReassignment ? 'Pergantian Pelatih Berhasil' : 'Penugasan Berhasil',
+      `Member ${purchase.memberName} berhasil ditugaskan ke Coach ${chosenTrainer.name}.`,
+      'success'
+    );
+  };
+
   // Handler: Correct / Update Payment Method
   const handleUpdatePaymentMethod = (
     trxId: string,
@@ -1933,7 +2080,9 @@ export default function App() {
       branchId: branchIdToTag,
       branchName: branchNameToTag
     };
-    setAttendances([stampedAtt, ...attendances]);
+
+    // Urutkan selalu dari yang paling baru datang di posisi paling atas
+    setAttendances((prev) => sortAttendancesByNewest([stampedAtt, ...prev.filter((a) => a.id !== stampedAtt.id)]));
     saveAttendanceToFirestore(stampedAtt).catch(() => {});
     if (updatedMember) {
       const stampedMember: Member = {
@@ -1980,31 +2129,34 @@ export default function App() {
       prev.map((a) => (a.id === attId ? { ...a, timeOut: timeNow, lockerReturned: true } : a))
     );
 
-    // Release locker automatically upon checkout
-    if (targetAtt && targetAtt.lockerNumber) {
-      const lockerNum =
-        typeof targetAtt.lockerNumber === 'string'
-          ? parseInt(targetAtt.lockerNumber.replace(/\D/g, ''), 10)
-          : targetAtt.lockerNumber;
+    // Release locker automatically upon checkout (cari berdasarkan nomor loker atau identitas member)
+    const lockerNum = targetAtt?.lockerNumber
+      ? typeof targetAtt.lockerNumber === 'string'
+        ? parseInt(targetAtt.lockerNumber.replace(/\D/g, ''), 10)
+        : targetAtt.lockerNumber
+      : undefined;
 
-      if (lockerNum) {
-        setLockers((prev) =>
-          prev.map((l) =>
-            l.number === lockerNum
-              ? {
-                  ...l,
-                  isOccupied: false,
-                  memberId: undefined,
-                  memberName: undefined,
-                  timeIn: undefined,
-                  hasTowel: false,
-                  status: 'Tersedia'
-                }
-              : l
-          )
-        );
-      }
-    }
+    setLockers((prev) =>
+      prev.map((l) => {
+        const matchesLockerNum = lockerNum ? l.number === lockerNum : false;
+        const matchesMember =
+          (targetAtt?.memberId && l.memberId === targetAtt.memberId) ||
+          (targetAtt?.memberName && l.memberName === targetAtt.memberName);
+
+        if ((matchesLockerNum || matchesMember) && l.status !== 'Perbaikan') {
+          return {
+            ...l,
+            isOccupied: false,
+            memberId: undefined,
+            memberName: undefined,
+            timeIn: undefined,
+            hasTowel: false,
+            status: 'Tersedia'
+          };
+        }
+        return l;
+      })
+    );
 
     showToast(
       'Check-Out Berhasil',
@@ -2016,6 +2168,7 @@ export default function App() {
   };
 
   const handleReleaseLocker = (lockerNum: number) => {
+    // 1. Bebaskan loker fisik
     setLockers((prev) =>
       prev.map((l) =>
         l.number === lockerNum
@@ -2031,13 +2184,31 @@ export default function App() {
           : l
       )
     );
-    showToast('Kunci Loker Dikembalikan', `Loker #${lockerNum} kini tersedia kembali.`, 'success');
+
+    // 2. Sinkronkan log kehadiran member aktif yang memegang loker ini
+    setAttendances((prev) =>
+      prev.map((a) => {
+        const num =
+          typeof a.lockerNumber === 'string'
+            ? parseInt(a.lockerNumber.replace(/\D/g, ''), 10)
+            : a.lockerNumber;
+        if (num === lockerNum && !a.timeOut) {
+          return { ...a, lockerReturned: true };
+        }
+        return a;
+      })
+    );
+
+    showToast('Kunci Loker Dikembalikan', `Kunci Loker #${lockerNum} telah diterima & kini tersedia kembali.`, 'success');
   };
 
   const handleSwapLocker = (oldLockerNum: number, newLockerNum: number) => {
+    let sourceSlot: LockerSlot | null = null;
+
     setLockers((prev) => {
       const oldSlot = prev.find((l) => l.number === oldLockerNum);
       if (!oldSlot || !oldSlot.isOccupied) return prev;
+      sourceSlot = oldSlot;
 
       return prev.map((l) => {
         if (l.number === oldLockerNum) {
@@ -2067,16 +2238,19 @@ export default function App() {
     });
 
     // Update ongoing attendance record
-    const oldSlot = lockers.find((l) => l.number === oldLockerNum);
-    if (oldSlot && oldSlot.memberId) {
-      setAttendances((prev) =>
-        prev.map((a) =>
-          (a.memberId === oldSlot.memberId || a.memberName === oldSlot.memberName) && !a.timeOut
-            ? { ...a, lockerNumber: newLockerNum }
-            : a
-        )
-      );
-    }
+    setAttendances((prev) =>
+      prev.map((a) => {
+        const num =
+          typeof a.lockerNumber === 'string'
+            ? parseInt(a.lockerNumber.replace(/\D/g, ''), 10)
+            : a.lockerNumber;
+        const matchesMember = sourceSlot && ((sourceSlot.memberId && a.memberId === sourceSlot.memberId) || (sourceSlot.memberName && a.memberName === sourceSlot.memberName));
+        if ((num === oldLockerNum || matchesMember) && !a.timeOut) {
+          return { ...a, lockerNumber: newLockerNum, lockerReturned: false };
+        }
+        return a;
+      })
+    );
 
     showToast('Tukar Loker Berhasil', `Kunci dipindahkan dari Loker #${oldLockerNum} ke Loker #${newLockerNum}.`, 'success');
   };
@@ -2444,6 +2618,14 @@ export default function App() {
 
   const freezeCount = members.filter((m) => m.isFrozen || m.status === 'FREEZE').length;
 
+  const ptWaitingCount = useMemo(() => {
+    return ptPurchases.filter(
+      (p) =>
+        p.status === 'WAITING_ASSIGNMENT' ||
+        (!p.trainerId && p.status !== 'COMPLETED' && p.status !== 'EXPIRED' && p.status !== 'CANCELLED')
+    ).length;
+  }, [ptPurchases]);
+
   // Handlers for Online Reservations
   const handleCompleteReservation = (newRes: OnlineReservation) => {
     setReservations((prev) => [newRes, ...prev]);
@@ -2631,6 +2813,7 @@ export default function App() {
           onCloseMobile={() => setIsSidebarOpen(false)}
           piutangCount={piutangCount}
           freezeCount={freezeCount}
+          ptWaitingCount={ptWaitingCount}
           onLogout={handleLogout}
         />
 
@@ -2663,6 +2846,7 @@ export default function App() {
               attendances={activeBranchFilteredAttendances}
               currentUser={currentUser}
               ptPurchases={ptPurchases}
+              ptAssignments={ptAssignments}
               bundlePackages={bundlePackages}
               transactions={activeBranchFilteredTransactions}
               trainerCommissions={trainerCommissions}
@@ -2673,6 +2857,8 @@ export default function App() {
               onUpdatePTPurchase={(upP) => {
                 setPtPurchases((prev) => prev.map((p) => (p.id === upP.id ? upP : p)));
               }}
+              onAssignPTTrainer={handleAssignPTTrainer}
+              onAddPTAssignment={(newAsg) => setPtAssignments((prev) => [newAsg, ...prev])}
               onNavigateTab={(tab) => setActiveTab(tab)}
               onOpenMemberDetail={(m) => setActiveDetailMember(m)}
               onUpdateSchedule={(upSch) =>

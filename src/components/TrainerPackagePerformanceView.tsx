@@ -210,7 +210,7 @@ export const TrainerPackagePerformanceView: React.FC<TrainerPackagePerformanceVi
         const q = searchQuery.toLowerCase();
         const mName = item.memberName.toLowerCase();
         const mId = item.memberId.toLowerCase();
-        const tName = item.trainerName.toLowerCase();
+        const tName = (item.trainerName || '-').toLowerCase();
         const pName = item.packageName.toLowerCase();
         const notes = (item.notes || '').toLowerCase();
         if (
@@ -250,7 +250,7 @@ export const TrainerPackagePerformanceView: React.FC<TrainerPackagePerformanceVi
     let completedSessions = 0;
 
     filteredPurchases.forEach((p) => {
-      trainerSet.add(p.trainerName);
+      trainerSet.add(p.trainerName || '-');
       memberSet.add(p.memberId);
       totalPackages += 1; // Count PT Purchase ID
       totalSessions += p.totalSessions;
@@ -276,11 +276,12 @@ export const TrainerPackagePerformanceView: React.FC<TrainerPackagePerformanceVi
     const map = new Map<string, TrainerPackageGroup>();
 
     filteredPurchases.forEach((p) => {
-      const key = `${p.trainerName}___${p.packageName}`;
+      const tName = p.trainerName || '-';
+      const key = `${tName}___${p.packageName}`;
       if (!map.has(key)) {
         map.set(key, {
-          trainerId: p.trainerId,
-          trainerName: p.trainerName,
+          trainerId: p.trainerId || '',
+          trainerName: tName,
           packageId: p.packageId,
           packageName: p.packageName,
           uniqueMemberIds: new Set<string>(),
@@ -349,7 +350,7 @@ export const TrainerPackagePerformanceView: React.FC<TrainerPackagePerformanceVi
       }
 
       const s = map.get(p.packageName)!;
-      s.trainers.add(p.trainerName);
+      s.trainers.add(p.trainerName || '-');
       s.uniqueMembers.add(p.memberId);
       s.totalPackages += 1;
       s.totalSessions += p.totalSessions;
@@ -387,10 +388,11 @@ export const TrainerPackagePerformanceView: React.FC<TrainerPackagePerformanceVi
     const map = new Map<string, { trainer: string; selesai: number; sisa: number; total: number }>();
 
     filteredPurchases.forEach((p) => {
-      if (!map.has(p.trainerName)) {
-        map.set(p.trainerName, { trainer: p.trainerName, selesai: 0, sisa: 0, total: 0 });
+      const tName = p.trainerName || '-';
+      if (!map.has(tName)) {
+        map.set(tName, { trainer: tName, selesai: 0, sisa: 0, total: 0 });
       }
-      const entry = map.get(p.trainerName)!;
+      const entry = map.get(tName)!;
       entry.selesai += p.completedSessions;
       entry.total += p.totalSessions;
     });
@@ -2127,7 +2129,7 @@ export const TrainerPackagePerformanceView: React.FC<TrainerPackagePerformanceVi
                                 className={`px-1.5 py-0.5 rounded text-[8.5pt] font-bold ${
                                   p.status === 'Active'
                                     ? 'bg-emerald-100 text-emerald-800'
-                                    : p.status === 'Completed'
+                                    : p.status === 'Completed' || p.status === 'COMPLETED'
                                     ? 'bg-blue-100 text-blue-800'
                                     : 'bg-zinc-100 text-zinc-700'
                                 }`}

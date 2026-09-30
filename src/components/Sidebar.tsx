@@ -100,6 +100,7 @@ interface SidebarProps {
   onLogout?: () => void;
   piutangCount?: number;
   freezeCount?: number;
+  ptWaitingCount?: number;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
@@ -112,7 +113,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onCloseMobile,
   onLogout,
   piutangCount = 0,
-  freezeCount = 0
+  freezeCount = 0,
+  ptWaitingCount = 0
 }) => {
   const role: UserRole = currentUser?.role || 'admin';
   const { openThemeModal, currentAccent, theme } = useTheme();
@@ -211,8 +213,15 @@ export const Sidebar: React.FC<SidebarProps> = ({
           id: 'pt-group',
           label: 'Personal Training',
           icon: Dumbbell,
-          roles: ['admin', 'leader_pt', 'pt'] as UserRole[],
+          roles: ['admin', 'leader_pt', 'pt', 'kasir'] as UserRole[],
+          badge: ptWaitingCount > 0 ? ptWaitingCount : undefined,
           subItems: [
+            {
+              id: 'leader-pt',
+              label: 'PT Management (Antrian)',
+              badge: ptWaitingCount > 0 ? ptWaitingCount : undefined,
+              roles: ['admin', 'leader_pt', 'kasir']
+            },
             {
               id: 'jadwal-pt',
               label: 'Jadwal & Sesi PT',
@@ -226,11 +235,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
             {
               id: 'pt-package-performance',
               label: 'Performa Trainer × Paket',
-              roles: ['admin', 'leader_pt']
-            },
-            {
-              id: 'leader-pt',
-              label: 'Dashboard Leader PT',
               roles: ['admin', 'leader_pt']
             }
           ]

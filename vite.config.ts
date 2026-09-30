@@ -58,7 +58,7 @@ export default defineConfig(() => {
           ],
         },
         workbox: {
-          maximumFileSizeToCacheInBytes: 6 * 1024 * 1024,
+          maximumFileSizeToCacheInBytes: 25 * 1024 * 1024,
           globPatterns: ['**/*.{js,css,html,ico,png,svg,woff,woff2}'],
           runtimeCaching: [
             {
@@ -106,8 +106,7 @@ export default defineConfig(() => {
           ],
         },
         devOptions: {
-          enabled: true, // Enables service worker in development / AI Studio preview
-          type: 'module',
+          enabled: false,
         },
       }),
     ],
@@ -115,6 +114,9 @@ export default defineConfig(() => {
       alias: {
         '@': path.resolve(import.meta.dirname, '.'),
       },
+    },
+    build: {
+      chunkSizeWarningLimit: 8000,
     },
     server: {
       // HMR is disabled in AI Studio via DISABLE_HMR env var.

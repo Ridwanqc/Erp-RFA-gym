@@ -1,0 +1,35 @@
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+  RewriteBase /
+  RewriteRule ^index\.html$ - [L]
+  RewriteCond %{REQUEST_FILENAME} !-f
+  RewriteCond %{REQUEST_FILENAME} !-d
+  RewriteCond %{REQUEST_FILENAME} !-l
+  RewriteRule . /index.html [L]
+</IfModule>
+
+# Security Headers & Caching for Hostinger LiteSpeed / Apache
+<IfModule mod_headers.c>
+  # Prevent MIME type sniffing
+  Header set X-Content-Type-Options "nosniff"
+  # Disable iframing from external domains (security)
+  Header set X-XSS-Protection "1; mode=block"
+
+  # Caching for immutable built assets
+  <FilesMatch "\.(js|css|woff2|woff|ttf|svg|png|jpg|jpeg|gif|webp|ico)$">
+    Header set Cache-Control "max-age=31536000, public, immutable"
+  </FilesMatch>
+
+  # HTML & SW files should not be cached aggressively
+  <FilesMatch "\.(html|json)$">
+    Header set Cache-Control "no-cache, no-store, must-revalidate"
+  </FilesMatch>
+  <FilesMatch "(sw\.js|registerSW\.js)$">
+    Header set Cache-Control "no-cache, no-store, must-revalidate"
+  </FilesMatch>
+</IfModule>
+
+# Enable GZIP compression if available
+<IfModule mod_deflate.c>
+  AddOutputFilterByType DEFLATE text/html text/plain text/xml text/css text/javascript application/javascript application/json application/xml
+</IfModule>

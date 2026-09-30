@@ -1,4 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
+import html2canvas from 'html2canvas';
+import { jsPDF } from 'jspdf';
 import {
   BookOpen,
   DollarSign,
@@ -31,7 +33,9 @@ import {
   CheckCheck,
   UserCheck,
   BarChart3,
-  Building2
+  Building2,
+  FileText,
+  Loader2
 } from 'lucide-react';
 import { Transaction, PettyCashItem, DailyClosingRecord, User, ALL_BRANCHES_ID } from '../types';
 import { formatRp, getTimestamp, APP_TODAY, getDayDiff, formatDateIndo } from '../utils/formatters';
@@ -133,7 +137,9 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
   const [physicalCashInput, setPhysicalCashInput] = useState('');
   const [closingNotes, setClosingNotes] = useState('');
   const [isClosingPrintOpen, setIsClosingPrintOpen] = useState(false);
+  const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
   const [closingAuditTab, setClosingAuditTab] = useState<'ALL' | 'Tunai' | 'Non-Tunai' | 'VOID'>('ALL');
+  const closingPrintRef = useRef<HTMLDivElement>(null);
 
   // Piutang filter states (Status, Name, Date)
   const [piutangStatusFilter, setPiutangStatusFilter] = useState<'all' | 'BELUM LUNAS' | 'LUNAS' | 'OVERDUE'>('all');
@@ -786,12 +792,76 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
     );
   };
 
-  // Handle Clean Print of Daily Closing
+  // Handle Clean Print of Daily Closing via standard browser window.print()
   const handlePrintReport = () => {
     setIsClosingPrintOpen(true);
     setTimeout(() => {
       window.print();
     }, 150);
+  };
+
+  // Handle Clean PDF Generation using html2canvas & jsPDF with standard window.print() integration
+  const handleGeneratePdfReport = async () => {
+    setIsGeneratingPdf(true);
+    setIsClosingPrintOpen(true);
+
+    try {
+      // Allow DOM to settle and styles to render
+      await new Promise((resolve) => setTimeout(resolve, 350));
+
+      const element = closingPrintRef.current || document.getElementById('printable-report-content');
+      if (!element) {
+        window.print();
+        return;
+      }
+
+      const canvas = await html2canvas(element, {
+        scale: 2,
+        useCORS: true,
+        logging: false,
+        backgroundColor: '#ffffff',
+        windowWidth: 1024
+      });
+
+      const imgData = canvas.toDataURL('image/png', 1.0);
+      const pdf = new jsPDF({
+        orientation: 'portrait',
+        unit: 'mm',
+        format: 'a4'
+      });
+
+      const pdfWidth = pdf.internal.pageSize.getWidth();
+      const pdfHeight = pdf.internal.pageSize.getHeight();
+      const margin = 8;
+      const printWidth = pdfWidth - margin * 2;
+      const printHeight = (canvas.height * printWidth) / canvas.width;
+
+      if (printHeight <= pdfHeight - margin * 2) {
+        pdf.addImage(imgData, 'PNG', margin, margin, printWidth, printHeight);
+      } else {
+        let heightLeft = printHeight;
+        let position = margin;
+        pdf.addImage(imgData, 'PNG', margin, position, printWidth, printHeight);
+        heightLeft -= (pdfHeight - margin * 2);
+
+        while (heightLeft > 0) {
+          position = heightLeft - printHeight + margin;
+          pdf.addPage();
+          pdf.addImage(imgData, 'PNG', margin, position, printWidth, printHeight);
+          heightLeft -= (pdfHeight - margin * 2);
+        }
+      }
+
+      const fileName = `GymPro_Laporan_Daily_Closing_${closingDate}.pdf`;
+      pdf.save(fileName);
+      showToast('Export PDF Berhasil', `Laporan Daily Closing berhasil digenerate dan diunduh (${fileName}).`, 'success');
+    } catch (err) {
+      console.error('Failed to generate PDF with html2canvas:', err);
+      showToast('Beralih ke Dialog Print', 'Gagal memproses canvas otomatis, membuka jendela Cetak / Simpan PDF browser...', 'info');
+      window.print();
+    } finally {
+      setIsGeneratingPdf(false);
+    }
   };
 
   // Handle Export of Daily Closing to CSV
@@ -1828,9 +1898,31 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
 
                 <button
                   type="button"
+                  id="btn-pdf-closing-report"
+                  onClick={handleGeneratePdfReport}
+                  disabled={isGeneratingPdf}
+                  className="bg-rose-500 hover:bg-rose-600 text-white px-3.5 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-sm active:scale-95 disabled:opacity-50"
+                  title="Generate Laporan PDF Daily Closing menggunakan html2canvas"
+                >
+                  {isGeneratingPdf ? (
+                    <>
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      <span>Rendering PDF...</span>
+                    </>
+                  ) : (
+                    <>
+                      <FileText className="w-3.5 h-3.5" />
+                      <span>Export PDF (html2canvas)</span>
+                    </>
+                  )}
+                </button>
+
+                <button
+                  type="button"
                   id="btn-print-closing-report"
                   onClick={handlePrintReport}
                   className="bg-orange-500 hover:bg-orange-600 text-white px-3.5 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-sm active:scale-95"
+                  title="Cetak Laporan / Simpan PDF via Browser Print"
                 >
                   <Printer className="w-3.5 h-3.5" />
                   <span>Print Report</span>
@@ -1856,9 +1948,30 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                   </button>
                   <button
                     type="button"
+                    id="btn-card-pdf-report"
+                    onClick={handleGeneratePdfReport}
+                    disabled={isGeneratingPdf}
+                    className="bg-rose-500 hover:bg-rose-600 text-white px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-xs active:scale-95 disabled:opacity-50"
+                    title="Generate Laporan PDF Daily Closing menggunakan html2canvas"
+                  >
+                    {isGeneratingPdf ? (
+                      <>
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        <span>Rendering...</span>
+                      </>
+                    ) : (
+                      <>
+                        <FileText className="w-3.5 h-3.5" />
+                        <span>Export PDF</span>
+                      </>
+                    )}
+                  </button>
+                  <button
+                    type="button"
                     id="btn-card-print-report"
                     onClick={handlePrintReport}
                     className="bg-orange-500 hover:bg-orange-600 text-white px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-xs active:scale-95"
+                    title="Cetak Laporan / Simpan PDF via Browser Print"
                   >
                     <Printer className="w-3.5 h-3.5" />
                     <span>Print Report</span>
@@ -2157,6 +2270,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
           {isClosingPrintOpen && (
             <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-xs p-3 sm:p-4 overflow-y-auto print:static print:inset-auto print:z-auto print:p-0 print:m-0 print:bg-white print:overflow-visible">
               <div
+                ref={closingPrintRef}
                 id="printable-report-content"
                 className="bg-zinc-900 border border-zinc-800 rounded-3xl shadow-2xl w-full max-w-3xl p-6 my-auto max-h-[95vh] overflow-y-auto print:max-h-none print:overflow-visible print:bg-white print:text-black print:border-none print:shadow-none print:max-w-full print:p-0 print:m-0"
               >
@@ -2429,7 +2543,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                 </div>
 
                 {/* Print modal buttons */}
-                <div className="mt-6 flex justify-end gap-3 print:hidden">
+                <div className="mt-6 flex flex-wrap justify-end gap-3 print:hidden">
                   <button
                     type="button"
                     onClick={() => setIsClosingPrintOpen(false)}
@@ -2447,10 +2561,28 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                   </button>
                   <button
                     type="button"
-                    onClick={() => window.print()}
-                    className="px-5 py-2 rounded-xl bg-orange-500 hover:bg-orange-600 text-white text-xs font-bold transition flex items-center gap-2 cursor-pointer shadow-md"
+                    onClick={handleGeneratePdfReport}
+                    disabled={isGeneratingPdf}
+                    className="px-4 py-2 rounded-xl bg-rose-500 hover:bg-rose-600 text-white text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-md active:scale-95 disabled:opacity-50"
                   >
-                    <Printer className="w-4 h-4" /> Cetak Sekarang (Print)
+                    {isGeneratingPdf ? (
+                      <>
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        <span>Rendering PDF...</span>
+                      </>
+                    ) : (
+                      <>
+                        <FileText className="w-3.5 h-3.5" />
+                        <span>Download PDF (html2canvas)</span>
+                      </>
+                    )}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => window.print()}
+                    className="px-5 py-2 rounded-xl bg-orange-500 hover:bg-orange-600 text-white text-xs font-bold transition flex items-center gap-2 cursor-pointer shadow-md active:scale-95"
+                  >
+                    <Printer className="w-4 h-4" /> Cetak Sekarang (window.print)
                   </button>
                 </div>
               </div>

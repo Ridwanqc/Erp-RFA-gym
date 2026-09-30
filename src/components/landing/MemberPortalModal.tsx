@@ -87,16 +87,6 @@ export const MemberPortalModal: React.FC<MemberPortalModalProps> = ({
     }
   };
 
-  // Quick Demo Login helper
-  const handleQuickLogin = (demoId: string) => {
-    const matched = members.find((m) => m.id === demoId);
-    if (matched) {
-      onLoginMember(matched);
-      setLoginInput('');
-      setLoginError(null);
-    }
-  };
-
   // Member reservations
   const memberReservations = reservations.filter((r) => {
     if (!loggedInMember) return false;
@@ -244,29 +234,6 @@ export const MemberPortalModal: React.FC<MemberPortalModalProps> = ({
                   <ArrowRight className="w-4 h-4" />
                 </button>
               </form>
-
-              {/* Quick Demo Login Chips */}
-              <div className="pt-4 border-t border-zinc-800 space-y-2">
-                <span className="text-[11px] font-bold text-zinc-500 uppercase tracking-wider block text-center">
-                  Atau coba akun demo cepat:
-                </span>
-                <div className="flex flex-wrap justify-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => handleQuickLogin('M001')}
-                    className="px-3 py-1.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-xs font-semibold text-zinc-300 hover:text-white"
-                  >
-                    Akbar Hanif (M001)
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleQuickLogin('M003')}
-                    className="px-3 py-1.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-xs font-semibold text-zinc-300 hover:text-white"
-                  >
-                    Doni Firmansyah (M003)
-                  </button>
-                </div>
-              </div>
             </div>
           ) : (
             /* STATE 2: MEMBER LOGGED IN -> DASHBOARD MEMBER */

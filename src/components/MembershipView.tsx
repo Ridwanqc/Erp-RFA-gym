@@ -1055,12 +1055,25 @@ export const MembershipView: React.FC<MembershipViewProps> = ({
                 </div>
               </div>
 
+              {/* Pemisahan Pembelian PT & Penugasan Trainer Notice */}
+              {cat === 'PT' && (
+                <div className="flex items-center gap-2.5 p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 text-xs text-amber-300">
+                  <ShieldCheck className="w-5 h-5 text-amber-400 shrink-0" />
+                  <div className="leading-snug">
+                    <p className="font-bold text-amber-200">SOP Pemisahan Tugas PT & Assignment Trainer:</p>
+                    <p className="text-[11px] text-amber-300/90 mt-0.5">
+                      Kasir/Sales hanya mencatat penjualan & pembayaran paket PT. Paket yang dibeli akan otomatis berstatus <strong>WAITING_ASSIGNMENT</strong> dan masuk ke <strong>Antrian PT Leader</strong> untuk penugasan pelatih resmi.
+                    </p>
+                  </div>
+                </div>
+              )}
+
               {/* Multi-Participant Notice */}
               {(type === 'Couple' || type === 'Trio') && (
                 <div className="flex items-center gap-2.5 p-3 rounded-xl bg-orange-500/10 border border-orange-500/20 text-xs text-orange-300">
                   <Users className="w-4 h-4 text-orange-400 shrink-0" />
                   <p className="leading-snug">
-                    <strong>Fokus 1-on-1:</strong> Jumlah PIC otomatis disesuaikan dengan jumlah ({type === 'Couple' ? '2' : '3'}) peserta. Anda dapat memilih trainer berbeda untuk masing-masing peserta atau klik <em>"Samakan PIC"</em> jika ingin 1 trainer yang sama.
+                    <strong>Paket {type}:</strong> {type === 'Couple' ? '2' : '3'} peserta terdaftar dalam 1 paket PT bersama. Leader PT nantinya dapat menugaskan pelatih khusus yang menangani peserta paket ini.
                   </p>
                 </div>
               )}
@@ -1096,7 +1109,7 @@ export const MembershipView: React.FC<MembershipViewProps> = ({
                       {cat === 'Membership'
                         ? 'PIC Penanggung Jawab Member (Front Desk / Sales)'
                         : cat === 'PT'
-                        ? 'PIC / Trainer Khusus Peserta 1'
+                        ? 'PIC Sales / Consultant Closing (Kasir/Sales)'
                         : 'PIC Penanggung Jawab & Trainer Peserta 1'}{' '}
                       <span className="text-orange-400">*</span>
                     </label>
@@ -1200,7 +1213,7 @@ export const MembershipView: React.FC<MembershipViewProps> = ({
                   <div className="pt-2 border-t border-zinc-800/80 space-y-1.5">
                     <div className="flex items-center justify-between mb-1.5 ml-1">
                       <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider block">
-                        PIC / Trainer Khusus Peserta 2 <span className="text-orange-400">*</span>
+                        {cat === 'PT' ? 'PIC Sales Closing Peserta 2' : 'PIC / Trainer Khusus Peserta 2'} <span className="text-orange-400">*</span>
                       </label>
                       <div className="flex items-center gap-2">
                         {p1PicId && p2PicId !== p1PicId && (
@@ -1310,7 +1323,7 @@ export const MembershipView: React.FC<MembershipViewProps> = ({
                   <div className="pt-2 border-t border-zinc-800/80 space-y-1.5">
                     <div className="flex items-center justify-between mb-1.5 ml-1">
                       <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider block">
-                        PIC / Trainer Khusus Peserta 3 <span className="text-orange-400">*</span>
+                        {cat === 'PT' ? 'PIC Sales Closing Peserta 3' : 'PIC / Trainer Khusus Peserta 3'} <span className="text-orange-400">*</span>
                       </label>
                       <div className="flex items-center gap-2">
                         {p1PicId && p3PicId !== p1PicId && (

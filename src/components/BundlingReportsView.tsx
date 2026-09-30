@@ -143,7 +143,7 @@ export const BundlingReportsView: React.FC<BundlingReportsViewProps> = ({
       .filter((row) => {
         if (searchQuery) {
           const q = searchQuery.toLowerCase();
-          return row.memberName.toLowerCase().includes(q) || row.trainerName.toLowerCase().includes(q) || row.bundleName.toLowerCase().includes(q);
+          return row.memberName.toLowerCase().includes(q) || (row.trainerName || '').toLowerCase().includes(q) || row.bundleName.toLowerCase().includes(q);
         }
         return true;
       });

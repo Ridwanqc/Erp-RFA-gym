@@ -1,6 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
 import {
-  Calendar,
   Menu,
   ShieldAlert,
   LogOut,
@@ -11,17 +10,11 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
   Settings,
-  Building2,
-  Check,
-  Plus,
-  X,
   Globe
 } from 'lucide-react';
-import { User, ALL_BRANCHES_ID } from '../types';
-import { formatDateIndo, APP_TODAY } from '../utils/formatters';
+import { User } from '../types';
 import { PWAInstallButton } from './PWAInstallButton';
 import { RealTimeClock } from './RealTimeClock';
-import { useSettings } from '../context/SettingsContext';
 
 interface HeaderProps {
   currentUser: User | null;
@@ -55,31 +48,21 @@ export const Header: React.FC<HeaderProps> = ({
   onOpenLandingPage
 }) => {
   const [isProfileOpen, setIsProfileOpen] = useState(false);
-  const [isBranchOpen, setIsBranchOpen] = useState(false);
   const profileMenuRef = useRef<HTMLDivElement | null>(null);
-  const branchMenuRef = useRef<HTMLDivElement | null>(null);
-  const { branches, activeBranchId, activeBranch, setActiveBranchId, canUserAccessBranch } = useSettings();
 
-  const isSuperUser = !currentUser || currentUser.role === 'admin' || currentUser.role === 'manager';
-  const isBranchLocked = !isSuperUser && currentUser?.branchId && (!currentUser.allowedBranchIds || currentUser.allowedBranchIds.length <= 1);
-
-  // Close dropdowns when clicking outside or pressing Escape
+  // Close profile dropdown when clicking outside or pressing Escape
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
       if (profileMenuRef.current && !profileMenuRef.current.contains(e.target as Node)) {
         setIsProfileOpen(false);
       }
-      if (branchMenuRef.current && !branchMenuRef.current.contains(e.target as Node)) {
-        setIsBranchOpen(false);
-      }
     };
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         setIsProfileOpen(false);
-        setIsBranchOpen(false);
       }
     };
-    if (isProfileOpen || isBranchOpen) {
+    if (isProfileOpen) {
       document.addEventListener('mousedown', handleClickOutside);
       document.addEventListener('keydown', handleKeyDown);
     }
@@ -87,7 +70,7 @@ export const Header: React.FC<HeaderProps> = ({
       document.removeEventListener('mousedown', handleClickOutside);
       document.removeEventListener('keydown', handleKeyDown);
     };
-  }, [isProfileOpen, isBranchOpen]);
+  }, [isProfileOpen]);
 
   return (
     <header className="h-16 border-b border-zinc-800 flex items-center justify-between px-3 sm:px-5 lg:px-6 z-30 shrink-0 bg-[#09090b]/90 backdrop-blur-md sticky top-0 w-full">
@@ -133,7 +116,7 @@ export const Header: React.FC<HeaderProps> = ({
         </div>
       </div>
 
-      {/* Right: Cloud Sync, Date & User Profile */}
+      {/* Right: Cloud Sync, Date, PWA, Landing & User Profile */}
       <div className="flex items-center gap-1.5 sm:gap-3 shrink-0">
         {/* Firebase Cloud Status Indicator */}
         <div
@@ -144,7 +127,7 @@ export const Header: React.FC<HeaderProps> = ({
           <span className="hidden md:inline text-[11px] font-bold text-amber-200">Cloud Sync</span>
         </div>
 
-        {/* Real-Time Live DateTime Widget (Akurasinya 100% Sesuai Waktu Real Perangkat & Server) */}
+        {/* Real-Time Live DateTime Widget */}
         <RealTimeClock variant="header" />
 
         {/* PWA Install Button (Android / iOS / Desktop) */}
@@ -162,196 +145,6 @@ export const Header: React.FC<HeaderProps> = ({
             <span className="hidden xl:inline">Landing Page</span>
           </button>
         )}
-
-        {/* Branch Selector Dropdown */}
-        <div className="relative" ref={branchMenuRef}>
-          <button
-            type="button"
-            id="btn-header-branch-switcher"
-            onClick={() => setIsBranchOpen(!isBranchOpen)}
-            className={`flex items-center gap-1.5 p-1.5 sm:px-2.5 sm:py-1.5 rounded-xl border transition active:scale-95 min-h-[44px] cursor-pointer ${
-              activeBranchId === ALL_BRANCHES_ID
-                ? 'bg-amber-500/10 border-amber-500/30 text-amber-200 hover:bg-amber-500/20'
-                : 'bg-zinc-900/90 hover:bg-zinc-800 border-zinc-800 text-zinc-300 hover:text-white'
-            }`}
-            title={`Cabang Aktif: ${activeBranch?.name}`}
-            aria-label="Pilih Cabang Aktif"
-            aria-expanded={isBranchOpen}
-          >
-            {activeBranchId === ALL_BRANCHES_ID ? (
-              <span className="w-2.5 h-2.5 rounded-full bg-amber-400 animate-pulse shrink-0" />
-            ) : (
-              <Building2 className="w-4 h-4 text-emerald-400 shrink-0" />
-            )}
-            <div className="hidden sm:flex flex-col text-left leading-tight">
-              <span className="text-[10px] text-zinc-500 font-bold uppercase flex items-center gap-1">
-                <span>{activeBranchId === ALL_BRANCHES_ID ? 'Holding HQ' : 'Cabang'}</span>
-                {activeBranchId === ALL_BRANCHES_ID && (
-                  <span className="px-1 py-0 text-[8px] bg-amber-500/20 text-amber-300 border border-amber-500/30 rounded font-black">
-                    ALL
-                  </span>
-                )}
-              </span>
-              <span className="text-xs font-bold text-white max-w-[110px] lg:max-w-[150px] truncate">
-                {activeBranch?.name || 'Cabang'}
-              </span>
-            </div>
-            <ChevronDown
-              className={`w-3.5 h-3.5 text-zinc-400 transition-transform duration-200 ${
-                isBranchOpen ? 'rotate-180 text-emerald-400' : ''
-              }`}
-            />
-          </button>
-
-          {isBranchOpen && (
-            <div className="absolute right-0 mt-2 w-72 sm:w-80 bg-zinc-900 border border-zinc-700 rounded-2xl shadow-2xl p-2 z-50 animate-in fade-in slide-in-from-top-2">
-              <div className="px-3 py-2 border-b border-zinc-800 flex items-center justify-between">
-                <div>
-                  <p className="text-xs font-bold text-white flex items-center gap-1.5">
-                    <Building2 className="w-3.5 h-3.5 text-emerald-400" />
-                    <span>Multi-Branch Unit Switcher</span>
-                  </p>
-                  <p className="text-[10px] text-zinc-400">Pilih unit kerja atau mode konsolidasi holding</p>
-                </div>
-                <span className="px-1.5 py-0.5 rounded text-[10px] font-mono bg-zinc-800 text-zinc-300">
-                  {branches.length} Outlet
-                </span>
-              </div>
-
-              {/* Branch List */}
-              <div className="max-h-64 overflow-y-auto py-1 space-y-1">
-                {/* 1. Option: Semua Cabang (Konsolidasi Pusat / Holding) - Only Admin / Manager */}
-                {isSuperUser && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setActiveBranchId(ALL_BRANCHES_ID);
-                      setIsBranchOpen(false);
-                    }}
-                    className={`w-full p-2.5 rounded-xl text-left transition flex items-center justify-between gap-2 cursor-pointer ${
-                      activeBranchId === ALL_BRANCHES_ID
-                        ? 'bg-amber-500/15 border border-amber-500/30 text-white'
-                        : 'hover:bg-zinc-800/80 text-zinc-300 hover:text-white'
-                    }`}
-                  >
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-1.5">
-                        <span className="text-xs font-black truncate text-amber-300">
-                          🌐 Semua Cabang (Konsolidasi)
-                        </span>
-                        <span className="px-1.5 py-0.2 text-[9px] font-black uppercase bg-amber-500/20 text-amber-300 border border-amber-500/40 rounded shrink-0">
-                          HQ
-                        </span>
-                      </div>
-                      <p className="text-[10px] text-zinc-400 truncate">
-                        Monitoring, keuangan & laporan gabungan seluruh outlet
-                      </p>
-                    </div>
-                    {activeBranchId === ALL_BRANCHES_ID ? (
-                      <div className="w-5 h-5 rounded-full bg-amber-500 text-black flex items-center justify-center shrink-0">
-                        <Check className="w-3 h-3 stroke-[3]" />
-                      </div>
-                    ) : (
-                      <span className="text-[10px] text-zinc-500 font-medium shrink-0 hover:text-amber-400">
-                        Pilih
-                      </span>
-                    )}
-                  </button>
-                )}
-
-                {isSuperUser && <div className="my-1 border-t border-zinc-800/80" />}
-
-                {isBranchLocked && (
-                  <div className="p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-300 text-xs flex items-center gap-2">
-                    <span className="text-base">🔒</span>
-                    <div>
-                      <p className="font-bold">Penugasan Unit Kerja Staf</p>
-                      <p className="text-[10px] text-amber-400/80">
-                        Akun Anda ditugaskan khusus di {activeBranch.name}. Hubungi Admin untuk mutasi cabang.
-                      </p>
-                    </div>
-                  </div>
-                )}
-
-                {/* 2. Individual Branches */}
-                {branches.map((b) => {
-                  const isCurrent = b.id === activeBranchId;
-                  const canAccess = canUserAccessBranch(currentUser || null, b.id);
-                  if (!canAccess) return null;
-
-                  return (
-                    <button
-                      key={b.id}
-                      type="button"
-                      onClick={() => {
-                        setActiveBranchId(b.id);
-                        setIsBranchOpen(false);
-                      }}
-                      className={`w-full p-2.5 rounded-xl text-left transition flex items-center justify-between gap-2 cursor-pointer ${
-                        isCurrent
-                          ? 'bg-emerald-500/15 border border-emerald-500/30 text-white'
-                          : 'hover:bg-zinc-800/80 text-zinc-300 hover:text-white'
-                      }`}
-                    >
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-1.5">
-                          <span className="text-xs font-bold truncate">{b.name}</span>
-                          {b.isMainBranch && (
-                            <span className="px-1.5 py-0.2 text-[9px] font-black uppercase bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 rounded shrink-0">
-                              Utama
-                            </span>
-                          )}
-                        </div>
-                        <p className="text-[10px] text-zinc-400 truncate">
-                          {b.code} • {b.city}
-                        </p>
-                      </div>
-                      {isCurrent ? (
-                        <div className="w-5 h-5 rounded-full bg-emerald-500 text-black flex items-center justify-center shrink-0">
-                          <Check className="w-3 h-3 stroke-[3]" />
-                        </div>
-                      ) : (
-                        <span className="text-[10px] text-zinc-500 font-medium shrink-0 hover:text-emerald-400">
-                          Pilih
-                        </span>
-                      )}
-                    </button>
-                  );
-                })}
-              </div>
-
-              {/* Action shortcuts */}
-              <div className="pt-2 border-t border-zinc-800 space-y-1">
-                {onOpenAddBranchModal && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setIsBranchOpen(false);
-                      onOpenAddBranchModal();
-                    }}
-                    className="w-full py-2 px-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer shadow-sm"
-                  >
-                    <Plus className="w-3.5 h-3.5" />
-                    <span>+ Tambah Cabang Baru</span>
-                  </button>
-                )}
-
-                {onOpenSettings && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setIsBranchOpen(false);
-                      onOpenSettings('branches');
-                    }}
-                    className="w-full py-1.5 px-3 rounded-xl text-center text-zinc-400 hover:text-white text-[11px] font-semibold transition cursor-pointer hover:bg-zinc-800/60"
-                  >
-                    Kelola Semua Outlet Cabang →
-                  </button>
-                )}
-              </div>
-            </div>
-          )}
-        </div>
 
         {/* User Profile Trigger & Dropdown */}
         <div className="relative" ref={profileMenuRef}>
@@ -416,29 +209,6 @@ export const Header: React.FC<HeaderProps> = ({
                   </p>
                 </div>
               </div>
-
-              {/* Quick Switch Staff Role (if available) */}
-              {staffUsers.length > 0 && onSwitchUser && (
-                <div className="p-3 border-b border-zinc-800 bg-zinc-950/40">
-                  <label className="text-[10px] font-bold uppercase tracking-wider text-zinc-400 block mb-1.5">
-                    Ganti Profil Staf Cepat
-                  </label>
-                  <select
-                    value={currentUser?.id || ''}
-                    onChange={(e) => {
-                      onSwitchUser(e.target.value);
-                      setIsProfileOpen(false);
-                    }}
-                    className="w-full bg-zinc-900 border border-zinc-700 rounded-xl px-2.5 py-2 text-xs font-bold text-zinc-200 outline-hidden focus:border-orange-500 cursor-pointer"
-                  >
-                    {staffUsers.map((u) => (
-                      <option key={u.id} value={u.id} className="bg-zinc-900 text-white">
-                        {u.name} — ({u.roleName})
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              )}
 
               {/* Settings Shortcut in Dropdown */}
               {onOpenSettings && (
@@ -533,3 +303,4 @@ export const Header: React.FC<HeaderProps> = ({
     </header>
   );
 };
+

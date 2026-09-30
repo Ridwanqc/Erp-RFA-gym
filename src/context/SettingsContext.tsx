@@ -86,14 +86,17 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       const saved = localStorage.getItem(SETTINGS_STORAGE_KEY);
       if (saved) {
         const parsed = JSON.parse(saved);
-          return {
-            printer: { ...DEFAULT_PRINTER_CONFIG, ...parsed.printer },
-            profile: { ...DEFAULT_GYM_PROFILE, ...parsed.profile },
-            paymentAndTax: { ...DEFAULT_PAYMENT_AND_TAX, ...parsed.paymentAndTax },
-            templates: { ...DEFAULT_WHATSAPP_TEMPLATES, ...parsed.templates },
-            picProtection: { ...DEFAULT_PIC_PROTECTION, ...parsed.picProtection },
-            updatedAt: parsed.updatedAt || new Date().toISOString()
-          };
+        const isLegacyProfile = !parsed.profile?.gymName || parsed.profile?.gymName === 'GymPro Fitness & Wellness Center';
+        const isLegacyPrinter = !parsed.printer?.storeName || parsed.printer?.storeName === 'GYMPRO FITNESS & WELLNESS';
+
+        return {
+          printer: isLegacyPrinter ? DEFAULT_PRINTER_CONFIG : { ...DEFAULT_PRINTER_CONFIG, ...parsed.printer },
+          profile: isLegacyProfile ? DEFAULT_GYM_PROFILE : { ...DEFAULT_GYM_PROFILE, ...parsed.profile },
+          paymentAndTax: { ...DEFAULT_PAYMENT_AND_TAX, ...parsed.paymentAndTax },
+          templates: { ...DEFAULT_WHATSAPP_TEMPLATES, ...parsed.templates },
+          picProtection: { ...DEFAULT_PIC_PROTECTION, ...parsed.picProtection },
+          updatedAt: parsed.updatedAt || new Date().toISOString()
+        };
       }
     } catch (e) {
       console.warn('Gagal memuat system settings dari storage:', e);
@@ -108,7 +111,22 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       if (saved) {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed) && parsed.length > 0) {
-          return parsed;
+          return parsed.map((b: GymBranch) => {
+            if (b.id === 'BR-001' && (b.name?.includes('Sudirman') || b.address?.includes('Sudirman') || b.address?.includes('Boulevard'))) {
+              return {
+                ...b,
+                name: DEFAULT_BRANCHES[0].name,
+                code: DEFAULT_BRANCHES[0].code,
+                address: DEFAULT_BRANCHES[0].address,
+                city: DEFAULT_BRANCHES[0].city,
+                phone: DEFAULT_BRANCHES[0].phone,
+                whatsapp: DEFAULT_BRANCHES[0].whatsapp,
+                email: DEFAULT_BRANCHES[0].email,
+                notes: DEFAULT_BRANCHES[0].notes
+              };
+            }
+            return b;
+          });
         }
       }
     } catch (e) {

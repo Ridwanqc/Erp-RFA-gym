@@ -1,4 +1,4 @@
-import { User, Member, Product, PackageItem, Transaction, Schedule, StudioClass, Attendance, StaffAttendance, Lead, FollowUpLog, LeaveRequest, PettyCash, DailyClosingRecord, PTPurchaseRecord, TrainingSessionDetail, WorkSchedule, ShiftDefinition } from '../types';
+import { User, Member, Product, PackageItem, Transaction, Schedule, StudioClass, Attendance, StaffAttendance, Lead, FollowUpLog, LeaveRequest, PettyCash, DailyClosingRecord, PTPurchaseRecord, PTTrainerAssignment, TrainingSessionDetail, WorkSchedule, ShiftDefinition } from '../types';
 import { APP_TODAY } from '../utils/formatters';
 
 export const INITIAL_USERS: User[] = [
@@ -3012,7 +3012,147 @@ export const INITIAL_CLOSING: DailyClosingRecord[] = [
   }
 ];
 
+export const INITIAL_PT_ASSIGNMENTS: PTTrainerAssignment[] = [
+  {
+    assignmentId: 'ASG-2026-001',
+    ptPurchaseId: 'PT-2026-00040',
+    ptNo: 'PT-2026-00040',
+    memberId: 'M001',
+    memberName: 'Budi Santoso',
+    trainerId: 'S07',
+    trainerName: 'Andi Saputra',
+    assignedBy: 'Citra Lestari (Leader PT)',
+    assignedById: 'S03',
+    assignedAt: '2026-09-01 10:00 WIB',
+    startDate: '2026-09-01',
+    endDate: '2026-09-15',
+    status: 'CHANGED',
+    reason: 'Perubahan jadwal member',
+    notes: 'Member beralih ke shift malam, dialihkan ke Coach Dimas'
+  },
+  {
+    assignmentId: 'ASG-2026-002',
+    ptPurchaseId: 'PT-2026-00040',
+    ptNo: 'PT-2026-00040',
+    memberId: 'M001',
+    memberName: 'Budi Santoso',
+    trainerId: 'S08',
+    trainerName: 'Dimas Kurniawan',
+    assignedBy: 'Citra Lestari (Leader PT)',
+    assignedById: 'S03',
+    assignedAt: '2026-09-15 14:30 WIB',
+    startDate: '2026-09-15',
+    status: 'ACTIVE',
+    reason: 'Reassignment jadwal malam',
+    notes: 'Program berlanjut sesi 6-10 dengan Coach Dimas'
+  },
+  {
+    assignmentId: 'ASG-2026-003',
+    ptPurchaseId: 'PUR-ANDI-10-1',
+    ptNo: 'PT-2026-00031',
+    memberId: 'M011',
+    memberName: 'Aditya Pratama (Member A)',
+    trainerId: 'S07',
+    trainerName: 'Andi Saputra',
+    assignedBy: 'Citra Lestari (Leader PT)',
+    assignedById: 'S03',
+    assignedAt: '2026-08-10 11:00 WIB',
+    startDate: '2026-08-10',
+    status: 'ACTIVE',
+    reason: 'Penugasan awal spesialisasi Lean Muscle Mass',
+    notes: 'Kandidat body transformation 10 sesi'
+  }
+];
+
 export const INITIAL_PT_PURCHASES: PTPurchaseRecord[] = [
+  // --- ANTRIAN WAITING ASSIGNMENT (BELUM PUNYA TRAINER) ---
+  {
+    id: 'PT-2026-00045',
+    ptNo: 'PT-2026-00045',
+    date: '2026-09-30',
+    memberId: 'M001',
+    memberName: 'Budi Santoso',
+    memberPhone: '081298765432',
+    packageId: 'PK09',
+    packageName: 'PT Personal 10 Sessions',
+    packageType: 'Personal',
+    totalSessions: 10,
+    completedSessions: 0,
+    remainingSessions: 10,
+    price: 1500000,
+    amountPaid: 1500000,
+    amountRemaining: 0,
+    paymentStatus: 'LUNAS',
+    paymentMethod: 'Transfer Mandiri',
+    status: 'WAITING_ASSIGNMENT',
+    trainerId: undefined,
+    trainerName: '-',
+    picSalesId: 'S07',
+    picSalesName: 'Andi Saputra',
+    purchaseBy: 'Siti Kasir (Kasir)',
+    purchaseAt: '30/09/2026 09:30 WIB',
+    notes: 'Member baru beli paket PT 10 sesi, menunggu assignment pelatih dari Leader PT'
+  },
+  {
+    id: 'PT-2026-00046',
+    ptNo: 'PT-2026-00046',
+    date: '2026-09-30',
+    memberId: 'M002',
+    memberName: 'Andi Pratama',
+    memberPhone: '081345678902',
+    packageId: 'PK08',
+    packageName: 'PT Personal 16 Sesi Transformation',
+    packageType: 'Personal',
+    totalSessions: 16,
+    completedSessions: 0,
+    remainingSessions: 16,
+    price: 2400000,
+    amountPaid: 2400000,
+    amountRemaining: 0,
+    paymentStatus: 'LUNAS',
+    paymentMethod: 'QRIS',
+    status: 'WAITING_ASSIGNMENT',
+    trainerId: undefined,
+    trainerName: '-',
+    picSalesId: 'S02',
+    picSalesName: 'Siti Kasir',
+    purchaseBy: 'Siti Kasir (Kasir)',
+    purchaseAt: '30/09/2026 10:15 WIB',
+    notes: 'Goal fat loss & conditioning, request jadwal fleksibel'
+  },
+  {
+    id: 'PT-2026-00047',
+    ptNo: 'PT-2026-00047',
+    date: '2026-09-29',
+    memberId: 'M003',
+    memberName: 'Siti Nurhaliza & Rina Wijaya',
+    memberPhone: '081512345679',
+    members: [
+      { id: 'M003', name: 'Siti Nurhaliza', phone: '081512345679', gender: 'P' },
+      { id: 'M004', name: 'Rina Wijaya', phone: '081698765432', gender: 'P' }
+    ],
+    memberIds: ['M003', 'M004'],
+    memberNames: ['Siti Nurhaliza', 'Rina Wijaya'],
+    packageId: 'PK-CPL-10',
+    packageName: 'PT Couple 10 Sessions',
+    packageType: 'Couple',
+    totalSessions: 10,
+    completedSessions: 0,
+    remainingSessions: 10,
+    price: 2500000,
+    amountPaid: 2500000,
+    amountRemaining: 0,
+    paymentStatus: 'LUNAS',
+    paymentMethod: 'EDC BCA',
+    status: 'WAITING_ASSIGNMENT',
+    trainerId: undefined,
+    trainerName: '-',
+    picSalesId: 'S02',
+    picSalesName: 'Siti Kasir',
+    purchaseBy: 'Siti Kasir (Kasir)',
+    purchaseAt: '29/09/2026 16:45 WIB',
+    notes: 'Paket Couple 2 orang peserta, prioritas trainer wanita atau coach sabar'
+  },
   // --- TRAINER ANDI SAPUTRA (S07) ---
   // PT Personal 10 Session (5 Paket, 5 Member, 50 Sesi, 32 Selesai, 18 Sisa)
   {

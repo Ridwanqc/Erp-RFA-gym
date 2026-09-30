@@ -353,13 +353,13 @@ export const RFA_FAQS: FAQItem[] = [
 export const BRANCH_CONTACTS: BranchContact[] = [
   {
     id: 'BR-001',
-    name: 'RFA Gym Central Sudirman (Flagship)',
-    shortName: 'Sudirman Central',
-    address: 'Gedung Menara Sudirman Lt. 2, Jl. Jend. Sudirman Kav. 60, Senayan, Kebayoran Baru, Jakarta Selatan',
-    phone: '(021) 5296-8800',
-    whatsapp: '6281234567890',
-    hours: 'Senin - Jumat: 06:00 - 22:00 WIB | Sabtu - Minggu: 06:00 - 21:00 WIB',
-    facilities: ['Olympic Weight Zone', 'Heated Sauna', 'Studio Aerobik 80 Orang', 'Smart Turnstile Gate', 'Juice Bar'],
+    name: 'RFA GYM Cibubur, Bekasi (Flagship HQ)',
+    shortName: 'Cibubur Bekasi HQ',
+    address: 'Jl. Kranggan Permai, Jl. Wijaya Kusuma Blok AS 48 No. 25–26, Jatisampurna, Bekasi, Jawa Barat',
+    phone: '0857-7218-5973',
+    whatsapp: '6285772185973',
+    hours: 'Senin - Jumat: 06:00 - 22:00 WIB | Sabtu - Minggu: 07:00 - 21:00 WIB',
+    facilities: ['Olympic Weight Zone', 'Resistance & Cable Machines', 'Cardio Deck', 'Private PT Studio', 'Smart Locker', 'Protein Bar'],
     isFlagship: true
   },
   {

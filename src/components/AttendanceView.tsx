@@ -36,7 +36,7 @@ import { SearchableStaffSelect } from './SearchableStaffSelect';
 import { QRCodeScannerModal } from './QRCodeScannerModal';
 import { LockerManagementModal } from './LockerManagementModal';
 import { RealTimeClock } from './RealTimeClock';
-import { getRecommendedLocker, getLockerStats, getAvailableLockersByGender } from '../data/lockerData';
+import { getRecommendedLocker, getLockerStats, getAvailableLockersByGender, sortAttendancesByNewest } from '../data/lockerData';
 import { useSettings } from '../context/SettingsContext';
 import { printViaHiddenIframe, generateLockerSlipHtml, PrintPaperSize } from '../utils/printEngine';
 
@@ -385,7 +385,10 @@ export const AttendanceView: React.FC<AttendanceViewProps> = ({
     }
   };
 
-  const todayMemberAttendances = attendances.filter((a) => a.date === APP_TODAY);
+  const todayMemberAttendances = useMemo(() => {
+    const list = attendances.filter((a) => a.date === APP_TODAY);
+    return sortAttendancesByNewest(list);
+  }, [attendances]);
   const activeInGymCount = todayMemberAttendances.filter((a) => !a.timeOut).length;
   const todayStaffAttendances = staffAttendances.filter((s) => s.date === APP_TODAY);
 
@@ -1088,14 +1091,18 @@ export const AttendanceView: React.FC<AttendanceViewProps> = ({
 
                               {att.lockerNumber ? (
                                 <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold border ${
-                                  att.timeOut
+                                  att.timeOut || att.lockerReturned
                                     ? 'bg-zinc-800/80 text-zinc-400 border-zinc-700'
                                     : 'bg-amber-500/20 text-amber-400 border-amber-500/30'
                                 }`}>
                                   <Key className="w-3 h-3" />
                                   <span>Loker #{att.lockerNumber} {att.lockerGender ? `(${att.lockerGender})` : ''}</span>
                                   {att.hasTowel && <span title="Handuk">+Handuk</span>}
-                                  {att.timeOut && <span className="text-emerald-400">✓ Dikembalikan</span>}
+                                  {(att.timeOut || att.lockerReturned) ? (
+                                    <span className="text-emerald-400 font-bold">✓ Kunci Kembali</span>
+                                  ) : (
+                                    <span className="text-amber-400 text-[9px] font-medium">(Kunci Dipegang)</span>
+                                  )}
                                 </span>
                               ) : (
                                 <span className="text-[10px] text-zinc-500">Tanpa Loker</span>
@@ -1104,7 +1111,7 @@ export const AttendanceView: React.FC<AttendanceViewProps> = ({
                           </div>
                         </div>
 
-                        <div className="flex items-center justify-between sm:justify-end gap-3 sm:gap-4 w-full sm:w-auto pt-2 sm:pt-0 border-t sm:border-t-0 border-zinc-800/70">
+                        <div className="flex items-center justify-between sm:justify-end gap-2 sm:gap-3 w-full sm:w-auto pt-2 sm:pt-0 border-t sm:border-t-0 border-zinc-800/70">
                           <div className="text-left sm:text-right">
                             <p className="text-xs font-bold text-white">Masuk: {att.timeIn}</p>
                             <p className={`text-[10px] font-semibold mt-0.5 ${att.timeOut ? 'text-zinc-500' : 'text-emerald-400 animate-pulse'}`}>
@@ -1113,14 +1120,32 @@ export const AttendanceView: React.FC<AttendanceViewProps> = ({
                           </div>
 
                           {!att.timeOut ? (
-                            <button
-                              onClick={() => onCheckoutMember(att.id)}
-                              className="px-3 py-1.5 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 text-xs font-bold border border-rose-500/30 transition flex items-center gap-1 shrink-0"
-                            >
-                              <LogOut className="w-3.5 h-3.5" /> Checkout & Terima Kunci
-                            </button>
+                            <div className="flex items-center gap-1.5 shrink-0">
+                              {att.lockerNumber && !att.lockerReturned && onReleaseLocker && (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    const num =
+                                      typeof att.lockerNumber === 'string'
+                                        ? parseInt(att.lockerNumber.replace(/\D/g, ''), 10)
+                                        : att.lockerNumber;
+                                    if (num) onReleaseLocker(num);
+                                  }}
+                                  className="px-2.5 py-1.5 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 text-xs font-bold border border-amber-500/30 transition flex items-center gap-1"
+                                  title="Terima kembali kunci loker saja tanpa checkout member"
+                                >
+                                  <Key className="w-3.5 h-3.5" /> Terima Kunci
+                                </button>
+                              )}
+                              <button
+                                onClick={() => onCheckoutMember(att.id)}
+                                className="px-3 py-1.5 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 text-xs font-bold border border-rose-500/30 transition flex items-center gap-1 shrink-0"
+                              >
+                                <LogOut className="w-3.5 h-3.5" /> {att.lockerNumber && !att.lockerReturned ? 'Checkout & Terima Kunci' : 'Checkout Member'}
+                              </button>
+                            </div>
                           ) : (
-                            <span className="text-[10px] font-bold text-zinc-500 px-2 py-1 bg-zinc-900 rounded-lg shrink-0">
+                            <span className="text-[10px] font-bold text-zinc-500 px-2.5 py-1 bg-zinc-900 rounded-lg shrink-0">
                               SELESAI
                             </span>
                           )}
@@ -1324,10 +1349,14 @@ export const AttendanceView: React.FC<AttendanceViewProps> = ({
                                 <button
                                   type="button"
                                   onClick={() => {
-                                    // Find ongoing attendance session
+                                    // Find ongoing attendance session by lockerNumber, memberId, or memberName
                                     const ongoing = attendances.find(
                                       (a) =>
-                                        (a.memberId === locker.memberId || a.memberName === locker.memberName) &&
+                                        ((typeof a.lockerNumber === 'string'
+                                          ? parseInt(a.lockerNumber.replace(/\D/g, ''), 10) === locker.number
+                                          : a.lockerNumber === locker.number) ||
+                                          (locker.memberId && a.memberId === locker.memberId) ||
+                                          (locker.memberName && a.memberName === locker.memberName)) &&
                                         !a.timeOut
                                     );
                                     if (ongoing) {
@@ -1340,6 +1369,16 @@ export const AttendanceView: React.FC<AttendanceViewProps> = ({
                                 >
                                   Checkout & Bebaskan
                                 </button>
+                                {onReleaseLocker && (
+                                  <button
+                                    type="button"
+                                    onClick={() => onReleaseLocker(locker.number)}
+                                    className="w-full py-0.5 px-1 bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 font-semibold rounded text-[9px] transition text-center"
+                                    title="Terima kunci ke meja resepsionis tanpa checkout member"
+                                  >
+                                    Terima Kunci Saja
+                                  </button>
+                                )}
                                 <button
                                   type="button"
                                   onClick={() => {

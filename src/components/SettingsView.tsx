@@ -68,7 +68,7 @@ import {
   ContentDensity,
   BackgroundPattern
 } from '../context/ThemeContext';
-import { SYSTEM_MODULES, DEFAULT_PIC_PROTECTION } from '../data/settingsData';
+import { SYSTEM_MODULES, DEFAULT_PIC_PROTECTION, DEFAULT_GYM_PROFILE, DEFAULT_PRINTER_CONFIG } from '../data/settingsData';
 import { formatRp, APP_TODAY } from '../utils/formatters';
 import { BranchManagementView } from './BranchManagementView';
 import {
@@ -2212,6 +2212,60 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
             </button>
           </div>
 
+          {/* RFA GYM Google Business Profile Sync Card */}
+          <div className="p-4.5 rounded-3xl bg-gradient-to-r from-orange-950/40 via-zinc-900 to-zinc-900 border border-orange-500/30 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+            <div className="flex items-start sm:items-center gap-3">
+              <div className="w-11 h-11 rounded-2xl bg-orange-500/20 border border-orange-500/30 flex items-center justify-center text-orange-400 shrink-0">
+                <Sparkles className="w-5 h-5" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-xs font-bold text-white">Sumber Data Resmi:</span>
+                  <span className="px-2 py-0.5 rounded-full text-[10px] font-black uppercase bg-orange-500/20 text-orange-400 border border-orange-500/30">
+                    RFA GYM (Google Business Profile)
+                  </span>
+                  <span className="text-[11px] text-zinc-400">• Cibubur, Bekasi</span>
+                </div>
+                <p className="text-xs text-zinc-300 mt-1">
+                  Jl. Kranggan Permai, Jl. Wijaya Kusuma Blok AS 48 No. 25–26, Jatisampurna, Bekasi • WA: 0857-7218-5973
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2 self-stretch md:self-auto shrink-0 flex-wrap">
+              <a
+                href={settings.profile.googleMapsUrl || 'https://share.google/SILNZrwYoRcIyYjRo'}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="px-3.5 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs font-bold transition flex items-center gap-1.5 border border-zinc-700"
+                title="Buka profil bisnis RFA GYM di Google Maps"
+              >
+                <span>Buka Google Maps</span>
+                <ExternalLink className="w-3.5 h-3.5 text-zinc-400" />
+              </a>
+
+              <button
+                type="button"
+                onClick={() => {
+                  updateProfileConfig(DEFAULT_GYM_PROFILE);
+                  updatePrinterConfig({
+                    storeName: DEFAULT_PRINTER_CONFIG.storeName,
+                    storeTagline: DEFAULT_PRINTER_CONFIG.storeTagline,
+                    storeAddress: DEFAULT_PRINTER_CONFIG.storeAddress,
+                    storeCity: DEFAULT_PRINTER_CONFIG.storeCity,
+                    storePhone: DEFAULT_PRINTER_CONFIG.storePhone
+                  });
+                  notifySuccess('Profil RFA GYM Diterapkan', 'Data profil usaha dan struk diperbarui sesuai Profil Bisnis Google RFA GYM.');
+                }}
+                className="px-3.5 py-2 rounded-xl bg-orange-500 hover:bg-orange-600 text-white text-xs font-bold transition flex items-center gap-1.5 shadow-md shadow-orange-500/20 cursor-pointer"
+                title="Terapkan data alamat, telepon, dan jam buka resmi RFA GYM"
+              >
+                <RefreshCw className="w-3.5 h-3.5" />
+                <span>Terapkan Profil RFA GYM</span>
+              </button>
+            </div>
+          </div>
+
           <div className="bg-zinc-900 border border-zinc-800 rounded-3xl p-5 sm:p-7 space-y-6">
             <div className="flex items-center justify-between border-b border-zinc-800 pb-4">
               <div>
@@ -2330,6 +2384,17 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                 type="text"
                 value={settings.profile.website}
                 onChange={(e) => updateProfileConfig({ website: e.target.value })}
+                className="w-full bg-zinc-950 border border-zinc-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-orange-500"
+              />
+            </div>
+
+            <div>
+              <label className="text-xs font-bold text-zinc-300 block mb-1">Tautan Google Maps / Profil Bisnis</label>
+              <input
+                type="text"
+                placeholder="https://share.google/..."
+                value={settings.profile.googleMapsUrl || ''}
+                onChange={(e) => updateProfileConfig({ googleMapsUrl: e.target.value })}
                 className="w-full bg-zinc-950 border border-zinc-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-orange-500"
               />
             </div>

@@ -408,21 +408,84 @@ export interface TrainerAttendanceLog {
   sessionFee?: number;
 }
 
+export type PTPurchaseStatus =
+  | 'PAID'
+  | 'WAITING_ASSIGNMENT'
+  | 'ASSIGNED'
+  | 'SCHEDULED'
+  | 'IN_PROGRESS'
+  | 'COMPLETED'
+  | 'Completed'
+  | 'EXPIRED'
+  | 'CANCELLED'
+  | 'Cancelled'
+  | 'REFUND'
+  | 'BELUM_LUNAS'
+  | 'Active';
+
+export interface PTPurchaseMember {
+  id: string;
+  name: string;
+  phone?: string;
+  photo?: string;
+  gender?: 'L' | 'P';
+}
+
+export interface PTTrainerAssignment {
+  assignmentId: string;
+  ptPurchaseId: string;
+  ptNo?: string;
+  memberId: string;
+  memberName: string;
+  memberIds?: string[];
+  memberNames?: string[];
+  trainerId: string;
+  trainerName: string;
+  assignedBy: string; // e.g. "Fajar (Leader PT)"
+  assignedById?: string;
+  assignedAt: string; // YYYY-MM-DD HH:mm or ISO
+  startDate: string; // YYYY-MM-DD
+  endDate?: string; // YYYY-MM-DD (when replaced/ended)
+  status: 'ACTIVE' | 'CHANGED' | 'REPLACED' | 'COMPLETED' | 'CANCELLED';
+  reason?: string;
+  notes?: string;
+}
+
 export interface PTPurchaseRecord {
-  id: string; // PT Purchase ID, e.g. PUR-101
+  id: string; // PT Purchase ID, e.g. PUR-101 or PT-2026-00045
+  ptNo?: string; // e.g. PT-2026-00045
   date: string; // YYYY-MM-DD
   memberId: string;
   memberName: string;
-  trainerId: string;
+  memberPhone?: string;
+  memberPhoto?: string;
+  // Multi-participant for Couple / Trio
+  members?: PTPurchaseMember[];
+  memberIds?: string[];
+  memberNames?: string[];
+  trainerId?: string;
   trainerName: string;
   packageId: string;
   packageName: string;
+  packageType?: 'Personal' | 'Couple' | 'Trio' | string;
   totalSessions: number;
   completedSessions: number;
+  remainingSessions?: number;
   price: number;
-  status: 'Active' | 'Completed' | 'Expired' | 'Cancelled';
+  amountPaid?: number;
+  amountRemaining?: number;
+  paymentStatus?: 'LUNAS' | 'CICILAN' | 'BELUM LUNAS' | 'DP 50%' | string;
+  paymentMethod?: string;
+  status: PTPurchaseStatus;
   expiryDate?: string;
   notes?: string;
+  picSalesId?: string;
+  picSalesName?: string;
+  purchaseBy?: string; // e.g. Kasir / Staf
+  purchaseAt?: string; // e.g. 30/09/2026 14:30
+  assignedBy?: string;
+  assignedAt?: string;
+  history?: PTTrainerAssignment[];
   source?: 'REGULAR' | 'BUNDLING';
   bundleId?: string;
   bundleCode?: string;
@@ -1154,6 +1217,7 @@ export interface GymBusinessProfile {
   npwp: string;
   openHoursWeekday: string;
   openHoursWeekend: string;
+  googleMapsUrl?: string;
 }
 
 export interface BankAccountConfig {

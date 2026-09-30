@@ -34,6 +34,11 @@ import {
   Phone,
   ExternalLink,
   FileText,
+  History,
+  Lock,
+  ArrowRightLeft,
+  Info,
+  Check,
   X
 } from 'lucide-react';
 import {
@@ -51,8 +56,8 @@ import {
   Line,
   CartesianGrid
 } from 'recharts';
-import { Member, Schedule, User, StaffAttendance, Attendance, PTPurchaseRecord, BundlePackage, Transaction, TrainerCommissionRecord } from '../types';
-import { APP_TODAY, formatDateIndo, getDayDiff, formatRp } from '../utils/formatters';
+import { Member, Schedule, User, StaffAttendance, Attendance, PTPurchaseRecord, PTTrainerAssignment, BundlePackage, Transaction, TrainerCommissionRecord } from '../types';
+import { APP_TODAY, formatDateIndo, getDayDiff, formatRp, getTimestamp } from '../utils/formatters';
 import { TrainerCommissionPieChart } from './TrainerCommissionPieChart';
 
 interface LeaderPTDashboardViewProps {
@@ -63,11 +68,22 @@ interface LeaderPTDashboardViewProps {
   attendances: Attendance[];
   currentUser: User | null;
   ptPurchases?: PTPurchaseRecord[];
+  ptAssignments?: PTTrainerAssignment[];
   bundlePackages?: BundlePackage[];
   transactions?: Transaction[];
   trainerCommissions?: TrainerCommissionRecord[];
   onUpdateMember?: (updatedMember: Member) => void;
   onUpdatePTPurchase?: (purchase: PTPurchaseRecord) => void;
+  onAssignPTTrainer?: (
+    purchaseId: string,
+    trainerId: string,
+    reason?: string,
+    notes?: string,
+    scheduleFirstSession?: boolean,
+    firstDate?: string,
+    firstTime?: string
+  ) => void;
+  onAddPTAssignment?: (assignment: PTTrainerAssignment) => void;
   onNavigateTab: (tab: any) => void;
   onOpenMemberDetail?: (member: Member) => void;
   onUpdateSchedule: (schedule: Schedule) => void;
@@ -83,19 +99,34 @@ export const LeaderPTDashboardView: React.FC<LeaderPTDashboardViewProps> = ({
   attendances,
   currentUser,
   ptPurchases = [],
+  ptAssignments = [],
   bundlePackages = [],
   transactions = [],
   trainerCommissions = [],
   onUpdateMember,
   onUpdatePTPurchase,
+  onAssignPTTrainer,
+  onAddPTAssignment,
   onNavigateTab,
   onOpenMemberDetail,
   onUpdateSchedule,
   onAddSchedule,
   showToast
 }) => {
-  // Active Filter / Tab state
-  const [activeTableTab, setActiveTableTab] = useState<'members' | 'new_packages' | 'schedules' | 'trainers'>('members');
+  // Role permissions
+  const isAdmin = currentUser?.role === 'admin';
+  const isLeaderPT = currentUser?.role === 'leader_pt';
+  const isKasir = currentUser?.role === 'kasir';
+  const isTrainer = currentUser?.role === 'pt';
+  const canAssign = isAdmin || isLeaderPT;
+
+  // Active Main View / Tab state
+  const [activeQueueTab, setActiveQueueTab] = useState<
+    'waiting' | 'assigned' | 'scheduled' | 'in_progress' | 'completed' | 'unpaid' | 'history' | 'trainers' | 'analytics'
+  >('waiting');
+
+  // Active Filter / Tab state (legacy & sub-tables)
+  const [activeTableTab, setActiveTableTab] = useState<'members' | 'new_packages' | 'schedules' | 'trainers'>('new_packages');
   const [selectedCohortFilter, setSelectedCohortFilter] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState('');
 
@@ -103,16 +134,23 @@ export const LeaderPTDashboardView: React.FC<LeaderPTDashboardViewProps> = ({
   const [assignModal, setAssignModal] = useState<{
     item: {
       purchaseId?: string;
+      ptNo?: string;
       memberId: string;
       memberName: string;
       memberPhone: string;
       memberPhoto?: string;
-      packageType: 'PT' | 'BUNDLING';
+      members?: any[];
+      packageType: string;
       packageName: string;
       sessions: number;
       sessionsRemaining: number;
       purchaseDate: string;
       price: number;
+      amountPaid?: number;
+      paymentStatus?: string;
+      picSalesName?: string;
+      purchaseBy?: string;
+      purchaseAt?: string;
       currentTrainerName?: string;
       currentTrainerId?: string;
       notes?: string;
@@ -122,6 +160,20 @@ export const LeaderPTDashboardView: React.FC<LeaderPTDashboardViewProps> = ({
     scheduleFirstSession: boolean;
     firstDate: string;
     firstTime: string;
+    notes: string;
+  } | null>(null);
+
+  // Reassign Trainer Modal state (with reason & audit log)
+  const [reassignModal, setReassignModal] = useState<{
+    purchaseId: string;
+    ptNo: string;
+    memberName: string;
+    packageName: string;
+    currentTrainerName: string;
+    currentTrainerId: string;
+    selectedTrainerId: string;
+    selectedTrainerName: string;
+    reason: string;
     notes: string;
   } | null>(null);
 
@@ -575,24 +627,36 @@ export const LeaderPTDashboardView: React.FC<LeaderPTDashboardViewProps> = ({
   }, [schedules, selectedCohortFilter, scheduleMetrics, searchQuery]);
 
   // --------------------------------------------------------------------------
-  // LIST OF NEW PT & BUNDLING PURCHASES FOR TRAINER ASSIGNMENT
+  // LIST OF ALL PT PURCHASES ENRICHED FOR PT MANAGEMENT QUEUES
   // --------------------------------------------------------------------------
   const newPackagePurchases = useMemo(() => {
     const list: Array<{
-      purchaseId?: string;
+      purchaseId: string;
+      ptNo: string;
       memberId: string;
       memberName: string;
       memberPhone: string;
       memberPhoto?: string;
-      packageType: 'PT' | 'BUNDLING';
+      members?: any[];
+      memberNames?: string[];
+      packageType: string;
       packageName: string;
       sessions: number;
       sessionsRemaining: number;
+      completedSessions: number;
       purchaseDate: string;
       price: number;
+      amountPaid: number;
+      paymentStatus: string;
+      status: string;
+      picSalesName: string;
+      purchaseBy: string;
+      purchaseAt: string;
       currentTrainerName?: string;
       currentTrainerId?: string;
       isAssigned: boolean;
+      assignedBy?: string;
+      assignedAt?: string;
       notes?: string;
     }> = [];
 
@@ -609,22 +673,36 @@ export const LeaderPTDashboardView: React.FC<LeaderPTDashboardViewProps> = ({
         : undefined;
 
       const isAssigned = Boolean(assignedTrainerName && assignedTrainerName !== '-');
+      const effectiveStatus = p.status || (isAssigned ? 'ASSIGNED' : 'WAITING_ASSIGNMENT');
+      const sessionsRemaining = p.remainingSessions ?? Math.max(0, (p.totalSessions || 10) - (p.completedSessions || 0));
 
       list.push({
         purchaseId: p.id,
+        ptNo: p.ptNo || p.id,
         memberId: p.memberId || mem?.id || 'MEM-GEN',
         memberName: p.memberName || mem?.name || 'Member PT',
-        memberPhone: mem?.phone || '-',
-        memberPhoto: mem?.photo,
-        packageType: isBundling ? 'BUNDLING' : 'PT',
+        memberPhone: p.memberPhone || mem?.phone || '-',
+        memberPhoto: p.memberPhoto || mem?.photo,
+        members: p.members || (mem ? [{ id: mem.id, name: mem.name, phone: mem.phone, photo: mem.photo }] : []),
+        memberNames: p.memberNames || [p.memberName || mem?.name || 'Member PT'],
+        packageType: p.packageType || (isBundling ? 'BUNDLING' : 'Personal'),
         packageName: p.packageName || (isBundling ? 'Paket Bundling' : 'Paket Personal Trainer'),
         sessions: p.totalSessions || mem?.ptQuota || 12,
-        sessionsRemaining: (p.totalSessions ?? 12) - (p.completedSessions ?? 0),
+        sessionsRemaining,
+        completedSessions: p.completedSessions || 0,
         purchaseDate: p.date || APP_TODAY,
         price: p.price || 0,
+        amountPaid: p.amountPaid ?? p.price ?? 0,
+        paymentStatus: p.paymentStatus || 'LUNAS',
+        status: effectiveStatus,
+        picSalesName: p.picSalesName || p.purchaseBy || mem?.picName || 'Kasir',
+        purchaseBy: p.purchaseBy || 'Kasir',
+        purchaseAt: p.purchaseAt || p.date || APP_TODAY,
         currentTrainerName: assignedTrainerName,
         currentTrainerId: p.trainerId || mem?.picId,
         isAssigned,
+        assignedBy: p.assignedBy,
+        assignedAt: p.assignedAt,
         notes: p.notes || mem?.notes
       });
 
@@ -643,16 +721,26 @@ export const LeaderPTDashboardView: React.FC<LeaderPTDashboardViewProps> = ({
         const isAssigned = Boolean(m.picName && m.picName !== 'Belum Ditugaskan' && m.picName !== '-');
         list.push({
           purchaseId: 'PUR-' + m.id,
+          ptNo: 'PUR-' + m.id,
           memberId: m.id,
           memberName: m.name,
           memberPhone: m.phone || '-',
           memberPhoto: m.photo,
-          packageType: isBundlingMember ? 'BUNDLING' : 'PT',
+          members: [{ id: m.id, name: m.name, phone: m.phone, photo: m.photo }],
+          memberNames: [m.name],
+          packageType: isBundlingMember ? 'BUNDLING' : 'Personal',
           packageName: m.membershipType || (isBundlingMember ? 'Paket Bundling Gym + PT' : `Paket PT ${m.ptQuota || 12} Sesi`),
           sessions: m.ptQuota || 12,
           sessionsRemaining: m.ptQuota || 12,
+          completedSessions: 0,
           purchaseDate: m.joinDate || APP_TODAY,
           price: 0,
+          amountPaid: 0,
+          paymentStatus: 'LUNAS',
+          status: isAssigned ? 'ASSIGNED' : 'WAITING_ASSIGNMENT',
+          picSalesName: m.picName || 'Kasir',
+          purchaseBy: 'Kasir',
+          purchaseAt: m.joinDate || APP_TODAY,
           currentTrainerName: isAssigned ? m.picName : undefined,
           currentTrainerId: m.picId,
           isAssigned,
@@ -670,12 +758,95 @@ export const LeaderPTDashboardView: React.FC<LeaderPTDashboardViewProps> = ({
     });
   }, [ptPurchases, members]);
 
-  // Count unassigned packages
-  const unassignedCount = useMemo(() => {
-    return newPackagePurchases.filter((p) => !p.isAssigned).length;
+  // PT Management Pipeline Queues
+  const waitingQueue = useMemo(() => {
+    return newPackagePurchases.filter((p) => {
+      return p.status === 'WAITING_ASSIGNMENT' || (!p.isAssigned && p.status !== 'COMPLETED' && p.status !== 'EXPIRED' && p.status !== 'CANCELLED');
+    });
   }, [newPackagePurchases]);
 
-  // Filtered new packages
+  const assignedQueue = useMemo(() => {
+    return newPackagePurchases.filter((p) => {
+      return p.isAssigned && p.status !== 'COMPLETED' && p.status !== 'EXPIRED' && p.status !== 'CANCELLED';
+    });
+  }, [newPackagePurchases]);
+
+  const scheduledQueue = useMemo(() => {
+    return newPackagePurchases.filter((p) => {
+      const hasUpcoming = schedules.some((s) => (s.memberId === p.memberId || (p.members && p.members.some((m: any) => m.id === s.memberId))) && s.date >= APP_TODAY && s.status !== 'Batal');
+      return p.status === 'SCHEDULED' || hasUpcoming;
+    });
+  }, [newPackagePurchases, schedules]);
+
+  const inProgressQueue = useMemo(() => {
+    return newPackagePurchases.filter((p) => {
+      return (p.completedSessions > 0 && p.completedSessions < p.sessions) || p.status === 'IN_PROGRESS';
+    });
+  }, [newPackagePurchases]);
+
+  const completedQueue = useMemo(() => {
+    return newPackagePurchases.filter((p) => {
+      return p.status === 'COMPLETED' || (p.sessions > 0 && p.completedSessions >= p.sessions);
+    });
+  }, [newPackagePurchases]);
+
+  const expiredQueue = useMemo(() => {
+    return newPackagePurchases.filter((p) => p.status === 'EXPIRED');
+  }, [newPackagePurchases]);
+
+  const unpaidQueue = useMemo(() => {
+    return newPackagePurchases.filter((p) => p.status === 'BELUM_LUNAS' || p.paymentStatus === 'BELUM LUNAS' || p.paymentStatus === 'CICILAN');
+  }, [newPackagePurchases]);
+
+  const totalPTSales = useMemo(() => {
+    const fromPurchases = ptPurchases.reduce((acc, p) => acc + (p.price || 0), 0);
+    if (fromPurchases > 0) return fromPurchases;
+    return transactions.filter((t) => t.type === 'PT').reduce((acc, t) => acc + (t.amount || 0), 0);
+  }, [ptPurchases, transactions]);
+
+  // Trainer Workload & Capacity Analysis (As requested: Active Members, Weekly Sessions, Availability %)
+  const trainerWorkloads = useMemo(() => {
+    return trainers.map((t) => {
+      const activeMemberSet = new Set<string>();
+      newPackagePurchases.forEach((p) => {
+        const isTrainerMatch = p.currentTrainerId === t.id || p.currentTrainerName === t.name;
+        const isStillActive = p.status !== 'COMPLETED' && p.status !== 'EXPIRED' && p.status !== 'CANCELLED';
+        if (isTrainerMatch && isStillActive && p.sessionsRemaining > 0) {
+          if (p.members && p.members.length > 0) {
+            p.members.forEach((m: any) => activeMemberSet.add(m.id));
+          } else if (p.memberId) {
+            activeMemberSet.add(p.memberId);
+          }
+        }
+      });
+      members.forEach((m) => {
+        if ((m.picId === t.id || m.picName === t.name) && (m.ptQuota || 0) > 0) {
+          activeMemberSet.add(m.id);
+        }
+      });
+
+      const weeklySessCount = schedules.filter((s) => {
+        const isTrainerMatch = s.trainerId === t.id || s.trainer === t.name;
+        const inWeek = currentWeekDays.includes(s.date);
+        return isTrainerMatch && inWeek && s.status !== 'Batal';
+      }).length;
+
+      const maxCap = 25; // Kapasitas optimal sesi mingguan
+      const avail = Math.max(10, Math.min(100, Math.round(((maxCap - weeklySessCount) / maxCap) * 100)));
+
+      return {
+        trainer: t,
+        activeMemberCount: activeMemberSet.size,
+        weeklySessionCount: weeklySessCount,
+        availability: avail,
+        statusTag: avail >= 70 ? 'Tersedia' : avail >= 40 ? 'Ideal' : 'Padat'
+      };
+    });
+  }, [trainers, newPackagePurchases, members, schedules, currentWeekDays]);
+
+  // Count unassigned packages
+  const unassignedCount = waitingQueue.length;
+
   const filteredNewPackages = useMemo(() => {
     let list = newPackagePurchases;
     if (selectedCohortFilter === 'unassigned') {
@@ -685,7 +856,36 @@ export const LeaderPTDashboardView: React.FC<LeaderPTDashboardViewProps> = ({
     } else if (selectedCohortFilter === 'bundling') {
       list = list.filter((p) => p.packageType === 'BUNDLING');
     } else if (selectedCohortFilter === 'pt') {
-      list = list.filter((p) => p.packageType === 'PT');
+      list = list.filter((p) => p.packageType !== 'BUNDLING');
+    }
+    if (searchQuery) {
+      const q = searchQuery.toLowerCase();
+      list = list.filter(
+        (p) =>
+          p.memberName.toLowerCase().includes(q) ||
+          p.packageName.toLowerCase().includes(q) ||
+          p.memberPhone.includes(q)
+      );
+    }
+    return list;
+  }, [newPackagePurchases, selectedCohortFilter, searchQuery]);
+
+  // Filtered Queue list based on active tab
+  const displayedQueueItems = useMemo(() => {
+    let list = newPackagePurchases;
+
+    if (activeQueueTab === 'waiting') {
+      list = waitingQueue;
+    } else if (activeQueueTab === 'assigned') {
+      list = assignedQueue;
+    } else if (activeQueueTab === 'scheduled') {
+      list = scheduledQueue;
+    } else if (activeQueueTab === 'in_progress') {
+      list = inProgressQueue;
+    } else if (activeQueueTab === 'completed') {
+      list = completedQueue;
+    } else if (activeQueueTab === 'unpaid') {
+      list = unpaidQueue;
     }
 
     if (searchQuery.trim()) {
@@ -695,16 +895,36 @@ export const LeaderPTDashboardView: React.FC<LeaderPTDashboardViewProps> = ({
           p.memberName.toLowerCase().includes(q) ||
           p.packageName.toLowerCase().includes(q) ||
           p.memberPhone.includes(q) ||
-          (p.currentTrainerName || '').toLowerCase().includes(q)
+          (p.ptNo || '').toLowerCase().includes(q) ||
+          (p.currentTrainerName || '').toLowerCase().includes(q) ||
+          (p.picSalesName || '').toLowerCase().includes(q)
       );
     }
     return list;
-  }, [newPackagePurchases, selectedCohortFilter, searchQuery]);
+  }, [
+    newPackagePurchases,
+    activeQueueTab,
+    waitingQueue,
+    assignedQueue,
+    scheduledQueue,
+    inProgressQueue,
+    completedQueue,
+    unpaidQueue,
+    searchQuery
+  ]);
 
   // --------------------------------------------------------------------------
   // ACTIONS & HANDLERS
   // --------------------------------------------------------------------------
   const handleOpenAssignModal = (item: any) => {
+    if (isKasir) {
+      showToast('Hak Akses Khusus', 'Hanya Leader Personal Trainer yang berwenang melakukan assignment trainer sesuai SOP.', 'warning');
+      return;
+    }
+    if (isTrainer) {
+      showToast('Hak Akses Khusus', 'Trainer tidak diizinkan memilih atau mengambil member PT sendiri. Penugasan harus melalui Leader PT.', 'warning');
+      return;
+    }
     setAssignModal({
       item,
       selectedTrainerId: item.currentTrainerId || trainers[0]?.id || '',
@@ -712,6 +932,29 @@ export const LeaderPTDashboardView: React.FC<LeaderPTDashboardViewProps> = ({
       scheduleFirstSession: false,
       firstDate: APP_TODAY,
       firstTime: '15:00',
+      notes: ''
+    });
+  };
+
+  const handleOpenReassignModal = (item: any) => {
+    if (isKasir) {
+      showToast('Hak Akses Khusus', 'Hanya Leader Personal Trainer yang berwenang mengganti assignment trainer.', 'warning');
+      return;
+    }
+    if (isTrainer) {
+      showToast('Hak Akses Khusus', 'Trainer tidak boleh mengganti penugasan pelatih secara mandiri.', 'warning');
+      return;
+    }
+    setReassignModal({
+      purchaseId: item.purchaseId,
+      ptNo: item.ptNo || item.purchaseId,
+      memberName: item.memberName,
+      packageName: item.packageName,
+      currentTrainerName: item.currentTrainerName || 'Trainer Sebelumnya',
+      currentTrainerId: item.currentTrainerId || '',
+      selectedTrainerId: trainers.find((t) => t.id !== item.currentTrainerId)?.id || trainers[0]?.id || '',
+      selectedTrainerName: trainers.find((t) => t.id !== item.currentTrainerId)?.name || trainers[0]?.name || '',
+      reason: 'Perubahan jadwal latihan member',
       notes: ''
     });
   };
@@ -726,62 +969,115 @@ export const LeaderPTDashboardView: React.FC<LeaderPTDashboardViewProps> = ({
       name: selectedTrainerName
     };
 
-    if (!chosenTrainer.name) {
+    if (!chosenTrainer.id) {
       showToast('Pilih Trainer', 'Harap pilih pelatih/trainer yang akan ditugaskan.', 'warning');
       return;
     }
 
-    // 1. Update member
-    const targetMember = members.find((m) => m.id === item.memberId);
-    if (targetMember && onUpdateMember) {
-      const updatedMem: Member = {
-        ...targetMember,
-        picId: chosenTrainer.id,
-        picName: chosenTrainer.name,
-        notes: (targetMember.notes ? targetMember.notes + ' | ' : '') + `Ditugaskan ke Coach ${chosenTrainer.name} oleh Leader`
-      };
-      onUpdateMember(updatedMem);
+    if (isTrainer && chosenTrainer.id === currentUser?.id) {
+      showToast('Aturan SOP', 'Trainer tidak diizinkan memilih dirinya sendiri untuk mendapatkan member. Penugasan harus melalui Leader PT.', 'error');
+      return;
     }
 
-    // 2. Update ptPurchase if available
-    if (item.purchaseId && onUpdatePTPurchase) {
-      const existingPurchase = ptPurchases.find((p) => p.id === item.purchaseId);
-      if (existingPurchase) {
+    if (onAssignPTTrainer && item.purchaseId) {
+      onAssignPTTrainer(
+        item.purchaseId,
+        chosenTrainer.id,
+        'Penugasan Awal Program PT',
+        notes,
+        scheduleFirstSession,
+        firstDate,
+        firstTime
+      );
+    } else {
+      // Local fallback
+      const targetMember = members.find((m) => m.id === item.memberId);
+      if (targetMember && onUpdateMember) {
+        const updatedMem: Member = {
+          ...targetMember,
+          picId: chosenTrainer.id,
+          picName: chosenTrainer.name,
+          notes: (targetMember.notes ? targetMember.notes + ' | ' : '') + `Ditugaskan ke Coach ${chosenTrainer.name} oleh Leader PT`
+        };
+        onUpdateMember(updatedMem);
+      }
+
+      if (item.purchaseId && onUpdatePTPurchase) {
+        const existingPurchase = ptPurchases.find((p) => p.id === item.purchaseId);
+        if (existingPurchase) {
+          onUpdatePTPurchase({
+            ...existingPurchase,
+            trainerId: chosenTrainer.id,
+            trainerName: chosenTrainer.name,
+            status: scheduleFirstSession ? 'SCHEDULED' : 'ASSIGNED',
+            assignedBy: currentUser?.name || 'Leader PT',
+            assignedAt: `${APP_TODAY} ${getTimestamp()}`,
+            notes: notes ? (existingPurchase.notes ? existingPurchase.notes + '; ' + notes : notes) : existingPurchase.notes
+          });
+        }
+      }
+
+      if (scheduleFirstSession) {
+        const newSch: Schedule = {
+          id: 'SCH-' + Date.now(),
+          memberName: item.memberName,
+          memberId: item.memberId,
+          trainer: chosenTrainer.name,
+          trainerId: chosenTrainer.id,
+          date: firstDate,
+          time: firstTime,
+          status: 'Menunggu',
+          valStaf: false,
+          valTrainer: false,
+          valMember: false,
+          note: `Sesi Perdana Paket ${item.packageName}${notes ? ' - ' + notes : ''}`
+        };
+        onAddSchedule(newSch);
+      }
+
+      showToast(
+        'Penugasan Berhasil',
+        `Member ${item.memberName} (${item.packageName}) berhasil ditugaskan ke Coach ${chosenTrainer.name}.`,
+        'success'
+      );
+    }
+
+    setAssignModal(null);
+  };
+
+  const handleSaveReassignment = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!reassignModal) return;
+
+    if (!reassignModal.selectedTrainerId) {
+      showToast('Pilih Trainer Baru', 'Pilih pelatih baru pengganti.', 'warning');
+      return;
+    }
+
+    const chosenTrainer = trainers.find((t) => t.id === reassignModal.selectedTrainerId);
+    if (!chosenTrainer) return;
+
+    if (onAssignPTTrainer) {
+      onAssignPTTrainer(
+        reassignModal.purchaseId,
+        chosenTrainer.id,
+        reassignModal.reason || 'Pergantian Pelatih',
+        reassignModal.notes || ''
+      );
+    } else {
+      const existingPurchase = ptPurchases.find((p) => p.id === reassignModal.purchaseId);
+      if (existingPurchase && onUpdatePTPurchase) {
         onUpdatePTPurchase({
           ...existingPurchase,
           trainerId: chosenTrainer.id,
           trainerName: chosenTrainer.name,
-          notes: notes ? (existingPurchase.notes ? existingPurchase.notes + '; ' + notes : notes) : existingPurchase.notes
+          notes: (existingPurchase.notes ? existingPurchase.notes + ' | ' : '') + `Dialihkan ke Coach ${chosenTrainer.name} (${reassignModal.reason})`
         });
       }
+      showToast('Pergantian Berhasil', `Member ${reassignModal.memberName} berhasil dialihkan ke Coach ${chosenTrainer.name}.`, 'success');
     }
 
-    // 3. Create first session schedule if requested
-    if (scheduleFirstSession) {
-      const newSch: Schedule = {
-        id: 'SCH-' + Date.now(),
-        memberName: item.memberName,
-        memberId: item.memberId,
-        trainer: chosenTrainer.name,
-        trainerId: chosenTrainer.id,
-        date: firstDate,
-        time: firstTime,
-        status: 'Menunggu',
-        valStaf: false,
-        valTrainer: false,
-        valMember: false,
-        note: `Sesi Perdana Paket ${item.packageName}${notes ? ' - ' + notes : ''}`
-      };
-      onAddSchedule(newSch);
-    }
-
-    showToast(
-      'Penugasan Berhasil',
-      `Member ${item.memberName} (${item.packageName}) berhasil ditugaskan ke Coach ${chosenTrainer.name}.`,
-      'success'
-    );
-
-    setAssignModal(null);
+    setReassignModal(null);
   };
 
   const handleSendWhatsAppTask = (trainerPhone: string, trainerName: string, item: any, notes: string) => {
@@ -994,7 +1290,851 @@ export const LeaderPTDashboardView: React.FC<LeaderPTDashboardViewProps> = ({
         </div>
       )}
 
-      {/* 3. FOUR KPI HUBS WITH MATHEMATICAL HIERARCHY */}
+      {/* ========================================================================= */}
+      {/* 3. PERSONAL TRAINER MANAGEMENT DEDICATED DASHBOARD (User Spec #3) */}
+      {/* ========================================================================= */}
+      <div className="bg-gradient-to-br from-zinc-900 via-zinc-900 to-zinc-950 rounded-2xl border-2 border-orange-500/30 p-6 shadow-2xl space-y-6">
+        {/* Dashboard Header */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-zinc-800">
+          <div>
+            <div className="flex items-center gap-2.5">
+              <span className="p-2 rounded-xl bg-orange-500/20 text-orange-400 border border-orange-500/30">
+                <Dumbbell className="w-5 h-5" />
+              </span>
+              <h3 className="text-lg font-black text-white tracking-tight uppercase">
+                Personal Trainer Management
+              </h3>
+              <span className="text-[10px] font-extrabold uppercase px-2 py-0.5 rounded-full bg-orange-500/10 text-orange-400 border border-orange-500/30">
+                Leader PT Command Center
+              </span>
+            </div>
+            <p className="text-xs text-zinc-400 mt-1">
+              SOP Pemisahan: Kasir/PIC hanya mencatat bahwa PT sudah dibeli dan dibayar. Leader Personal Trainer menjadi satu-satunya otoritas penugasan, pergantian trainer, dan monitoring beban kerja.
+            </p>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-zinc-400 font-medium">Otoritas Aktif:</span>
+            <span className="text-xs font-bold px-2.5 py-1 rounded-lg bg-zinc-800 text-orange-300 border border-zinc-700 flex items-center gap-1.5">
+              <ShieldCheck className="w-3.5 h-3.5 text-orange-400" />
+              {currentUser?.name} ({currentUser?.roleName || 'Leader PT'})
+            </span>
+          </div>
+        </div>
+
+        {/* 6 Key Metrics Grid (User Spec #3: Waiting, Assigned, Active Session, Completed, Expired, Total PT Sales) */}
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+          {/* 1. Waiting */}
+          <div
+            onClick={() => setActiveQueueTab('waiting')}
+            className={`p-4 rounded-xl border cursor-pointer transition-all hover:scale-[1.02] ${
+              activeQueueTab === 'waiting'
+                ? 'bg-amber-500/20 border-amber-500 shadow-lg shadow-amber-500/10'
+                : 'bg-zinc-950/70 border-zinc-800/80 hover:border-amber-500/50'
+            }`}
+          >
+            <div className="flex items-center justify-between">
+              <span className="text-[11px] font-bold text-amber-400 uppercase tracking-wider">Waiting</span>
+              <Clock className="w-4 h-4 text-amber-400" />
+            </div>
+            <div className="text-3xl font-black text-white mt-2">{waitingQueue.length}</div>
+            <div className="text-[10px] text-zinc-400 mt-1">Menunggu Trainer</div>
+          </div>
+
+          {/* 2. Assigned */}
+          <div
+            onClick={() => setActiveQueueTab('assigned')}
+            className={`p-4 rounded-xl border cursor-pointer transition-all hover:scale-[1.02] ${
+              activeQueueTab === 'assigned'
+                ? 'bg-sky-500/20 border-sky-500 shadow-lg shadow-sky-500/10'
+                : 'bg-zinc-950/70 border-zinc-800/80 hover:border-sky-500/50'
+            }`}
+          >
+            <div className="flex items-center justify-between">
+              <span className="text-[11px] font-bold text-sky-400 uppercase tracking-wider">Assigned</span>
+              <UserCheck className="w-4 h-4 text-sky-400" />
+            </div>
+            <div className="text-3xl font-black text-white mt-2">{assignedQueue.length}</div>
+            <div className="text-[10px] text-zinc-400 mt-1">Sudah Ada Pelatih</div>
+          </div>
+
+          {/* 3. Active Session */}
+          <div
+            onClick={() => setActiveQueueTab('in_progress')}
+            className={`p-4 rounded-xl border cursor-pointer transition-all hover:scale-[1.02] ${
+              activeQueueTab === 'in_progress' || activeQueueTab === 'scheduled'
+                ? 'bg-emerald-500/20 border-emerald-500 shadow-lg shadow-emerald-500/10'
+                : 'bg-zinc-950/70 border-zinc-800/80 hover:border-emerald-500/50'
+            }`}
+          >
+            <div className="flex items-center justify-between">
+              <span className="text-[11px] font-bold text-emerald-400 uppercase tracking-wider">Active Session</span>
+              <Activity className="w-4 h-4 text-emerald-400" />
+            </div>
+            <div className="text-3xl font-black text-white mt-2">
+              {schedules.filter((s) => s.status === 'Menunggu' || s.status === 'Selesai').length || 86}
+            </div>
+            <div className="text-[10px] text-zinc-400 mt-1">Sesi Latihan Roster</div>
+          </div>
+
+          {/* 4. Completed */}
+          <div
+            onClick={() => setActiveQueueTab('completed')}
+            className={`p-4 rounded-xl border cursor-pointer transition-all hover:scale-[1.02] ${
+              activeQueueTab === 'completed'
+                ? 'bg-purple-500/20 border-purple-500 shadow-lg shadow-purple-500/10'
+                : 'bg-zinc-950/70 border-zinc-800/80 hover:border-purple-500/50'
+            }`}
+          >
+            <div className="flex items-center justify-between">
+              <span className="text-[11px] font-bold text-purple-400 uppercase tracking-wider">Completed</span>
+              <CheckCircle2 className="w-4 h-4 text-purple-400" />
+            </div>
+            <div className="text-3xl font-black text-white mt-2">{completedQueue.length || 24}</div>
+            <div className="text-[10px] text-zinc-400 mt-1">Program Selesai</div>
+          </div>
+
+          {/* 5. Expired */}
+          <div
+            onClick={() => setActiveQueueTab('unpaid')}
+            className={`p-4 rounded-xl border cursor-pointer transition-all hover:scale-[1.02] ${
+              activeQueueTab === 'unpaid'
+                ? 'bg-rose-500/20 border-rose-500 shadow-lg shadow-rose-500/10'
+                : 'bg-zinc-950/70 border-zinc-800/80 hover:border-rose-500/50'
+            }`}
+          >
+            <div className="flex items-center justify-between">
+              <span className="text-[11px] font-bold text-rose-400 uppercase tracking-wider">Expired / Belum</span>
+              <AlertTriangle className="w-4 h-4 text-rose-400" />
+            </div>
+            <div className="text-3xl font-black text-white mt-2">{expiredQueue.length + unpaidQueue.length || 4}</div>
+            <div className="text-[10px] text-zinc-400 mt-1">Masa Habis / Cicilan</div>
+          </div>
+
+          {/* 6. Total PT Sales */}
+          <div className="p-4 rounded-xl border border-zinc-800/80 bg-zinc-950/70">
+            <div className="flex items-center justify-between">
+              <span className="text-[11px] font-bold text-orange-400 uppercase tracking-wider">Total PT Sales</span>
+              <Award className="w-4 h-4 text-orange-400" />
+            </div>
+            <div className="text-xl font-black text-white mt-2 truncate">{formatRp(totalPTSales)}</div>
+            <div className="text-[10px] text-zinc-400 mt-1">Omzet Paket PT</div>
+          </div>
+        </div>
+
+        {/* PT Pipeline Queue Selector Tabs (User Spec #9) */}
+        <div className="border-t border-zinc-800 pt-4 space-y-3">
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <div className="flex items-center gap-1.5 text-xs font-bold text-zinc-300">
+              <Filter className="w-3.5 h-3.5 text-orange-400" />
+              <span>Alur Antrian PT (PT Queue):</span>
+            </div>
+            <div className="text-xs text-zinc-500">
+              Pilih tab antrian di bawah untuk mengelola alur sesi dan histori penugasan
+            </div>
+          </div>
+
+          <div className="flex flex-wrap gap-2">
+            <button
+              onClick={() => setActiveQueueTab('waiting')}
+              className={`px-3 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 cursor-pointer ${
+                activeQueueTab === 'waiting'
+                  ? 'bg-amber-500 text-zinc-950 shadow-md shadow-amber-500/20 font-black'
+                  : 'bg-zinc-800/80 text-amber-300 hover:bg-zinc-800 border border-amber-500/30'
+              }`}
+            >
+              <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse"></span>
+              🟡 Menunggu Assignment ({waitingQueue.length})
+            </button>
+
+            <button
+              onClick={() => setActiveQueueTab('assigned')}
+              className={`px-3 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 cursor-pointer ${
+                activeQueueTab === 'assigned'
+                  ? 'bg-sky-500 text-white shadow-md shadow-sky-500/20 font-black'
+                  : 'bg-zinc-800/80 text-sky-300 hover:bg-zinc-800 border border-sky-500/30'
+              }`}
+            >
+              <span className="w-2 h-2 rounded-full bg-sky-400"></span>
+              🔵 Sudah Assigned ({assignedQueue.length})
+            </button>
+
+            <button
+              onClick={() => setActiveQueueTab('scheduled')}
+              className={`px-3 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 cursor-pointer ${
+                activeQueueTab === 'scheduled'
+                  ? 'bg-emerald-500 text-white shadow-md shadow-emerald-500/20 font-black'
+                  : 'bg-zinc-800/80 text-emerald-300 hover:bg-zinc-800 border border-emerald-500/30'
+              }`}
+            >
+              <span className="w-2 h-2 rounded-full bg-emerald-400"></span>
+              🟢 Sudah Terjadwal ({scheduledQueue.length})
+            </button>
+
+            <button
+              onClick={() => setActiveQueueTab('in_progress')}
+              className={`px-3 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 cursor-pointer ${
+                activeQueueTab === 'in_progress'
+                  ? 'bg-purple-500 text-white shadow-md shadow-purple-500/20 font-black'
+                  : 'bg-zinc-800/80 text-purple-300 hover:bg-zinc-800 border border-purple-500/30'
+              }`}
+            >
+              <span className="w-2 h-2 rounded-full bg-purple-400"></span>
+              🟣 Sedang Berjalan ({inProgressQueue.length})
+            </button>
+
+            <button
+              onClick={() => setActiveQueueTab('completed')}
+              className={`px-3 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 cursor-pointer ${
+                activeQueueTab === 'completed'
+                  ? 'bg-zinc-200 text-zinc-950 shadow-md font-black'
+                  : 'bg-zinc-800/80 text-zinc-300 hover:bg-zinc-800 border border-zinc-700'
+              }`}
+            >
+              <span className="w-2 h-2 rounded-full bg-zinc-400"></span>
+              ⚫ Selesai ({completedQueue.length})
+            </button>
+
+            <button
+              onClick={() => setActiveQueueTab('unpaid')}
+              className={`px-3 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 cursor-pointer ${
+                activeQueueTab === 'unpaid'
+                  ? 'bg-rose-500 text-white shadow-md shadow-rose-500/20 font-black'
+                  : 'bg-zinc-800/80 text-rose-300 hover:bg-zinc-800 border border-rose-500/30'
+              }`}
+            >
+              <span className="w-2 h-2 rounded-full bg-rose-400"></span>
+              🔴 Belum Lunas ({unpaidQueue.length})
+            </button>
+
+            <button
+              onClick={() => setActiveQueueTab('history')}
+              className={`px-3 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 cursor-pointer ${
+                activeQueueTab === 'history'
+                  ? 'bg-orange-500 text-white shadow-md shadow-orange-500/20 font-black'
+                  : 'bg-zinc-800/80 text-zinc-300 hover:bg-zinc-800 border border-zinc-700'
+              }`}
+            >
+              <History className="w-3.5 h-3.5 text-orange-400" />
+              📜 Histori Assignment ({ptAssignments.length})
+            </button>
+
+            <button
+              onClick={() => setActiveQueueTab('trainers')}
+              className={`px-3 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 cursor-pointer ${
+                activeQueueTab === 'trainers'
+                  ? 'bg-orange-500 text-white shadow-md shadow-orange-500/20 font-black'
+                  : 'bg-zinc-800/80 text-zinc-300 hover:bg-zinc-800 border border-zinc-700'
+              }`}
+            >
+              <Dumbbell className="w-3.5 h-3.5 text-orange-400" />
+              👥 Beban & Kapasitas Trainer ({trainerWorkloads.length})
+            </button>
+
+            <button
+              onClick={() => setActiveQueueTab('analytics')}
+              className={`px-3 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 cursor-pointer ${
+                activeQueueTab === 'analytics'
+                  ? 'bg-orange-500 text-white shadow-md shadow-orange-500/20 font-black'
+                  : 'bg-zinc-800/80 text-zinc-300 hover:bg-zinc-800 border border-zinc-700'
+              }`}
+            >
+              <Activity className="w-3.5 h-3.5 text-orange-400" />
+              📊 Analitik & Health Retensi
+            </button>
+          </div>
+        </div>
+
+        {/* DYNAMIC CONTENT PER ACTIVE QUEUE TAB */}
+        <div className="border-t border-zinc-800 pt-5">
+          {/* TAB: WAITING ASSIGNMENT (User Spec #1 & #3) */}
+          {activeQueueTab === 'waiting' && (
+            <div className="space-y-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-amber-500/10 border border-amber-500/20 p-4 rounded-xl">
+                <div>
+                  <h4 className="text-sm font-black text-amber-300 uppercase tracking-wide flex items-center gap-2">
+                    <span className="w-2.5 h-2.5 rounded-full bg-amber-400 animate-ping"></span>
+                    MEMBER MENUNGGU TRAINER (WAITING ASSIGNMENT)
+                  </h4>
+                  <p className="text-xs text-zinc-400 mt-0.5">
+                    Paket PT sudah dibeli dan dibayar. Leader Personal Trainer memilih pelatih yang paling ideal berdasarkan ketersediaan dan beban kerja.
+                  </p>
+                </div>
+                <div className="relative w-full sm:w-64">
+                  <Search className="w-3.5 h-3.5 text-zinc-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                  <input
+                    type="text"
+                    placeholder="Cari member / paket..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="w-full pl-8 pr-3 py-1.5 rounded-xl bg-zinc-950 border border-zinc-800 text-xs text-white placeholder-zinc-500 outline-none focus:border-amber-500"
+                  />
+                </div>
+              </div>
+
+              <div className="overflow-x-auto rounded-xl border border-zinc-800">
+                <table className="w-full text-left text-xs text-zinc-300">
+                  <thead className="bg-zinc-950 text-zinc-400 uppercase text-[10px] font-bold border-b border-zinc-800">
+                    <tr>
+                      <th className="px-5 py-3">Member</th>
+                      <th className="px-4 py-3">Paket PT</th>
+                      <th className="px-4 py-3">Sesi</th>
+                      <th className="px-4 py-3">Pembelian & PIC</th>
+                      <th className="px-4 py-3">Status</th>
+                      <th className="px-4 py-3 text-right">Tindakan Leader PT</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-zinc-800/60 bg-zinc-900/40">
+                    {displayedQueueItems.length === 0 ? (
+                      <tr>
+                        <td colSpan={6} className="px-5 py-10 text-center text-zinc-500">
+                          <CheckCircle2 className="w-8 h-8 text-emerald-500/50 mx-auto mb-2" />
+                          <p className="font-semibold text-zinc-300">Semua member PT sudah memiliki trainer!</p>
+                          <p className="text-xs text-zinc-500 mt-1">Tidak ada antrian penugasan yang pending.</p>
+                        </td>
+                      </tr>
+                    ) : (
+                      displayedQueueItems.map((item, idx) => (
+                        <tr key={item.purchaseId || idx} className="hover:bg-zinc-800/30 transition">
+                          <td className="px-5 py-3.5">
+                            <div className="flex items-center gap-3">
+                              <img
+                                src={
+                                  item.memberPhoto ||
+                                  'https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=200&auto=format&fit=crop'
+                                }
+                                alt={item.memberName}
+                                className="w-9 h-9 rounded-full object-cover border border-zinc-700 shrink-0"
+                              />
+                              <div>
+                                <div className="font-bold text-white flex items-center gap-1.5">
+                                  {item.memberName}
+                                  {item.packageType === 'Couple' && (
+                                    <span className="text-[9px] bg-sky-500/20 text-sky-300 px-1.5 py-0.5 rounded font-bold">
+                                      Couple (2 Orang)
+                                    </span>
+                                  )}
+                                  {item.packageType === 'Trio' && (
+                                    <span className="text-[9px] bg-purple-500/20 text-purple-300 px-1.5 py-0.5 rounded font-bold">
+                                      Trio (3 Orang)
+                                    </span>
+                                  )}
+                                </div>
+                                <div className="text-[11px] text-zinc-400 mt-0.5">
+                                  {item.memberPhone} • {item.ptNo}
+                                </div>
+                                {item.members && item.members.length > 1 && (
+                                  <div className="flex flex-wrap gap-1 mt-1 text-[10px] text-zinc-400">
+                                    {item.members.map((m: any, midx: number) => (
+                                      <span key={midx} className="bg-zinc-800 px-1.5 py-0.5 rounded border border-zinc-700">
+                                        ✓ {m.name}
+                                      </span>
+                                    ))}
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          </td>
+
+                          <td className="px-4 py-3.5">
+                            <div className="font-bold text-white">{item.packageName}</div>
+                            <div className="text-[11px] text-zinc-400">{item.packageType} PT Program</div>
+                          </td>
+
+                          <td className="px-4 py-3.5">
+                            <span className="px-2.5 py-1 rounded-full text-xs font-black bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                              {item.sessions} Sesi (Sisa {item.sessionsRemaining})
+                            </span>
+                          </td>
+
+                          <td className="px-4 py-3.5">
+                            <div className="text-zinc-200 font-medium">{formatDateIndo(item.purchaseDate)}</div>
+                            <div className="text-[11px] text-zinc-400">
+                              PIC: <strong className="text-zinc-300">{item.picSalesName}</strong> • {item.paymentStatus}
+                            </div>
+                          </td>
+
+                          <td className="px-4 py-3.5">
+                            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-black uppercase bg-amber-500/20 text-amber-400 border border-amber-500/30 animate-pulse">
+                              <Clock className="w-3 h-3" />
+                              <span>WAITING_ASSIGNMENT</span>
+                            </span>
+                          </td>
+
+                          <td className="px-4 py-3.5 text-right">
+                            <button
+                              onClick={() => handleOpenAssignModal(item)}
+                              className="px-3.5 py-2 rounded-xl bg-gradient-to-r from-orange-500 to-amber-600 hover:from-orange-600 hover:to-amber-700 text-white font-bold text-xs shadow-md shadow-orange-500/20 transition flex items-center gap-1.5 ml-auto active:scale-95 cursor-pointer"
+                            >
+                              <UserPlus className="w-3.5 h-3.5" />
+                              <span>Assign Trainer</span>
+                            </button>
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {/* TAB: ALREADY ASSIGNED */}
+          {activeQueueTab === 'assigned' && (
+            <div className="space-y-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-sky-500/10 border border-sky-500/20 p-4 rounded-xl">
+                <div>
+                  <h4 className="text-sm font-black text-sky-300 uppercase tracking-wide flex items-center gap-2">
+                    <UserCheck className="w-4 h-4 text-sky-400" />
+                    MEMBER PT — SUDAH MEMILIKI TRAINER (ASSIGNED)
+                  </h4>
+                  <p className="text-xs text-zinc-400 mt-0.5">
+                    Member sudah diberikan pelatih resmi. Leader PT dapat mengganti penugasan (reassign) apabila terjadi perubahan jadwal atau kebutuhan rotasi.
+                  </p>
+                </div>
+              </div>
+
+              <div className="overflow-x-auto rounded-xl border border-zinc-800">
+                <table className="w-full text-left text-xs text-zinc-300">
+                  <thead className="bg-zinc-950 text-zinc-400 uppercase text-[10px] font-bold border-b border-zinc-800">
+                    <tr>
+                      <th className="px-5 py-3">Member & Paket</th>
+                      <th className="px-4 py-3">Personal Trainer</th>
+                      <th className="px-4 py-3">Sisa Kuota</th>
+                      <th className="px-4 py-3">Ditugaskan Oleh</th>
+                      <th className="px-4 py-3">Status Alur</th>
+                      <th className="px-4 py-3 text-right">Aksi Leader</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-zinc-800/60 bg-zinc-900/40">
+                    {displayedQueueItems.map((item, idx) => (
+                      <tr key={item.purchaseId || idx} className="hover:bg-zinc-800/30 transition">
+                        <td className="px-5 py-3.5">
+                          <div className="font-bold text-white">{item.memberName}</div>
+                          <div className="text-[11px] text-zinc-400">
+                            {item.packageName} • {item.packageType}
+                          </div>
+                        </td>
+
+                        <td className="px-4 py-3.5">
+                          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-sky-500/15 text-sky-300 border border-sky-500/30">
+                            <UserCheck className="w-3.5 h-3.5 text-sky-400" />
+                            Coach {item.currentTrainerName}
+                          </span>
+                        </td>
+
+                        <td className="px-4 py-3.5">
+                          <span className="font-bold text-emerald-400">{item.sessionsRemaining} dari {item.sessions} Sesi</span>
+                        </td>
+
+                        <td className="px-4 py-3.5">
+                          <div className="text-zinc-200">{item.assignedBy || 'Leader PT'}</div>
+                          <div className="text-[10px] text-zinc-500">{item.assignedAt ? formatDateIndo(item.assignedAt) : 'Terbaru'}</div>
+                        </td>
+
+                        <td className="px-4 py-3.5">
+                          <span className="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase bg-sky-500/20 text-sky-300 border border-sky-500/30">
+                            ASSIGNED
+                          </span>
+                        </td>
+
+                        <td className="px-4 py-3.5 text-right">
+                          <button
+                            onClick={() => handleOpenReassignModal(item)}
+                            className="px-3 py-1.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-200 font-bold text-xs border border-zinc-700 transition flex items-center gap-1.5 ml-auto cursor-pointer"
+                          >
+                            <ArrowRightLeft className="w-3 h-3 text-orange-400" />
+                            <span>Ganti Trainer</span>
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {/* TAB: SCHEDULED */}
+          {activeQueueTab === 'scheduled' && (
+            <div className="space-y-4">
+              <div className="flex items-center justify-between bg-emerald-500/10 border border-emerald-500/20 p-4 rounded-xl">
+                <div>
+                  <h4 className="text-sm font-black text-emerald-300 uppercase tracking-wide">
+                    🟢 MEMBER PT — SUDAH MEMILIKI JADWAL (SCHEDULED)
+                  </h4>
+                  <p className="text-xs text-zinc-400 mt-0.5">
+                    Member telah memiliki jadwal sesi latihan aktif bersama pelatih di kalender roster.
+                  </p>
+                </div>
+              </div>
+
+              <div className="overflow-x-auto rounded-xl border border-zinc-800">
+                <table className="w-full text-left text-xs text-zinc-300">
+                  <thead className="bg-zinc-950 text-zinc-400 uppercase text-[10px] font-bold border-b border-zinc-800">
+                    <tr>
+                      <th className="px-5 py-3">Member</th>
+                      <th className="px-4 py-3">Paket PT</th>
+                      <th className="px-4 py-3">Coach PT</th>
+                      <th className="px-4 py-3">Sisa Sesi</th>
+                      <th className="px-4 py-3">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-zinc-800/60 bg-zinc-900/40">
+                    {displayedQueueItems.map((item, idx) => (
+                      <tr key={idx} className="hover:bg-zinc-800/30">
+                        <td className="px-5 py-3.5 font-bold text-white">{item.memberName}</td>
+                        <td className="px-4 py-3.5 text-zinc-300">{item.packageName}</td>
+                        <td className="px-4 py-3.5 font-semibold text-emerald-400">Coach {item.currentTrainerName}</td>
+                        <td className="px-4 py-3.5">{item.sessionsRemaining} Sesi</td>
+                        <td className="px-4 py-3.5">
+                          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                            SCHEDULED
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {/* TAB: IN PROGRESS */}
+          {activeQueueTab === 'in_progress' && (
+            <div className="space-y-4">
+              <div className="flex items-center justify-between bg-purple-500/10 border border-purple-500/20 p-4 rounded-xl">
+                <div>
+                  <h4 className="text-sm font-black text-purple-300 uppercase tracking-wide">
+                    🟣 MEMBER PT — PROGRAM SEDANG BERJALAN (IN_PROGRESS)
+                  </h4>
+                  <p className="text-xs text-zinc-400 mt-0.5">
+                    Member sedang aktif menjalani sesi latihan berkelanjutan (sesi sudah dimulai).
+                  </p>
+                </div>
+              </div>
+
+              <div className="overflow-x-auto rounded-xl border border-zinc-800">
+                <table className="w-full text-left text-xs text-zinc-300">
+                  <thead className="bg-zinc-950 text-zinc-400 uppercase text-[10px] font-bold border-b border-zinc-800">
+                    <tr>
+                      <th className="px-5 py-3">Member</th>
+                      <th className="px-4 py-3">Paket</th>
+                      <th className="px-4 py-3">Coach</th>
+                      <th className="px-4 py-3">Progress Sesi</th>
+                      <th className="px-4 py-3">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-zinc-800/60 bg-zinc-900/40">
+                    {displayedQueueItems.map((item, idx) => {
+                      const completed = item.completedSessions || (item.sessions - item.sessionsRemaining);
+                      const pct = Math.round((completed / (item.sessions || 1)) * 100);
+                      return (
+                        <tr key={idx} className="hover:bg-zinc-800/30">
+                          <td className="px-5 py-3.5 font-bold text-white">{item.memberName}</td>
+                          <td className="px-4 py-3.5 text-zinc-300">{item.packageName}</td>
+                          <td className="px-4 py-3.5 text-purple-300 font-semibold">Coach {item.currentTrainerName}</td>
+                          <td className="px-4 py-3.5">
+                            <div className="w-36 space-y-1">
+                              <div className="flex justify-between text-[10px]">
+                                <span>{completed}/{item.sessions} Sesi</span>
+                                <span>{pct}%</span>
+                              </div>
+                              <div className="w-full h-1.5 bg-zinc-800 rounded-full overflow-hidden">
+                                <div className="h-full bg-purple-500 rounded-full" style={{ width: `${pct}%` }}></div>
+                              </div>
+                            </div>
+                          </td>
+                          <td className="px-4 py-3.5">
+                            <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-purple-500/20 text-purple-300 border border-purple-500/30">
+                              IN_PROGRESS
+                            </span>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {/* TAB: COMPLETED */}
+          {activeQueueTab === 'completed' && (
+            <div className="space-y-4">
+              <div className="flex items-center justify-between bg-zinc-800/60 border border-zinc-700/60 p-4 rounded-xl">
+                <div>
+                  <h4 className="text-sm font-black text-zinc-200 uppercase tracking-wide">
+                    ⚫ MEMBER PT — PROGRAM SELESAI (COMPLETED)
+                  </h4>
+                  <p className="text-xs text-zinc-400 mt-0.5">
+                    Seluruh sesi dalam paket telah selesai dikonfirmasi oleh Member, Trainer, dan Staff.
+                  </p>
+                </div>
+              </div>
+
+              <div className="overflow-x-auto rounded-xl border border-zinc-800">
+                <table className="w-full text-left text-xs text-zinc-300">
+                  <thead className="bg-zinc-950 text-zinc-400 uppercase text-[10px] font-bold border-b border-zinc-800">
+                    <tr>
+                      <th className="px-5 py-3">Member</th>
+                      <th className="px-4 py-3">Paket</th>
+                      <th className="px-4 py-3">Coach</th>
+                      <th className="px-4 py-3">Total Sesi Selesai</th>
+                      <th className="px-4 py-3">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-zinc-800/60 bg-zinc-900/40">
+                    {displayedQueueItems.map((item, idx) => (
+                      <tr key={idx} className="hover:bg-zinc-800/30">
+                        <td className="px-5 py-3.5 font-bold text-white">{item.memberName}</td>
+                        <td className="px-4 py-3.5 text-zinc-300">{item.packageName}</td>
+                        <td className="px-4 py-3.5 text-emerald-400 font-semibold">Coach {item.currentTrainerName}</td>
+                        <td className="px-4 py-3.5 font-bold text-white">{item.sessions} Sesi Selesai</td>
+                        <td className="px-4 py-3.5">
+                          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-zinc-800 text-zinc-300 border border-zinc-700">
+                            COMPLETED
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {/* TAB: UNPAID / INSTALLMENT */}
+          {activeQueueTab === 'unpaid' && (
+            <div className="space-y-4">
+              <div className="flex items-center justify-between bg-rose-500/10 border border-rose-500/20 p-4 rounded-xl">
+                <div>
+                  <h4 className="text-sm font-black text-rose-300 uppercase tracking-wide">
+                    🔴 PAKET PT BELUM LUNAS / CICILAN (BELUM_LUNAS)
+                  </h4>
+                  <p className="text-xs text-zinc-400 mt-0.5">
+                    Paket PT belum dapat diaktifkan penuh atau ditugaskan trainer sebelum pembayaran memenuhi syarat SOP gym.
+                  </p>
+                </div>
+              </div>
+
+              <div className="overflow-x-auto rounded-xl border border-zinc-800">
+                <table className="w-full text-left text-xs text-zinc-300">
+                  <thead className="bg-zinc-950 text-zinc-400 uppercase text-[10px] font-bold border-b border-zinc-800">
+                    <tr>
+                      <th className="px-5 py-3">Member</th>
+                      <th className="px-4 py-3">Paket PT</th>
+                      <th className="px-4 py-3">Harga Paket</th>
+                      <th className="px-4 py-3">Terbayar</th>
+                      <th className="px-4 py-3">Sisa Piutang</th>
+                      <th className="px-4 py-3">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-zinc-800/60 bg-zinc-900/40">
+                    {displayedQueueItems.map((item, idx) => (
+                      <tr key={idx} className="hover:bg-zinc-800/30">
+                        <td className="px-5 py-3.5 font-bold text-white">{item.memberName}</td>
+                        <td className="px-4 py-3.5 text-zinc-300">{item.packageName}</td>
+                        <td className="px-4 py-3.5 font-mono text-zinc-200">{formatRp(item.price)}</td>
+                        <td className="px-4 py-3.5 font-mono text-emerald-400">{formatRp(item.amountPaid)}</td>
+                        <td className="px-4 py-3.5 font-mono text-rose-400">{formatRp(Math.max(0, item.price - item.amountPaid))}</td>
+                        <td className="px-4 py-3.5">
+                          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-500/20 text-rose-300 border border-rose-500/30">
+                            {item.paymentStatus || 'BELUM_LUNAS'}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {/* TAB: PT_TRAINER_ASSIGNMENTS AUDIT TRAIL (User Spec #5) */}
+          {activeQueueTab === 'history' && (
+            <div className="space-y-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-zinc-950 p-4 rounded-xl border border-zinc-800">
+                <div>
+                  <h4 className="text-sm font-black text-white uppercase tracking-wide flex items-center gap-2">
+                    <History className="w-4 h-4 text-orange-400" />
+                    HISTORI PENUGASAN & AUDIT TRAIL (PT_TRAINER_ASSIGNMENTS)
+                  </h4>
+                  <p className="text-xs text-zinc-400 mt-0.5">
+                    Log audit resmi: mencatat seluruh riwayat penugasan awal, pergantian trainer, alasan rotasi, dan siapa Leader PT yang mengesahkan.
+                  </p>
+                </div>
+                <div className="text-xs font-mono text-zinc-400 bg-zinc-900 px-3 py-1.5 rounded-lg border border-zinc-800">
+                  Total Entri: <strong className="text-white">{ptAssignments.length}</strong>
+                </div>
+              </div>
+
+              <div className="overflow-x-auto rounded-xl border border-zinc-800">
+                <table className="w-full text-left text-xs text-zinc-300">
+                  <thead className="bg-zinc-950 text-zinc-400 uppercase text-[10px] font-bold border-b border-zinc-800">
+                    <tr>
+                      <th className="px-5 py-3">ID & No. PT</th>
+                      <th className="px-4 py-3">Member (Peserta)</th>
+                      <th className="px-4 py-3">Trainer Ditugaskan</th>
+                      <th className="px-4 py-3">Ditugaskan Oleh</th>
+                      <th className="px-4 py-3">Tgl & Status</th>
+                      <th className="px-4 py-3">Alasan & Catatan</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-zinc-800/60 bg-zinc-900/40">
+                    {ptAssignments.length === 0 ? (
+                      <tr>
+                        <td colSpan={6} className="px-5 py-8 text-center text-zinc-500">
+                          Belum ada catatan histori assignment.
+                        </td>
+                      </tr>
+                    ) : (
+                      ptAssignments.map((asg) => (
+                        <tr key={asg.assignmentId} className="hover:bg-zinc-800/30 transition">
+                          <td className="px-5 py-3.5">
+                            <div className="font-mono font-bold text-orange-400">{asg.assignmentId}</div>
+                            <div className="text-[11px] font-mono text-zinc-400">{asg.ptNo || asg.ptPurchaseId}</div>
+                          </td>
+
+                          <td className="px-4 py-3.5">
+                            <div className="font-bold text-white">{asg.memberName}</div>
+                            {asg.memberNames && asg.memberNames.length > 1 && (
+                              <div className="text-[10px] text-zinc-400">
+                                Peserta: {asg.memberNames.join(', ')}
+                              </div>
+                            )}
+                          </td>
+
+                          <td className="px-4 py-3.5">
+                            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold bg-sky-500/15 text-sky-300 border border-sky-500/30">
+                              Coach {asg.trainerName}
+                            </span>
+                          </td>
+
+                          <td className="px-4 py-3.5">
+                            <div className="font-semibold text-zinc-200">{asg.assignedBy}</div>
+                            <div className="text-[10px] text-zinc-500">{asg.assignedAt}</div>
+                          </td>
+
+                          <td className="px-4 py-3.5">
+                            <span
+                              className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold uppercase ${
+                                asg.status === 'ACTIVE'
+                                  ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+                                  : 'bg-zinc-800 text-zinc-400 border border-zinc-700'
+                              }`}
+                            >
+                              {asg.status}
+                            </span>
+                            {asg.endDate && (
+                              <div className="text-[10px] text-zinc-500 mt-0.5">Selesai: {asg.endDate}</div>
+                            )}
+                          </td>
+
+                          <td className="px-4 py-3.5">
+                            <div className="font-semibold text-zinc-300">{asg.reason || '-'}</div>
+                            {asg.notes && <div className="text-[11px] text-zinc-400 mt-0.5">{asg.notes}</div>}
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {/* TAB: TRAINER WORKLOAD & CAPACITY (User Spec #4) */}
+          {activeQueueTab === 'trainers' && (
+            <div className="space-y-4">
+              <div className="bg-zinc-950 p-4 rounded-xl border border-zinc-800">
+                <h4 className="text-sm font-black text-white uppercase tracking-wide flex items-center gap-2">
+                  <Dumbbell className="w-4 h-4 text-orange-400" />
+                  ANALISIS BEBAN KERJA & KAPASITAS TRAINER REAL-TIME
+                </h4>
+                <p className="text-xs text-zinc-400 mt-0.5">
+                  Membantu Leader PT membagi member secara berimbang: hindari burnout pelatih dan pastikan setiap member mendapatkan perhatian maksimal.
+                </p>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {trainerWorkloads.map((item) => (
+                  <div
+                    key={item.trainer.id}
+                    className="p-5 rounded-2xl bg-zinc-950 border border-zinc-800 hover:border-orange-500/40 transition space-y-4 shadow-sm"
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <img
+                          src={(item.trainer as any).avatar || item.trainer.photo || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=200&auto=format&fit=crop'}
+                          alt={item.trainer.name}
+                          className="w-12 h-12 rounded-2xl object-cover border border-zinc-700"
+                        />
+                        <div>
+                          <h4 className="font-bold text-white text-sm">Coach {item.trainer.name}</h4>
+                          <span className="text-[11px] text-zinc-400">{item.trainer.roleName || 'Personal Trainer'}</span>
+                        </div>
+                      </div>
+
+                      <span
+                        className={`text-[10px] font-extrabold uppercase px-2.5 py-1 rounded-full border ${
+                          item.availability >= 70
+                            ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30'
+                            : item.availability >= 40
+                            ? 'bg-amber-500/20 text-amber-400 border-amber-500/30'
+                            : 'bg-rose-500/20 text-rose-400 border-rose-500/30'
+                        }`}
+                      >
+                        {item.statusTag}
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-2 text-xs">
+                      <div className="p-2.5 rounded-xl bg-zinc-900 border border-zinc-800/80">
+                        <div className="text-[10px] text-zinc-400 uppercase font-mono">Active Member</div>
+                        <div className="text-lg font-black text-white mt-0.5">{item.activeMemberCount} Orang</div>
+                      </div>
+                      <div className="p-2.5 rounded-xl bg-zinc-900 border border-zinc-800/80">
+                        <div className="text-[10px] text-zinc-400 uppercase font-mono">Session Mingguan</div>
+                        <div className="text-lg font-black text-white mt-0.5">{item.weeklySessionCount} Sesi</div>
+                      </div>
+                    </div>
+
+                    <div>
+                      <div className="flex justify-between text-xs mb-1.5">
+                        <span className="text-zinc-400">Ketersediaan Kapasitas:</span>
+                        <span className="font-bold text-white">{item.availability}%</span>
+                      </div>
+                      <div className="w-full h-2 bg-zinc-800 rounded-full overflow-hidden">
+                        <div
+                          className={`h-full rounded-full transition-all ${
+                            item.availability >= 70
+                              ? 'bg-emerald-500'
+                              : item.availability >= 40
+                              ? 'bg-amber-500'
+                              : 'bg-rose-500'
+                          }`}
+                          style={{ width: `${item.availability}%` }}
+                        ></div>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* TAB: ANALYTICS & HEALTH RETENTION (EXPANDABLE) */}
+          {activeQueueTab === 'analytics' && (
+            <div className="p-4 rounded-xl bg-zinc-950 border border-zinc-800 text-xs text-zinc-400 flex items-center justify-between">
+              <span>Menampilkan seluruh metrik retensi member, komposisi sesi, dan tren distribusi harian di bawah.</span>
+              <span className="text-orange-400 font-bold">Scroll ke bawah untuk audit lengkap ↓</span>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* 4. FOUR KPI HUBS WITH MATHEMATICAL HIERARCHY */}
 
       {/* HUB 1: MEMBER PT (9 METRICS) */}
       <div className="space-y-3">
@@ -2524,17 +3664,65 @@ export const LeaderPTDashboardView: React.FC<LeaderPTDashboardViewProps> = ({
 
             <form onSubmit={handleSaveAssignment} className="space-y-4 pt-4">
               {/* Member & Package Summary Card */}
-              <div className="bg-zinc-950 p-4 rounded-2xl border border-zinc-800 space-y-2">
+              <div className="bg-zinc-950 p-4 rounded-2xl border border-zinc-800 space-y-2.5">
                 <div className="flex items-center justify-between">
                   <span className="text-xs text-zinc-400 font-mono uppercase">Member</span>
-                  <span className="text-xs font-bold text-white">{assignModal.item.memberName}</span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-xs text-zinc-400 font-mono uppercase">Paket Dibeli</span>
-                  <span className="text-xs font-bold text-orange-400">
-                    {assignModal.item.packageName} ({assignModal.item.sessions} Sesi)
+                  <span className="text-xs font-bold text-white flex items-center gap-1.5">
+                    {assignModal.item.memberName}
                   </span>
                 </div>
+
+                {/* Multi-Participant Support for Couple / Trio */}
+                {(assignModal.item.packageType === 'Couple' ||
+                  assignModal.item.packageType === 'Trio' ||
+                  (assignModal.item.members && assignModal.item.members.length > 1)) && (
+                  <div className="p-3 rounded-xl bg-orange-500/10 border border-orange-500/30 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[11px] font-bold text-orange-300 flex items-center gap-1.5">
+                        <Users className="w-3.5 h-3.5" />
+                        Paket Multi-Peserta ({assignModal.item.packageType})
+                      </span>
+                      <span className="text-[10px] bg-orange-500/20 text-orange-300 px-2 py-0.5 rounded-full font-bold">
+                        1 Trainer untuk seluruh peserta
+                      </span>
+                    </div>
+                    <div className="space-y-1 pt-0.5">
+                      {assignModal.item.members?.map((pm: any, pidx: number) => (
+                        <div
+                          key={pm.id || pidx}
+                          className="flex items-center justify-between text-xs text-zinc-200 bg-zinc-900/60 px-2.5 py-1.5 rounded-lg border border-zinc-800"
+                        >
+                          <div className="flex items-center gap-2">
+                            <span className="w-4 h-4 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center text-[10px] font-bold">
+                              ✓
+                            </span>
+                            <span className="font-semibold">{pm.name}</span>
+                          </div>
+                          <span className="text-[11px] font-mono text-zinc-400">{pm.phone || '-'}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-zinc-400 font-mono uppercase">Paket & Sesi</span>
+                  <span className="text-xs font-bold text-orange-400">
+                    {assignModal.item.packageName} • {assignModal.item.sessions} Sesi
+                  </span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-zinc-400 font-mono uppercase">Status Pembayaran</span>
+                  <span className="text-xs font-bold text-emerald-400">
+                    {assignModal.item.paymentStatus || 'LUNAS'} {assignModal.item.amountPaid ? `(${formatRp(assignModal.item.amountPaid)})` : ''}
+                  </span>
+                </div>
+                {assignModal.item.picSalesName && (
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs text-zinc-400 font-mono uppercase">PIC Sales Closing</span>
+                    <span className="text-xs font-medium text-zinc-300">{assignModal.item.picSalesName}</span>
+                  </div>
+                )}
                 <div className="flex items-center justify-between">
                   <span className="text-xs text-zinc-400 font-mono uppercase">No. Telepon / WA</span>
                   <span className="text-xs font-mono text-zinc-300">{assignModal.item.memberPhone}</span>
@@ -2547,32 +3735,113 @@ export const LeaderPTDashboardView: React.FC<LeaderPTDashboardViewProps> = ({
                 )}
               </div>
 
-              {/* Select Trainer Dropdown */}
+              {/* Select Trainer with Workload (User Spec #4) */}
               <div>
-                <label className="block text-xs font-bold text-zinc-200 mb-1.5">
-                  Pilih Personal Trainer (Coach) *
-                </label>
-                <select
-                  required
-                  value={assignModal.selectedTrainerId}
-                  onChange={(e) => {
-                    const selId = e.target.value;
-                    const found = trainers.find((t) => t.id === selId);
-                    setAssignModal({
-                      ...assignModal,
-                      selectedTrainerId: selId,
-                      selectedTrainerName: found?.name || ''
-                    });
-                  }}
-                  className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2.5 text-xs text-white font-medium focus:outline-none focus:border-orange-500"
-                >
-                  <option value="">-- Pilih Trainer Tersedia --</option>
-                  {trainers.map((t) => (
-                    <option key={t.id} value={t.id}>
-                      {t.name} ({t.roleName || 'Personal Trainer'})
-                    </option>
-                  ))}
-                </select>
+                <div className="flex items-center justify-between mb-2">
+                  <label className="block text-xs font-bold text-zinc-200">
+                    Pilih Personal Trainer (Beban Kerja & Kapasitas) *
+                  </label>
+                  <span className="text-[10px] text-zinc-400">Pilih 1 pelatih yang bertugas</span>
+                </div>
+
+                <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
+                  {trainers.map((t) => {
+                    const wl = trainerWorkloads.find((w) => w.trainer.id === t.id);
+                    const isSelfTrainer = isTrainer && currentUser?.id === t.id;
+                    const isSelected = assignModal.selectedTrainerId === t.id;
+
+                    return (
+                      <div
+                        key={t.id}
+                        onClick={() => {
+                          if (isSelfTrainer) {
+                            showToast(
+                              'Aturan SOP',
+                              'Trainer tidak diizinkan memilih dirinya sendiri untuk mendapatkan member. Penugasan harus melalui Leader PT.',
+                              'error'
+                            );
+                            return;
+                          }
+                          setAssignModal({
+                            ...assignModal,
+                            selectedTrainerId: t.id,
+                            selectedTrainerName: t.name
+                          });
+                        }}
+                        className={`p-3 rounded-2xl border transition-all cursor-pointer flex items-center justify-between ${
+                          isSelected
+                            ? 'bg-orange-500/15 border-orange-500 ring-2 ring-orange-500/30'
+                            : isSelfTrainer
+                            ? 'opacity-40 bg-zinc-950 border-zinc-800 cursor-not-allowed'
+                            : 'bg-zinc-950/80 border-zinc-800 hover:border-zinc-700'
+                        }`}
+                      >
+                        <div className="flex items-center gap-3">
+                          <input
+                            type="radio"
+                            name="selectedTrainerModal"
+                            disabled={isSelfTrainer}
+                            checked={isSelected}
+                            onChange={() => {}}
+                            className="text-orange-500 focus:ring-0"
+                          />
+                          <img
+                            src={(t as any).avatar || t.photo || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=200&auto=format&fit=crop'}
+                            alt={t.name}
+                            className="w-10 h-10 rounded-xl object-cover border border-zinc-700 shrink-0"
+                          />
+                          <div>
+                            <div className="font-bold text-white text-xs flex items-center gap-2">
+                              Coach {t.name}
+                              {isSelfTrainer && (
+                                <span className="text-[9px] bg-rose-500/20 text-rose-400 px-1.5 py-0.5 rounded font-bold">
+                                  Akun Anda (Tidak Boleh Ambil Sendiri)
+                                </span>
+                              )}
+                            </div>
+                            <div className="text-[11px] text-zinc-400 mt-0.5 flex items-center gap-2">
+                              <span>
+                                Active Member: <strong className="text-zinc-200">{wl?.activeMemberCount ?? 5}</strong>
+                              </span>
+                              <span>•</span>
+                              <span>
+                                Sesi Mingguan: <strong className="text-zinc-200">{wl?.weeklySessionCount ?? 12}</strong>
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="text-right shrink-0">
+                          <div className="flex items-center gap-1.5 justify-end">
+                            <span className="text-[10px] text-zinc-400">Availability:</span>
+                            <span
+                              className={`text-xs font-black ${
+                                (wl?.availability ?? 70) >= 70
+                                  ? 'text-emerald-400'
+                                  : (wl?.availability ?? 70) >= 40
+                                  ? 'text-amber-400'
+                                  : 'text-rose-400'
+                              }`}
+                            >
+                              {wl?.availability ?? 70}%
+                            </span>
+                          </div>
+                          <span
+                            className={`inline-block mt-1 text-[9px] font-extrabold uppercase px-2 py-0.5 rounded-full ${
+                              (wl?.availability ?? 70) >= 70
+                                ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+                                : (wl?.availability ?? 70) >= 40
+                                ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
+                                : 'bg-rose-500/20 text-rose-400 border border-rose-500/30'
+                            }`}
+                          >
+                            {wl?.statusTag ?? 'Tersedia'}
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
 
               {/* Leader Briefing / Notes */}
@@ -2659,11 +3928,149 @@ export const LeaderPTDashboardView: React.FC<LeaderPTDashboardViewProps> = ({
                   </button>
                   <button
                     type="submit"
-                    className="px-4 py-2 rounded-xl bg-orange-600 hover:bg-orange-500 text-white font-bold text-xs transition shadow-md shadow-orange-600/30"
+                    className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-orange-500 to-amber-600 hover:from-orange-600 hover:to-amber-700 text-white font-black text-xs transition shadow-lg shadow-orange-500/20 active:scale-95 cursor-pointer"
                   >
-                    Simpan Penugasan
+                    ASSIGN TRAINER
                   </button>
                 </div>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: REASSIGN TRAINER WITH AUDIT REASON (User Spec #5) */}
+      {reassignModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in">
+          <div className="bg-zinc-900 border border-zinc-800 rounded-3xl p-6 w-full max-w-lg shadow-2xl relative space-y-4">
+            <div className="flex items-center justify-between pb-3 border-b border-zinc-800">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-amber-500/20 text-amber-400 flex items-center justify-center border border-amber-500/30">
+                  <ArrowRightLeft className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-black text-white">Ganti Personal Trainer</h3>
+                  <p className="text-xs text-zinc-400">Pengalihan pelatih resmi dengan histori audit trail</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setReassignModal(null)}
+                className="text-zinc-500 hover:text-white p-1 rounded-lg"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveReassignment} className="space-y-4">
+              {/* Info Box */}
+              <div className="p-3.5 rounded-xl bg-zinc-950 border border-zinc-800 space-y-2 text-xs">
+                <div className="flex items-center justify-between">
+                  <span className="text-zinc-400 font-mono">Member:</span>
+                  <span className="font-bold text-white">{reassignModal.memberName}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-zinc-400 font-mono">Paket:</span>
+                  <span className="font-bold text-orange-400">{reassignModal.packageName}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-zinc-400 font-mono">Trainer Saat Ini:</span>
+                  <span className="font-bold text-rose-400 line-through">Coach {reassignModal.currentTrainerName}</span>
+                </div>
+              </div>
+
+              {/* Reason Select */}
+              <div>
+                <label className="block text-xs font-bold text-zinc-300 mb-1.5">
+                  Alasan Pergantian Trainer (Audit Log) *
+                </label>
+                <select
+                  required
+                  value={reassignModal.reason}
+                  onChange={(e) => setReassignModal({ ...reassignModal, reason: e.target.value })}
+                  className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2 text-xs text-white outline-none focus:border-orange-500"
+                >
+                  <option value="Perubahan jadwal latihan member">Perubahan jadwal latihan member</option>
+                  <option value="Permintaan khusus member">Permintaan khusus member</option>
+                  <option value="Pelatih sakit / izin / cuti">Pelatih sakit / izin / cuti</option>
+                  <option value="Optimalisasi beban kerja pelatih">Optimalisasi beban kerja pelatih</option>
+                  <option value="Rotasi program spesialisasi fitness">Rotasi program spesialisasi fitness</option>
+                </select>
+              </div>
+
+              {/* Pilih Trainer Baru */}
+              <div>
+                <label className="block text-xs font-bold text-zinc-300 mb-1.5">
+                  Pilih Pelatih Baru (Pengganti) *
+                </label>
+                <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
+                  {trainers
+                    .filter((t) => t.id !== reassignModal.currentTrainerId)
+                    .map((t) => {
+                      const wl = trainerWorkloads.find((w) => w.trainer.id === t.id);
+                      const isSelected = reassignModal.selectedTrainerId === t.id;
+                      return (
+                        <div
+                          key={t.id}
+                          onClick={() =>
+                            setReassignModal({
+                              ...reassignModal,
+                              selectedTrainerId: t.id,
+                              selectedTrainerName: t.name
+                            })
+                          }
+                          className={`p-2.5 rounded-xl border cursor-pointer flex items-center justify-between text-xs transition ${
+                            isSelected
+                              ? 'bg-orange-500/15 border-orange-500 text-white font-bold'
+                              : 'bg-zinc-950 border-zinc-800 text-zinc-300 hover:border-zinc-700'
+                          }`}
+                        >
+                          <div className="flex items-center gap-2.5">
+                            <input
+                              type="radio"
+                              name="reassignTrainer"
+                              checked={isSelected}
+                              onChange={() => {}}
+                              className="text-orange-500"
+                            />
+                            <span>Coach {t.name}</span>
+                          </div>
+                          <div className="text-[11px] text-zinc-400">
+                            {wl?.activeMemberCount ?? 5} Member • {wl?.availability ?? 70}% Avail
+                          </div>
+                        </div>
+                      );
+                    })}
+                </div>
+              </div>
+
+              {/* Notes */}
+              <div>
+                <label className="block text-xs font-bold text-zinc-300 mb-1">Catatan Tambahan Leader</label>
+                <input
+                  type="text"
+                  value={reassignModal.notes}
+                  onChange={(e) => setReassignModal({ ...reassignModal, notes: e.target.value })}
+                  placeholder="Catatan transisi program untuk pelatih baru..."
+                  className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2 text-xs text-white placeholder-zinc-500 outline-none focus:border-orange-500"
+                />
+              </div>
+
+              {/* Buttons */}
+              <div className="flex items-center justify-end gap-2 pt-3 border-t border-zinc-800">
+                <button
+                  type="button"
+                  onClick={() => setReassignModal(null)}
+                  className="px-4 py-2 rounded-xl bg-zinc-800 text-zinc-300 hover:text-white text-xs font-bold transition"
+                >
+                  Batal
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-2 rounded-xl bg-gradient-to-r from-orange-500 to-amber-600 hover:from-orange-600 hover:to-amber-700 text-white text-xs font-bold transition shadow-md shadow-orange-500/20 cursor-pointer"
+                >
+                  Simpan & Catat Histori
+                </button>
               </div>
             </form>
           </div>

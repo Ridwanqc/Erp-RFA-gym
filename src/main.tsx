@@ -4,6 +4,7 @@ import {registerSW} from 'virtual:pwa-register';
 import App from './App.tsx';
 import { ThemeProvider } from './context/ThemeContext';
 import { SettingsProvider } from './context/SettingsContext';
+import { ErrorBoundary } from './components/ErrorBoundary';
 import './index.css';
 
 // Automatically register PWA Service Worker for offline capabilities & caching
@@ -21,10 +22,12 @@ registerSW({
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <ThemeProvider>
-      <SettingsProvider>
-        <App />
-      </SettingsProvider>
-    </ThemeProvider>
+    <ErrorBoundary>
+      <ThemeProvider>
+        <SettingsProvider>
+          <App />
+        </SettingsProvider>
+      </ThemeProvider>
+    </ErrorBoundary>
   </StrictMode>,
 );

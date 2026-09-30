@@ -3,6 +3,7 @@ import { X, Calendar, CreditCard, Dumbbell, History, Phone, ShieldCheck, AlertCi
 import { Member, Attendance, Transaction, Schedule, FollowUpLog, MemberMembershipRecord, PTPurchaseRecord, MemberFreezeRecord } from '../types';
 import { formatRp, APP_TODAY, formatDateIndo } from '../utils/formatters';
 import { getMemberStatus } from '../utils/memberStatus';
+import { sortAttendancesByNewest } from '../data/lockerData';
 import { MemberCameraCaptureModal } from './MemberCameraCaptureModal';
 import { MemberQRCodeModal } from './MemberQRCodeModal';
 
@@ -82,8 +83,10 @@ export const MemberDetailModal: React.FC<MemberDetailModalProps> = ({
   const currentStatus = getMemberStatus(member);
   const isExpired = currentStatus.status === 'EXPIRED';
 
-  // Filter specific member data
-  const memberAttendances = attendanceList.filter((a) => a.memberName === member.name || a.memberId === member.id);
+  // Filter specific member data (diurutkan dari kunjungan paling baru)
+  const memberAttendances = sortAttendancesByNewest(
+    attendanceList.filter((a) => a.memberName === member.name || a.memberId === member.id)
+  );
   const memberTransactions = transactionList.filter((t) => t.customer.includes(member.name));
   const memberSchedules = scheduleList.filter((s) => s.memberId === member.id || s.memberName === member.name);
   const memberFollowUps = followUpList.filter((f) => f.memberId === member.id);

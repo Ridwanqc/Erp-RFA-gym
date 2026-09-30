@@ -1,0 +1,36 @@
+name: Deploy to Hostinger
+
+on:
+  push:
+    branches:
+      - main  # atau master, sesuaikan dengan branch utama Anda
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Install Dependencies
+        run: npm ci
+
+      - name: Build Project
+        run: npm run build
+
+      - name: Deploy to Hostinger via FTP
+        uses: SamKirkland/FTP-Deploy-Action@v4.3.5
+        with:
+          server: ${{ secrets.HOSTINGER_FTP_SERVER }}       # Contoh: ftp.namadomain.com
+          username: ${{ secrets.HOSTINGER_FTP_USERNAME }}   # Username FTP dari hPanel
+          password: ${{ secrets.HOSTINGER_FTP_PASSWORD }}   # Password FTP dari hPanel
+          local-dir: ./dist/                                # Folder hasil build Vite
+          server-dir: ./public_html/                        # Direktori web di Hostinger
+          dangerous-clean-slate: false                      # Set true jika ingin membersihkan public_html sebelum upload

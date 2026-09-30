@@ -1,31 +1,31 @@
-import { LockerSlot } from '../types';
+import { LockerSlot, Attendance } from '../types';
 
 export const INITIAL_LOCKERS: LockerSlot[] = [
   // LOKER PRIA (#01 - #15)
   { number: 1, label: 'P-01', gender: 'Pria', isOccupied: false, status: 'Tersedia' },
   { number: 2, label: 'P-02', gender: 'Pria', isOccupied: false, status: 'Tersedia' },
+  { number: 3, label: 'P-03', gender: 'Pria', isOccupied: false, status: 'Tersedia' },
+  { number: 4, label: 'P-04', gender: 'Pria', isOccupied: false, status: 'Tersedia' },
   {
-    number: 3,
-    label: 'P-03',
+    number: 5,
+    label: 'P-05',
     gender: 'Pria',
     isOccupied: true,
-    memberId: 'M001',
-    memberName: 'Akbar Hanif',
-    timeIn: '07:15 WIB',
+    memberId: 'M003',
+    memberName: 'Doni Firmansyah',
+    timeIn: '07:00 WIB',
     hasTowel: true,
     status: 'Terpakai'
   },
-  { number: 4, label: 'P-04', gender: 'Pria', isOccupied: false, status: 'Tersedia' },
-  { number: 5, label: 'P-05', gender: 'Pria', isOccupied: false, status: 'Tersedia' },
   { number: 6, label: 'P-06', gender: 'Pria', isOccupied: false, status: 'Tersedia' },
   {
     number: 7,
     label: 'P-07',
     gender: 'Pria',
     isOccupied: true,
-    memberId: 'M003',
-    memberName: 'Doni Firmansyah',
-    timeIn: '08:30 WIB',
+    memberId: 'M009',
+    memberName: 'Budi Santoso',
+    timeIn: '08:20 WIB',
     hasTowel: true,
     status: 'Terpakai'
   },
@@ -33,31 +33,61 @@ export const INITIAL_LOCKERS: LockerSlot[] = [
   { number: 9, label: 'P-09', gender: 'Pria', isOccupied: false, status: 'Tersedia' },
   { number: 10, label: 'P-10', gender: 'Pria', isOccupied: false, status: 'Tersedia' },
   { number: 11, label: 'P-11', gender: 'Pria', isOccupied: false, status: 'Tersedia' },
-  { number: 12, label: 'P-12', gender: 'Pria', isOccupied: false, status: 'Tersedia' },
-  { number: 13, label: 'P-13', gender: 'Pria', isOccupied: false, status: 'Tersedia' },
-  { number: 14, label: 'P-14', gender: 'Pria', isOccupied: false, status: 'Tersedia' },
-  { number: 15, label: 'P-15', gender: 'Pria', isOccupied: false, status: 'Tersedia' },
-
-  // LOKER WANITA (#16 - #30)
   {
-    number: 16,
-    label: 'W-16',
-    gender: 'Wanita',
+    number: 12,
+    label: 'P-12',
+    gender: 'Pria',
     isOccupied: true,
-    memberId: 'M004',
-    memberName: 'Maya Indah',
+    memberId: 'M012',
+    memberName: 'Rio Dewanto',
     timeIn: '08:45 WIB',
     hasTowel: true,
     status: 'Terpakai'
   },
+  { number: 13, label: 'P-13', gender: 'Pria', isOccupied: false, status: 'Tersedia' },
+  {
+    number: 14,
+    label: 'P-14',
+    gender: 'Pria',
+    isOccupied: true,
+    memberId: 'M004',
+    memberName: 'Rizky Pratama',
+    timeIn: '07:30 WIB',
+    hasTowel: true,
+    status: 'Terpakai'
+  },
+  { number: 15, label: 'P-15', gender: 'Pria', isOccupied: false, status: 'Tersedia' },
+
+  // LOKER WANITA (#16 - #30)
+  { number: 16, label: 'W-16', gender: 'Wanita', isOccupied: false, status: 'Tersedia' },
   { number: 17, label: 'W-17', gender: 'Wanita', isOccupied: false, status: 'Tersedia' },
   { number: 18, label: 'W-18', gender: 'Wanita', isOccupied: false, status: 'Tersedia' },
   { number: 19, label: 'W-19', gender: 'Wanita', isOccupied: false, status: 'Tersedia' },
-  { number: 20, label: 'W-20', gender: 'Wanita', isOccupied: false, status: 'Tersedia' },
+  {
+    number: 20,
+    label: 'W-20',
+    gender: 'Wanita',
+    isOccupied: true,
+    memberId: 'M010',
+    memberName: 'Nadia Saphira',
+    timeIn: '08:30 WIB',
+    hasTowel: true,
+    status: 'Terpakai'
+  },
   { number: 21, label: 'W-21', gender: 'Wanita', isOccupied: false, status: 'Tersedia' },
   { number: 22, label: 'W-22', gender: 'Wanita', isOccupied: false, status: 'Tersedia' },
   { number: 23, label: 'W-23', gender: 'Wanita', isOccupied: false, status: 'Tersedia' },
-  { number: 24, label: 'W-24', gender: 'Wanita', isOccupied: false, status: 'Tersedia' },
+  {
+    number: 24,
+    label: 'W-24',
+    gender: 'Wanita',
+    isOccupied: true,
+    memberId: 'M014',
+    memberName: 'Gisella Anastasia',
+    timeIn: '08:55 WIB',
+    hasTowel: true,
+    status: 'Terpakai'
+  },
   { number: 25, label: 'W-25', gender: 'Wanita', isOccupied: false, status: 'Tersedia' },
   { number: 26, label: 'W-26', gender: 'Wanita', isOccupied: false, status: 'Tersedia' },
   { number: 27, label: 'W-27', gender: 'Wanita', isOccupied: false, status: 'Tersedia' },
@@ -202,3 +232,118 @@ export function getAvailableLockersByGender(
     .filter((l) => !l.isOccupied && l.status !== 'Perbaikan' && l.gender === targetGender)
     .slice(0, limit);
 }
+
+/**
+ * Mengurutkan log kunjungan member secara kronologis terbalik (dari yang paling baru datang di posisi teratas).
+ * Membandingkan tanggal (terbaru dahulu), lalu waktu masuk (timeIn terbaru dahulu), dan ID numerik sebagai fallback.
+ */
+export function sortAttendancesByNewest(attendances: Attendance[]): Attendance[] {
+  const parseTimeToMinutes = (timeStr?: string): number => {
+    if (!timeStr) return 0;
+    // Format bisa: "08:35 WIB", "08:35:12 WIB", "08:35", dsb.
+    const match = timeStr.match(/(\d{1,2}):(\d{2})/);
+    if (!match) return 0;
+    const hours = parseInt(match[1], 10);
+    const minutes = parseInt(match[2], 10);
+    return hours * 60 + minutes;
+  };
+
+  return [...attendances].sort((a, b) => {
+    // 1. Tanggal terbaru di atas (misal 2026-09-18 > 2026-09-17)
+    const dateComp = (b.date || '').localeCompare(a.date || '');
+    if (dateComp !== 0) return dateComp;
+
+    // 2. Jam Masuk (timeIn) paling baru di atas
+    const timeA = parseTimeToMinutes(a.timeIn);
+    const timeB = parseTimeToMinutes(b.timeIn);
+    if (timeB !== timeA) return timeB - timeA;
+
+    // 3. Fallback: perbandingan string pada timeIn (misal ada selisih detik)
+    const rawTimeComp = (b.timeIn || '').localeCompare(a.timeIn || '');
+    if (rawTimeComp !== 0) return rawTimeComp;
+
+    // 4. Fallback: ID urutan menurun (misal ATT-timestamp atau ATT-10 vs ATT-2)
+    return (b.id || '').localeCompare(a.id || '', undefined, { numeric: true });
+  });
+}
+
+/**
+ * Sinkronisasi dua arah antara status fisik kunci loker dan log kunjungan member.
+ * - Member yang sedang aktif di gym (belum check-out & belum kembalikan kunci) secara otomatis mengunci slot loker.
+ * - Loker yang dipegang oleh member yang sudah check-out atau sudah mengembalikan kunci otomatis dibebaskan (Tersedia).
+ * - Menjaga status loker 'Perbaikan' agar tidak tertimpa.
+ */
+export function syncLockersWithAttendances(
+  currentLockers: LockerSlot[],
+  attendances: Attendance[],
+  targetDate: string = '2026-09-18'
+): LockerSlot[] {
+  // Ambil semua sesi kehadiran aktif hari ini yang menggunakan kunci loker & belum dikembalikan
+  const activeLockerAtts = attendances.filter(
+    (a) =>
+      a.date === targetDate &&
+      (!a.timeOut || a.timeOut.trim() === '') &&
+      !a.lockerReturned &&
+      Boolean(a.lockerNumber)
+  );
+
+  // Map loker number -> attendance aktif
+  const lockerToAttMap = new Map<number, Attendance>();
+  activeLockerAtts.forEach((a) => {
+    const num =
+      typeof a.lockerNumber === 'string'
+        ? parseInt(a.lockerNumber.replace(/\D/g, ''), 10)
+        : a.lockerNumber;
+    if (num && !isNaN(num)) {
+      lockerToAttMap.set(num, a);
+    }
+  });
+
+  return currentLockers.map((locker) => {
+    // Jika loker dalam kondisi maintenance/perbaikan, pertahankan statusnya
+    if (locker.status === 'Perbaikan') {
+      return locker;
+    }
+
+    const activeAtt = lockerToAttMap.get(locker.number);
+
+    if (activeAtt) {
+      // Loker sedang digunakan oleh member yang aktif
+      return {
+        ...locker,
+        isOccupied: true,
+        status: 'Terpakai',
+        memberId: activeAtt.memberId,
+        memberName: activeAtt.memberName,
+        timeIn: activeAtt.timeIn,
+        hasTowel: activeAtt.hasTowel ?? locker.hasTowel ?? false
+      };
+    }
+
+    // Jika tidak ada attendance aktif yang memegang loker ini,
+    // periksa apakah loker ini tercatat terpakai oleh member yang sudah checkout / bukan pemegang sah
+    if (locker.isOccupied) {
+      const memberAttToday = attendances.find(
+        (a) =>
+          a.date === targetDate &&
+          (a.memberId === locker.memberId || a.memberName === locker.memberName)
+      );
+
+      // Jika member sudah checkout, atau sudah mengembalikan loker, atau tidak ada sesi hari ini -> bebaskan
+      if (!memberAttToday || (memberAttToday.timeOut && memberAttToday.timeOut.trim() !== '') || memberAttToday.lockerReturned) {
+        return {
+          ...locker,
+          isOccupied: false,
+          status: 'Tersedia',
+          memberId: undefined,
+          memberName: undefined,
+          timeIn: undefined,
+          hasTowel: false
+        };
+      }
+    }
+
+    return locker;
+  });
+}
+
