@@ -271,7 +271,15 @@ export default function App() {
 
   const [leads, setLeads] = useState<Lead[]>(() => {
     const saved = localStorage.getItem('rfa_leads');
-    return saved ? JSON.parse(saved) : INITIAL_LEADS;
+    if (!saved) return INITIAL_LEADS;
+    try {
+      const parsed: Lead[] = JSON.parse(saved);
+      const existingIds = new Set(parsed.map((l) => l.id));
+      const missing = INITIAL_LEADS.filter((l) => !existingIds.has(l.id));
+      return missing.length > 0 ? [...parsed, ...missing] : parsed;
+    } catch {
+      return INITIAL_LEADS;
+    }
   });
 
   const [followUps, setFollowUps] = useState<FollowUpLog[]>(() => {
@@ -3105,6 +3113,7 @@ export default function App() {
               followUps={followUps}
               transactions={activeBranchFilteredTransactions}
               currentUser={currentUser}
+              onlineReservations={reservations}
               onAddLead={(l) => setLeads([l, ...leads])}
               onUpdateLeadStatus={(lid, nStatus) =>
                 setLeads(leads.map((l) => (l.id === lid ? { ...l, status: nStatus } : l)))
@@ -3409,6 +3418,14 @@ export default function App() {
       <IDCardModal
         isOpen={Boolean(activeIDCardMember)}
         member={activeIDCardMember}
+        attendances={attendances}
+        onAddAttendance={handleAddAttendance}
+        onCheckoutMember={handleCheckoutMember}
+        showToast={showToast}
+        onOpenScanner={() => {
+          setActiveIDCardMember(null);
+          setActiveTab('absen');
+        }}
         onClose={() => setActiveIDCardMember(null)}
       />
 

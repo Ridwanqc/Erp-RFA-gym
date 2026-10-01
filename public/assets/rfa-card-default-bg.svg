@@ -1,0 +1,234 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 1050" width="100%" height="100%">
+  <defs>
+    <!-- Dark Titanium Vignette Background -->
+    <radialGradient id="titaniumBgGrad" cx="50%" cy="40%" r="80%">
+      <stop offset="0%" stop-color="#181b24" />
+      <stop offset="45%" stop-color="#0e1017" />
+      <stop offset="85%" stop-color="#08090d" />
+      <stop offset="100%" stop-color="#040507" />
+    </radialGradient>
+
+    <!-- Metallic Orange Flame Gradient -->
+    <linearGradient id="rfaFlameGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#ffe600" />
+      <stop offset="35%" stop-color="#ff6a00" />
+      <stop offset="70%" stop-color="#f95700" />
+      <stop offset="100%" stop-color="#c41c00" />
+    </linearGradient>
+
+    <!-- Orange Metallic Bevel Gradient -->
+    <linearGradient id="orangeBevelGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#ffb700" />
+      <stop offset="30%" stop-color="#ff6a00" />
+      <stop offset="70%" stop-color="#d63d00" />
+      <stop offset="100%" stop-color="#802000" />
+    </linearGradient>
+
+    <!-- 3D Armor Plate Titanium Gradient -->
+    <linearGradient id="armorPlateGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#323746" />
+      <stop offset="30%" stop-color="#20242f" />
+      <stop offset="75%" stop-color="#141720" />
+      <stop offset="100%" stop-color="#0b0d12" />
+    </linearGradient>
+
+    <!-- Speed Slashes Glowing Gradient -->
+    <linearGradient id="speedSlashGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#ff3b00" />
+      <stop offset="45%" stop-color="#ff7700" />
+      <stop offset="100%" stop-color="#ffc400" />
+    </linearGradient>
+
+    <!-- Smart Chip Chrome/Copper Gradient -->
+    <linearGradient id="chipMetalGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#ffd280" />
+      <stop offset="35%" stop-color="#d4881e" />
+      <stop offset="70%" stop-color="#99580a" />
+      <stop offset="100%" stop-color="#f5b95c" />
+    </linearGradient>
+
+    <!-- Guilloche Security Pattern -->
+    <pattern id="guillocheMesh" width="100" height="100" patternUnits="userSpaceOnUse" opacity="0.09">
+      <circle cx="50" cy="50" r="45" fill="none" stroke="#f95700" stroke-width="0.8" />
+      <circle cx="50" cy="50" r="35" fill="none" stroke="#f95700" stroke-width="0.6" stroke-dasharray="2,2" />
+      <circle cx="50" cy="50" r="25" fill="none" stroke="#f95700" stroke-width="0.5" />
+      <circle cx="50" cy="50" r="15" fill="none" stroke="#ffffff" stroke-width="0.5" stroke-dasharray="3,2" />
+      <line x1="50" y1="0" x2="50" y2="100" stroke="#f95700" stroke-width="0.4" />
+      <line x1="0" y1="50" x2="100" y2="50" stroke="#f95700" stroke-width="0.4" />
+      <line x1="15" y1="15" x2="85" y2="85" stroke="#ffffff" stroke-width="0.4" />
+      <line x1="85" y1="15" x2="15" y2="85" stroke="#ffffff" stroke-width="0.4" />
+    </pattern>
+
+    <!-- Carbon Hex Weave Pattern -->
+    <pattern id="carbonHex" width="32" height="55.42" patternUnits="userSpaceOnUse" opacity="0.18">
+      <path d="M16 0 L32 9.24 L32 27.71 L16 36.95 L0 27.71 L0 9.24 Z M16 55.42 L32 46.18 L32 27.71 L16 36.95 L0 27.71 L0 46.18 Z"
+            fill="none" stroke="#ff8c00" stroke-width="0.7" />
+    </pattern>
+
+    <!-- Specular Light Sheen Line -->
+    <linearGradient id="sheenAngle" x1="0%" y1="100%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#ffffff" stop-opacity="0" />
+      <stop offset="48%" stop-color="#ffffff" stop-opacity="0.04" />
+      <stop offset="50%" stop-color="#ffffff" stop-opacity="0.16" />
+      <stop offset="52%" stop-color="#ffffff" stop-opacity="0.04" />
+      <stop offset="100%" stop-color="#ffffff" stop-opacity="0" />
+    </linearGradient>
+
+    <!-- Drop Shadows -->
+    <filter id="laserGlow" x="-30%" y="-30%" width="160%" height="160%">
+      <feDropShadow dx="0" dy="0" stdDeviation="6" flood-color="#f95700" flood-opacity="0.8" />
+    </filter>
+
+    <filter id="pillShadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="-4" dy="12" stdDeviation="12" flood-color="#000000" flood-opacity="0.95" />
+    </filter>
+
+    <filter id="bannerShadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="14" stdDeviation="14" flood-color="#000000" flood-opacity="0.95" />
+    </filter>
+
+    <filter id="armorShadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="4" dy="12" stdDeviation="12" flood-color="#000000" flood-opacity="0.95" />
+    </filter>
+  </defs>
+
+  <!-- 1. BASE TITANIUM BACKGROUND -->
+  <rect width="600" height="1050" fill="url(#titaniumBgGrad)" />
+
+  <!-- 2. HIGH-TECH PATTERNS -->
+  <rect width="600" height="1050" fill="url(#carbonHex)" />
+  <rect width="600" height="1050" fill="url(#guillocheMesh)" />
+
+  <!-- 3. METALLIC SPECULAR ANGULAR SHEEN -->
+  <rect width="600" height="1050" fill="url(#sheenAngle)" />
+
+  <!-- 4. AEROSPACE OUTER BORDER INLAID RIM -->
+  <rect x="14" y="14" width="572" height="1022" rx="36" fill="none"
+        stroke="url(#orangeBevelGrad)" stroke-width="2.5" filter="url(#laserGlow)" opacity="0.85" />
+  <rect x="22" y="22" width="556" height="1006" rx="30" fill="none"
+        stroke="#ffffff" stroke-width="0.8" opacity="0.25" />
+
+  <!-- 5. LEFT & RIGHT HIGH-ENERGY RACING ACCENT BARS -->
+  <path d="M 0 0 L 36 0 L 36 300 L 0 370 Z" fill="#f95700" />
+  <path d="M 34 0 L 36 0 L 36 300 L 34 302 Z" fill="#ffb700" opacity="0.8" />
+  
+  <path d="M 564 610 L 600 580 L 600 1050 L 564 1050 Z" fill="#f95700" />
+  <path d="M 564 610 L 566 610 L 566 1050 L 564 1050 Z" fill="#ffb700" opacity="0.8" />
+
+  <!-- 6. TOP-RIGHT ARMOR PLATE WITH 3D BEVELED EDGES -->
+  <g filter="url(#armorShadow)">
+    <path d="M 334 0 L 600 0 L 600 370 L 476 370 L 334 224 Z"
+          fill="url(#armorPlateGrad)" stroke="#454c5e" stroke-width="2" />
+    <!-- Bevel highlights -->
+    <path d="M 336 224 L 476 368 L 598 368" fill="none" stroke="#717a94" stroke-width="1.8" opacity="0.9" />
+  </g>
+
+  <!-- Top-Right 3 Diagonal Hazard Speed Slash Stripes -->
+  <g transform="translate(442, 138) rotate(42)" filter="url(#laserGlow)">
+    <rect x="0" y="0" width="76" height="13" rx="3.5" fill="url(#speedSlashGrad)" />
+    <rect x="0" y="23" width="76" height="13" rx="3.5" fill="url(#speedSlashGrad)" />
+    <rect x="0" y="46" width="76" height="13" rx="3.5" fill="url(#speedSlashGrad)" />
+  </g>
+
+  <!-- 7. BOTTOM-LEFT ARMOR PLATE WITH 3D BEVELED EDGES -->
+  <g filter="url(#armorShadow)">
+    <path d="M 0 380 L 84 380 L 166 462 L 166 1050 L 0 1050 Z"
+          fill="url(#armorPlateGrad)" stroke="#454c5e" stroke-width="2" />
+    <!-- Bevel highlight line -->
+    <path d="M 0 382 L 84 382 L 164 462 L 164 1050" fill="none" stroke="#717a94" stroke-width="1.8" opacity="0.9" />
+  </g>
+
+  <!-- Bottom-Left 3 Diagonal Hazard Speed Slash Stripes -->
+  <g transform="translate(70, 700) rotate(42)" filter="url(#laserGlow)">
+    <rect x="0" y="0" width="76" height="13" rx="3.5" fill="url(#speedSlashGrad)" />
+    <rect x="0" y="23" width="76" height="13" rx="3.5" fill="url(#speedSlashGrad)" />
+    <rect x="0" y="46" width="76" height="13" rx="3.5" fill="url(#speedSlashGrad)" />
+  </g>
+
+  <!-- 8. BRAND LOGO & TITLE (TOP LEFT) -->
+  <g transform="translate(62, 44)">
+    <!-- Dynamic Fiery 'R' Logo with Radiant Holographic Glow -->
+    <g transform="translate(0, 0) scale(0.92)" filter="url(#laserGlow)">
+      <path d="M 18,36 C 36,12 86,6 108,14 C 90,24 68,26 55,30 C 80,30 105,42 101,62 C 98,76 80,84 62,84 L 50,84 L 72,110 C 62,110 52,107 40,96 L 27,78 L 32,54 Z"
+            fill="url(#rfaFlameGrad)" />
+      <path d="M 46,42 C 55,40 76,41 78,57 C 79,67 67,71 54,71 L 40,71 Z" fill="#0d0f14" />
+      <path d="M 12,36 C 30,20 62,16 92,16 C 65,23 40,30 20,44 Z" fill="#ffffff" opacity="0.75" />
+    </g>
+
+    <!-- Typography: RFA GYM & FITNESS CENTER -->
+    <g transform="translate(136, 26)">
+      <text x="0" y="32" font-family="'Plus Jakarta Sans', Arial, sans-serif" font-weight="900" font-size="38" letter-spacing="1.5">
+        <tspan fill="#ffffff">RFA </tspan>
+        <tspan fill="#f95700">GYM</tspan>
+      </text>
+      <!-- Subtitle line -->
+      <g transform="translate(0, 48)">
+        <line x1="0" y1="-4" x2="28" y2="-4" stroke="#f95700" stroke-width="2" />
+        <text x="35" y="0" font-family="'Plus Jakarta Sans', Arial, sans-serif" font-weight="800" font-size="12" fill="#ff9900" letter-spacing="4.5">
+          FITNESS CENTER
+        </text>
+        <line x1="202" y1="-4" x2="230" y2="-4" stroke="#f95700" stroke-width="2" />
+      </g>
+    </g>
+  </g>
+
+  <!-- 9. AUTHENTIC SMART ACCESS EMV MICROCHIP (Top-Left under Logo) -->
+  <g transform="translate(56, 172)" filter="url(#laserGlow)">
+    <!-- Chip Base Plate with Chamfered Corners -->
+    <rect x="0" y="0" width="76" height="58" rx="8" fill="url(#chipMetalGrad)" stroke="#803300" stroke-width="1.2" />
+    <!-- Metallic Inner Bevel -->
+    <rect x="2" y="2" width="72" height="54" rx="6" fill="none" stroke="#fff8d6" stroke-width="0.8" opacity="0.8" />
+    <!-- Chip Contact Traces / Circuit Grooves -->
+    <path d="M 0 29 L 24 29 M 52 29 L 76 29 M 24 0 L 24 58 M 52 0 L 52 58 M 24 16 L 52 16 M 24 42 L 52 42 M 38 16 L 38 42"
+          stroke="#401800" stroke-width="1.5" fill="none" opacity="0.65" />
+    <!-- Central Processing Core Circle -->
+    <rect x="30" y="22" width="16" height="14" rx="3" fill="none" stroke="#401800" stroke-width="1.2" opacity="0.75" />
+  </g>
+
+  <!-- 10. CONTACTLESS NFC / RFID WIRELESS ACCESS WAVES -->
+  <g transform="translate(148, 184)" stroke="#f95700" stroke-width="2.2" stroke-linecap="round" fill="none" opacity="0.9">
+    <path d="M 0 10 A 10 10 0 0 1 0 24" />
+    <path d="M 6 5 A 18 18 0 0 1 6 29" />
+    <path d="M 12 0 A 26 26 0 0 1 12 34" />
+    <path d="M 18 -5 A 34 34 0 0 1 18 39" />
+  </g>
+
+  <!-- 11. SECURITY CREDENTIAL SUB-TEXT -->
+  <g transform="translate(56, 252)">
+    <text x="0" y="0" font-family="'Courier New', monospace, sans-serif" font-weight="700" font-size="10" letter-spacing="2" fill="#ffaa55" opacity="0.85">
+      RFA-SECURE • PASS ID ENCRYPTED • 2026
+    </text>
+  </g>
+
+  <!-- 12. RIGHT TAB CUTOUT PILL (CONTAINER DOCK FOR QR CODE) -->
+  <g filter="url(#pillShadow)">
+    <!-- Outer Pill Housing -->
+    <path d="M 396 358 L 600 358 L 600 492 L 396 492 A 67 67 0 0 1 396 358 Z"
+          fill="#f4f5f8" stroke="#ffffff" stroke-width="2.5" />
+    <!-- Inner Rim Accent -->
+    <path d="M 400 364 L 600 364 L 600 486 L 400 486 A 61 61 0 0 1 400 364 Z"
+          fill="none" stroke="#d5d8e2" stroke-width="1.2" />
+  </g>
+
+  <!-- 13. CENTER BANNER CUTOUT PILL (CONTAINER DOCK FOR BARCODE / PASSCODE) -->
+  <g filter="url(#bannerShadow)">
+    <!-- Outer Banner Housing -->
+    <path d="M 0 518 L 480 518 A 64 64 0 0 1 480 646 L 0 646 Z"
+          fill="#f4f5f8" stroke="#ffffff" stroke-width="2.5" />
+    <!-- Inner Rim Accent -->
+    <path d="M 0 524 L 474 524 A 58 58 0 0 1 474 640 L 0 640 Z"
+          fill="none" stroke="#d5d8e2" stroke-width="1.2" />
+    <!-- Subtle orange edge laser guide -->
+    <line x1="0" y1="520" x2="475" y2="520" stroke="#f95700" stroke-width="2" opacity="0.6" />
+  </g>
+
+  <!-- 14. BOTTOM-RIGHT MEMBERSHIP WATERMARK / TEXT -->
+  <g transform="translate(540, 920)">
+    <text x="0" y="0" text-anchor="end" font-family="'Plus Jakarta Sans', Arial, sans-serif" font-weight="900" font-size="24" fill="#ffffff" letter-spacing="6">
+      MEMBERSHIP
+    </text>
+    <text x="0" y="20" text-anchor="end" font-family="'Plus Jakarta Sans', Arial, sans-serif" font-weight="700" font-size="9" fill="#ff8c00" letter-spacing="3">
+      OFFICIAL ALL-ACCESS PASS
+    </text>
+  </g>
+</svg>

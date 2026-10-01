@@ -97,9 +97,43 @@ export function findMemberFromQR(text: string, members: Member[]): Member | null
     if (phoneMatch) return phoneMatch;
   }
 
-  // 7. Check full name exact match
-  const nameMatch = members.find((m) => m.name.toLowerCase() === raw.toLowerCase());
+  // 7. Check full name exact match or stripped barcode asterisks / prefix
+  const cleanRaw = raw.replace(/^\*+|\*+$/g, '').trim();
+  const nameMatch = members.find((m) => m.name.toLowerCase() === cleanRaw.toLowerCase());
   if (nameMatch) return nameMatch;
+
+  // 8. Check name without 'AT ' prefix (e.g. 'AT AHMAD TAJUDIN') or 'Nama - ID'
+  const withoutPrefix = cleanRaw.replace(/^AT\s+/i, '').trim();
+  const prefixMatch = members.find((m) => m.name.toLowerCase() === withoutPrefix.toLowerCase());
+  if (prefixMatch) return prefixMatch;
+
+  if (cleanRaw.includes(' - ')) {
+    const [namePart] = cleanRaw.split(' - ');
+    const partMatch = members.find((m) => m.name.toLowerCase() === namePart.trim().toLowerCase());
+    if (partMatch) return partMatch;
+  }
+
+  // 9. Normalized space matching
+  const normalizedRaw = cleanRaw.replace(/\s+/g, ' ');
+  const normalizedMatch = members.find(
+    (m) => m.name.replace(/\s+/g, ' ').toLowerCase() === normalizedRaw.toLowerCase()
+  );
+  if (normalizedMatch) return normalizedMatch;
+
+  // 10. Extract ID token if present in string (e.g. "M001")
+  const idRegexMatch = cleanRaw.match(/\b(M\d{3,5})\b/i);
+  if (idRegexMatch) {
+    const candidate = members.find((m) => m.id.toLowerCase() === idRegexMatch[1].toLowerCase());
+    if (candidate) return candidate;
+  }
+
+  // 11. Partial / Substring containment match
+  const subMatch = members.find(
+    (m) =>
+      (cleanRaw.length >= 4 && m.name.toLowerCase().includes(cleanRaw.toLowerCase())) ||
+      (m.name.length >= 4 && cleanRaw.toLowerCase().includes(m.name.toLowerCase()))
+  );
+  if (subMatch) return subMatch;
 
   return null;
 }
@@ -135,10 +169,18 @@ export const QRCodeScannerModal: React.FC<QRCodeScannerModalProps> = ({
   const [visitType, setVisitType] = useState<'Reguler' | 'PT'>('Reguler');
   const [countdown, setCountdown] = useState<number | null>(null);
   const [recentScans, setRecentScans] = useState<Array<{ id: string; name: string; action: 'IN' | 'OUT'; time: string; type: string }>>([]);
+  const [manualBarcodeInput, setManualBarcodeInput] = useState('');
 
   // Lock flag to prevent repeated rapid detections
   const isProcessingRef = useRef(false);
   const countdownTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+  const handleManualSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!manualBarcodeInput.trim()) return;
+    handleQRDetected(manualBarcodeInput.trim());
+    setManualBarcodeInput('');
+  };
 
   // Synthesize sound beep using Web Audio API
   const playBeep = useCallback((isError = false) => {
@@ -343,6 +385,26 @@ export const QRCodeScannerModal: React.FC<QRCodeScannerModalProps> = ({
       ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
       if (!isProcessingRef.current) {
+        // 1. Try native BarcodeDetector if available (hardware-accelerated 1D & 2D)
+        if (typeof window !== 'undefined' && 'BarcodeDetector' in window) {
+          try {
+            const detector = new (window as any).BarcodeDetector({
+              formats: ['qr_code', 'code_128', 'code_39', 'ean_13']
+            });
+            detector
+              .detect(video)
+              .then((barcodes: any[]) => {
+                if (!isProcessingRef.current && barcodes && barcodes.length > 0 && barcodes[0].rawValue) {
+                  handleQRDetected(barcodes[0].rawValue);
+                }
+              })
+              .catch(() => {});
+          } catch {
+            // fallback quietly
+          }
+        }
+
+        // 2. jsQR software decoding
         const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
         const code = jsQR(imageData.data, imageData.width, imageData.height, {
           inversionAttempts: 'dontInvert'
@@ -825,6 +887,25 @@ export const QRCodeScannerModal: React.FC<QRCodeScannerModalProps> = ({
             </div>
           </div>
         )}
+
+        {/* Manual Barcode / USB Laser Scanner Direct Input */}
+        <form onSubmit={handleManualSubmit} className="p-3 bg-zinc-900 border-t border-zinc-800 flex items-center gap-2">
+          <div className="relative flex-1">
+            <input
+              type="text"
+              value={manualBarcodeInput}
+              onChange={(e) => setManualBarcodeInput(e.target.value)}
+              placeholder="Scan Barcode USB atau ketik Nama Pengguna / ID (misal: AHMAD TAJUDIN, M001)..."
+              className="w-full bg-zinc-950 border border-zinc-700 rounded-xl px-3 py-2 text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-orange-500"
+            />
+          </div>
+          <button
+            type="submit"
+            className="px-4 py-2 bg-orange-500 hover:bg-orange-600 text-zinc-950 font-bold text-xs rounded-xl transition shrink-0 flex items-center gap-1.5 shadow"
+          >
+            <UserCheck className="w-3.5 h-3.5" /> Presensi
+          </button>
+        </form>
 
         {/* BOTTOM HELPER / TEST SIMULATION PANEL */}
         <div className="p-4 bg-zinc-950 border-t border-zinc-800/80">

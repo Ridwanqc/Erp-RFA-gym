@@ -36,10 +36,19 @@ import {
   Check,
   Briefcase,
   AlertCircle,
-  ChevronLeft
+  ChevronLeft,
+  Maximize2,
+  Minimize2,
+  Globe,
+  Ticket,
+  LayoutGrid,
+  List,
+  Copy
 } from 'lucide-react';
 import { Lead, Member, User, FollowUpLog, Transaction, LeadFollowUpRecord, LeadHandoverRecord } from '../types';
+import { OnlineReservation } from '../types/landingTypes';
 import { formatRp, getDayDiff, formatDateIndo, APP_TODAY } from '../utils/formatters';
+import { isOnlineLead, getOnlinePasscode, mapOnlineReservationToLead } from '../utils/crmPipelineUtils';
 
 export type DatePreset = 'all' | 'today' | 'last7' | 'this_month' | 'last_month' | 'custom';
 
@@ -89,6 +98,7 @@ interface CRMViewProps {
   followUps: FollowUpLog[];
   transactions: Transaction[];
   currentUser: User | null;
+  onlineReservations?: OnlineReservation[];
   onAddLead: (lead: Lead) => void;
   onUpdateLeadStatus: (leadId: string, nextStatus: Lead['status']) => void;
   onUpdateLead?: (updatedLead: Lead) => void;
@@ -105,6 +115,7 @@ export const CRMView: React.FC<CRMViewProps> = ({
   followUps,
   transactions,
   currentUser,
+  onlineReservations = [],
   onAddLead,
   onUpdateLeadStatus,
   onUpdateLead,
@@ -126,12 +137,19 @@ export const CRMView: React.FC<CRMViewProps> = ({
   const [modalFilterCat, setModalFilterCat] = useState<'all' | 'Membership' | 'PT' | 'POS' | 'trx'>('all');
   const [modalSearch, setModalSearch] = useState('');
 
-  // Leads Kanban Filters & Scope
-  const [leadScope, setLeadScope] = useState<'all' | 'my' | 'unassigned' | 'high_priority'>('all');
+  // Leads Kanban Filters & Scope (added 'online' scope)
+  const [leadScope, setLeadScope] = useState<'all' | 'my' | 'online' | 'unassigned' | 'high_priority'>('all');
   const [filterLeadPic, setFilterLeadPic] = useState<string>('all');
   const [filterLeadSource, setFilterLeadSource] = useState<string>('all');
   const [filterLeadPriority, setFilterLeadPriority] = useState<string>('all');
   const [searchLeadQuery, setSearchLeadQuery] = useState<string>('');
+
+  // Pipeline View Mode & Stage Expansion States
+  const [expandedStage, setExpandedStage] = useState<Lead['status'] | null>(null);
+  const [collapsedStages, setCollapsedStages] = useState<Record<string, boolean>>({});
+  const [expandedViewMode, setExpandedViewMode] = useState<'grid' | 'table'>('grid');
+  const [pipelineViewMode, setPipelineViewMode] = useState<'kanban' | 'table'>('kanban');
+  const [expandedCardIds, setExpandedCardIds] = useState<Set<string>>(new Set());
 
   // Add Lead modal state
   const [isAddLeadOpen, setIsAddLeadOpen] = useState(false);
@@ -450,44 +468,158 @@ export const CRMView: React.FC<CRMViewProps> = ({
     return staffUsers.find((s) => s.id === id);
   };
 
+  // Merge leads with online reservations to ensure all online members appear in the pipeline
+  const allPipelineLeads = useMemo(() => {
+    const existingPhones = new Set(leads.map((l) => l.phone.replace(/\D/g, '')));
+    const existingIds = new Set(leads.map((l) => l.id));
+
+    const onlineMappedLeads: Lead[] = (onlineReservations || [])
+      .filter((res) => {
+        const cleanPhone = (res.customerPhone || '').replace(/\D/g, '');
+        return !existingIds.has(res.id) && !existingPhones.has(cleanPhone);
+      })
+      .map((res) => mapOnlineReservationToLead(res));
+
+    return [...leads, ...onlineMappedLeads];
+  }, [leads, onlineReservations]);
+
   // Filtered Leads Calculation
   const myLeadsCount = useMemo(() => {
     if (!currentUser) return 0;
-    return leads.filter((l) => l.picId === currentUser.id && l.status !== 'Lost').length;
-  }, [leads, currentUser]);
+    return allPipelineLeads.filter((l) => l.picId === currentUser.id && l.status !== 'Lost').length;
+  }, [allPipelineLeads, currentUser]);
+
+  const onlineLeadsCount = useMemo(() => {
+    return allPipelineLeads.filter((l) => isOnlineLead(l)).length;
+  }, [allPipelineLeads]);
 
   const unassignedLeadsCount = useMemo(() => {
-    return leads.filter((l) => !l.picId && l.status !== 'Lost').length;
-  }, [leads]);
+    return allPipelineLeads.filter((l) => !l.picId && l.status !== 'Lost').length;
+  }, [allPipelineLeads]);
 
   const highPriorityLeadsCount = useMemo(() => {
-    return leads.filter((l) => l.priority === 'Tinggi' && l.status !== 'Lost').length;
-  }, [leads]);
+    return allPipelineLeads.filter((l) => l.priority === 'Tinggi' && l.status !== 'Lost').length;
+  }, [allPipelineLeads]);
 
   const activePipelineValue = useMemo(() => {
-    return leads
+    return allPipelineLeads
       .filter((l) => l.status !== 'Lost' && l.status !== 'Member')
       .reduce((acc, curr) => acc + (curr.estimatedValue || 0), 0);
-  }, [leads]);
+  }, [allPipelineLeads]);
 
   const winClosingValue = useMemo(() => {
-    return leads
+    return allPipelineLeads
       .filter((l) => l.status === 'Member')
       .reduce((acc, curr) => acc + (curr.estimatedValue || 0), 0);
-  }, [leads]);
+  }, [allPipelineLeads]);
 
   const closingRate = useMemo(() => {
-    if (leads.length === 0) return 0;
-    const memberCount = leads.filter((l) => l.status === 'Member').length;
-    return Math.round((memberCount / leads.length) * 100);
-  }, [leads]);
+    if (allPipelineLeads.length === 0) return 0;
+    const memberCount = allPipelineLeads.filter((l) => l.status === 'Member').length;
+    return Math.round((memberCount / allPipelineLeads.length) * 100);
+  }, [allPipelineLeads]);
+
+  // Toggle inline card expansion
+  const toggleCardExpand = (id: string) => {
+    setExpandedCardIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  // Toggle column collapse
+  const toggleColumnCollapse = (stageKey: string) => {
+    setCollapsedStages((prev) => ({
+      ...prev,
+      [stageKey]: !prev[stageKey]
+    }));
+  };
+
+  // Copy phone number helper
+  const handleCopyPhone = (phone: string, name: string) => {
+    navigator.clipboard.writeText(phone);
+    showToast('Tersalin 📋', `Nomor ${phone} (${name}) disalin ke clipboard.`, 'info');
+  };
+
+  // Stage Metadata Configuration
+  const STAGE_CONFIGS: {
+    key: Lead['status'];
+    label: string;
+    subtitle: string;
+    dotColor: string;
+    borderColor: string;
+    bgBadge: string;
+    textColor: string;
+    accentBg: string;
+    icon: React.ComponentType<{ className?: string }>;
+  }[] = [
+    {
+      key: 'Baru',
+      label: 'Lead Baru',
+      subtitle: 'Inquiry & Registrasi Masuk',
+      dotColor: 'bg-blue-500',
+      borderColor: 'border-blue-500/30',
+      bgBadge: 'bg-blue-500/20 text-blue-400',
+      textColor: 'text-blue-400',
+      accentBg: 'bg-blue-500/10',
+      icon: Sparkles
+    },
+    {
+      key: 'Follow Up',
+      label: 'Follow Up',
+      subtitle: 'Konsultasi & Penawaran Paket',
+      dotColor: 'bg-amber-500',
+      borderColor: 'border-amber-500/30',
+      bgBadge: 'bg-amber-500/20 text-amber-400',
+      textColor: 'text-amber-400',
+      accentBg: 'bg-amber-500/10',
+      icon: MessageSquare
+    },
+    {
+      key: 'Trial',
+      label: 'Trial / Visit',
+      subtitle: 'Jadwal Survey & Latihan',
+      dotColor: 'bg-purple-500',
+      borderColor: 'border-purple-500/30',
+      bgBadge: 'bg-purple-500/20 text-purple-400',
+      textColor: 'text-purple-400',
+      accentBg: 'bg-purple-500/10',
+      icon: Dumbbell
+    },
+    {
+      key: 'Member',
+      label: 'Win (Member)',
+      subtitle: 'Closing & Terdaftar Resmi',
+      dotColor: 'bg-emerald-500',
+      borderColor: 'border-emerald-500/30',
+      bgBadge: 'bg-emerald-500/20 text-emerald-400',
+      textColor: 'text-emerald-400',
+      accentBg: 'bg-emerald-500/10',
+      icon: Trophy
+    },
+    {
+      key: 'Lost',
+      label: 'Lost / Batal',
+      subtitle: 'Tidak Berminat / Batal',
+      dotColor: 'bg-rose-500',
+      borderColor: 'border-rose-500/30',
+      bgBadge: 'bg-rose-500/20 text-rose-400',
+      textColor: 'text-rose-400',
+      accentBg: 'bg-rose-500/10',
+      icon: AlertTriangle
+    }
+  ];
 
   // Filtered Leads for Kanban Board
   const filteredLeads = useMemo(() => {
-    return leads.filter((lead) => {
+    return allPipelineLeads.filter((lead) => {
       // 1. Lead Scope filter
       if (leadScope === 'my') {
         if (!currentUser || lead.picId !== currentUser.id) return false;
+      } else if (leadScope === 'online') {
+        if (!isOnlineLead(lead)) return false;
       } else if (leadScope === 'unassigned') {
         if (lead.picId) return false;
       } else if (leadScope === 'high_priority') {
@@ -504,8 +636,12 @@ export const CRMView: React.FC<CRMViewProps> = ({
       }
 
       // 3. Source filter
-      if (filterLeadSource !== 'all' && lead.source !== filterLeadSource) {
-        return false;
+      if (filterLeadSource !== 'all') {
+        if (filterLeadSource === 'Online' || filterLeadSource === 'Daftar Online (Website)') {
+          if (!isOnlineLead(lead)) return false;
+        } else if (lead.source !== filterLeadSource) {
+          return false;
+        }
       }
 
       // 4. Priority filter
@@ -522,14 +658,15 @@ export const CRMView: React.FC<CRMViewProps> = ({
         const matchPic = (staff?.name || lead.picName || '').toLowerCase().includes(q);
         const matchInterest = (lead.interest || '').toLowerCase().includes(q);
         const matchNotes = (lead.notes || '').toLowerCase().includes(q);
-        if (!matchName && !matchPhone && !matchPic && !matchInterest && !matchNotes) {
+        const matchTags = (lead.tags || []).some((t) => t.toLowerCase().includes(q));
+        if (!matchName && !matchPhone && !matchPic && !matchInterest && !matchNotes && !matchTags) {
           return false;
         }
       }
 
       return true;
     });
-  }, [leads, leadScope, filterLeadPic, filterLeadSource, filterLeadPriority, searchLeadQuery, currentUser, staffUsers]);
+  }, [allPipelineLeads, leadScope, filterLeadPic, filterLeadSource, filterLeadPriority, searchLeadQuery, currentUser, staffUsers]);
 
   // Save New Lead Handler
   const handleSaveLead = (e: React.FormEvent) => {
@@ -696,6 +833,25 @@ export const CRMView: React.FC<CRMViewProps> = ({
 
   // Stage Movement Handler
   const handleMoveStage = (lead: Lead, nextStatus: Lead['status']) => {
+    // If this lead was dynamically mapped from onlineReservations, add it to leads state!
+    if (!leads.some((l) => l.id === lead.id)) {
+      const promotedLead: Lead = {
+        ...lead,
+        status: nextStatus
+      };
+      onAddLead(promotedLead);
+      if (nextStatus === 'Member') {
+        onConvertLeadToMember(promotedLead);
+        return;
+      }
+      if (nextStatus === 'Lost') {
+        setSelectedLeadForLost(promotedLead);
+        return;
+      }
+      showToast('Tahapan Diperbarui 📋', `${lead.name} dipindahkan ke tahap ${nextStatus}.`, 'info');
+      return;
+    }
+
     if (nextStatus === 'Member') {
       onUpdateLeadStatus(lead.id, 'Member');
       onConvertLeadToMember(lead);
@@ -746,26 +902,30 @@ export const CRMView: React.FC<CRMViewProps> = ({
     setLostReasonNotes('');
   };
 
-  // WhatsApp Smart Action
-  const openWhatsAppLead = (lead: Lead, templateType: 'greeting' | 'trial' | 'promo') => {
+  // WhatsApp Smart Action with Online Template Support
+  const openWhatsAppLead = (lead: Lead, templateType: 'greeting' | 'trial' | 'promo' | 'online_welcome') => {
     const staff = getStaffById(lead.picId) || currentUser;
-    const staffName = staff?.name || 'Petugas Front Desk GymPro';
+    const staffName = staff?.name || 'Petugas Front Desk RFA Gym';
     const cleanPhone = lead.phone.replace(/^0/, '62').replace(/\D/g, '');
+    const isOnline = isOnlineLead(lead);
+    const passcode = getOnlinePasscode(lead);
 
     let text = '';
-    if (templateType === 'greeting') {
-      text = `Halo Kak ${lead.name}! Salam hangat dan sehat dari GymPro. Saya ${staffName} dari tim Front Desk. Terima kasih telah menghubungi kami mengenai ${lead.interest || 'program gym'}. Apakah ada jadwal luang untuk kami bantu jelaskan paket atau keliling studio gym kami?`;
+    if (templateType === 'online_welcome' || isOnline) {
+      text = `Halo Kak ${lead.name}! Salam hangat dan bugar dari RFA Gym. Saya ${staffName} dari tim Front Desk. Kami telah menerima data registrasi online Kakak ${passcode ? `(Passcode: ${passcode})` : ''} untuk ${lead.interest || 'paket gym'}. Tim kami siap menyambut kedatangan Kakak untuk serah terima Digital Member Card dan sesi gratis penimbangan InBody 770. Kapan kira-kira waktu yang paling nyaman untuk berkunjung ke gym kami?`;
+    } else if (templateType === 'greeting') {
+      text = `Halo Kak ${lead.name}! Salam hangat dan sehat dari RFA Gym. Saya ${staffName} dari tim Front Desk. Terima kasih telah menghubungi kami mengenai ${lead.interest || 'program gym'}. Apakah ada jadwal luang untuk kami bantu jelaskan paket atau keliling studio gym kami?`;
     } else if (templateType === 'trial') {
-      text = `Halo Kak ${lead.name}! Saya ${staffName} dari Front Desk GymPro. Kami ingin mengonfirmasi jadwal sesi Free Trial & Konsultasi Kebugaran untuk Kakak. Kapan kira-kira waktu yang paling nyaman untuk berkunjung ke gym kami?`;
+      text = `Halo Kak ${lead.name}! Saya ${staffName} dari Front Desk RFA Gym. Kami ingin mengonfirmasi jadwal sesi Free Trial & Konsultasi Kebugaran untuk Kakak. Kapan kira-kira waktu yang paling nyaman untuk berkunjung ke gym kami?`;
     } else {
-      text = `Halo Kak ${lead.name}! Saya ${staffName} dari GymPro. Spesial hari ini kami memiliki promo khusus membership dengan potongan biaya registrasi dan free akses kelas studio. Apakah Kakak berminat kami kirimkan brosur detailnya?`;
+      text = `Halo Kak ${lead.name}! Saya ${staffName} dari RFA Gym. Spesial hari ini kami memiliki promo khusus membership dengan potongan biaya registrasi dan free akses kelas studio. Apakah Kakak berminat kami kirimkan brosur detailnya?`;
     }
 
     // Auto-record follow up
     handleAddLeadFollowUp(
       lead,
       'WhatsApp',
-      `Kirim Pesan WhatsApp (${templateType === 'greeting' ? 'Sapaan Awal' : templateType === 'trial' ? 'Jadwal Trial' : 'Promo Khusus'})`,
+      `Kirim Pesan WhatsApp (${isOnline ? 'Konfirmasi Online' : templateType === 'greeting' ? 'Sapaan Awal' : templateType === 'trial' ? 'Jadwal Trial' : 'Promo Khusus'})`,
       `Pesan template WA terkirim otomatis oleh ${staffName}`
     );
 
@@ -1363,12 +1523,12 @@ export const CRMView: React.FC<CRMViewProps> = ({
           </div>
 
           {/* KPI Summary Cards */}
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
             <div className="bg-zinc-900/90 border border-zinc-800 p-3.5 rounded-2xl flex items-center justify-between">
               <div>
                 <p className="text-[10px] font-bold text-zinc-500 uppercase">Leads Aktif</p>
                 <h4 className="text-lg font-black text-white mt-0.5">
-                  {leads.filter((l) => l.status !== 'Lost' && l.status !== 'Member').length}
+                  {allPipelineLeads.filter((l) => l.status !== 'Lost' && l.status !== 'Member').length}
                 </h4>
                 <p className="text-[9px] text-zinc-400">Total prospek berjalan</p>
               </div>
@@ -1389,7 +1549,33 @@ export const CRMView: React.FC<CRMViewProps> = ({
             </div>
 
             <div
-              onClick={() => setLeadScope(leadScope === 'my' ? 'all' : 'my')}
+              onClick={() => {
+                setLeadScope(leadScope === 'online' ? 'all' : 'online');
+                setFilterLeadPic('all');
+              }}
+              className={`p-3.5 rounded-2xl border transition cursor-pointer flex items-center justify-between ${
+                leadScope === 'online'
+                  ? 'bg-cyan-500/20 border-cyan-500/60 ring-1 ring-cyan-500'
+                  : 'bg-zinc-900/90 border-zinc-800 hover:border-zinc-700'
+              }`}
+            >
+              <div>
+                <p className="text-[10px] font-bold text-cyan-400 uppercase flex items-center gap-1">
+                  <Globe className="w-3.5 h-3.5 text-cyan-400" /> Member Online
+                </p>
+                <h4 className="text-lg font-black text-cyan-300 mt-0.5">{onlineLeadsCount} Member</h4>
+                <p className="text-[9px] text-zinc-400">Daftar Web & Portal</p>
+              </div>
+              <div className="w-9 h-9 rounded-xl bg-cyan-500/10 border border-cyan-500/20 flex items-center justify-center text-cyan-400">
+                <Ticket className="w-4 h-4" />
+              </div>
+            </div>
+
+            <div
+              onClick={() => {
+                setLeadScope(leadScope === 'my' ? 'all' : 'my');
+                setFilterLeadPic('all');
+              }}
               className={`p-3.5 rounded-2xl border transition cursor-pointer flex items-center justify-between ${
                 leadScope === 'my'
                   ? 'bg-orange-500/20 border-orange-500/60 ring-1 ring-orange-500'
@@ -1456,14 +1642,32 @@ export const CRMView: React.FC<CRMViewProps> = ({
                       : 'bg-zinc-800 text-zinc-400'
                   }`}
                 >
-                  {leads.length}
+                  {allPipelineLeads.length}
+                </span>
+              </button>
+
+              <button
+                onClick={() => {
+                  setLeadScope(leadScope === 'online' ? 'all' : 'online');
+                  setFilterLeadPic('all');
+                }}
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-2 shrink-0 border ${
+                  leadScope === 'online'
+                    ? 'bg-cyan-500 text-white border-cyan-400 shadow-md'
+                    : 'bg-zinc-950 hover:bg-zinc-800 text-cyan-400 border-cyan-500/30'
+                }`}
+              >
+                <Globe className="w-3.5 h-3.5 text-cyan-400" />
+                <span>🌐 Daftar Online</span>
+                <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${leadScope === 'online' ? 'bg-black/30 text-white' : 'bg-cyan-500/20 text-cyan-300'}`}>
+                  {onlineLeadsCount}
                 </span>
               </button>
 
               {staffUsers
                 .filter((s) => s.roleName?.toLowerCase().includes('front') || s.roleName?.toLowerCase().includes('kasir') || s.roleName?.toLowerCase().includes('manager') || s.roleName?.toLowerCase().includes('leader'))
                 .map((staff) => {
-                  const staffLeadsCount = leads.filter(
+                  const staffLeadsCount = allPipelineLeads.filter(
                     (l) => l.picId === staff.id && l.status !== 'Lost'
                   ).length;
                   const isSelected = filterLeadPic === staff.id;
@@ -1537,6 +1741,95 @@ export const CRMView: React.FC<CRMViewProps> = ({
             </div>
           </div>
 
+          {/* STAGE SELECTOR TABS & MONITORING VIEW MODE BAR */}
+          <div className="bg-zinc-900/80 border border-zinc-800 p-2.5 rounded-2xl flex flex-col md:flex-row md:items-center justify-between gap-3">
+            {/* Stage Pills */}
+            <div className="flex items-center gap-1.5 overflow-x-auto pb-1 md:pb-0 scrollbar-thin">
+              <button
+                onClick={() => setExpandedStage(null)}
+                className={`px-3 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 shrink-0 border ${
+                  expandedStage === null
+                    ? 'bg-zinc-800 text-white border-zinc-700 shadow-sm'
+                    : 'bg-zinc-950 hover:bg-zinc-800 text-zinc-400 border-zinc-800'
+                }`}
+              >
+                <LayoutGrid className="w-3.5 h-3.5" />
+                <span>Semua Tahap (5 Kolom)</span>
+                <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-zinc-800 text-zinc-300 font-mono">
+                  {filteredLeads.length}
+                </span>
+              </button>
+
+              {STAGE_CONFIGS.map((sc) => {
+                const count = filteredLeads.filter((l) => l.status === sc.key).length;
+                const onlineInStage = filteredLeads.filter((l) => l.status === sc.key && isOnlineLead(l)).length;
+                const isExpandedThis = expandedStage === sc.key;
+                return (
+                  <button
+                    key={sc.key}
+                    onClick={() => setExpandedStage(isExpandedThis ? null : sc.key)}
+                    title={`Klik untuk expand tahap ${sc.label} (Fokus Mode)`}
+                    className={`px-3 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 shrink-0 border ${
+                      isExpandedThis
+                        ? `${sc.accentBg} ${sc.textColor} border-current shadow-md ring-1 ring-current/40`
+                        : 'bg-zinc-950 hover:bg-zinc-800 text-zinc-300 border-zinc-800'
+                    }`}
+                  >
+                    <span className={`w-2.5 h-2.5 rounded-full ${sc.dotColor}`}></span>
+                    <span>{sc.label}</span>
+                    <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-zinc-800 font-mono font-bold">
+                      {count}
+                    </span>
+                    {onlineInStage > 0 && (
+                      <span className="text-[9px] px-1 rounded bg-cyan-950 text-cyan-300 font-mono border border-cyan-500/30 flex items-center gap-0.5" title={`${onlineInStage} daftar online`}>
+                        <Globe className="w-2.5 h-2.5" /> {onlineInStage}
+                      </span>
+                    )}
+                    <Maximize2 className="w-3 h-3 opacity-60 ml-0.5" />
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* View Mode Toggle (Kanban vs Table) */}
+            <div className="flex items-center gap-2 shrink-0 self-end md:self-auto">
+              {Object.values(collapsedStages).some(Boolean) && expandedStage === null && (
+                <button
+                  onClick={() => setCollapsedStages({})}
+                  className="px-2.5 py-1.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs font-medium transition"
+                  title="Buka kembali semua kolom yang di-collapse"
+                >
+                  Buka Semua Kolom
+                </button>
+              )}
+
+              {expandedStage === null && (
+                <div className="bg-zinc-950 border border-zinc-800 p-1 rounded-xl flex items-center gap-1">
+                  <button
+                    onClick={() => setPipelineViewMode('kanban')}
+                    className={`px-3 py-1 rounded-lg text-xs font-bold transition flex items-center gap-1.5 ${
+                      pipelineViewMode === 'kanban'
+                        ? 'bg-orange-500 text-white shadow-sm'
+                        : 'text-zinc-400 hover:text-white'
+                    }`}
+                  >
+                    <LayoutGrid className="w-3.5 h-3.5" /> Board
+                  </button>
+                  <button
+                    onClick={() => setPipelineViewMode('table')}
+                    className={`px-3 py-1 rounded-lg text-xs font-bold transition flex items-center gap-1.5 ${
+                      pipelineViewMode === 'table'
+                        ? 'bg-orange-500 text-white shadow-sm'
+                        : 'text-zinc-400 hover:text-white'
+                    }`}
+                  >
+                    <List className="w-3.5 h-3.5" /> Tabel
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+
           {/* FILTER CONTROLS & SEARCH BAR */}
           <div className="bg-zinc-900/60 border border-zinc-800 p-3.5 rounded-2xl flex flex-col md:flex-row md:items-center justify-between gap-3">
             {/* Scope Pills */}
@@ -1552,7 +1845,21 @@ export const CRMView: React.FC<CRMViewProps> = ({
                     : 'text-zinc-400 hover:text-white'
                 }`}
               >
-                Semua ({leads.length})
+                Semua ({allPipelineLeads.length})
+              </button>
+              <button
+                onClick={() => {
+                  setLeadScope('online');
+                  setFilterLeadPic('all');
+                }}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 border ${
+                  leadScope === 'online'
+                    ? 'bg-cyan-500/20 text-cyan-300 border-cyan-500/50 shadow'
+                    : 'text-cyan-400 hover:bg-cyan-500/10 border-transparent'
+                }`}
+              >
+                <Globe className="w-3.5 h-3.5" />
+                <span>🌐 Daftar Online ({onlineLeadsCount})</span>
               </button>
               <button
                 onClick={() => {
@@ -1629,14 +1936,14 @@ export const CRMView: React.FC<CRMViewProps> = ({
                       : 'bg-zinc-950 border-zinc-800 text-zinc-300 focus:border-orange-500'
                   }`}
                 >
-                  <option value="all">👤 Semua PIC / Petugas ({leads.length})</option>
+                  <option value="all">👤 Semua PIC / Petugas ({allPipelineLeads.length})</option>
                   {currentUser && (
                     <option value="my">⭐ PIC: Tanggung Jawab Saya ({myLeadsCount})</option>
                   )}
                   <option value="unassigned">⚠️ Belum Ada PIC ({unassignedLeadsCount})</option>
                   <optgroup label="Front Desk & Sales Team">
                     {staffUsers.map((staff) => {
-                      const count = leads.filter((l) => l.picId === staff.id && l.status !== 'Lost').length;
+                      const count = allPipelineLeads.filter((l) => l.picId === staff.id && l.status !== 'Lost').length;
                       const roleDisplay = staff.roleName?.split(' ')[0] || staff.role || 'Staff';
                       const shiftDisplay = staff.shift ? ` [${staff.shift}]` : '';
                       return (
@@ -1657,6 +1964,7 @@ export const CRMView: React.FC<CRMViewProps> = ({
                   className="bg-zinc-950 border border-zinc-800 rounded-xl px-2.5 py-1.5 text-xs text-zinc-300 outline-none focus:border-orange-500"
                 >
                   <option value="all">Semua Sumber</option>
+                  <option value="Daftar Online (Website)">🌐 Daftar Online (Website)</option>
                   <option value="Instagram">Instagram</option>
                   <option value="Walk-in">Walk-in</option>
                   <option value="Referral">Referral</option>
@@ -1726,6 +2034,14 @@ export const CRMView: React.FC<CRMViewProps> = ({
                     </button>
                   </span>
                 )}
+                {leadScope === 'online' && (
+                  <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-cyan-500/20 text-cyan-300 rounded-lg font-bold border border-cyan-500/30">
+                    <Globe className="w-3 h-3" /> Member Daftar Online
+                    <button onClick={() => setLeadScope('all')} className="hover:text-white ml-0.5">
+                      <X className="w-3 h-3" />
+                    </button>
+                  </span>
+                )}
                 {leadScope === 'high_priority' && (
                   <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-rose-500/20 text-rose-300 rounded-lg font-bold border border-rose-500/30">
                     <Flame className="w-3 h-3" /> Prioritas Tinggi
@@ -1762,7 +2078,7 @@ export const CRMView: React.FC<CRMViewProps> = ({
 
               <div className="flex items-center gap-3">
                 <span className="text-zinc-400 font-medium">
-                  Menampilkan <strong className="text-white">{filteredLeads.length}</strong> dari {leads.length} prospek
+                  Menampilkan <strong className="text-white">{filteredLeads.length}</strong> dari {allPipelineLeads.length} prospek
                 </span>
                 <button
                   onClick={() => {
@@ -1780,719 +2096,881 @@ export const CRMView: React.FC<CRMViewProps> = ({
             </div>
           )}
 
-          {/* 5-COLUMN KANBAN BOARD */}
-          <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4 overflow-x-auto pb-4">
-            {/* COLUMN 1: BARU (INQUIRY MASUK) */}
-            <div className="bg-zinc-900/90 border border-zinc-800 rounded-3xl p-3.5 flex flex-col min-h-[500px]">
-              <div className="flex justify-between items-center pb-3 mb-3 border-b border-zinc-800">
-                <div>
-                  <span className="text-xs font-bold text-white flex items-center gap-2">
-                    <span className="w-2.5 h-2.5 rounded-full bg-blue-500"></span> Lead Baru
-                  </span>
-                  <span className="text-[10px] text-zinc-500 block">Inquiry / Prospek Masuk</span>
-                </div>
-                <div className="text-right">
-                  <span className="text-[10px] font-bold bg-blue-500/20 text-blue-400 px-2 py-0.5 rounded-full">
-                    {filteredLeads.filter((l) => l.status === 'Baru').length}
-                  </span>
-                  <p className="text-[9px] text-zinc-500 mt-0.5">
-                    {formatRp(
-                      filteredLeads
-                        .filter((l) => l.status === 'Baru')
-                        .reduce((a, b) => a + (b.estimatedValue || 0), 0)
-                    )}
-                  </p>
-                </div>
-              </div>
+          {/* ========================================================================= */}
+          {/* PIPELINE RENDERING MODES: EXPANDED STAGE / TABLE VIEW / 5-COLUMN KANBAN */}
+          {/* ========================================================================= */}
+          {(() => {
+            // Reusable Lead Card Renderer for both Kanban Columns & Expanded Cockpit
+            const renderLeadCard = (lead: Lead, currentStage: Lead['status'], isExpandedView: boolean = false) => {
+              const staff = getStaffById(lead.picId);
+              const isMyLead = currentUser?.id === lead.picId;
+              const isOnline = isOnlineLead(lead);
+              const passcode = getOnlinePasscode(lead);
+              const isCardExpanded = expandedCardIds.has(lead.id);
 
-              <div className="space-y-3 flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-zinc-800">
-                {filteredLeads.filter((l) => l.status === 'Baru').length === 0 ? (
-                  <div className="h-32 flex flex-col items-center justify-center text-center p-4 border border-dashed border-zinc-800 rounded-2xl text-zinc-500 text-xs">
-                    <p>Tidak ada lead di tahap ini</p>
+              return (
+                <div
+                  key={lead.id}
+                  className={`bg-zinc-950 border p-3.5 rounded-2xl space-y-2.5 transition shadow-sm hover:border-zinc-700 relative ${
+                    isMyLead
+                      ? 'border-orange-500/40 ring-1 ring-orange-500/20'
+                      : isOnline
+                      ? 'border-cyan-500/40 bg-gradient-to-b from-cyan-950/10 to-zinc-950'
+                      : 'border-zinc-800/90'
+                  }`}
+                >
+                  {/* Top Strip: Priority + Source + Online Badge + Date */}
+                  <div className="flex justify-between items-center text-[10px]">
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <span
+                        className={`px-1.5 py-0.5 rounded font-bold ${
+                          lead.priority === 'Tinggi'
+                            ? 'bg-rose-500/20 text-rose-400 border border-rose-500/30'
+                            : lead.priority === 'Sedang'
+                            ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
+                            : 'bg-zinc-800 text-zinc-400'
+                        }`}
+                      >
+                        {lead.priority === 'Tinggi' ? '🔥 Tinggi' : lead.priority || 'Sedang'}
+                      </span>
+
+                      {isOnline ? (
+                        <span className="px-2 py-0.5 rounded-full text-[9px] font-black tracking-wide bg-gradient-to-r from-cyan-500/20 to-emerald-500/20 text-cyan-300 border border-cyan-500/40 flex items-center gap-1 shadow-sm">
+                          <Globe className="w-2.5 h-2.5 text-cyan-400 animate-pulse" /> DAFTAR ONLINE
+                        </span>
+                      ) : (
+                        <span className="text-zinc-400 bg-zinc-900 px-1.5 py-0.5 rounded border border-zinc-800">
+                          {lead.source}
+                        </span>
+                      )}
+                    </div>
+                    <span className="text-zinc-500">{formatDateIndo(lead.date || '')}</span>
                   </div>
-                ) : (
-                  filteredLeads
-                    .filter((l) => l.status === 'Baru')
-                    .map((lead) => {
-                      const staff = getStaffById(lead.picId);
-                      const isMyLead = currentUser?.id === lead.picId;
 
-                      return (
-                        <div
-                          key={lead.id}
-                          className={`bg-zinc-950 border p-3.5 rounded-2xl space-y-2.5 transition shadow-sm hover:border-zinc-700 ${
-                            isMyLead ? 'border-orange-500/40 ring-1 ring-orange-500/20' : 'border-zinc-800/90'
-                          }`}
+                  {/* Online Passcode Strip (if online registration) */}
+                  {isOnline && (
+                    <div className="bg-gradient-to-r from-cyan-950/40 via-zinc-900/90 to-emerald-950/30 border border-cyan-500/30 rounded-xl px-2.5 py-1.5 text-[10px] flex items-center justify-between">
+                      <div className="flex items-center gap-1.5">
+                        <Ticket className="w-3.5 h-3.5 text-cyan-400" />
+                        <span className="text-cyan-300 font-bold">{passcode ? `Passcode: ${passcode}` : 'Reservasi Online'}</span>
+                      </div>
+                      <span className="text-[9px] text-zinc-400 bg-cyan-950/80 px-1.5 py-0.5 rounded border border-cyan-500/20 font-medium">
+                        Web Portal
+                      </span>
+                    </div>
+                  )}
+
+                  {/* Lead Name & Target Program */}
+                  <div>
+                    <div className="flex items-center justify-between">
+                      <h5
+                        className="text-xs font-bold text-white hover:text-orange-400 transition cursor-pointer flex items-center gap-1"
+                        onClick={() => setSelectedLeadForDetail(lead)}
+                      >
+                        <span>{lead.name}</span>
+                      </h5>
+                      {lead.estimatedValue ? (
+                        <span className="text-[10px] text-emerald-400 font-bold">
+                          {formatRp(lead.estimatedValue)}
+                        </span>
+                      ) : null}
+                    </div>
+
+                    <div className="flex items-center justify-between mt-1 text-[11px] text-zinc-400">
+                      <div className="flex items-center gap-1.5">
+                        <Phone className="w-3 h-3 text-zinc-500" />
+                        <span className="font-mono">{lead.phone}</span>
+                        <button
+                          onClick={() => handleCopyPhone(lead.phone, lead.name)}
+                          title="Salin No. WhatsApp"
+                          className="text-zinc-500 hover:text-zinc-300 p-0.5 rounded"
                         >
-                          {/* Card Top: Priority, Source, Date */}
-                          <div className="flex justify-between items-center text-[10px]">
-                            <div className="flex items-center gap-1.5">
-                              <span
-                                className={`px-1.5 py-0.5 rounded font-bold ${
-                                  lead.priority === 'Tinggi'
-                                    ? 'bg-rose-500/20 text-rose-400 border border-rose-500/30'
-                                    : lead.priority === 'Sedang'
-                                    ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
-                                    : 'bg-zinc-800 text-zinc-400'
-                                }`}
-                              >
-                                {lead.priority === 'Tinggi' ? '🔥 Tinggi' : lead.priority || 'Sedang'}
-                              </span>
-                              <span className="text-zinc-400 bg-zinc-900 px-1.5 py-0.5 rounded border border-zinc-800">
-                                {lead.source}
-                              </span>
-                            </div>
-                            <span className="text-zinc-500">{formatDateIndo(lead.date || '')}</span>
-                          </div>
+                          <Copy className="w-2.5 h-2.5" />
+                        </button>
+                      </div>
+                    </div>
 
-                          {/* Lead Name & Target Program */}
-                          <div>
-                            <h5 className="text-xs font-bold text-white hover:text-orange-400 transition cursor-pointer" onClick={() => setSelectedLeadForDetail(lead)}>
-                              {lead.name}
-                            </h5>
-                            <p className="text-[11px] text-zinc-400 flex items-center gap-1 mt-0.5">
-                              <Phone className="w-3 h-3 text-zinc-500" /> {lead.phone}
-                            </p>
-                            {lead.interest && (
-                              <p className="text-[10px] text-orange-400/90 font-medium mt-1 bg-orange-500/5 px-2 py-0.5 rounded border border-orange-500/10">
-                                Minat: {lead.interest}
-                              </p>
-                            )}
-                            {lead.estimatedValue ? (
-                              <p className="text-[10px] text-emerald-400 font-bold mt-1">
-                                Est. Nilai: {formatRp(lead.estimatedValue)}
-                              </p>
-                            ) : null}
-                          </div>
-
-                          {/* PIC RESPONSIBILITY BOX (Pencegah Tertukar) */}
-                          <div className="bg-zinc-900/90 border border-zinc-800/80 rounded-xl p-2 space-y-1.5">
-                            <div className="flex items-center justify-between">
-                              <div className="flex items-center gap-2">
-                                <div className="w-6 h-6 rounded-full bg-zinc-800 border border-zinc-700 flex items-center justify-center overflow-hidden shrink-0">
-                                  {staff?.photo ? (
-                                    <img src={staff.photo} alt={staff.name} className="w-full h-full object-cover" />
-                                  ) : (
-                                    <span className="text-[9px] font-bold text-zinc-300">
-                                      {(staff?.name || lead.picName || '?').charAt(0)}
-                                    </span>
-                                  )}
-                                </div>
-                                <div className="leading-tight">
-                                  <div className="flex items-center gap-1">
-                                    <span className="text-[11px] font-bold text-zinc-200">
-                                      {staff?.name || lead.picName || 'Belum Ada PIC'}
-                                    </span>
-                                    {isMyLead && (
-                                      <span className="text-[8px] bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 px-1 py-0.2 rounded font-bold">
-                                        Milik Saya
-                                      </span>
-                                    )}
-                                  </div>
-                                  <span className="text-[9px] text-zinc-500 block">
-                                    {staff?.roleName || lead.picRole || 'Front Desk'} • Shift {staff?.shift || lead.picShift || 'Pagi'}
-                                  </span>
-                                </div>
-                              </div>
-
-                              {/* Handover or Claim Button */}
-                              {lead.picId ? (
-                                <button
-                                  onClick={() => {
-                                    setSelectedLeadForHandover(lead);
-                                    setHandoverTargetPicId(staffUsers.find((s) => s.id !== lead.picId)?.id || '');
-                                  }}
-                                  title="Oper Alih / Handover ke Petugas Lain"
-                                  className="text-[9px] font-bold bg-zinc-800 hover:bg-zinc-700 text-orange-400 px-2 py-1 rounded-lg flex items-center gap-1 border border-zinc-700 transition"
-                                >
-                                  <ArrowRightLeft className="w-2.5 h-2.5" /> Oper
-                                </button>
-                              ) : (
-                                <button
-                                  onClick={() => handleClaimLead(lead)}
-                                  className="text-[9px] font-bold bg-amber-500/20 hover:bg-amber-500/30 text-amber-400 px-2 py-1 rounded-lg flex items-center gap-1 border border-amber-500/30 transition"
-                                >
-                                  <UserCheck className="w-2.5 h-2.5" /> Klaim
-                                </button>
-                              )}
-                            </div>
-                          </div>
-
-                          {/* Quick Follow-up Log / Note */}
-                          {lead.notes && (
-                            <p className="text-[10px] text-zinc-400 italic line-clamp-1 bg-zinc-900/40 px-2 py-1 rounded">
-                              "{lead.notes}"
-                            </p>
-                          )}
-
-                          {/* Card Footer: WhatsApp & Stage Action */}
-                          <div className="pt-2 border-t border-zinc-800/80 flex justify-between items-center gap-1">
-                            <button
-                              onClick={() => openWhatsAppLead(lead, 'greeting')}
-                              className="text-[10px] font-bold text-emerald-400 hover:text-emerald-300 flex items-center gap-1 bg-emerald-500/10 hover:bg-emerald-500/20 px-2.5 py-1 rounded-lg border border-emerald-500/20 transition"
-                            >
-                              <MessageSquare className="w-3 h-3" /> Chat WA
-                            </button>
-
-                            <div className="flex items-center gap-1">
-                              <button
-                                onClick={() => setSelectedLeadForDetail(lead)}
-                                title="Lihat Detail & Timeline"
-                                className="text-[10px] bg-zinc-800 hover:bg-zinc-700 text-zinc-300 p-1.5 rounded-lg transition"
-                              >
-                                <Eye className="w-3 h-3" />
-                              </button>
-                              <button
-                                onClick={() => handleMoveStage(lead, 'Follow Up')}
-                                className="text-[10px] font-bold bg-orange-500 hover:bg-orange-600 text-white px-2.5 py-1 rounded-lg flex items-center gap-1 transition shadow-sm"
-                              >
-                                Ke Follow Up <ChevronRight className="w-3 h-3" />
-                              </button>
-                            </div>
-                          </div>
-                        </div>
-                      );
-                    })
-                )}
-              </div>
-            </div>
-
-            {/* COLUMN 2: FOLLOW UP (SEDANG DISKUSI / PENAWARAN) */}
-            <div className="bg-zinc-900/90 border border-zinc-800 rounded-3xl p-3.5 flex flex-col min-h-[500px]">
-              <div className="flex justify-between items-center pb-3 mb-3 border-b border-zinc-800">
-                <div>
-                  <span className="text-xs font-bold text-white flex items-center gap-2">
-                    <span className="w-2.5 h-2.5 rounded-full bg-orange-500"></span> Follow Up
-                  </span>
-                  <span className="text-[10px] text-zinc-500 block">Konsultasi & Penawaran</span>
-                </div>
-                <div className="text-right">
-                  <span className="text-[10px] font-bold bg-orange-500/20 text-orange-400 px-2 py-0.5 rounded-full">
-                    {filteredLeads.filter((l) => l.status === 'Follow Up').length}
-                  </span>
-                  <p className="text-[9px] text-zinc-500 mt-0.5">
-                    {formatRp(
-                      filteredLeads
-                        .filter((l) => l.status === 'Follow Up')
-                        .reduce((a, b) => a + (b.estimatedValue || 0), 0)
+                    {lead.interest && (
+                      <p className="text-[10px] text-orange-400/90 font-medium mt-1 bg-orange-500/5 px-2 py-0.5 rounded border border-orange-500/10 truncate">
+                        Minat: <strong className="text-zinc-200">{lead.interest}</strong>
+                      </p>
                     )}
-                  </p>
-                </div>
-              </div>
-
-              <div className="space-y-3 flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-zinc-800">
-                {filteredLeads.filter((l) => l.status === 'Follow Up').length === 0 ? (
-                  <div className="h-32 flex flex-col items-center justify-center text-center p-4 border border-dashed border-zinc-800 rounded-2xl text-zinc-500 text-xs">
-                    <p>Tidak ada lead di tahap ini</p>
                   </div>
-                ) : (
-                  filteredLeads
-                    .filter((l) => l.status === 'Follow Up')
-                    .map((lead) => {
-                      const staff = getStaffById(lead.picId);
-                      const isMyLead = currentUser?.id === lead.picId;
 
-                      return (
-                        <div
-                          key={lead.id}
-                          className={`bg-zinc-950 border p-3.5 rounded-2xl space-y-2.5 transition shadow-sm hover:border-zinc-700 ${
-                            isMyLead ? 'border-orange-500/40 ring-1 ring-orange-500/20' : 'border-zinc-800/90'
-                          }`}
-                        >
-                          {/* Card Top: Priority, Source, Date */}
-                          <div className="flex justify-between items-center text-[10px]">
-                            <div className="flex items-center gap-1.5">
-                              <span
-                                className={`px-1.5 py-0.5 rounded font-bold ${
-                                  lead.priority === 'Tinggi'
-                                    ? 'bg-rose-500/20 text-rose-400 border border-rose-500/30'
-                                    : lead.priority === 'Sedang'
-                                    ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
-                                    : 'bg-zinc-800 text-zinc-400'
-                                }`}
-                              >
-                                {lead.priority === 'Tinggi' ? '🔥 Tinggi' : lead.priority || 'Sedang'}
-                              </span>
-                              <span className="text-zinc-400 bg-zinc-900 px-1.5 py-0.5 rounded border border-zinc-800">
-                                {lead.source}
-                              </span>
-                            </div>
-                            <span className="text-zinc-500">{formatDateIndo(lead.date || '')}</span>
-                          </div>
-
-                          {/* Lead Name & Target Program */}
-                          <div>
-                            <h5 className="text-xs font-bold text-white hover:text-orange-400 transition cursor-pointer" onClick={() => setSelectedLeadForDetail(lead)}>
-                              {lead.name}
-                            </h5>
-                            <p className="text-[11px] text-zinc-400 flex items-center gap-1 mt-0.5">
-                              <Phone className="w-3 h-3 text-zinc-500" /> {lead.phone}
-                            </p>
-                            {lead.interest && (
-                              <p className="text-[10px] text-orange-400/90 font-medium mt-1 bg-orange-500/5 px-2 py-0.5 rounded border border-orange-500/10">
-                                Minat: {lead.interest}
-                              </p>
-                            )}
-                            {lead.estimatedValue ? (
-                              <p className="text-[10px] text-emerald-400 font-bold mt-1">
-                                Est. Nilai: {formatRp(lead.estimatedValue)}
-                              </p>
-                            ) : null}
-                          </div>
-
-                          {/* PIC RESPONSIBILITY BOX (Pencegah Tertukar) */}
-                          <div className="bg-zinc-900/90 border border-zinc-800/80 rounded-xl p-2 space-y-1.5">
-                            <div className="flex items-center justify-between">
-                              <div className="flex items-center gap-2">
-                                <div className="w-6 h-6 rounded-full bg-zinc-800 border border-zinc-700 flex items-center justify-center overflow-hidden shrink-0">
-                                  {staff?.photo ? (
-                                    <img src={staff.photo} alt={staff.name} className="w-full h-full object-cover" />
-                                  ) : (
-                                    <span className="text-[9px] font-bold text-zinc-300">
-                                      {(staff?.name || lead.picName || '?').charAt(0)}
-                                    </span>
-                                  )}
-                                </div>
-                                <div className="leading-tight">
-                                  <div className="flex items-center gap-1">
-                                    <span className="text-[11px] font-bold text-zinc-200">
-                                      {staff?.name || lead.picName || 'Belum Ada PIC'}
-                                    </span>
-                                    {isMyLead && (
-                                      <span className="text-[8px] bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 px-1 py-0.2 rounded font-bold">
-                                        Milik Saya
-                                      </span>
-                                    )}
-                                  </div>
-                                  <span className="text-[9px] text-zinc-500 block">
-                                    {staff?.roleName || lead.picRole || 'Front Desk'} • Shift {staff?.shift || lead.picShift || 'Pagi'}
-                                  </span>
-                                </div>
-                              </div>
-
-                              {lead.picId ? (
-                                <button
-                                  onClick={() => {
-                                    setSelectedLeadForHandover(lead);
-                                    setHandoverTargetPicId(staffUsers.find((s) => s.id !== lead.picId)?.id || '');
-                                  }}
-                                  title="Oper Alih / Handover ke Petugas Lain"
-                                  className="text-[9px] font-bold bg-zinc-800 hover:bg-zinc-700 text-orange-400 px-2 py-1 rounded-lg flex items-center gap-1 border border-zinc-700 transition"
-                                >
-                                  <ArrowRightLeft className="w-2.5 h-2.5" /> Oper
-                                </button>
-                              ) : (
-                                <button
-                                  onClick={() => handleClaimLead(lead)}
-                                  className="text-[9px] font-bold bg-amber-500/20 hover:bg-amber-500/30 text-amber-400 px-2 py-1 rounded-lg flex items-center gap-1 border border-amber-500/30 transition"
-                                >
-                                  <UserCheck className="w-2.5 h-2.5" /> Klaim
-                                </button>
-                              )}
-                            </div>
-                          </div>
-
-                          {/* Last Follow Up Record */}
-                          {lead.followUpHistory && lead.followUpHistory.length > 0 && (
-                            <div className="text-[9px] text-zinc-400 bg-zinc-900/60 p-1.5 rounded-lg border border-zinc-800/60 space-y-0.5">
-                              <span className="font-bold text-zinc-300">
-                                Follow-up: {lead.followUpHistory[0].result}
-                              </span>
-                              <p className="line-clamp-1 text-zinc-500">
-                                {lead.followUpHistory[0].notes}
-                              </p>
-                            </div>
-                          )}
-
-                          {/* Card Footer: WhatsApp & Stage Action */}
-                          <div className="pt-2 border-t border-zinc-800/80 flex justify-between items-center gap-1">
-                            <button
-                              onClick={() => openWhatsAppLead(lead, 'promo')}
-                              className="text-[10px] font-bold text-emerald-400 hover:text-emerald-300 flex items-center gap-1 bg-emerald-500/10 hover:bg-emerald-500/20 px-2.5 py-1 rounded-lg border border-emerald-500/20 transition"
-                            >
-                              <MessageSquare className="w-3 h-3" /> Promo WA
-                            </button>
-
-                            <div className="flex items-center gap-1">
-                              <button
-                                onClick={() => handleMoveStage(lead, 'Baru')}
-                                title="Kembalikan ke Baru"
-                                className="text-[10px] bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-white p-1.5 rounded-lg transition"
-                              >
-                                <ChevronLeft className="w-3 h-3" />
-                              </button>
-                              <button
-                                onClick={() => setSelectedLeadForDetail(lead)}
-                                title="Lihat Detail & Timeline"
-                                className="text-[10px] bg-zinc-800 hover:bg-zinc-700 text-zinc-300 p-1.5 rounded-lg transition"
-                              >
-                                <Eye className="w-3 h-3" />
-                              </button>
-                              <button
-                                onClick={() => handleMoveStage(lead, 'Trial')}
-                                className="text-[10px] font-bold bg-purple-600 hover:bg-purple-500 text-white px-2.5 py-1 rounded-lg flex items-center gap-1 transition shadow-sm"
-                              >
-                                Ke Trial <ChevronRight className="w-3 h-3" />
-                              </button>
-                            </div>
-                          </div>
-                        </div>
-                      );
-                    })
-                )}
-              </div>
-            </div>
-
-            {/* COLUMN 3: TRIAL / VISIT (JADWAL KUNJUNGAN GYM) */}
-            <div className="bg-zinc-900/90 border border-zinc-800 rounded-3xl p-3.5 flex flex-col min-h-[500px]">
-              <div className="flex justify-between items-center pb-3 mb-3 border-b border-zinc-800">
-                <div>
-                  <span className="text-xs font-bold text-white flex items-center gap-2">
-                    <span className="w-2.5 h-2.5 rounded-full bg-purple-500"></span> Trial / Visit
-                  </span>
-                  <span className="text-[10px] text-zinc-500 block">Jadwal Survey & Latihan</span>
-                </div>
-                <div className="text-right">
-                  <span className="text-[10px] font-bold bg-purple-500/20 text-purple-400 px-2 py-0.5 rounded-full">
-                    {filteredLeads.filter((l) => l.status === 'Trial').length}
-                  </span>
-                  <p className="text-[9px] text-zinc-500 mt-0.5">
-                    {formatRp(
-                      filteredLeads
-                        .filter((l) => l.status === 'Trial')
-                        .reduce((a, b) => a + (b.estimatedValue || 0), 0)
-                    )}
-                  </p>
-                </div>
-              </div>
-
-              <div className="space-y-3 flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-zinc-800">
-                {filteredLeads.filter((l) => l.status === 'Trial').length === 0 ? (
-                  <div className="h-32 flex flex-col items-center justify-center text-center p-4 border border-dashed border-zinc-800 rounded-2xl text-zinc-500 text-xs">
-                    <p>Tidak ada lead di tahap ini</p>
-                  </div>
-                ) : (
-                  filteredLeads
-                    .filter((l) => l.status === 'Trial')
-                    .map((lead) => {
-                      const staff = getStaffById(lead.picId);
-                      const isMyLead = currentUser?.id === lead.picId;
-
-                      return (
-                        <div
-                          key={lead.id}
-                          className={`bg-zinc-950 border p-3.5 rounded-2xl space-y-2.5 transition shadow-sm hover:border-zinc-700 ${
-                            isMyLead ? 'border-orange-500/40 ring-1 ring-orange-500/20' : 'border-zinc-800/90'
-                          }`}
-                        >
-                          {/* Card Top: Priority, Source, Date */}
-                          <div className="flex justify-between items-center text-[10px]">
-                            <div className="flex items-center gap-1.5">
-                              <span
-                                className={`px-1.5 py-0.5 rounded font-bold ${
-                                  lead.priority === 'Tinggi'
-                                    ? 'bg-rose-500/20 text-rose-400 border border-rose-500/30'
-                                    : lead.priority === 'Sedang'
-                                    ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
-                                    : 'bg-zinc-800 text-zinc-400'
-                                }`}
-                              >
-                                {lead.priority === 'Tinggi' ? '🔥 Tinggi' : lead.priority || 'Sedang'}
-                              </span>
-                              <span className="text-zinc-400 bg-zinc-900 px-1.5 py-0.5 rounded border border-zinc-800">
-                                {lead.source}
-                              </span>
-                            </div>
-                            <span className="text-zinc-500">{formatDateIndo(lead.date || '')}</span>
-                          </div>
-
-                          {/* Lead Name & Target Program */}
-                          <div>
-                            <h5 className="text-xs font-bold text-white hover:text-orange-400 transition cursor-pointer" onClick={() => setSelectedLeadForDetail(lead)}>
-                              {lead.name}
-                            </h5>
-                            <p className="text-[11px] text-zinc-400 flex items-center gap-1 mt-0.5">
-                              <Phone className="w-3 h-3 text-zinc-500" /> {lead.phone}
-                            </p>
-                            {lead.interest && (
-                              <p className="text-[10px] text-orange-400/90 font-medium mt-1 bg-orange-500/5 px-2 py-0.5 rounded border border-orange-500/10">
-                                Minat: {lead.interest}
-                              </p>
-                            )}
-                            {lead.estimatedValue ? (
-                              <p className="text-[10px] text-emerald-400 font-bold mt-1">
-                                Est. Nilai: {formatRp(lead.estimatedValue)}
-                              </p>
-                            ) : null}
-                          </div>
-
-                          {/* PIC RESPONSIBILITY BOX (Pencegah Tertukar) */}
-                          <div className="bg-zinc-900/90 border border-zinc-800/80 rounded-xl p-2 space-y-1.5">
-                            <div className="flex items-center justify-between">
-                              <div className="flex items-center gap-2">
-                                <div className="w-6 h-6 rounded-full bg-zinc-800 border border-zinc-700 flex items-center justify-center overflow-hidden shrink-0">
-                                  {staff?.photo ? (
-                                    <img src={staff.photo} alt={staff.name} className="w-full h-full object-cover" />
-                                  ) : (
-                                    <span className="text-[9px] font-bold text-zinc-300">
-                                      {(staff?.name || lead.picName || '?').charAt(0)}
-                                    </span>
-                                  )}
-                                </div>
-                                <div className="leading-tight">
-                                  <div className="flex items-center gap-1">
-                                    <span className="text-[11px] font-bold text-zinc-200">
-                                      {staff?.name || lead.picName || 'Belum Ada PIC'}
-                                    </span>
-                                    {isMyLead && (
-                                      <span className="text-[8px] bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 px-1 py-0.2 rounded font-bold">
-                                        Milik Saya
-                                      </span>
-                                    )}
-                                  </div>
-                                  <span className="text-[9px] text-zinc-500 block">
-                                    {staff?.roleName || lead.picRole || 'Front Desk'} • Shift {staff?.shift || lead.picShift || 'Pagi'}
-                                  </span>
-                                </div>
-                              </div>
-
-                              {lead.picId ? (
-                                <button
-                                  onClick={() => {
-                                    setSelectedLeadForHandover(lead);
-                                    setHandoverTargetPicId(staffUsers.find((s) => s.id !== lead.picId)?.id || '');
-                                  }}
-                                  title="Oper Alih / Handover ke Petugas Lain"
-                                  className="text-[9px] font-bold bg-zinc-800 hover:bg-zinc-700 text-orange-400 px-2 py-1 rounded-lg flex items-center gap-1 border border-zinc-700 transition"
-                                >
-                                  <ArrowRightLeft className="w-2.5 h-2.5" /> Oper
-                                </button>
-                              ) : (
-                                <button
-                                  onClick={() => handleClaimLead(lead)}
-                                  className="text-[9px] font-bold bg-amber-500/20 hover:bg-amber-500/30 text-amber-400 px-2 py-1 rounded-lg flex items-center gap-1 border border-amber-500/30 transition"
-                                >
-                                  <UserCheck className="w-2.5 h-2.5" /> Klaim
-                                </button>
-                              )}
-                            </div>
-                          </div>
-
-                          {/* Card Footer: WhatsApp, Move Stage, & Jadi Member */}
-                          <div className="pt-2 border-t border-zinc-800/80 flex justify-between items-center gap-1">
-                            <button
-                              onClick={() => openWhatsAppLead(lead, 'trial')}
-                              className="text-[10px] font-bold text-emerald-400 hover:text-emerald-300 flex items-center gap-1 bg-emerald-500/10 hover:bg-emerald-500/20 px-2.5 py-1 rounded-lg border border-emerald-500/20 transition"
-                            >
-                              <MessageSquare className="w-3 h-3" /> Konfirmasi
-                            </button>
-
-                            <div className="flex items-center gap-1">
-                              <button
-                                onClick={() => handleMoveStage(lead, 'Follow Up')}
-                                title="Kembalikan ke Follow Up"
-                                className="text-[10px] bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-white p-1.5 rounded-lg transition"
-                              >
-                                <ChevronLeft className="w-3 h-3" />
-                              </button>
-                              <button
-                                onClick={() => setSelectedLeadForDetail(lead)}
-                                title="Lihat Detail & Timeline"
-                                className="text-[10px] bg-zinc-800 hover:bg-zinc-700 text-zinc-300 p-1.5 rounded-lg transition"
-                              >
-                                <Eye className="w-3 h-3" />
-                              </button>
-                              <button
-                                onClick={() => {
-                                  onUpdateLeadStatus(lead.id, 'Member');
-                                  onConvertLeadToMember(lead);
-                                }}
-                                className="text-[10px] font-bold bg-emerald-600 hover:bg-emerald-500 text-white px-2.5 py-1 rounded-lg flex items-center gap-1 transition shadow-sm"
-                              >
-                                Jadi Member <CheckCircle2 className="w-3 h-3" />
-                              </button>
-                            </div>
-                          </div>
-                        </div>
-                      );
-                    })
-                )}
-              </div>
-            </div>
-
-            {/* COLUMN 4: WIN (MEMBER BARU CLOSING) */}
-            <div className="bg-zinc-900/90 border border-zinc-800 rounded-3xl p-3.5 flex flex-col min-h-[500px]">
-              <div className="flex justify-between items-center pb-3 mb-3 border-b border-zinc-800">
-                <div>
-                  <span className="text-xs font-bold text-white flex items-center gap-2">
-                    <span className="w-2.5 h-2.5 rounded-full bg-emerald-500"></span> Win (Member)
-                  </span>
-                  <span className="text-[10px] text-zinc-500 block">Closing & Terdaftar Resmi</span>
-                </div>
-                <div className="text-right">
-                  <span className="text-[10px] font-bold bg-emerald-500/20 text-emerald-400 px-2 py-0.5 rounded-full">
-                    {filteredLeads.filter((l) => l.status === 'Member').length}
-                  </span>
-                  <p className="text-[9px] text-zinc-500 mt-0.5">
-                    {formatRp(
-                      filteredLeads
-                        .filter((l) => l.status === 'Member')
-                        .reduce((a, b) => a + (b.estimatedValue || 0), 0)
-                    )}
-                  </p>
-                </div>
-              </div>
-
-              <div className="space-y-3 flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-zinc-800">
-                {filteredLeads.filter((l) => l.status === 'Member').length === 0 ? (
-                  <div className="h-32 flex flex-col items-center justify-center text-center p-4 border border-dashed border-zinc-800 rounded-2xl text-zinc-500 text-xs">
-                    <p>Belum ada closing di filter ini</p>
-                  </div>
-                ) : (
-                  filteredLeads
-                    .filter((l) => l.status === 'Member')
-                    .map((lead) => {
-                      const staff = getStaffById(lead.picId);
-                      const isMyLead = currentUser?.id === lead.picId;
-
-                      return (
-                        <div
-                          key={lead.id}
-                          className="bg-zinc-950 border border-emerald-500/30 p-3.5 rounded-2xl space-y-2.5 transition shadow-sm hover:border-emerald-500/50"
-                        >
-                          {/* Card Top: Win Tag & Date */}
-                          <div className="flex justify-between items-center text-[10px]">
-                            <span className="text-[9px] font-bold text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded-full flex items-center gap-1">
-                              <Trophy className="w-2.5 h-2.5" /> Closing Win
+                  {/* PIC RESPONSIBILITY BOX (Pencegah Tertukar) */}
+                  <div className="bg-zinc-900/90 border border-zinc-800/80 rounded-xl p-2 space-y-1.5">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <div className="w-6 h-6 rounded-full bg-zinc-800 border border-zinc-700 flex items-center justify-center overflow-hidden shrink-0">
+                          {staff?.photo ? (
+                            <img src={staff.photo} alt={staff.name} className="w-full h-full object-cover" />
+                          ) : (
+                            <span className="text-[9px] font-bold text-zinc-300">
+                              {(staff?.name || lead.picName || '?').charAt(0)}
                             </span>
-                            <span className="text-zinc-500">{formatDateIndo(lead.date || '')}</span>
-                          </div>
-
-                          {/* Member info */}
-                          <div>
-                            <h5 className="text-xs font-bold text-white flex items-center justify-between">
-                              <span>{lead.name}</span>
-                              <span className="text-[10px] text-emerald-400 font-bold">
-                                {formatRp(lead.estimatedValue || 0)}
-                              </span>
-                            </h5>
-                            <p className="text-[11px] text-zinc-400 flex items-center gap-1 mt-0.5">
-                              <Phone className="w-3 h-3 text-zinc-500" /> {lead.phone}
-                            </p>
-                            <p className="text-[10px] text-zinc-400 mt-1">
-                              Paket: <strong className="text-zinc-200">{lead.interest || 'Membership'}</strong>
-                            </p>
-                          </div>
-
-                          {/* Closing PIC Badge */}
-                          <div className="bg-zinc-900/80 border border-zinc-800 rounded-xl p-2 flex items-center justify-between text-[10px]">
-                            <div className="flex items-center gap-2">
-                              <div className="w-5 h-5 rounded-full bg-emerald-500/20 border border-emerald-500/30 flex items-center justify-center shrink-0">
-                                <Check className="w-3 h-3 text-emerald-400" />
-                              </div>
-                              <div className="leading-tight">
-                                <span className="text-[11px] font-bold text-zinc-200 block">
-                                  PIC Closing: {staff?.name || lead.picName || 'Front Desk'}
-                                </span>
-                                <span className="text-[9px] text-zinc-500">
-                                  Shift {staff?.shift || lead.picShift || 'Pagi'}
-                                </span>
-                              </div>
-                            </div>
+                          )}
+                        </div>
+                        <div className="leading-tight">
+                          <div className="flex items-center gap-1">
+                            <span className="text-[11px] font-bold text-zinc-200">
+                              {staff?.name || lead.picName || 'Belum Ada PIC'}
+                            </span>
                             {isMyLead && (
-                              <span className="text-[9px] text-emerald-400 font-bold bg-emerald-500/10 px-1.5 py-0.5 rounded border border-emerald-500/20">
-                                Closing Anda ⭐
+                              <span className="text-[8px] bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 px-1 py-0.2 rounded font-bold">
+                                Milik Saya
                               </span>
                             )}
                           </div>
-
-                          <div className="pt-2 border-t border-zinc-800/80 flex justify-between items-center">
-                            <button
-                              onClick={() => setSelectedLeadForDetail(lead)}
-                              className="text-[10px] text-zinc-400 hover:text-white flex items-center gap-1"
-                            >
-                              <History className="w-3 h-3" /> Riwayat Prospek
-                            </button>
-                            <a
-                              href={`https://wa.me/${lead.phone.replace(/^0/, '62').replace(/\D/g, '')}`}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="text-[10px] font-bold text-emerald-400 hover:text-emerald-300 flex items-center gap-1"
-                            >
-                              <MessageSquare className="w-3 h-3" /> WhatsApp
-                            </a>
-                          </div>
+                          <span className="text-[9px] text-zinc-500 block">
+                            {staff?.roleName || lead.picRole || 'Front Desk'} • Shift {staff?.shift || lead.picShift || 'Pagi'}
+                          </span>
                         </div>
-                      );
-                    })
-                )}
-              </div>
-            </div>
+                      </div>
 
-            {/* COLUMN 5: LOST / BATAL (ARSIP PROSPEK BATAL) */}
-            <div className="bg-zinc-900/90 border border-zinc-800 rounded-3xl p-3.5 flex flex-col min-h-[500px]">
-              <div className="flex justify-between items-center pb-3 mb-3 border-b border-zinc-800">
-                <div>
-                  <span className="text-xs font-bold text-white flex items-center gap-2">
-                    <span className="w-2.5 h-2.5 rounded-full bg-rose-500"></span> Lost / Batal
-                  </span>
-                  <span className="text-[10px] text-zinc-500 block">Tidak Berminat / Gagal</span>
-                </div>
-                <div className="text-right">
-                  <span className="text-[10px] font-bold bg-rose-500/20 text-rose-400 px-2 py-0.5 rounded-full">
-                    {filteredLeads.filter((l) => l.status === 'Lost').length}
-                  </span>
-                </div>
-              </div>
-
-              <div className="space-y-3 flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-zinc-800">
-                {filteredLeads.filter((l) => l.status === 'Lost').length === 0 ? (
-                  <div className="h-32 flex flex-col items-center justify-center text-center p-4 border border-dashed border-zinc-800 rounded-2xl text-zinc-500 text-xs">
-                    <p>Tidak ada lead di daftar Lost</p>
-                  </div>
-                ) : (
-                  filteredLeads
-                    .filter((l) => l.status === 'Lost')
-                    .map((lead) => {
-                      const staff = getStaffById(lead.picId);
-
-                      return (
-                        <div
-                          key={lead.id}
-                          className="bg-zinc-950 border border-zinc-800/80 p-3 rounded-2xl space-y-2 opacity-80 hover:opacity-100 transition"
+                      {/* Handover or Claim Button */}
+                      {lead.picId ? (
+                        <button
+                          onClick={() => {
+                            setSelectedLeadForHandover(lead);
+                            setHandoverTargetPicId(staffUsers.find((s) => s.id !== lead.picId)?.id || '');
+                          }}
+                          title="Oper Alih / Handover ke Petugas Lain"
+                          className="text-[9px] font-bold bg-zinc-800 hover:bg-zinc-700 text-orange-400 px-2 py-1 rounded-lg flex items-center gap-1 border border-zinc-700 transition"
                         >
-                          <div className="flex justify-between items-start">
-                            <div>
-                              <h5 className="text-xs font-bold text-zinc-300">{lead.name}</h5>
-                              <p className="text-[10px] text-zinc-500">{lead.phone}</p>
-                            </div>
-                            <span className="text-[9px] text-rose-400 bg-rose-500/10 border border-rose-500/20 px-1.5 py-0.5 rounded font-bold">
-                              Lost
+                          <ArrowRightLeft className="w-2.5 h-2.5" /> Oper
+                        </button>
+                      ) : (
+                        <button
+                          onClick={() => handleClaimLead(lead)}
+                          className="text-[9px] font-bold bg-amber-500/20 hover:bg-amber-500/30 text-amber-400 px-2 py-1 rounded-lg flex items-center gap-1 border border-amber-500/30 transition"
+                        >
+                          <UserCheck className="w-2.5 h-2.5" /> Klaim
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Expandable Notes & Follow-up History Toggle */}
+                  <div>
+                    {lead.notes && !isCardExpanded && (
+                      <p className="text-[10px] text-zinc-400 italic line-clamp-1 bg-zinc-900/40 px-2 py-1 rounded">
+                        "{lead.notes}"
+                      </p>
+                    )}
+
+                    {isCardExpanded && (
+                      <div className="space-y-2 pt-1 border-t border-zinc-800/80 animate-in fade-in duration-150">
+                        {lead.notes && (
+                          <div className="bg-zinc-900/60 p-2 rounded-xl text-[10px] text-zinc-300 border border-zinc-800 space-y-0.5">
+                            <span className="text-[9px] font-bold text-zinc-500 uppercase">Catatan Prospek:</span>
+                            <p className="whitespace-pre-line leading-relaxed">{lead.notes}</p>
+                          </div>
+                        )}
+
+                        {lead.followUpHistory && lead.followUpHistory.length > 0 && (
+                          <div className="bg-zinc-900/60 p-2 rounded-xl text-[10px] border border-zinc-800 space-y-1">
+                            <span className="text-[9px] font-bold text-zinc-500 uppercase flex items-center gap-1">
+                              <Clock className="w-2.5 h-2.5" /> Log Follow-up Terakhir:
                             </span>
+                            <div className="space-y-0.5">
+                              <div className="flex justify-between items-center text-zinc-400 font-semibold">
+                                <span>{lead.followUpHistory[0].result}</span>
+                                <span className="text-[9px] text-zinc-500">{lead.followUpHistory[0].date}</span>
+                              </div>
+                              <p className="text-zinc-400 italic">{lead.followUpHistory[0].notes}</p>
+                            </div>
                           </div>
+                        )}
 
-                          {lead.lostReason && (
-                            <p className="text-[9px] text-rose-400/90 bg-rose-500/5 border border-rose-500/10 p-1.5 rounded">
-                              Alasan: {lead.lostReason}
-                            </p>
-                          )}
-
-                          <div className="text-[9px] text-zinc-500 flex justify-between items-center pt-1 border-t border-zinc-800">
-                            <span>PIC: {staff?.name || lead.picName || 'Front Desk'}</span>
-                            <button
-                              onClick={() => handleMoveStage(lead, 'Follow Up')}
-                              className="text-orange-400 hover:text-orange-300 font-bold flex items-center gap-0.5"
-                            >
-                              <RotateCcw className="w-2.5 h-2.5" /> Reaktivasi
-                            </button>
-                          </div>
+                        {/* Quick Stage Mover Selector */}
+                        <div className="flex items-center justify-between gap-1 pt-1">
+                          <span className="text-[9px] text-zinc-500 font-bold uppercase">Pindah Tahap:</span>
+                          <select
+                            aria-label="Pindah Tahap"
+                            value={lead.status}
+                            onChange={(e) => handleMoveStage(lead, e.target.value as Lead['status'])}
+                            className="bg-zinc-900 border border-zinc-700 text-zinc-200 text-[10px] rounded-lg px-2 py-1 font-bold outline-none focus:border-orange-500"
+                          >
+                            <option value="Baru">🔵 Lead Baru</option>
+                            <option value="Follow Up">🟠 Follow Up</option>
+                            <option value="Trial">🟣 Trial / Visit</option>
+                            <option value="Member">🟢 Win (Member)</option>
+                            <option value="Lost">🔴 Lost / Batal</option>
+                          </select>
                         </div>
-                      );
-                    })
-                )}
+                      </div>
+                    )}
+
+                    <button
+                      onClick={() => toggleCardExpand(lead.id)}
+                      className="text-[9px] text-zinc-500 hover:text-zinc-300 font-medium flex items-center gap-1 mt-1 transition"
+                    >
+                      {isCardExpanded ? (
+                        <>
+                          <ChevronUp className="w-2.5 h-2.5" /> Sembunyikan Detail
+                        </>
+                      ) : (
+                        <>
+                          <ChevronDown className="w-2.5 h-2.5" /> Lihat Catatan & Riwayat ({lead.followUpHistory?.length || 0})
+                        </>
+                      )}
+                    </button>
+                  </div>
+
+                  {/* Card Footer: WhatsApp & Stage Action */}
+                  <div className="pt-2 border-t border-zinc-800/80 flex justify-between items-center gap-1">
+                    <button
+                      onClick={() => openWhatsAppLead(lead, isOnline ? 'online_welcome' : currentStage === 'Trial' ? 'trial' : currentStage === 'Follow Up' ? 'promo' : 'greeting')}
+                      className="text-[10px] font-bold text-emerald-400 hover:text-emerald-300 flex items-center gap-1 bg-emerald-500/10 hover:bg-emerald-500/20 px-2.5 py-1 rounded-lg border border-emerald-500/20 transition"
+                    >
+                      <MessageSquare className="w-3 h-3" /> {isOnline ? 'Konfirmasi WA' : 'Chat WA'}
+                    </button>
+
+                    <div className="flex items-center gap-1">
+                      <button
+                        onClick={() => setSelectedLeadForDetail(lead)}
+                        title="Lihat Detail & Timeline"
+                        className="text-[10px] bg-zinc-800 hover:bg-zinc-700 text-zinc-300 p-1.5 rounded-lg transition"
+                      >
+                        <Eye className="w-3 h-3" />
+                      </button>
+
+                      {currentStage === 'Baru' && (
+                        <button
+                          onClick={() => handleMoveStage(lead, 'Follow Up')}
+                          className="text-[10px] font-bold bg-orange-500 hover:bg-orange-600 text-white px-2.5 py-1 rounded-lg flex items-center gap-1 transition shadow-sm"
+                        >
+                          Follow Up <ChevronRight className="w-3 h-3" />
+                        </button>
+                      )}
+
+                      {currentStage === 'Follow Up' && (
+                        <>
+                          <button
+                            onClick={() => handleMoveStage(lead, 'Baru')}
+                            title="Kembalikan ke Baru"
+                            className="text-[10px] bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-white p-1.5 rounded-lg transition"
+                          >
+                            <ChevronLeft className="w-3 h-3" />
+                          </button>
+                          <button
+                            onClick={() => handleMoveStage(lead, 'Trial')}
+                            className="text-[10px] font-bold bg-purple-600 hover:bg-purple-500 text-white px-2.5 py-1 rounded-lg flex items-center gap-1 transition shadow-sm"
+                          >
+                            Ke Trial <ChevronRight className="w-3 h-3" />
+                          </button>
+                        </>
+                      )}
+
+                      {currentStage === 'Trial' && (
+                        <>
+                          <button
+                            onClick={() => handleMoveStage(lead, 'Follow Up')}
+                            title="Kembalikan ke Follow Up"
+                            className="text-[10px] bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-white p-1.5 rounded-lg transition"
+                          >
+                            <ChevronLeft className="w-3 h-3" />
+                          </button>
+                          <button
+                            onClick={() => handleMoveStage(lead, 'Member')}
+                            className="text-[10px] font-bold bg-emerald-600 hover:bg-emerald-500 text-white px-2.5 py-1 rounded-lg flex items-center gap-1 transition shadow-sm"
+                          >
+                            Jadi Member <CheckCircle2 className="w-3 h-3" />
+                          </button>
+                        </>
+                      )}
+
+                      {currentStage === 'Member' && (
+                        <span className="text-[9px] font-bold text-emerald-400 bg-emerald-500/10 border border-emerald-500/30 px-2 py-1 rounded-lg flex items-center gap-1">
+                          <Check className="w-2.5 h-2.5" /> Closing Win
+                        </span>
+                      )}
+
+                      {currentStage === 'Lost' && (
+                        <button
+                          onClick={() => handleMoveStage(lead, 'Follow Up')}
+                          className="text-[10px] text-orange-400 hover:text-orange-300 font-bold flex items-center gap-1 bg-orange-500/10 hover:bg-orange-500/20 px-2 py-1 rounded-lg border border-orange-500/20 transition"
+                        >
+                          <RotateCcw className="w-2.5 h-2.5" /> Reaktivasi
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              );
+            };
+
+            // CASE 1: EXPANDED STAGE COCKPIT VIEW
+            if (expandedStage !== null) {
+              const activeStageConfig = STAGE_CONFIGS.find((s) => s.key === expandedStage) || STAGE_CONFIGS[0];
+              const stageLeads = filteredLeads.filter((l) => l.status === expandedStage);
+              const stageOnlineCount = stageLeads.filter((l) => isOnlineLead(l)).length;
+
+              return (
+                <div className="bg-zinc-900/95 border border-zinc-800 rounded-3xl p-5 space-y-5 animate-in fade-in zoom-in-95 duration-200">
+                  {/* Cockpit Top Bar */}
+                  <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 pb-4 border-b border-zinc-800">
+                    <div className="flex items-center gap-3">
+                      <button
+                        onClick={() => setExpandedStage(null)}
+                        className="px-3.5 py-2.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs font-bold transition flex items-center gap-2 shrink-0 border border-zinc-700 shadow-sm"
+                      >
+                        <ChevronLeft className="w-4 h-4" />
+                        <span>Kembali ke 5 Kolom</span>
+                      </button>
+
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span className={`w-3.5 h-3.5 rounded-full ${activeStageConfig.dotColor}`}></span>
+                          <h3 className="text-base font-black text-white flex items-center gap-2">
+                            Fokus Tahap: {activeStageConfig.label}
+                          </h3>
+                          <span className={`text-xs font-bold px-2.5 py-0.5 rounded-full ${activeStageConfig.bgBadge}`}>
+                            {stageLeads.length} Prospek
+                          </span>
+                          {stageOnlineCount > 0 && (
+                            <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 flex items-center gap-1">
+                              <Globe className="w-3 h-3 text-cyan-400" /> {stageOnlineCount} Member Online
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-xs text-zinc-400 mt-0.5">
+                          {activeStageConfig.subtitle} • Monitoring mendalam dan aksi cepat khusus tahap ini
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Stage Switcher Pills */}
+                    <div className="flex items-center gap-1.5 overflow-x-auto pb-1 lg:pb-0 scrollbar-thin">
+                      <span className="text-[10px] text-zinc-500 font-bold uppercase mr-1 hidden sm:inline">Pindah Tahap:</span>
+                      {STAGE_CONFIGS.map((sc) => {
+                        const count = filteredLeads.filter((l) => l.status === sc.key).length;
+                        const isCurrent = expandedStage === sc.key;
+                        return (
+                          <button
+                            key={sc.key}
+                            onClick={() => setExpandedStage(sc.key)}
+                            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 shrink-0 border ${
+                              isCurrent
+                                ? `${sc.accentBg} ${sc.textColor} border-current shadow-md ring-1 ring-current/40`
+                                : 'bg-zinc-950 hover:bg-zinc-800 text-zinc-400 border-zinc-800'
+                            }`}
+                          >
+                            <span className={`w-2 h-2 rounded-full ${sc.dotColor}`}></span>
+                            <span>{sc.label}</span>
+                            <span className="text-[10px] px-1 py-0.2 rounded-full bg-zinc-800/80 font-mono font-bold">
+                              {count}
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {/* Stage KPI Metric Cards */}
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                    <div className="bg-zinc-950 border border-zinc-800 p-3.5 rounded-2xl">
+                      <span className="text-[10px] font-bold text-zinc-500 uppercase">Total Prospek</span>
+                      <h4 className="text-2xl font-black text-white mt-1">{stageLeads.length}</h4>
+                      <p className="text-[10px] text-zinc-400">Dalam tahap {activeStageConfig.label}</p>
+                    </div>
+
+                    <div className="bg-zinc-950 border border-cyan-500/30 p-3.5 rounded-2xl">
+                      <span className="text-[10px] font-bold text-cyan-400 uppercase flex items-center gap-1">
+                        <Globe className="w-3.5 h-3.5 text-cyan-400" /> Member Daftar Online
+                      </span>
+                      <h4 className="text-2xl font-black text-cyan-300 mt-1">{stageOnlineCount}</h4>
+                      <p className="text-[10px] text-zinc-400">
+                        {stageLeads.length > 0 ? Math.round((stageOnlineCount / stageLeads.length) * 100) : 0}% dari tahap ini
+                      </p>
+                    </div>
+
+                    <div className="bg-zinc-950 border border-emerald-500/30 p-3.5 rounded-2xl">
+                      <span className="text-[10px] font-bold text-emerald-400 uppercase">Estimasi Nilai Pipeline</span>
+                      <h4 className="text-2xl font-black text-emerald-400 mt-1">
+                        {formatRp(stageLeads.reduce((a, b) => a + (b.estimatedValue || 0), 0))}
+                      </h4>
+                      <p className="text-[10px] text-zinc-400">Potensi konversi omzet</p>
+                    </div>
+
+                    <div className="bg-zinc-950 border border-amber-500/30 p-3.5 rounded-2xl">
+                      <span className="text-[10px] font-bold text-amber-400 uppercase flex items-center gap-1">
+                        <AlertCircle className="w-3.5 h-3.5 text-amber-400" /> Belum Ada PIC
+                      </span>
+                      <h4 className="text-2xl font-black text-amber-300 mt-1">
+                        {stageLeads.filter((l) => !l.picId).length}
+                      </h4>
+                      <p className="text-[10px] text-zinc-400">Perlu penugasan segera</p>
+                    </div>
+                  </div>
+
+                  {/* Stage Controls: View Mode & Online Filter */}
+                  <div className="flex flex-wrap items-center justify-between gap-3 bg-zinc-950/80 p-3 rounded-2xl border border-zinc-800">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="text-xs text-zinc-400 font-medium">Tampilan:</span>
+                      <div className="bg-zinc-900 border border-zinc-800 p-0.5 rounded-xl flex items-center gap-1">
+                        <button
+                          onClick={() => setExpandedViewMode('grid')}
+                          className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 ${
+                            expandedViewMode === 'grid'
+                              ? 'bg-orange-500 text-white shadow-sm'
+                              : 'text-zinc-400 hover:text-white'
+                          }`}
+                        >
+                          <LayoutGrid className="w-3.5 h-3.5" /> Grid Kartu
+                        </button>
+                        <button
+                          onClick={() => setExpandedViewMode('table')}
+                          className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 ${
+                            expandedViewMode === 'table'
+                              ? 'bg-orange-500 text-white shadow-sm'
+                              : 'text-zinc-400 hover:text-white'
+                          }`}
+                        >
+                          <List className="w-3.5 h-3.5" /> Tabel Monitoring
+                        </button>
+                      </div>
+
+                      <button
+                        onClick={() => setLeadScope(leadScope === 'online' ? 'all' : 'online')}
+                        className={`px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 border ${
+                          leadScope === 'online'
+                            ? 'bg-cyan-500/20 text-cyan-300 border-cyan-500/50 shadow'
+                            : 'bg-zinc-900 hover:bg-zinc-800 text-zinc-400 border-zinc-800'
+                        }`}
+                      >
+                        <Globe className="w-3.5 h-3.5 text-cyan-400" />
+                        <span>Hanya Daftar Online</span>
+                        {stageOnlineCount > 0 && (
+                          <span className="px-1.5 py-0.2 rounded-full text-[9px] bg-cyan-950 text-cyan-300 font-mono font-bold">
+                            {stageOnlineCount}
+                          </span>
+                        )}
+                      </button>
+                    </div>
+
+                    <div className="text-xs text-zinc-400">
+                      Menampilkan <strong className="text-white">{stageLeads.length}</strong> prospek di tahap {activeStageConfig.label}
+                    </div>
+                  </div>
+
+                  {/* Content: Grid or Table */}
+                  {stageLeads.length === 0 ? (
+                    <div className="py-16 text-center border border-dashed border-zinc-800 rounded-3xl text-zinc-500 text-sm space-y-2">
+                      <p className="font-bold text-zinc-400">Tidak ada lead di tahap {activeStageConfig.label}</p>
+                      <p className="text-xs text-zinc-500">
+                        Ubah filter pencarian atau pindahkan lead dari tahapan lain ke sini.
+                      </p>
+                    </div>
+                  ) : expandedViewMode === 'grid' ? (
+                    <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+                      {stageLeads.map((lead) => renderLeadCard(lead, activeStageConfig.key, true))}
+                    </div>
+                  ) : (
+                    /* Expanded Table Monitoring View */
+                    <div className="bg-zinc-950 border border-zinc-800 rounded-2xl overflow-hidden overflow-x-auto shadow-sm">
+                      <table className="w-full text-left text-xs">
+                        <thead className="bg-zinc-900/90 text-zinc-400 border-b border-zinc-800">
+                          <tr>
+                            <th className="p-3.5 font-bold">No</th>
+                            <th className="p-3.5 font-bold">Calon Member & Kontak</th>
+                            <th className="p-3.5 font-bold">Sumber</th>
+                            <th className="p-3.5 font-bold">Minat / Program</th>
+                            <th className="p-3.5 font-bold">Est. Nilai</th>
+                            <th className="p-3.5 font-bold">Petugas PIC</th>
+                            <th className="p-3.5 font-bold">Catatan / Status</th>
+                            <th className="p-3.5 font-bold text-center">Pindah Tahap</th>
+                            <th className="p-3.5 font-bold text-right">Aksi</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-zinc-800/80">
+                          {stageLeads.map((lead, idx) => {
+                            const staff = getStaffById(lead.picId);
+                            const isOnline = isOnlineLead(lead);
+                            const passcode = getOnlinePasscode(lead);
+                            return (
+                              <tr key={lead.id} className="hover:bg-zinc-900/50 transition">
+                                <td className="p-3.5 text-zinc-500 font-mono">{idx + 1}</td>
+                                <td className="p-3.5">
+                                  <div>
+                                    <span
+                                      onClick={() => setSelectedLeadForDetail(lead)}
+                                      className="font-bold text-white hover:text-orange-400 cursor-pointer block"
+                                    >
+                                      {lead.name}
+                                    </span>
+                                    <span className="text-[11px] text-zinc-400 font-mono flex items-center gap-1 mt-0.5">
+                                      {lead.phone}
+                                      <button
+                                        onClick={() => handleCopyPhone(lead.phone, lead.name)}
+                                        className="text-zinc-500 hover:text-zinc-300"
+                                      >
+                                        <Copy className="w-2.5 h-2.5" />
+                                      </button>
+                                    </span>
+                                  </div>
+                                </td>
+                                <td className="p-3.5">
+                                  {isOnline ? (
+                                    <div className="space-y-0.5">
+                                      <span className="px-2 py-0.5 rounded-full text-[9px] font-bold bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 inline-flex items-center gap-1">
+                                        <Globe className="w-2.5 h-2.5" /> Online
+                                      </span>
+                                      {passcode && (
+                                        <span className="block text-[9px] font-mono text-zinc-400">{passcode}</span>
+                                      )}
+                                    </div>
+                                  ) : (
+                                    <span className="text-zinc-400 bg-zinc-900 px-2 py-0.5 rounded border border-zinc-800 text-[10px]">
+                                      {lead.source}
+                                    </span>
+                                  )}
+                                </td>
+                                <td className="p-3.5">
+                                  <span className="text-zinc-200 font-medium">{lead.interest || '-'}</span>
+                                </td>
+                                <td className="p-3.5 font-bold text-emerald-400">
+                                  {formatRp(lead.estimatedValue || 0)}
+                                </td>
+                                <td className="p-3.5">
+                                  <div className="leading-tight">
+                                    <span className="text-zinc-200 font-medium block">
+                                      {staff?.name || lead.picName || 'Belum Ada PIC'}
+                                    </span>
+                                    <span className="text-[10px] text-zinc-500">
+                                      {staff?.roleName || lead.picRole || 'Front Desk'}
+                                    </span>
+                                  </div>
+                                </td>
+                                <td className="p-3.5 max-w-[200px]">
+                                  <p className="text-zinc-400 text-[11px] truncate">
+                                    {lead.notes || (lead.followUpHistory?.[0]?.notes) || '-'}
+                                  </p>
+                                </td>
+                                <td className="p-3.5 text-center">
+                                  <select
+                                    aria-label="Pindah Tahap"
+                                    value={lead.status}
+                                    onChange={(e) => handleMoveStage(lead, e.target.value as Lead['status'])}
+                                    className="bg-zinc-900 border border-zinc-700 text-zinc-200 text-[11px] rounded-lg px-2 py-1 font-bold outline-none cursor-pointer focus:border-orange-500"
+                                  >
+                                    <option value="Baru">🔵 Baru</option>
+                                    <option value="Follow Up">🟠 Follow Up</option>
+                                    <option value="Trial">🟣 Trial</option>
+                                    <option value="Member">🟢 Member (Win)</option>
+                                    <option value="Lost">🔴 Lost</option>
+                                  </select>
+                                </td>
+                                <td className="p-3.5 text-right">
+                                  <div className="flex items-center justify-end gap-1.5">
+                                    <button
+                                      onClick={() => openWhatsAppLead(lead, isOnline ? 'online_welcome' : 'greeting')}
+                                      title="Chat WhatsApp"
+                                      className="p-1.5 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/20 transition"
+                                    >
+                                      <MessageSquare className="w-3.5 h-3.5" />
+                                    </button>
+                                    <button
+                                      onClick={() => setSelectedLeadForDetail(lead)}
+                                      title="Lihat Detail & Timeline"
+                                      className="p-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-300 transition"
+                                    >
+                                      <Eye className="w-3.5 h-3.5" />
+                                    </button>
+                                    {lead.status !== 'Member' && (
+                                      <button
+                                        onClick={() => handleMoveStage(lead, 'Member')}
+                                        title="Jadikan Member Resmi"
+                                        className="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-[10px] transition shadow-sm"
+                                      >
+                                        Jadi Member
+                                      </button>
+                                    )}
+                                  </div>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+              );
+            }
+
+            // CASE 2: UNIFIED MONITORING TABLE VIEW ACROSS ALL STAGES
+            if (pipelineViewMode === 'table') {
+              return (
+                <div className="bg-zinc-900/90 border border-zinc-800 rounded-3xl p-4 space-y-4">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-zinc-800">
+                    <div>
+                      <h4 className="text-sm font-bold text-white flex items-center gap-2">
+                        <List className="w-4 h-4 text-orange-400" />
+                        Tabel Monitoring Terpadu Prospek & Member Online
+                      </h4>
+                      <p className="text-xs text-zinc-400 mt-0.5">
+                        Memantau seluruh calon member dari semua tahapan dalam satu daftar terstruktur
+                      </p>
+                    </div>
+                    <span className="text-xs text-zinc-400">
+                      Total: <strong className="text-white">{filteredLeads.length}</strong> Prospek
+                    </span>
+                  </div>
+
+                  <div className="bg-zinc-950 border border-zinc-800 rounded-2xl overflow-hidden overflow-x-auto shadow-sm">
+                    <table className="w-full text-left text-xs">
+                      <thead className="bg-zinc-900/90 text-zinc-400 border-b border-zinc-800">
+                        <tr>
+                          <th className="p-3.5 font-bold">No</th>
+                          <th className="p-3.5 font-bold">Tahap</th>
+                          <th className="p-3.5 font-bold">Calon Member & Kontak</th>
+                          <th className="p-3.5 font-bold">Sumber</th>
+                          <th className="p-3.5 font-bold">Minat / Program</th>
+                          <th className="p-3.5 font-bold">Est. Nilai</th>
+                          <th className="p-3.5 font-bold">Petugas PIC</th>
+                          <th className="p-3.5 font-bold">Follow Up Terakhir</th>
+                          <th className="p-3.5 font-bold text-center">Pindah Tahap</th>
+                          <th className="p-3.5 font-bold text-right">Aksi</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-zinc-800/80">
+                        {filteredLeads.map((lead, idx) => {
+                          const staff = getStaffById(lead.picId);
+                          const isOnline = isOnlineLead(lead);
+                          const passcode = getOnlinePasscode(lead);
+                          const stageCfg = STAGE_CONFIGS.find((s) => s.key === lead.status) || STAGE_CONFIGS[0];
+
+                          return (
+                            <tr key={lead.id} className="hover:bg-zinc-900/50 transition">
+                              <td className="p-3.5 text-zinc-500 font-mono">{idx + 1}</td>
+                              <td className="p-3.5">
+                                <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${stageCfg.bgBadge} border border-current/30 inline-flex items-center gap-1`}>
+                                  <span className={`w-1.5 h-1.5 rounded-full ${stageCfg.dotColor}`}></span>
+                                  {stageCfg.label}
+                                </span>
+                              </td>
+                              <td className="p-3.5">
+                                <div>
+                                  <span
+                                    onClick={() => setSelectedLeadForDetail(lead)}
+                                    className="font-bold text-white hover:text-orange-400 cursor-pointer block"
+                                  >
+                                    {lead.name}
+                                  </span>
+                                  <span className="text-[11px] text-zinc-400 font-mono flex items-center gap-1 mt-0.5">
+                                    {lead.phone}
+                                    <button
+                                      onClick={() => handleCopyPhone(lead.phone, lead.name)}
+                                      className="text-zinc-500 hover:text-zinc-300"
+                                    >
+                                      <Copy className="w-2.5 h-2.5" />
+                                    </button>
+                                  </span>
+                                </div>
+                              </td>
+                              <td className="p-3.5">
+                                {isOnline ? (
+                                  <div className="space-y-0.5">
+                                    <span className="px-2 py-0.5 rounded-full text-[9px] font-bold bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 inline-flex items-center gap-1">
+                                      <Globe className="w-2.5 h-2.5" /> Online
+                                    </span>
+                                    {passcode && (
+                                      <span className="block text-[9px] font-mono text-zinc-400">{passcode}</span>
+                                    )}
+                                  </div>
+                                ) : (
+                                  <span className="text-zinc-400 bg-zinc-900 px-2 py-0.5 rounded border border-zinc-800 text-[10px]">
+                                    {lead.source}
+                                  </span>
+                                )}
+                              </td>
+                              <td className="p-3.5">
+                                <span className="text-zinc-200 font-medium">{lead.interest || '-'}</span>
+                              </td>
+                              <td className="p-3.5 font-bold text-emerald-400">
+                                {formatRp(lead.estimatedValue || 0)}
+                              </td>
+                              <td className="p-3.5">
+                                <div className="leading-tight">
+                                  <span className="text-zinc-200 font-medium block">
+                                    {staff?.name || lead.picName || 'Belum Ada PIC'}
+                                  </span>
+                                  <span className="text-[10px] text-zinc-500">
+                                    {staff?.roleName || lead.picRole || 'Front Desk'}
+                                  </span>
+                                </div>
+                              </td>
+                              <td className="p-3.5 max-w-[200px]">
+                                <p className="text-zinc-400 text-[11px] truncate">
+                                  {lead.notes || (lead.followUpHistory?.[0]?.notes) || '-'}
+                                </p>
+                              </td>
+                              <td className="p-3.5 text-center">
+                                <select
+                                  aria-label="Pindah Tahap"
+                                  value={lead.status}
+                                  onChange={(e) => handleMoveStage(lead, e.target.value as Lead['status'])}
+                                  className="bg-zinc-900 border border-zinc-700 text-zinc-200 text-[11px] rounded-lg px-2 py-1 font-bold outline-none cursor-pointer focus:border-orange-500"
+                                >
+                                  <option value="Baru">🔵 Baru</option>
+                                  <option value="Follow Up">🟠 Follow Up</option>
+                                  <option value="Trial">🟣 Trial</option>
+                                  <option value="Member">🟢 Member</option>
+                                  <option value="Lost">🔴 Lost</option>
+                                </select>
+                              </td>
+                              <td className="p-3.5 text-right">
+                                <div className="flex items-center justify-end gap-1.5">
+                                  <button
+                                    onClick={() => openWhatsAppLead(lead, isOnline ? 'online_welcome' : 'greeting')}
+                                    title="Chat WhatsApp"
+                                    className="p-1.5 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/20 transition"
+                                  >
+                                    <MessageSquare className="w-3.5 h-3.5" />
+                                  </button>
+                                  <button
+                                    onClick={() => setSelectedLeadForDetail(lead)}
+                                    title="Lihat Detail & Timeline"
+                                    className="p-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-300 transition"
+                                  >
+                                    <Eye className="w-3.5 h-3.5" />
+                                  </button>
+                                  {lead.status !== 'Member' && (
+                                    <button
+                                      onClick={() => handleMoveStage(lead, 'Member')}
+                                      title="Jadikan Member Resmi"
+                                      className="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-[10px] transition shadow-sm"
+                                    >
+                                      Jadi Member
+                                    </button>
+                                  )}
+                                </div>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              );
+            }
+
+            // CASE 3: 5-COLUMN KANBAN BOARD WITH EXPAND & COLLAPSE SUPPORT
+            return (
+              <div className="flex gap-3 overflow-x-auto pb-4 scrollbar-thin scrollbar-thumb-zinc-800 items-start">
+                {STAGE_CONFIGS.map((stage) => {
+                  const isCollapsed = Boolean(collapsedStages[stage.key]);
+                  const stageLeads = filteredLeads.filter((l) => l.status === stage.key);
+                  const stageOnlineCount = stageLeads.filter((l) => isOnlineLead(l)).length;
+                  const stageTotalVal = stageLeads.reduce((a, b) => a + (b.estimatedValue || 0), 0);
+
+                  // Collapsed Column Strip
+                  if (isCollapsed) {
+                    return (
+                      <div
+                        key={stage.key}
+                        onClick={() => toggleColumnCollapse(stage.key)}
+                        className="bg-zinc-900/80 border border-zinc-800 rounded-3xl p-2.5 flex flex-col items-center justify-between min-h-[500px] cursor-pointer hover:border-zinc-700 hover:bg-zinc-900 transition w-14 shrink-0 shadow-sm"
+                        title={`Klik untuk membuka kembali kolom ${stage.label}`}
+                      >
+                        <div className="flex flex-col items-center gap-2 pt-2">
+                          <span className={`w-3 h-3 rounded-full ${stage.dotColor}`}></span>
+                          <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${stage.bgBadge}`}>
+                            {stageLeads.length}
+                          </span>
+                        </div>
+
+                        <div className="[writing-mode:vertical-rl] rotate-180 text-xs font-bold text-zinc-300 tracking-wider flex items-center gap-2 py-4">
+                          <span>{stage.label}</span>
+                        </div>
+
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            toggleColumnCollapse(stage.key);
+                          }}
+                          className="p-1.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-white transition"
+                          title="Expand Kolom"
+                        >
+                          <ChevronRight className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    );
+                  }
+
+                  // Normal Expanded Column
+                  return (
+                    <div
+                      key={stage.key}
+                      className="bg-zinc-900/90 border border-zinc-800 rounded-3xl p-3.5 flex flex-col min-h-[500px] min-w-[280px] sm:min-w-[300px] flex-1 shadow-sm transition"
+                    >
+                      {/* Column Header */}
+                      <div className="flex justify-between items-start pb-3 mb-3 border-b border-zinc-800">
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <span className={`w-2.5 h-2.5 rounded-full ${stage.dotColor}`}></span>
+                            <span className="text-xs font-bold text-white">{stage.label}</span>
+                            {stageOnlineCount > 0 && (
+                              <span
+                                className="px-1.5 py-0.2 rounded-full text-[9px] font-bold bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 flex items-center gap-0.5"
+                                title={`${stageOnlineCount} member daftar online`}
+                              >
+                                <Globe className="w-2.5 h-2.5" /> {stageOnlineCount}
+                              </span>
+                            )}
+                          </div>
+                          <span className="text-[10px] text-zinc-500 block mt-0.5">{stage.subtitle}</span>
+                        </div>
+
+                        <div className="flex items-center gap-1.5">
+                          <div className="text-right mr-1">
+                            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${stage.bgBadge}`}>
+                              {stageLeads.length}
+                            </span>
+                            <p className="text-[9px] text-zinc-500 mt-0.5">
+                              {formatRp(stageTotalVal)}
+                            </p>
+                          </div>
+
+                          {/* Collapse button */}
+                          <button
+                            onClick={() => toggleColumnCollapse(stage.key)}
+                            title="Perkecil / Minimize Kolom"
+                            className="p-1 rounded-lg bg-zinc-800/80 hover:bg-zinc-700 text-zinc-400 hover:text-white transition"
+                          >
+                            <ChevronLeft className="w-3 h-3" />
+                          </button>
+
+                          {/* Expand Tahap button (Fokus Mode) */}
+                          <button
+                            onClick={() => setExpandedStage(stage.key)}
+                            title={`Expand Tahap ${stage.label} (Fokus Mode & Layar Lebar)`}
+                            className={`p-1.5 rounded-lg border transition flex items-center gap-1 text-[10px] font-bold ${stage.accentBg} ${stage.textColor} border-current/30 hover:bg-white/10`}
+                          >
+                            <Maximize2 className="w-3 h-3" />
+                            <span className="hidden xl:inline text-[9px]">Expand</span>
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Cards Container */}
+                      <div className="space-y-3 flex-1 overflow-y-auto max-h-[650px] scrollbar-thin scrollbar-thumb-zinc-800 pr-1">
+                        {stageLeads.length === 0 ? (
+                          <div className="h-32 flex flex-col items-center justify-center text-center p-4 border border-dashed border-zinc-800 rounded-2xl text-zinc-500 text-xs">
+                            <p>Tidak ada lead di tahap ini</p>
+                          </div>
+                        ) : (
+                          stageLeads.map((lead) => renderLeadCard(lead, stage.key))
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
-            </div>
-          </div>
+            );
+          })()}
         </div>
       )}
 
@@ -2737,6 +3215,7 @@ export const CRMView: React.FC<CRMViewProps> = ({
                     onChange={(e) => setLeadSource(e.target.value)}
                     className="w-full bg-zinc-950 border border-zinc-700 rounded-xl px-3 py-2.5 text-xs text-white outline-none focus:border-orange-500"
                   >
+                    <option value="Daftar Online (Website)">🌐 Daftar Online (Website / Portal)</option>
                     <option value="Instagram">Instagram</option>
                     <option value="Walk-in">Walk-in Langsung</option>
                     <option value="Referral">Rekomendasi Teman</option>

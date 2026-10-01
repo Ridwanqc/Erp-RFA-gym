@@ -99,18 +99,40 @@ export const SearchableMemberSelect: React.FC<SearchableMemberSelectProps> = ({
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Escape') {
       setIsOpen(false);
+    } else if (e.key === 'Enter') {
+      if (filteredMembers.length === 1) {
+        e.preventDefault();
+        handleSelect(filteredMembers[0]);
+      }
     }
   };
 
   // Filtered members list
   const filteredMembers = useMemo(() => {
-    const query = searchQuery.trim().toLowerCase();
+    const rawQuery = searchQuery.trim();
+    const query = rawQuery.toLowerCase();
+    const cleanQuery = rawQuery.replace(/^\*+|\*+$/g, '').trim().toLowerCase();
+    const withoutPrefix = cleanQuery.replace(/^at\s+/i, '').trim();
+
     return members.filter((m) => {
-      // 1. Text search match (Name, ID, Phone)
+      // 1. Text search match (Name, ID, Phone, Barcode, Passcode)
       if (query) {
-        const matchName = m.name.toLowerCase().includes(query);
-        const matchId = m.id.toLowerCase().includes(query);
-        const matchPhone = (m.phone || '').toLowerCase().includes(query);
+        const mName = m.name.toLowerCase();
+        const mId = m.id.toLowerCase();
+        const mPhone = (m.phone || '').toLowerCase();
+
+        const matchName =
+          mName.includes(query) ||
+          mName.includes(cleanQuery) ||
+          mName.includes(withoutPrefix);
+        const matchId =
+          mId.includes(query) ||
+          query.includes(mId) ||
+          cleanQuery.includes(mId);
+        const matchPhone =
+          mPhone.includes(query) ||
+          (query.length >= 6 && mPhone.replace(/\D/g, '').includes(query.replace(/\D/g, '')));
+
         if (!matchName && !matchId && !matchPhone) return false;
       }
 

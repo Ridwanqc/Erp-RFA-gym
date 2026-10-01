@@ -1,0 +1,96 @@
+import { Router, Request, Response } from 'express';
+import { z } from 'zod';
+import { db } from '../database/db';
+import { authMiddleware } from '../middleware/auth';
+import { requireRoles, requireMemberOwnershipOrStaff } from '../middleware/rbac';
+import { validateRequest } from '../middleware/validator';
+import { AuditService } from '../services/auditService';
+
+export const memberRouter = Router();
+
+// Whitelisted profile update schema (Mass Assignment Protection)
+const updateMemberSchema = z.object({
+  phone: z.string().min(8).max(20).optional(),
+  email: z.string().email().optional(),
+  name: z.string().min(2).max(100).optional()
+}).strict(); // Disallows unknown fields like 'role', 'status', 'id'
+
+// 1. GET /api/members
+memberRouter.get(
+  '/',
+  authMiddleware,
+  requireRoles(['ADMIN', 'LEADER', 'KARYAWAN', 'KASIR', 'TRAINER']),
+  (req: Request, res: Response) => {
+    let members = Array.from(db.members.values());
+
+    // If Trainer, only show assigned members
+    if (req.user?.role === 'TRAINER') {
+      members = members.filter((m) => m.assignedTrainerId === req.user?.userId);
+    }
+
+    return res.status(200).json({
+      success: true,
+      count: members.length,
+      data: members
+    });
+  }
+);
+
+// 2. GET /api/members/:id (Protected with Object-Level Authorization / Anti-IDOR)
+memberRouter.get(
+  '/:id',
+  authMiddleware,
+  requireMemberOwnershipOrStaff,
+  (req: Request, res: Response) => {
+    const member = db.members.get(req.params.id);
+    if (!member) {
+      return res.status(404).json({
+        success: false,
+        message: 'Member tidak ditemukan.'
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      data: member
+    });
+  }
+);
+
+// 3. PUT /api/members/:id (Mass Assignment Protected)
+memberRouter.put(
+  '/:id',
+  authMiddleware,
+  requireMemberOwnershipOrStaff,
+  validateRequest({ body: updateMemberSchema }),
+  (req: Request, res: Response) => {
+    const member = db.members.get(req.params.id);
+    if (!member) {
+      return res.status(404).json({ success: false, message: 'Member tidak ditemukan.' });
+    }
+
+    const { name, phone, email } = req.body;
+    const oldValue = { name: member.name, phone: member.phone, email: member.email };
+
+    if (name) member.name = name;
+    if (phone) member.phone = phone;
+    if (email) member.email = email;
+    member.updatedAt = new Date();
+
+    AuditService.log({
+      userId: req.user?.userId,
+      action: 'UPDATE_MEMBER_PROFILE',
+      module: 'MEMBER',
+      recordId: member.id,
+      oldValue,
+      newValue: { name: member.name, phone: member.phone, email: member.email },
+      ipAddress: req.ip
+    });
+
+    return res.status(200).json({
+      success: true,
+      message: 'Profil member berhasil diperbarui.',
+      data: member
+    });
+  }
+);
