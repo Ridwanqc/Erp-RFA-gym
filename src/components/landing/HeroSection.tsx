@@ -12,6 +12,7 @@ import {
   Play
 } from 'lucide-react';
 import { SafeImage } from '../common/SafeImage';
+import { useSettings } from '../../context/SettingsContext';
 
 interface HeroSectionProps {
   onStartBooking: () => void;
@@ -27,6 +28,10 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
   memberCount,
   activeInGymCount = 18
 }) => {
+  const { settings } = useSettings();
+  const gymName = settings?.profile?.gymName || 'RFA GYM';
+  const logoUrl = settings?.profile?.logoUrl || '';
+
   return (
     <section id="hero" className="relative pt-28 pb-16 lg:pt-36 lg:pb-24 overflow-hidden">
       {/* Background Lighting Elements */}
@@ -40,19 +45,37 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 lg:gap-8 items-center">
           {/* Left Text Content */}
           <div className="lg:col-span-7 space-y-6 text-center lg:text-left">
-            {/* Top Live Occupancy Badge */}
-            <div className="inline-flex items-center gap-2.5 px-3.5 py-1.5 rounded-full bg-zinc-900/90 border border-emerald-500/40 text-xs font-medium text-emerald-300 shadow-inner backdrop-blur-md">
-              <span className="relative flex h-2 w-2">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
-                <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
-              </span>
-              <span>
-                Live di Gym:{' '}
-                <strong className="text-white font-mono tabular-nums font-bold">
-                  {activeInGymCount} Member
-                </strong>{' '}
-                Sedang Latihan • Suasana Nyaman & Kondusif
-              </span>
+            {/* Top Live Occupancy Badge & Optional Company Logo Badge */}
+            <div className="flex flex-wrap items-center justify-center lg:justify-start gap-2.5">
+              {logoUrl && (
+                <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-zinc-900/90 border border-orange-500/30 text-xs font-semibold text-zinc-200 shadow-md backdrop-blur-md">
+                  <div className="w-5 h-5 rounded-md overflow-hidden bg-black/50 p-0.5 flex items-center justify-center">
+                    <img
+                      src={logoUrl}
+                      alt={gymName}
+                      className="w-full h-full object-contain"
+                      onError={(e) => {
+                        e.currentTarget.style.display = 'none';
+                      }}
+                    />
+                  </div>
+                  <span className="font-bold text-orange-400">{gymName}</span>
+                </div>
+              )}
+
+              <div className="inline-flex items-center gap-2.5 px-3.5 py-1.5 rounded-full bg-zinc-900/90 border border-emerald-500/40 text-xs font-medium text-emerald-300 shadow-inner backdrop-blur-md">
+                <span className="relative flex h-2 w-2">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
+                </span>
+                <span>
+                  Live di Gym:{' '}
+                  <strong className="text-white font-mono tabular-nums font-bold">
+                    {activeInGymCount} Member
+                  </strong>{' '}
+                  Sedang Latihan • Nyaman & Bersih
+                </span>
+              </div>
             </div>
 
             {/* Headline */}
@@ -61,7 +84,7 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
               <span className="bg-gradient-to-r from-orange-400 via-amber-300 to-orange-500 bg-clip-text text-transparent">
                 TANPA BATAS
               </span>{' '}
-              DI RFA GYM
+              DI {gymName.toUpperCase()}
             </h1>
 
             {/* Subheadline */}

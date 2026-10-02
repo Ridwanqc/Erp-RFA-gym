@@ -1218,6 +1218,7 @@ export interface GymBusinessProfile {
   openHoursWeekday: string;
   openHoursWeekend: string;
   googleMapsUrl?: string;
+  logoUrl?: string;
 }
 
 export interface BankAccountConfig {

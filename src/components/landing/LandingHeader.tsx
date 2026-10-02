@@ -16,6 +16,7 @@ import {
   Heart
 } from 'lucide-react';
 import { Member } from '../../types';
+import { useSettings } from '../../context/SettingsContext';
 
 interface LandingHeaderProps {
   activeSection: string;
@@ -42,6 +43,10 @@ export const LandingHeader: React.FC<LandingHeaderProps> = ({
   onReturnToERP,
   activeInGymCount = 0
 }) => {
+  const { settings } = useSettings();
+  const gymName = settings?.profile?.gymName || 'RFA GYM';
+  const logoUrl = settings?.profile?.logoUrl || '';
+
   const [isScrolled, setIsScrolled] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [moreDropdownOpen, setMoreDropdownOpen] = useState(false);
@@ -118,14 +123,35 @@ export const LandingHeader: React.FC<LandingHeaderProps> = ({
             <div
               onClick={() => handleNavClick('hero')}
               className="flex items-center gap-2.5 cursor-pointer group select-none shrink-0"
-              title="RFA GYM PLATFORM - Beranda"
+              title={`${gymName} PLATFORM - Beranda`}
             >
-              <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-orange-600 to-amber-500 flex items-center justify-center shadow-md shadow-orange-500/20 group-hover:scale-105 transition-transform duration-200">
-                <Flame className="w-5 h-5 text-white" />
-              </div>
+              {logoUrl ? (
+                <div className="w-9 h-9 rounded-xl bg-zinc-900 border border-zinc-700/80 p-0.5 flex items-center justify-center shadow-md shadow-orange-500/10 group-hover:scale-105 transition-transform duration-200 overflow-hidden">
+                  <img
+                    src={logoUrl}
+                    alt={gymName}
+                    className="w-full h-full object-contain"
+                    onError={(e) => {
+                      e.currentTarget.style.display = 'none';
+                    }}
+                  />
+                </div>
+              ) : (
+                <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-orange-600 to-amber-500 flex items-center justify-center shadow-md shadow-orange-500/20 group-hover:scale-105 transition-transform duration-200">
+                  <Flame className="w-5 h-5 text-white" />
+                </div>
+              )}
               <div className="flex items-center gap-1.5">
                 <span className="text-base sm:text-lg font-black tracking-wider text-white whitespace-nowrap">
-                  RFA <span className="text-orange-500">GYM</span>
+                  {gymName.includes(' ') ? (
+                    <>
+                      {gymName.split(' ')[0]} <span className="text-orange-500">{gymName.split(' ').slice(1).join(' ')}</span>
+                    </>
+                  ) : (
+                    <>
+                      {gymName} <span className="text-orange-500">GYM</span>
+                    </>
+                  )}
                 </span>
                 <span className="hidden sm:inline-block text-[9px] font-extrabold tracking-widest px-1.5 py-0.5 rounded bg-orange-500/20 text-orange-400 border border-orange-500/30">
                   PLATFORM

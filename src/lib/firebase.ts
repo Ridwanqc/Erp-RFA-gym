@@ -68,8 +68,11 @@ export interface FirestoreErrorInfo {
 }
 
 export function handleFirestoreError(error: unknown, operationType: OperationType, path: string | null) {
+  const errMessage = error instanceof Error ? error.message : String(error);
+  const errCode = (error as any)?.code;
+
   const errInfo: FirestoreErrorInfo = {
-    error: error instanceof Error ? error.message : String(error),
+    error: errMessage,
     authInfo: {
       userId: auth.currentUser?.uid,
       email: auth.currentUser?.email,
@@ -84,6 +87,18 @@ export function handleFirestoreError(error: unknown, operationType: OperationTyp
     operationType,
     path
   };
+
+  // If backend is temporarily unreachable / offline, log a gentle warning instead of throwing an unhandled fatal error
+  if (
+    errCode === 'unavailable' ||
+    errMessage.includes('unavailable') ||
+    errMessage.includes('the client is offline') ||
+    errMessage.includes('Could not reach Cloud Firestore backend')
+  ) {
+    console.warn(`[Firestore Offline Cache Active] ${operationType} on ${path}: backend temporarily offline, local cache is handling data.`);
+    return;
+  }
+
   console.error('Firestore Error: ', JSON.stringify(errInfo));
   throw new Error(JSON.stringify(errInfo));
 }
@@ -93,9 +108,11 @@ export async function testConnection(): Promise<boolean> {
   try {
     await getDocFromServer(doc(db, 'test', 'connection'));
     return true;
-  } catch (error) {
-    if (error instanceof Error && error.message.includes('the client is offline')) {
-      console.warn("Please check your Firebase configuration or network connectivity.");
+  } catch (error: any) {
+    const msg = error instanceof Error ? error.message : String(error);
+    const code = error?.code || '';
+    if (code === 'unavailable' || msg.includes('the client is offline') || msg.includes('unavailable')) {
+      console.warn("Firestore operates in offline/local cache mode:", code || msg);
       return false;
     }
     // Expected to return permission denied or not found for test doc, which confirms connectivity

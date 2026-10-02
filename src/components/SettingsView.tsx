@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import {
   Printer,
   ShieldCheck,
@@ -46,7 +46,10 @@ import {
   CircleDot,
   Layers,
   Copy,
-  Receipt
+  Receipt,
+  Image as ImageIcon,
+  Flame,
+  Crown
 } from 'lucide-react';
 import {
   User,
@@ -171,6 +174,67 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   );
 
   const isSuperAdmin = currentUser?.role === 'admin';
+
+  // Logo Settings Form State & File Upload
+  const [logoInputUrl, setLogoInputUrl] = useState(settings.profile.logoUrl || '');
+  const [logoPreviewTab, setLogoPreviewTab] = useState<'card' | 'landing' | 'receipt'>('card');
+  const [isUploadingLogo, setIsUploadingLogo] = useState(false);
+  const logoFileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleLogoFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!file.type.startsWith('image/')) {
+      if (showToast) showToast('Format File Tidak Sesuai', 'Harap unggah file gambar (PNG, JPG, SVG, atau WebP).', 'error');
+      return;
+    }
+
+    if (file.size > 5 * 1024 * 1024) {
+      if (showToast) showToast('Ukuran File Melebihi Batas', 'Maksimal ukuran file logo adalah 5MB.', 'error');
+      return;
+    }
+
+    setIsUploadingLogo(true);
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const dataUrl = event.target?.result as string;
+      if (dataUrl) {
+        updateProfileConfig({ logoUrl: dataUrl });
+        setLogoInputUrl(dataUrl);
+        notifySuccess('Logo Berhasil Diterapkan', 'Logo perusahaan berhasil diunggah dan disimpan ke sistem.');
+      }
+      setIsUploadingLogo(false);
+    };
+    reader.onerror = () => {
+      setIsUploadingLogo(false);
+      if (showToast) showToast('Gagal Membaca File', 'Terjadi kesalahan teknis saat membaca file logo.', 'error');
+    };
+    reader.readAsDataURL(file);
+    e.target.value = '';
+  };
+
+  const handleApplyLogoUrl = () => {
+    const trimmed = logoInputUrl.trim();
+    updateProfileConfig({ logoUrl: trimmed });
+    if (trimmed) {
+      notifySuccess('Logo Diperbarui', 'Tautan logo perusahaan berhasil disimpan dan disinkronkan.');
+    } else {
+      notifySuccess('Logo Dikosongkan', 'Logo direset ke ikon & brand standar.');
+    }
+  };
+
+  const handleRemoveLogo = () => {
+    updateProfileConfig({ logoUrl: '' });
+    setLogoInputUrl('');
+    notifySuccess('Logo Dihapus', 'Sistem kembali menggunakan logo bawaan resmi RFA GYM.');
+  };
+
+  const handleApplyPresetLogo = (presetUrl: string, name: string) => {
+    updateProfileConfig({ logoUrl: presetUrl });
+    setLogoInputUrl(presetUrl);
+    notifySuccess('Preset Logo Diterapkan', `Logo berhasil diubah menjadi preset ${name}.`);
+  };
 
   // Handle Save Feedback
   const notifySuccess = (title: string, msg: string) => {
@@ -2263,6 +2327,359 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                 <RefreshCw className="w-3.5 h-3.5" />
                 <span>Terapkan Profil RFA GYM</span>
               </button>
+            </div>
+          </div>
+
+          {/* DEDICATED COMPANY LOGO MANAGEMENT SECTION (MEMBER PASS & LANDING PAGE) */}
+          <div className="bg-zinc-900 border border-zinc-800 rounded-3xl p-5 sm:p-7 space-y-6 shadow-xl">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-4 border-b border-zinc-800 gap-3">
+              <div>
+                <div className="flex items-center gap-2">
+                  <div className="p-2 rounded-xl bg-orange-500/10 text-orange-400 border border-orange-500/20">
+                    <ImageIcon className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-bold uppercase tracking-wider text-white flex items-center gap-2">
+                      Logo Perusahaan & Kartu Member
+                    </h3>
+                    <p className="text-xs text-zinc-400 mt-0.5">
+                      Atur logo brand gym untuk ditampilkan otomatis di Kartu Member Digital (VIP Pass), Landing Page, dan Struk POS.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2 self-start sm:self-auto">
+                <span className={`px-2.5 py-1 rounded-full text-[10px] font-black tracking-wider uppercase flex items-center gap-1.5 ${
+                  settings.profile.logoUrl
+                    ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30'
+                    : 'bg-zinc-800 text-zinc-400 border border-zinc-700'
+                }`}>
+                  <span className={`w-2 h-2 rounded-full ${settings.profile.logoUrl ? 'bg-emerald-500 animate-pulse' : 'bg-zinc-500'}`} />
+                  {settings.profile.logoUrl ? 'Logo Kustom Aktif' : 'Logo Default RFA'}
+                </span>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+              {/* Left Column: Upload Controls & Inputs */}
+              <div className="lg:col-span-6 space-y-4">
+                {/* File Upload Box */}
+                <div className="p-4 rounded-2xl bg-zinc-950/80 border border-zinc-800 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-bold text-zinc-200 flex items-center gap-1.5">
+                      <Upload className="w-3.5 h-3.5 text-orange-400" />
+                      Unggah File Logo (PNG, JPG, SVG, WebP)
+                    </label>
+                    <span className="text-[10px] text-zinc-500">Maks. 5 MB</span>
+                  </div>
+
+                  <input
+                    ref={logoFileInputRef}
+                    type="file"
+                    accept="image/*"
+                    onChange={handleLogoFileUpload}
+                    className="hidden"
+                  />
+
+                  <div className="flex flex-col sm:flex-row items-center gap-3">
+                    <button
+                      type="button"
+                      disabled={isUploadingLogo}
+                      onClick={() => logoFileInputRef.current?.click()}
+                      className="w-full sm:w-auto px-4 py-2.5 rounded-xl bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white font-bold text-xs flex items-center justify-center gap-2 transition shadow-md shadow-orange-500/20 cursor-pointer disabled:opacity-50"
+                    >
+                      {isUploadingLogo ? (
+                        <>
+                          <RefreshCw className="w-4 h-4 animate-spin" />
+                          <span>Memproses...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Upload className="w-4 h-4" />
+                          <span>Pilih File dari Komputer / HP</span>
+                        </>
+                      )}
+                    </button>
+
+                    {settings.profile.logoUrl && (
+                      <button
+                        type="button"
+                        onClick={handleRemoveLogo}
+                        className="w-full sm:w-auto px-3.5 py-2.5 rounded-xl bg-red-950/40 hover:bg-red-900/60 text-red-400 border border-red-800/40 font-bold text-xs flex items-center justify-center gap-1.5 transition cursor-pointer"
+                        title="Hapus logo dan gunakan logo default RFA"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                        <span>Hapus Logo</span>
+                      </button>
+                    )}
+                  </div>
+
+                  <p className="text-[11px] text-zinc-400 leading-relaxed">
+                    💡 <strong>Tips:</strong> Gunakan logo dengan latar belakang transparan (format .PNG atau .SVG) agar terlihat mewah dan pas di kartu gelap maupun terang.
+                  </p>
+                </div>
+
+                {/* Direct Image URL Input */}
+                <div className="p-4 rounded-2xl bg-zinc-950/80 border border-zinc-800 space-y-2.5">
+                  <label className="text-xs font-bold text-zinc-200 flex items-center gap-1.5">
+                    <ExternalLink className="w-3.5 h-3.5 text-orange-400" />
+                    Atau Masukkan Tautan / URL Gambar Logo
+                  </label>
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      placeholder="https://example.com/logo-gym.png"
+                      value={logoInputUrl}
+                      onChange={(e) => setLogoInputUrl(e.target.value)}
+                      className="flex-1 bg-zinc-900 border border-zinc-700 rounded-xl px-3 py-2 text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-orange-500"
+                    />
+                    <button
+                      type="button"
+                      onClick={handleApplyLogoUrl}
+                      className="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-orange-400 font-bold text-xs rounded-xl border border-orange-500/30 transition flex items-center gap-1.5 cursor-pointer shrink-0"
+                    >
+                      <Check className="w-3.5 h-3.5" />
+                      <span>Simpan</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Preset Fast Picks */}
+                <div className="p-3.5 rounded-2xl bg-zinc-950/60 border border-zinc-800/80 space-y-2">
+                  <span className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider block">
+                    Pilihan Preset Logo Resmi RFA:
+                  </span>
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      onClick={() => handleApplyPresetLogo('https://images.unsplash.com/photo-1517838277536-f5f99be501cd?w=200&auto=format&fit=crop&q=80', 'RFA Titan Strength')}
+                      className="px-2.5 py-1.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 text-[11px] font-medium text-zinc-200 flex items-center gap-1.5 transition cursor-pointer"
+                    >
+                      <Flame className="w-3.5 h-3.5 text-orange-400" />
+                      <span>Titan Flame</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleApplyPresetLogo('https://images.unsplash.com/photo-1540497077202-7c8a3999166f?w=200&auto=format&fit=crop&q=80', '24K Gold VIP')}
+                      className="px-2.5 py-1.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 text-[11px] font-medium text-zinc-200 flex items-center gap-1.5 transition cursor-pointer"
+                    >
+                      <Crown className="w-3.5 h-3.5 text-yellow-400" />
+                      <span>Royal Gold</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleApplyPresetLogo('https://images.unsplash.com/photo-1534438327276-14e5300c3a48?w=200&auto=format&fit=crop&q=80', 'Cyber Arena')}
+                      className="px-2.5 py-1.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 text-[11px] font-medium text-zinc-200 flex items-center gap-1.5 transition cursor-pointer"
+                    >
+                      <Sparkles className="w-3.5 h-3.5 text-cyan-400" />
+                      <span>Cyber Arena</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleRemoveLogo}
+                      className="px-2.5 py-1.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 text-[11px] font-medium text-zinc-400 flex items-center gap-1.5 transition cursor-pointer"
+                    >
+                      <RotateCcw className="w-3 h-3" />
+                      <span>Default Asli</span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Right Column: Multi-Format Live Preview */}
+              <div className="lg:col-span-6 bg-zinc-950/90 border border-zinc-800/90 rounded-2xl p-4 space-y-3">
+                <div className="flex items-center justify-between border-b border-zinc-800 pb-2.5">
+                  <div className="flex items-center gap-1.5">
+                    <Eye className="w-3.5 h-3.5 text-orange-400" />
+                    <span className="text-xs font-bold text-white uppercase tracking-wider">
+                      Pratinjau Tampilan Logo
+                    </span>
+                  </div>
+
+                  {/* Subtabs for Preview */}
+                  <div className="flex items-center bg-zinc-900 p-0.5 rounded-xl border border-zinc-800">
+                    <button
+                      type="button"
+                      onClick={() => setLogoPreviewTab('card')}
+                      className={`px-2.5 py-1 rounded-lg text-[10px] font-bold transition ${
+                        logoPreviewTab === 'card'
+                          ? 'bg-orange-500 text-white shadow-sm'
+                          : 'text-zinc-400 hover:text-white'
+                      }`}
+                    >
+                      Kartu Member
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setLogoPreviewTab('landing')}
+                      className={`px-2.5 py-1 rounded-lg text-[10px] font-bold transition ${
+                        logoPreviewTab === 'landing'
+                          ? 'bg-orange-500 text-white shadow-sm'
+                          : 'text-zinc-400 hover:text-white'
+                      }`}
+                    >
+                      Landing Page
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setLogoPreviewTab('receipt')}
+                      className={`px-2.5 py-1 rounded-lg text-[10px] font-bold transition ${
+                        logoPreviewTab === 'receipt'
+                          ? 'bg-orange-500 text-white shadow-sm'
+                          : 'text-zinc-400 hover:text-white'
+                      }`}
+                    >
+                      Struk Kasir
+                    </button>
+                  </div>
+                </div>
+
+                {/* PREVIEW 1: KARTU MEMBER DIGITAL PASS */}
+                {logoPreviewTab === 'card' && (
+                  <div className="flex flex-col items-center justify-center p-3 bg-zinc-900/60 rounded-xl border border-zinc-800/80">
+                    <div className="w-[280px] h-[190px] rounded-2xl bg-gradient-to-br from-zinc-900 via-zinc-950 to-zinc-900 border-2 border-orange-500/40 p-3.5 shadow-2xl relative overflow-hidden flex flex-col justify-between">
+                      {/* Ambient metallic glow */}
+                      <div className="absolute -top-10 -right-10 w-28 h-28 bg-orange-500/20 rounded-full blur-xl pointer-events-none" />
+                      
+                      {/* Card Header with Logo */}
+                      <div className="flex items-center justify-between z-10">
+                        <div className="flex items-center gap-2">
+                          <div className="w-10 h-10 rounded-xl bg-zinc-900/90 border border-zinc-700/80 p-1 flex items-center justify-center shadow-md overflow-hidden">
+                            {settings.profile.logoUrl ? (
+                              <img
+                                src={settings.profile.logoUrl}
+                                alt="Logo Gym"
+                                className="w-full h-full object-contain"
+                              />
+                            ) : (
+                              <div className="w-full h-full bg-gradient-to-tr from-orange-600 to-amber-500 rounded-lg flex items-center justify-center text-white font-black text-sm">
+                                R
+                              </div>
+                            )}
+                          </div>
+                          <div>
+                            <div className="text-xs font-black tracking-wider text-white">
+                              {settings.profile.gymName || 'RFA GYM'}
+                            </div>
+                            <div className="text-[9px] font-bold tracking-widest text-orange-400 uppercase">
+                              VIP PASS • CENTRAL
+                            </div>
+                          </div>
+                        </div>
+
+                        <span className="px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider bg-orange-500/20 text-orange-400 border border-orange-500/30">
+                          ACTIVE
+                        </span>
+                      </div>
+
+                      {/* Mock Member Data */}
+                      <div className="z-10 space-y-0.5">
+                        <div className="text-[10px] text-zinc-400 uppercase font-medium">Nama Member</div>
+                        <div className="text-sm font-black text-white tracking-wide">ALEXANDER PRATAMA</div>
+                        <div className="text-[9px] font-mono text-zinc-400">ID: RFA-M001 • PASS: #88219</div>
+                      </div>
+
+                      {/* Mock Barcode Line */}
+                      <div className="pt-1 border-t border-zinc-800 flex items-center justify-between z-10">
+                        <div className="flex items-center gap-0.5 h-4 opacity-80">
+                          <div className="w-1 h-full bg-white" />
+                          <div className="w-0.5 h-full bg-white" />
+                          <div className="w-1.5 h-full bg-white" />
+                          <div className="w-0.5 h-full bg-white" />
+                          <div className="w-2 h-full bg-white" />
+                          <div className="w-1 h-full bg-white" />
+                          <div className="w-0.5 h-full bg-white" />
+                        </div>
+                        <span className="text-[9px] font-mono text-orange-400">Presensi & Akses Pintu</span>
+                      </div>
+                    </div>
+                    <span className="text-[10px] text-zinc-500 mt-2">
+                      Logo otomatis tertampil di header kartu pass member fisik & digital.
+                    </span>
+                  </div>
+                )}
+
+                {/* PREVIEW 2: LANDING PAGE HEADER */}
+                {logoPreviewTab === 'landing' && (
+                  <div className="space-y-3 p-3 bg-zinc-900/60 rounded-xl border border-zinc-800/80">
+                    <div className="w-full bg-zinc-950/95 border border-zinc-800 rounded-xl p-3 flex items-center justify-between shadow-lg">
+                      <div className="flex items-center gap-2.5">
+                        <div className="w-8 h-8 rounded-lg bg-zinc-900 border border-zinc-700 p-0.5 flex items-center justify-center overflow-hidden">
+                          {settings.profile.logoUrl ? (
+                            <img
+                              src={settings.profile.logoUrl}
+                              alt="Logo"
+                              className="w-full h-full object-contain"
+                            />
+                          ) : (
+                            <div className="w-full h-full bg-gradient-to-tr from-orange-600 to-amber-500 rounded flex items-center justify-center text-white font-black text-xs">
+                              <Flame className="w-3.5 h-3.5 text-white" />
+                            </div>
+                          )}
+                        </div>
+                        <span className="text-xs font-black text-white tracking-wider">
+                          {settings.profile.gymName || 'RFA GYM'}{' '}
+                          <span className="text-orange-500 font-extrabold text-[9px] px-1 py-0.5 rounded bg-orange-500/20">
+                            PLATFORM
+                          </span>
+                        </span>
+                      </div>
+
+                      <div className="hidden sm:flex items-center gap-2 text-[10px] text-zinc-400">
+                        <span className="text-orange-400 font-bold">Beranda</span>
+                        <span>Program</span>
+                        <span>Jadwal</span>
+                        <span>Kontak</span>
+                      </div>
+
+                      <span className="px-2 py-1 rounded-lg bg-orange-500 text-white text-[10px] font-bold">
+                        Gabung Member
+                      </span>
+                    </div>
+                    <span className="text-[10px] text-zinc-500 block text-center">
+                      Logo otomatis muncul pada navigasi bar atas landing page publik.
+                    </span>
+                  </div>
+                )}
+
+                {/* PREVIEW 3: STRUK KASIR POS */}
+                {logoPreviewTab === 'receipt' && (
+                  <div className="flex flex-col items-center justify-center p-3 bg-zinc-900/60 rounded-xl border border-zinc-800/80">
+                    <div className="w-[230px] bg-white text-zinc-950 rounded-lg p-3 shadow-md font-mono text-[10px] leading-tight space-y-1.5 text-center">
+                      {settings.profile.logoUrl ? (
+                        <div className="w-8 h-8 mx-auto overflow-hidden rounded">
+                          <img
+                            src={settings.profile.logoUrl}
+                            alt="Logo"
+                            className="w-full h-full object-contain mx-auto filter grayscale contrast-125"
+                          />
+                        </div>
+                      ) : (
+                        <div className="w-6 h-6 mx-auto bg-black text-white font-black rounded flex items-center justify-center text-xs">
+                          R
+                        </div>
+                      )}
+                      <div className="font-black text-xs">{settings.profile.gymName || 'RFA GYM'}</div>
+                      <div className="text-[9px] text-zinc-600">{settings.profile.address || 'Kranggan Permai, Bekasi'}</div>
+                      <div className="border-b border-dashed border-zinc-400 my-1" />
+                      <div className="flex justify-between text-[9px]">
+                        <span>Membership 1 Bulan</span>
+                        <span>Rp 350.000</span>
+                      </div>
+                      <div className="flex justify-between font-bold text-[9px]">
+                        <span>TOTAL</span>
+                        <span>Rp 350.000</span>
+                      </div>
+                      <div className="border-b border-dashed border-zinc-400 my-1" />
+                      <div className="text-[8px] text-zinc-500">Terima kasih atas kunjungan Anda</div>
+                    </div>
+                    <span className="text-[10px] text-zinc-500 mt-2">
+                      Logo dapat disertakan pada cetakan struk thermal 58mm / 80mm.
+                    </span>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
 

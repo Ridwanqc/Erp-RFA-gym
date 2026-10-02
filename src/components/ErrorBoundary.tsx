@@ -1,5 +1,5 @@
 import React, { Component, ErrorInfo, ReactNode } from 'react';
-import { AlertTriangle, RefreshCw, Home } from 'lucide-react';
+import { AlertTriangle, RefreshCw, Home, RotateCcw } from 'lucide-react';
 
 interface Props {
   children: ReactNode;
@@ -35,6 +35,17 @@ export class ErrorBoundary extends Component<Props, State> {
   private handleGoHome = () => {
     this.setState({ hasError: false, error: null, errorInfo: null });
     window.location.href = '/';
+  };
+
+  private handleClearCache = () => {
+    try {
+      // Clear corrupt transient UI state while keeping essential data
+      sessionStorage.clear();
+      localStorage.removeItem('active_tab');
+      localStorage.removeItem('rfa_scanner_mode');
+    } catch {}
+    this.setState({ hasError: false, error: null, errorInfo: null });
+    window.location.reload();
   };
 
   public render() {
@@ -77,6 +88,15 @@ export class ErrorBoundary extends Component<Props, State> {
                 <span>Kembali</span>
               </button>
             </div>
+
+            <button
+              type="button"
+              onClick={this.handleClearCache}
+              className="w-full py-2 px-3 rounded-xl bg-zinc-950 hover:bg-zinc-800 text-zinc-400 hover:text-zinc-200 text-[11px] font-medium border border-zinc-800 transition flex items-center justify-center gap-1.5 cursor-pointer"
+            >
+              <RotateCcw className="w-3.5 h-3.5" />
+              <span>Bersihkan Cache Sesi & Pulihkan Tampilan</span>
+            </button>
           </div>
         </div>
       );

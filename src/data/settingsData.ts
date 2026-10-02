@@ -47,7 +47,8 @@ export const DEFAULT_GYM_PROFILE: GymBusinessProfile = {
   googleMapsUrl: 'https://share.google/SILNZrwYoRcIyYjRo',
   npwp: '01.345.678.9-041.000',
   openHoursWeekday: '06:00 - 22:00 WIB',
-  openHoursWeekend: '07:00 - 21:00 WIB'
+  openHoursWeekend: '07:00 - 21:00 WIB',
+  logoUrl: ''
 };
 
 export const DEFAULT_BRANCHES: GymBranch[] = [
