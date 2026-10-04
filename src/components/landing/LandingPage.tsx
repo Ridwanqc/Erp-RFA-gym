@@ -206,6 +206,8 @@ export const LandingPage: React.FC<LandingPageProps> = ({
           onExplorePrograms={() => handleNavigateSection('programs')}
           memberCount={members.length}
           activeInGymCount={activeInGymCount}
+          loggedInMember={loggedInMember}
+          onOpenMemberArea={() => setIsMemberModalOpen(true)}
         />
 
         {/* Why Choose Us (6 Nilai Unggulan) */}
@@ -221,6 +223,8 @@ export const LandingPage: React.FC<LandingPageProps> = ({
           onCtaClick={() => handleOpenJoinNow()}
           onOpenJoinNow={(plan, branchId) => handleOpenJoinNow(plan, branchId)}
           onOpenInquiry={(topic, branchId) => handleOpenInquiry(topic, branchId)}
+          loggedInMember={loggedInMember}
+          onOpenMemberArea={() => setIsMemberModalOpen(true)}
         />
 
         {/* 3. About Us (Profil, Sejarah, Galeri Fasilitas & Trainer) */}
@@ -260,6 +264,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
           onOpenStaffLogin={onOpenStaffLogin}
           onOpenMemberArea={() => setIsMemberModalOpen(true)}
           onOpenReservation={(branchId) => handleOpenJoinNow(undefined, branchId)}
+          isMemberLoggedIn={!!loggedInMember}
         />
       </main>
 

@@ -19,7 +19,7 @@ import {
   Download,
   Upload
 } from 'lucide-react';
-import { User, ShiftType } from '../../types';
+import { User, ShiftType, getStaffDivision } from '../../types';
 import { formatRp, APP_TODAY } from '../../utils/formatters';
 import { DataImportModal } from '../DataImportModal';
 import { DataExportModal } from '../DataExportModal';
@@ -41,6 +41,7 @@ export const StaffDirectoryTab: React.FC<StaffDirectoryTabProps> = ({
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [filterRole, setFilterRole] = useState('all');
+  const [filterDivision, setFilterDivision] = useState('all');
   const [filterStatus, setFilterStatus] = useState('all');
   const [viewMode, setViewMode] = useState<'grid' | 'table'>('grid');
 
@@ -57,6 +58,7 @@ export const StaffDirectoryTab: React.FC<StaffDirectoryTabProps> = ({
   const [formName, setFormName] = useState('');
   const [formRole, setFormRole] = useState<'admin' | 'kasir' | 'pt' | 'leader_pt'>('pt');
   const [formRoleName, setFormRoleName] = useState('Pelatih PT');
+  const [formDivision, setFormDivision] = useState('Pelatihan');
   const [formShift, setFormShift] = useState<ShiftType>('Pagi');
   const [formBaseSalary, setFormBaseSalary] = useState<number>(3500000);
   const [formAllowance, setFormAllowance] = useState<number>(500000);
@@ -78,19 +80,21 @@ export const StaffDirectoryTab: React.FC<StaffDirectoryTabProps> = ({
   const filteredStaff = useMemo(() => {
     return staffUsers.filter((s) => {
       if (filterRole !== 'all' && s.role !== filterRole) return false;
+      if (filterDivision !== 'all' && getStaffDivision(s) !== filterDivision) return false;
       if (filterStatus !== 'all' && (s.employmentStatus || 'Tetap') !== filterStatus) return false;
 
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase();
         const matchName = s.name.toLowerCase().includes(q);
         const matchRole = s.roleName.toLowerCase().includes(q);
+        const matchDiv = getStaffDivision(s).toLowerCase().includes(q);
         const matchPhone = (s.phone || '').includes(q);
         const matchId = s.id.toLowerCase().includes(q);
-        if (!matchName && !matchRole && !matchPhone && !matchId) return false;
+        if (!matchName && !matchRole && !matchDiv && !matchPhone && !matchId) return false;
       }
       return true;
     });
-  }, [staffUsers, filterRole, filterStatus, searchQuery]);
+  }, [staffUsers, filterRole, filterDivision, filterStatus, searchQuery]);
 
   const handleOpenAdd = () => {
     setEditingStaff(null);
@@ -102,6 +106,7 @@ export const StaffDirectoryTab: React.FC<StaffDirectoryTabProps> = ({
     setFormName('');
     setFormRole('pt');
     setFormRoleName('Pelatih PT');
+    setFormDivision('Pelatihan');
     setFormShift('Pagi');
     setFormBaseSalary(3500000);
     setFormAllowance(500000);
@@ -129,6 +134,7 @@ export const StaffDirectoryTab: React.FC<StaffDirectoryTabProps> = ({
     setFormName(staff.name);
     setFormRole(staff.role as any);
     setFormRoleName(staff.roleName);
+    setFormDivision(staff.division || getStaffDivision(staff));
     setFormShift((staff.shift as ShiftType) || 'Pagi');
     setFormBaseSalary(staff.baseSalary || 3500000);
     setFormAllowance(staff.allowance || 500000);
@@ -153,19 +159,23 @@ export const StaffDirectoryTab: React.FC<StaffDirectoryTabProps> = ({
     switch (role) {
       case 'admin':
         setFormRoleName('System Admin / Manager');
+        setFormDivision('Manajemen');
         setFormBaseSalary(5000000);
         break;
       case 'kasir':
         setFormRoleName('Kasir & Front Desk');
+        setFormDivision('Kasir & Front Desk');
         setFormBaseSalary(3500000);
         break;
       case 'leader_pt':
         setFormRoleName('Leader PT');
+        setFormDivision('Pelatihan');
         setFormBaseSalary(4500000);
         break;
       case 'pt':
       default:
         setFormRoleName('Pelatih PT');
+        setFormDivision('Pelatihan');
         setFormBaseSalary(3000000);
         break;
     }
@@ -184,6 +194,7 @@ export const StaffDirectoryTab: React.FC<StaffDirectoryTabProps> = ({
       name: formName,
       role: formRole,
       roleName: formRoleName,
+      division: formDivision,
       shift: formShift,
       baseSalary: Number(formBaseSalary) || 0,
       allowance: Number(formAllowance) || 0,
@@ -244,6 +255,18 @@ export const StaffDirectoryTab: React.FC<StaffDirectoryTabProps> = ({
             <option value="kasir">Kasir & Front Desk</option>
             <option value="leader_pt">Leader PT</option>
             <option value="pt">Pelatih PT</option>
+          </select>
+
+          <select
+            value={filterDivision}
+            onChange={(e) => setFilterDivision(e.target.value)}
+            className="bg-zinc-950 border border-zinc-800 text-white rounded-xl px-3 py-2 text-xs focus:outline-none focus:border-orange-500 font-medium"
+          >
+            <option value="all">Semua Devisi</option>
+            <option value="Kasir & Front Desk">Devisi Kasir & Front Desk</option>
+            <option value="Pelatihan">Devisi Pelatihan (PT & Coach)</option>
+            <option value="Manajemen">Devisi Manajemen</option>
+            <option value="Teknisi">Devisi Teknisi</option>
           </select>
 
           <select
@@ -323,11 +346,22 @@ export const StaffDirectoryTab: React.FC<StaffDirectoryTabProps> = ({
                       {staff.id}
                     </span>
                   </div>
-                  <div className="text-right">
+                  <div className="text-right space-y-1">
                     <span className="inline-block bg-orange-500/10 text-orange-400 border border-orange-500/20 text-[10px] font-bold px-2 py-0.5 rounded-full">
                       {staff.roleName}
                     </span>
-                    <p className="text-[10px] text-zinc-500 mt-1">
+                    <div>
+                      <span className={`inline-block text-[9px] font-bold px-2 py-0.5 rounded-md ${
+                        getStaffDivision(staff) === 'Kasir & Front Desk'
+                          ? 'bg-blue-500/15 text-blue-300 border border-blue-500/30'
+                          : getStaffDivision(staff) === 'Pelatihan'
+                          ? 'bg-amber-500/15 text-amber-300 border border-amber-500/30'
+                          : 'bg-purple-500/15 text-purple-300 border border-purple-500/30'
+                      }`}>
+                        Devisi: {getStaffDivision(staff)}
+                      </span>
+                    </div>
+                    <p className="text-[10px] text-zinc-500">
                       Status: <strong className="text-zinc-300">{staff.employmentStatus || 'Tetap'}</strong>
                     </p>
                   </div>
@@ -436,7 +470,18 @@ export const StaffDirectoryTab: React.FC<StaffDirectoryTabProps> = ({
                         </div>
                       </div>
                     </td>
-                    <td className="py-3 px-4 font-semibold text-zinc-200">{staff.roleName}</td>
+                    <td className="py-3 px-4">
+                      <p className="font-semibold text-zinc-200">{staff.roleName}</p>
+                      <span className={`inline-block text-[9px] font-bold px-1.5 py-0.2 rounded mt-0.5 ${
+                        getStaffDivision(staff) === 'Kasir & Front Desk'
+                          ? 'bg-blue-500/15 text-blue-300 border border-blue-500/30'
+                          : getStaffDivision(staff) === 'Pelatihan'
+                          ? 'bg-amber-500/15 text-amber-300 border border-amber-500/30'
+                          : 'bg-purple-500/15 text-purple-300 border border-purple-500/30'
+                      }`}>
+                        {getStaffDivision(staff)}
+                      </span>
+                    </td>
                     <td className="py-3 px-4 font-mono text-zinc-300">{staff.phone || '-'}</td>
                     <td className="py-3 px-4">
                       <span className="bg-zinc-800 text-zinc-300 px-2 py-0.5 rounded text-[10px] font-bold">
@@ -562,8 +607,8 @@ export const StaffDirectoryTab: React.FC<StaffDirectoryTabProps> = ({
                 </div>
               </div>
 
-              {/* Role & Posisi */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {/* Role, Devisi & Posisi */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div>
                   <label className="block text-zinc-400 font-bold mb-1.5">Role Sistem</label>
                   <select
@@ -571,10 +616,26 @@ export const StaffDirectoryTab: React.FC<StaffDirectoryTabProps> = ({
                     onChange={(e) => handleRoleSelect(e.target.value as any)}
                     className="w-full bg-zinc-950 border border-zinc-800 text-white rounded-xl p-2.5 text-xs font-bold"
                   >
+                    <option value="kasir">Kasir & Front Desk</option>
                     <option value="pt">Pelatih PT</option>
                     <option value="leader_pt">Leader PT</option>
-                    <option value="kasir">Kasir & Front Desk</option>
                     <option value="admin">System Admin / Manager</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-zinc-400 font-bold mb-1.5 flex items-center justify-between">
+                    <span>Devisi Organisasi</span>
+                    <span className="text-[9px] text-orange-400 font-normal">Tupoksi Resmi</span>
+                  </label>
+                  <select
+                    value={formDivision}
+                    onChange={(e) => setFormDivision(e.target.value)}
+                    className="w-full bg-zinc-950 border border-zinc-800 text-white rounded-xl p-2.5 text-xs font-bold"
+                  >
+                    <option value="Kasir & Front Desk">Devisi Kasir & Front Desk (Layanan & POS)</option>
+                    <option value="Pelatihan">Devisi Pelatihan (PT & Coach)</option>
+                    <option value="Manajemen">Devisi Manajemen & Operasional</option>
+                    <option value="Teknisi">Devisi Teknisi</option>
                   </select>
                 </div>
                 <div>

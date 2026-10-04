@@ -32,7 +32,9 @@ import {
   HeartPulse,
   Activity,
   ArrowUpRight,
-  ClipboardCheck
+  ClipboardCheck,
+  Lock,
+  Shield
 } from 'lucide-react';
 import { Schedule, Member, User as UserType, PTPurchaseRecord, TrainerWorkoutLog, TrainerAttendanceLog } from '../types';
 import { formatDateIndo, APP_TODAY } from '../utils/formatters';
@@ -136,6 +138,24 @@ export const TrainerPortalView: React.FC<TrainerPortalViewProps> = ({
 
   const activeTrainerName = activeTrainer?.name || 'Reza Pratama';
   const activeTrainerId = activeTrainer?.id || 'S04';
+
+  // Hanya Leader PT (Head Coach), Admin, dan Manager yang memiliki hak akses untuk fitur Akses Cepat 1-Klik Pindah Akun Pelatih
+  const isLeaderOrAdmin =
+    currentUser?.role === 'leader_pt' ||
+    currentUser?.role === 'admin' ||
+    currentUser?.role === 'manager';
+
+  const handleSwitchTrainer = (trainerId: string) => {
+    if (!isLeaderOrAdmin) {
+      showToast(
+        'Akses Terbatas 🔒',
+        'Fitur mode pelatih akses cepat 1-klik hanya dapat diakses oleh Leader PT dan Admin.',
+        'warning'
+      );
+      return;
+    }
+    onSwitchUser(trainerId);
+  };
 
   // Sub-tabs within Trainer Portal
   const [activeTab, setActiveTab] = useState<'jadwal' | 'klien' | 'log' | 'attendance' | 'performa' | 'rekomendasi'>(initialSubTab || 'jadwal');
@@ -560,41 +580,72 @@ export const TrainerPortalView: React.FC<TrainerPortalViewProps> = ({
             </div>
           </div>
 
-          {/* Quick Account Switcher for Trainers */}
-          <div className="bg-zinc-950/80 border border-zinc-800 rounded-2xl p-3 sm:p-4 flex flex-col gap-2 shrink-0">
-            <div className="flex items-center justify-between gap-2 text-xs">
-              <span className="text-zinc-400 font-semibold flex items-center gap-1.5">
-                <Users className="w-3.5 h-3.5 text-orange-500" />
-                <span>Pindah Akun Pelatih:</span>
-              </span>
-              <span className="text-[10px] text-zinc-500">Akses Cepat 1-Klik</span>
-            </div>
+          {/* Quick Account Switcher for Trainers - Hanya untuk Leader PT & Admin */}
+          {isLeaderOrAdmin ? (
+            <div className="bg-zinc-950/80 border border-zinc-800 rounded-2xl p-3 sm:p-4 flex flex-col gap-2 shrink-0">
+              <div className="flex items-center justify-between gap-2 text-xs">
+                <span className="text-zinc-300 font-bold flex items-center gap-1.5">
+                  <Users className="w-3.5 h-3.5 text-orange-500" />
+                  <span>Pindah Akun Pelatih:</span>
+                </span>
+                <span className="text-[10px] px-2 py-0.5 rounded-full bg-orange-500/10 text-orange-400 font-bold border border-orange-500/30 flex items-center gap-1">
+                  <Sparkles className="w-3 h-3 text-amber-300" />
+                  Akses Cepat 1-Klik (Leader & Admin)
+                </span>
+              </div>
 
-            <div className="flex items-center gap-2 flex-wrap">
-              {trainerAccounts.map((trainer) => {
-                const isSelected = trainer.id === activeTrainerId;
-                return (
-                  <button
-                    key={trainer.id}
-                    onClick={() => onSwitchUser(trainer.id)}
-                    className={`flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-bold transition ${
-                      isSelected
-                        ? 'bg-orange-500 text-zinc-950 shadow-md shadow-orange-500/20'
-                        : 'bg-zinc-900 hover:bg-zinc-800 text-zinc-300 border border-zinc-800'
-                    }`}
-                  >
-                    <img
-                      src={trainer.photo || 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?q=80&w=200&auto=format&fit=crop'}
-                      alt={trainer.name}
-                      className="w-5 h-5 rounded-full object-cover"
-                    />
-                    <span>{trainer.name.split(' ')[0]}</span>
-                    {isSelected && <Check className="w-3 h-3" />}
-                  </button>
-                );
-              })}
+              <div className="flex items-center gap-2 flex-wrap">
+                {trainerAccounts.map((trainer) => {
+                  const isSelected = trainer.id === activeTrainerId;
+                  return (
+                    <button
+                      key={trainer.id}
+                      onClick={() => handleSwitchTrainer(trainer.id)}
+                      className={`flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer active:scale-95 ${
+                        isSelected
+                          ? 'bg-orange-500 text-zinc-950 shadow-md shadow-orange-500/20'
+                          : 'bg-zinc-900 hover:bg-zinc-800 text-zinc-300 border border-zinc-800'
+                      }`}
+                      title={`Pindah ke akun ${trainer.name} (${trainer.roleName || 'Pelatih PT'})`}
+                    >
+                      <img
+                        src={trainer.photo || 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?q=80&w=200&auto=format&fit=crop'}
+                        alt={trainer.name}
+                        className="w-5 h-5 rounded-full object-cover"
+                      />
+                      <span>{trainer.name.split(' ')[0]}</span>
+                      {isSelected && <Check className="w-3 h-3" />}
+                    </button>
+                  );
+                })}
+              </div>
             </div>
-          </div>
+          ) : (
+            <div className="bg-zinc-950/80 border border-zinc-800/80 rounded-2xl p-3 sm:p-4 flex flex-col justify-center gap-1.5 shrink-0 max-w-xs">
+              <div className="flex items-center justify-between gap-2 text-xs">
+                <span className="text-zinc-400 font-semibold flex items-center gap-1.5">
+                  <Lock className="w-3.5 h-3.5 text-amber-400" />
+                  <span>Akun Pelatih Bertugas:</span>
+                </span>
+                <span className="text-[10px] px-2 py-0.5 rounded-full bg-zinc-900 text-zinc-400 font-bold border border-zinc-800 flex items-center gap-1">
+                  <Shield className="w-3 h-3 text-orange-400" />
+                  Sesi Pribadi
+                </span>
+              </div>
+              <div className="flex items-center gap-2 pt-0.5">
+                <img
+                  src={activeTrainer?.photo || 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?q=80&w=200&auto=format&fit=crop'}
+                  alt={activeTrainerName}
+                  className="w-6 h-6 rounded-full object-cover border border-orange-500 shrink-0"
+                />
+                <span className="text-xs font-bold text-white truncate">{activeTrainerName}</span>
+                <span className="text-[10px] text-zinc-500 font-mono shrink-0">({activeTrainerId})</span>
+              </div>
+              <p className="text-[10px] text-zinc-500 leading-snug">
+                Fitur akses cepat 1-klik hanya diizinkan untuk <strong>Leader PT</strong> & <strong>Admin</strong> demi keamanan sesi latihan.
+              </p>
+            </div>
+          )}
         </div>
 
         {/* Action Bar inside Banner */}

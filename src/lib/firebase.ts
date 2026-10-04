@@ -105,14 +105,30 @@ export function handleFirestoreError(error: unknown, operationType: OperationTyp
 
 // Critical validation boot check
 export async function testConnection(): Promise<boolean> {
+  // If browser reports offline, gracefully fallback to local storage / cache
+  if (typeof navigator !== 'undefined' && !navigator.onLine) {
+    return false;
+  }
+
   try {
-    await getDocFromServer(doc(db, 'test', 'connection'));
+    const probePromise = getDocFromServer(doc(db, 'test', 'connection'));
+    const timeoutPromise = new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error('Connection check timed out')), 2500)
+    );
+    await Promise.race([probePromise, timeoutPromise]);
     return true;
   } catch (error: any) {
     const msg = error instanceof Error ? error.message : String(error);
     const code = error?.code || '';
-    if (code === 'unavailable' || msg.includes('the client is offline') || msg.includes('unavailable')) {
-      console.warn("Firestore operates in offline/local cache mode:", code || msg);
+    if (
+      code === 'unavailable' ||
+      code === 'failed-precondition' ||
+      msg.includes('the client is offline') ||
+      msg.includes('unavailable') ||
+      msg.includes('timed out') ||
+      msg.includes('Could not reach Cloud Firestore')
+    ) {
+      // Local cache mode active without warning spam
       return false;
     }
     // Expected to return permission denied or not found for test doc, which confirms connectivity

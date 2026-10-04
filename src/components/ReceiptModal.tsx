@@ -1,4 +1,7 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { useReactToPrint } from 'react-to-print';
+import { jsPDF } from 'jspdf';
+import html2canvas from 'html2canvas-pro';
 import {
   Printer,
   X,
@@ -18,7 +21,10 @@ import {
   Phone,
   Calendar,
   CreditCard,
-  Receipt
+  Receipt,
+  FileDown,
+  Download,
+  Loader2
 } from 'lucide-react';
 import { Transaction, DailyClosingRecord, GymBranch } from '../types';
 import { formatRp, formatDateIndo, APP_TODAY, getTimestamp } from '../utils/formatters';
@@ -53,6 +59,115 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({
   const [showCashierDetails, setShowCashierDetails] = useState<boolean>(printer?.showCashierName !== false);
   const [copiedWA, setCopiedWA] = useState(false);
   const [printTimestamp, setPrintTimestamp] = useState(getTimestamp(true));
+
+  // Ref for react-to-print & PDF export
+  const receiptPrintRef = useRef<HTMLDivElement>(null);
+  const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
+
+  // Dynamic CSS Page Style for react-to-print
+  const reactToPrintPageStyle = useMemo(() => {
+    if (paperWidth === '58mm') {
+      return `@media print {
+        @page { size: 58mm auto !important; margin: 0mm !important; }
+        body { margin: 0 !important; padding: 0 !important; background: #fff !important; }
+        #receipt-printable-area {
+          width: 58mm !important;
+          max-width: 58mm !important;
+          padding: 2mm !important;
+          margin: 0 auto !important;
+          box-shadow: none !important;
+          border: none !important;
+        }
+      }`;
+    }
+    if (paperWidth === '80mm') {
+      return `@media print {
+        @page { size: 80mm auto !important; margin: 0mm !important; }
+        body { margin: 0 !important; padding: 0 !important; background: #fff !important; }
+        #receipt-printable-area {
+          width: 80mm !important;
+          max-width: 80mm !important;
+          padding: 3mm !important;
+          margin: 0 auto !important;
+          box-shadow: none !important;
+          border: none !important;
+        }
+      }`;
+    }
+    return `@media print {
+      @page { size: A4 portrait !important; margin: 10mm 15mm !important; }
+      body { margin: 0 !important; padding: 0 !important; background: #fff !important; }
+      #receipt-printable-area {
+        width: 100% !important;
+        max-width: 100% !important;
+        padding: 0 !important;
+        margin: 0 auto !important;
+        box-shadow: none !important;
+        border: none !important;
+      }
+    }`;
+  }, [paperWidth]);
+
+  // Hook react-to-print
+  const handlePrintWithReactToPrint = useReactToPrint({
+    contentRef: receiptPrintRef,
+    documentTitle: `Struk-${transaction?.id || closingRecord?.id || 'Transaksi'}`,
+    pageStyle: reactToPrintPageStyle
+  });
+
+  // Export & Download PDF
+  const handleDownloadPDF = async () => {
+    if (!receiptPrintRef.current) return;
+    setIsGeneratingPdf(true);
+    try {
+      const element = receiptPrintRef.current;
+      const canvas = await html2canvas(element, {
+        scale: 2,
+        useCORS: true,
+        backgroundColor: '#ffffff',
+        logging: false
+      });
+
+      const imgData = canvas.toDataURL('image/png');
+      const imgWidth = canvas.width;
+      const imgHeight = canvas.height;
+
+      const trxId = transaction?.id || closingRecord?.id || 'TRX';
+      const safeId = trxId.replace(/[^a-zA-Z0-9_-]/g, '_');
+
+      if (paperWidth === '58mm') {
+        const pdfWidth = 58;
+        const pdfHeight = (imgHeight * pdfWidth) / imgWidth;
+        const pdf = new jsPDF({
+          orientation: 'p',
+          unit: 'mm',
+          format: [pdfWidth, Math.max(pdfHeight, 60)]
+        });
+        pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
+        pdf.save(`Struk-${safeId}-58mm.pdf`);
+      } else if (paperWidth === '80mm') {
+        const pdfWidth = 80;
+        const pdfHeight = (imgHeight * pdfWidth) / imgWidth;
+        const pdf = new jsPDF({
+          orientation: 'p',
+          unit: 'mm',
+          format: [pdfWidth, Math.max(pdfHeight, 80)]
+        });
+        pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
+        pdf.save(`Struk-${safeId}-80mm.pdf`);
+      } else {
+        const pdf = new jsPDF('p', 'mm', 'a4');
+        const pdfWidth = 210;
+        const pdfHeight = (imgHeight * pdfWidth) / imgWidth;
+        pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, Math.min(pdfHeight, 297));
+        pdf.save(`Faktur-${safeId}-A4.pdf`);
+      }
+    } catch (err) {
+      console.error('Failed to generate PDF:', err);
+    } finally {
+      setIsGeneratingPdf(false);
+    }
+  };
 
   // Sync default printer settings when opened
   useEffect(() => {
@@ -123,6 +238,15 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({
       };
     }
 
+    if (transaction.desc?.toLowerCase().includes('tiket visit') || transaction.desc?.toLowerCase().includes('guest pass')) {
+      return {
+        badge: 'STRUK RESMI TIKET VISIT GYM PASS',
+        subtitle: 'Guest Walk-In • Akses Fasilitas Gym & Loker Harian',
+        code: 'GUEST-PASS',
+        color: 'text-amber-700 bg-amber-50 border-amber-300'
+      };
+    }
+
     switch (transaction.type) {
       case 'Class':
         return {
@@ -172,9 +296,14 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({
 
   if (!isOpen || (!transaction && !closingRecord)) return null;
 
-  // Execute clean print with specialized body class & dynamic @page size
+  // Execute clean print with react-to-print or fallback
   const handleExecutePrint = () => {
-    // Inject dynamic @page rule so thermal printers (58mm/80mm) and A4 printers format accurately
+    if (receiptPrintRef.current) {
+      handlePrintWithReactToPrint();
+      return;
+    }
+
+    // Fallback: Inject dynamic @page rule so thermal printers (58mm/80mm) and A4 printers format accurately
     const pageStyleId = 'dynamic-receipt-print-style';
     let styleEl = document.getElementById(pageStyleId) as HTMLStyleElement;
     if (!styleEl) {
@@ -486,6 +615,7 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({
         <div className="flex-1 overflow-y-auto p-4 sm:p-6 bg-zinc-950/60 flex justify-center items-start">
           {/* THE PRINTABLE RECEIPT CONTAINER */}
           <div
+            ref={receiptPrintRef}
             id="receipt-printable-area"
             className={`bg-white text-black p-4 sm:p-6 shadow-2xl transition-all duration-200 border border-zinc-300 font-mono ${printableWidthClass} ${
               layoutMode === 'invoice' ? 'rounded-2xl font-sans' : 'rounded-sm'
@@ -897,7 +1027,28 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({
             </span>
           </div>
 
-          <div className="flex items-center gap-2 ml-auto">
+          <div className="flex flex-wrap items-center gap-2 ml-auto">
+            {/* Download PDF Button */}
+            <button
+              type="button"
+              onClick={handleDownloadPDF}
+              disabled={isGeneratingPdf}
+              className="px-3.5 py-2.5 rounded-xl bg-purple-600 hover:bg-purple-700 disabled:opacity-50 text-white text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-sm active:scale-95"
+              title="Unduh struk nota transaksi sebagai dokumen file PDF"
+            >
+              {isGeneratingPdf ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  <span>Membuat PDF...</span>
+                </>
+              ) : (
+                <>
+                  <FileDown className="w-4 h-4" />
+                  <span>Unduh PDF</span>
+                </>
+              )}
+            </button>
+
             {/* Copy WhatsApp Plain Text Button */}
             <button
               type="button"
@@ -929,13 +1080,14 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({
               Tutup
             </button>
 
-            {/* Print Button (Primary) */}
+            {/* Print Button (react-to-print) */}
             <button
               type="button"
               onClick={handleExecutePrint}
               className="px-5 py-2.5 rounded-xl bg-orange-500 hover:bg-orange-600 text-white text-xs font-black shadow-lg shadow-orange-500/20 transition flex items-center gap-2 cursor-pointer active:scale-95"
+              title="Cetak langsung ke printer thermal / kertas (menggunakan react-to-print)"
             >
-              <Printer className="w-4 h-4 stroke-[2.5]" /> Cetak Struk (Print)
+              <Printer className="w-4 h-4 stroke-[2.5]" /> Cetak Struk (react-to-print)
             </button>
           </div>
         </div>

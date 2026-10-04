@@ -43,12 +43,19 @@ import {
   Ticket,
   LayoutGrid,
   List,
-  Copy
+  Copy,
+  Lock,
+  Unlock,
+  KeyRound,
+  EyeOff,
+  ShieldCheck
 } from 'lucide-react';
-import { Lead, Member, User, FollowUpLog, Transaction, LeadFollowUpRecord, LeadHandoverRecord } from '../types';
+import { Lead, Member, User, FollowUpLog, Transaction, LeadFollowUpRecord, LeadHandoverRecord, getStaffDivision } from '../types';
 import { OnlineReservation } from '../types/landingTypes';
 import { formatRp, getDayDiff, formatDateIndo, APP_TODAY } from '../utils/formatters';
 import { isOnlineLead, getOnlinePasscode, mapOnlineReservationToLead } from '../utils/crmPipelineUtils';
+import { useSettings } from '../context/SettingsContext';
+import { DEFAULT_PIC_PROTECTION } from '../data/settingsData';
 
 export type DatePreset = 'all' | 'today' | 'last7' | 'this_month' | 'last_month' | 'custom';
 
@@ -162,10 +169,20 @@ export const CRMView: React.FC<CRMViewProps> = ({
   const [leadEstimatedValue, setLeadEstimatedValue] = useState('750000');
   const [leadNotes, setLeadNotes] = useState('');
 
+  // Settings Context for PIC Security & Password Verification
+  const { settings, verifyPicPassword } = useSettings();
+  const picProtection = settings.picProtection || DEFAULT_PIC_PROTECTION;
+  const isLeadHandoverPasswordRequired =
+    picProtection.requirePasswordToChangePic && (picProtection.requirePasswordOnLeadHandover !== false);
+  const isAdminOrManager = currentUser?.role === 'admin' || currentUser?.role === 'manager';
+
   // Handover / Oper Alih PIC modal state
   const [selectedLeadForHandover, setSelectedLeadForHandover] = useState<Lead | null>(null);
   const [handoverTargetPicId, setHandoverTargetPicId] = useState<string>('');
   const [handoverReason, setHandoverReason] = useState<string>('');
+  const [handoverPassword, setHandoverPassword] = useState<string>('');
+  const [showHandoverPassword, setShowHandoverPassword] = useState<boolean>(false);
+  const [handoverPasswordError, setHandoverPasswordError] = useState<string>('');
 
   // Lead 360 Detail & Timeline modal state
   const [selectedLeadForDetail, setSelectedLeadForDetail] = useState<Lead | null>(null);
@@ -690,6 +707,7 @@ export const CRMView: React.FC<CRMViewProps> = ({
       picId: assignedStaff?.id,
       picName: assignedStaff?.name || 'Petugas Front Desk',
       picRole: assignedStaff?.roleName || 'Front Desk',
+      picDivision: getStaffDivision(assignedStaff),
       picShift: assignedStaff?.shift || 'Pagi',
       assignedAt: `${APP_TODAY} ${new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}`,
       assignedBy: currentUser?.name || 'Front Desk',
@@ -706,6 +724,7 @@ export const CRMView: React.FC<CRMViewProps> = ({
           picId: assignedStaff?.id || 'SYSTEM',
           picName: assignedStaff?.name || 'Petugas Front Desk',
           picRole: assignedStaff?.roleName || 'Front Desk',
+          picDivision: getStaffDivision(assignedStaff),
           method: leadSource === 'Walk-in' ? 'Tatap Muka' : 'Instagram DM',
           result: 'Inquiry Prospek Baru Diterima',
           notes: leadNotes.trim() || 'Prospek berhasil ditambahkan ke Kanban dan ditugaskan ke Front Desk.'
@@ -716,7 +735,7 @@ export const CRMView: React.FC<CRMViewProps> = ({
     onAddLead(newLead);
     showToast(
       'Lead Baru Ditambahkan 🎯',
-      `Prospek ${leadName} berhasil ditugaskan ke ${assignedStaff?.name || 'Front Desk'}.`,
+      `Prospek ${leadName} berhasil ditugaskan ke ${assignedStaff?.name || 'Front Desk'} (${getStaffDivision(assignedStaff)}).`,
       'success'
     );
 
@@ -728,7 +747,7 @@ export const CRMView: React.FC<CRMViewProps> = ({
     setLeadEstimatedValue('750000');
   };
 
-  // Handover / Oper Alih PIC Handler (Pencegah Tertukar)
+  // Handover / Oper Alih PIC Handler (Pencegah Tertukar & Multi-Divisi)
   const handlePerformHandover = (lead: Lead, targetPicId: string, reason: string) => {
     const targetStaff = getStaffById(targetPicId);
     if (!targetStaff) {
@@ -738,6 +757,9 @@ export const CRMView: React.FC<CRMViewProps> = ({
 
     const currentStaff = getStaffById(lead.picId);
     const fromName = currentStaff?.name || lead.picName || 'Belum Ada PIC (Pool Bebas)';
+    const fromDivision = lead.picDivision || getStaffDivision(currentStaff);
+    const toDivision = getStaffDivision(targetStaff);
+    const isCrossDivision = fromDivision !== toDivision;
 
     const newHandover: LeadHandoverRecord = {
       id: 'HO-' + Date.now(),
@@ -745,9 +767,11 @@ export const CRMView: React.FC<CRMViewProps> = ({
       time: new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) + ' WIB',
       fromPicId: lead.picId || 'UNASSIGNED',
       fromPicName: fromName,
+      fromPicDivision: fromDivision,
       toPicId: targetStaff.id,
       toPicName: targetStaff.name,
-      reason: reason.trim() || 'Oper alih tugas antar shift Front Desk / PIC'
+      toPicDivision: toDivision,
+      reason: reason.trim() || `Oper alih tugas ke ${targetStaff.name} (${toDivision})`
     };
 
     const updatedLead: Lead = {
@@ -755,6 +779,7 @@ export const CRMView: React.FC<CRMViewProps> = ({
       picId: targetStaff.id,
       picName: targetStaff.name,
       picRole: targetStaff.roleName || 'Front Desk',
+      picDivision: toDivision,
       picShift: targetStaff.shift || 'Pagi',
       assignedAt: `${APP_TODAY} ${new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}`,
       assignedBy: currentUser?.name || 'Front Desk',
@@ -768,8 +793,8 @@ export const CRMView: React.FC<CRMViewProps> = ({
     }
 
     showToast(
-      'Tanggung Jawab Dialihkan 🔄',
-      `Prospek ${lead.name} kini resmi dialihkan ke ${targetStaff.name} (${targetStaff.roleName || 'Front Desk'} - Shift ${targetStaff.shift || '-'}).`,
+      isCrossDivision ? 'Oper Alih Lintas Devisi 🔄' : 'Tanggung Jawab Dialihkan 🔄',
+      `Prospek ${lead.name} dialihkan ke ${targetStaff.name} (${toDivision} - Shift ${targetStaff.shift || '-'}).`,
       'success'
     );
 
@@ -1665,8 +1690,16 @@ export const CRMView: React.FC<CRMViewProps> = ({
               </button>
 
               {staffUsers
-                .filter((s) => s.roleName?.toLowerCase().includes('front') || s.roleName?.toLowerCase().includes('kasir') || s.roleName?.toLowerCase().includes('manager') || s.roleName?.toLowerCase().includes('leader'))
+                .slice()
+                .sort((a, b) => {
+                  const divA = getStaffDivision(a);
+                  const divB = getStaffDivision(b);
+                  if (divA === 'Kasir & Front Desk' && divB !== 'Kasir & Front Desk') return -1;
+                  if (divB === 'Kasir & Front Desk' && divA !== 'Kasir & Front Desk') return 1;
+                  return a.name.localeCompare(b.name);
+                })
                 .map((staff) => {
+                  const staffDivision = getStaffDivision(staff);
                   const staffLeadsCount = allPipelineLeads.filter(
                     (l) => l.picId === staff.id && l.status !== 'Lost'
                   ).length;
@@ -1703,7 +1736,11 @@ export const CRMView: React.FC<CRMViewProps> = ({
                           {isMe && <span className="text-[9px] text-amber-300">⭐</span>}
                         </div>
                         <span className="text-[9px] opacity-75 font-normal block leading-tight">
-                          {staff.roleName?.split(' ')[0] || 'Staff'} {staff.shift ? `(${staff.shift})` : ''}
+                          {staffDivision === 'Kasir & Front Desk'
+                            ? 'Kasir & Front Desk'
+                            : staffDivision === 'Pelatihan'
+                            ? 'Pelatihan (PT)'
+                            : staff.roleName?.split(' ')[0] || 'Staff'} {staff.shift ? `(${staff.shift})` : ''}
                         </span>
                       </div>
                       <span
@@ -1941,17 +1978,43 @@ export const CRMView: React.FC<CRMViewProps> = ({
                     <option value="my">⭐ PIC: Tanggung Jawab Saya ({myLeadsCount})</option>
                   )}
                   <option value="unassigned">⚠️ Belum Ada PIC ({unassignedLeadsCount})</option>
-                  <optgroup label="Front Desk & Sales Team">
-                    {staffUsers.map((staff) => {
-                      const count = allPipelineLeads.filter((l) => l.picId === staff.id && l.status !== 'Lost').length;
-                      const roleDisplay = staff.roleName?.split(' ')[0] || staff.role || 'Staff';
-                      const shiftDisplay = staff.shift ? ` [${staff.shift}]` : '';
-                      return (
-                        <option key={staff.id} value={staff.id}>
-                          {staff.name} ({roleDisplay}{shiftDisplay}) — {count} Leads
-                        </option>
-                      );
-                    })}
+                  <optgroup label="🏛️ Divisi Kasir & Front Desk (PIC Utama Prospek)">
+                    {staffUsers
+                      .filter((s) => getStaffDivision(s) === 'Kasir & Front Desk')
+                      .map((staff) => {
+                        const count = allPipelineLeads.filter((l) => l.picId === staff.id && l.status !== 'Lost').length;
+                        const shiftDisplay = staff.shift ? ` [${staff.shift}]` : '';
+                        return (
+                          <option key={staff.id} value={staff.id}>
+                            {staff.name} (Kasir & Front Desk{shiftDisplay}) — {count} Leads
+                          </option>
+                        );
+                      })}
+                  </optgroup>
+                  <optgroup label="🏋️ Divisi Pelatihan (Beda Devisi - Pelatih & PT)">
+                    {staffUsers
+                      .filter((s) => getStaffDivision(s) === 'Pelatihan')
+                      .map((staff) => {
+                        const count = allPipelineLeads.filter((l) => l.picId === staff.id && l.status !== 'Lost').length;
+                        const shiftDisplay = staff.shift ? ` [${staff.shift}]` : '';
+                        return (
+                          <option key={staff.id} value={staff.id}>
+                            {staff.name} (Pelatih PT{shiftDisplay}) — {count} Leads
+                          </option>
+                        );
+                      })}
+                  </optgroup>
+                  <optgroup label="🏢 Divisi Manajemen & Operasional">
+                    {staffUsers
+                      .filter((s) => getStaffDivision(s) !== 'Kasir & Front Desk' && getStaffDivision(s) !== 'Pelatihan')
+                      .map((staff) => {
+                        const count = allPipelineLeads.filter((l) => l.picId === staff.id && l.status !== 'Lost').length;
+                        return (
+                          <option key={staff.id} value={staff.id}>
+                            {staff.name} ({staff.roleName || staff.role}) — {count} Leads
+                          </option>
+                        );
+                      })}
                   </optgroup>
                 </select>
               </div>
@@ -2221,9 +2284,25 @@ export const CRMView: React.FC<CRMViewProps> = ({
                               </span>
                             )}
                           </div>
-                          <span className="text-[9px] text-zinc-500 block">
-                            {staff?.roleName || lead.picRole || 'Front Desk'} • Shift {staff?.shift || lead.picShift || 'Pagi'}
-                          </span>
+                          <div className="flex items-center gap-1.5 flex-wrap mt-0.5">
+                            <span className="text-[9px] text-zinc-500">
+                              {staff?.roleName || lead.picRole || 'Front Desk'} • Shift {staff?.shift || lead.picShift || 'Pagi'}
+                            </span>
+                            {(() => {
+                              const div = lead.picDivision || getStaffDivision(staff);
+                              return (
+                                <span className={`text-[8px] px-1 py-0.2 rounded font-semibold ${
+                                  div === 'Kasir & Front Desk'
+                                    ? 'bg-blue-500/15 text-blue-300 border border-blue-500/30'
+                                    : div === 'Pelatihan'
+                                    ? 'bg-amber-500/15 text-amber-300 border border-amber-500/30'
+                                    : 'bg-purple-500/15 text-purple-300 border border-purple-500/30'
+                                }`}>
+                                  {div}
+                                </span>
+                              );
+                            })()}
+                          </div>
                         </div>
                       </div>
 
@@ -2233,11 +2312,23 @@ export const CRMView: React.FC<CRMViewProps> = ({
                           onClick={() => {
                             setSelectedLeadForHandover(lead);
                             setHandoverTargetPicId(staffUsers.find((s) => s.id !== lead.picId)?.id || '');
+                            setHandoverPassword('');
+                            setShowHandoverPassword(false);
+                            setHandoverPasswordError('');
                           }}
-                          title="Oper Alih / Handover ke Petugas Lain"
+                          title={
+                            isLeadHandoverPasswordRequired
+                              ? 'Oper Alih / Handover ke Petugas Lain (Dilindungi Sandi Keamanan)'
+                              : 'Oper Alih / Handover ke Petugas Lain'
+                          }
                           className="text-[9px] font-bold bg-zinc-800 hover:bg-zinc-700 text-orange-400 px-2 py-1 rounded-lg flex items-center gap-1 border border-zinc-700 transition"
                         >
-                          <ArrowRightLeft className="w-2.5 h-2.5" /> Oper
+                          {isLeadHandoverPasswordRequired ? (
+                            <Lock className="w-2.5 h-2.5 text-amber-400" />
+                          ) : (
+                            <ArrowRightLeft className="w-2.5 h-2.5" />
+                          )}
+                          <span>Oper</span>
                         </button>
                       ) : (
                         <button
@@ -2637,9 +2728,25 @@ export const CRMView: React.FC<CRMViewProps> = ({
                                     <span className="text-zinc-200 font-medium block">
                                       {staff?.name || lead.picName || 'Belum Ada PIC'}
                                     </span>
-                                    <span className="text-[10px] text-zinc-500">
-                                      {staff?.roleName || lead.picRole || 'Front Desk'}
-                                    </span>
+                                    <div className="flex items-center gap-1.5 mt-0.5">
+                                      <span className="text-[10px] text-zinc-500">
+                                        {staff?.roleName || lead.picRole || 'Front Desk'}
+                                      </span>
+                                      {(() => {
+                                        const div = lead.picDivision || getStaffDivision(staff);
+                                        return (
+                                          <span className={`text-[8px] px-1 py-0.2 rounded font-semibold ${
+                                            div === 'Kasir & Front Desk'
+                                              ? 'bg-blue-500/15 text-blue-300 border border-blue-500/30'
+                                              : div === 'Pelatihan'
+                                              ? 'bg-amber-500/15 text-amber-300 border border-amber-500/30'
+                                              : 'bg-purple-500/15 text-purple-300 border border-purple-500/30'
+                                          }`}>
+                                            {div}
+                                          </span>
+                                        );
+                                      })()}
+                                    </div>
                                   </div>
                                 </td>
                                 <td className="p-3.5 max-w-[200px]">
@@ -2796,9 +2903,25 @@ export const CRMView: React.FC<CRMViewProps> = ({
                                   <span className="text-zinc-200 font-medium block">
                                     {staff?.name || lead.picName || 'Belum Ada PIC'}
                                   </span>
-                                  <span className="text-[10px] text-zinc-500">
-                                    {staff?.roleName || lead.picRole || 'Front Desk'}
-                                  </span>
+                                  <div className="flex items-center gap-1.5 mt-0.5">
+                                    <span className="text-[10px] text-zinc-500">
+                                      {staff?.roleName || lead.picRole || 'Front Desk'}
+                                    </span>
+                                    {(() => {
+                                      const div = lead.picDivision || getStaffDivision(staff);
+                                      return (
+                                        <span className={`text-[8px] px-1 py-0.2 rounded font-semibold ${
+                                          div === 'Kasir & Front Desk'
+                                            ? 'bg-blue-500/15 text-blue-300 border border-blue-500/30'
+                                            : div === 'Pelatihan'
+                                            ? 'bg-amber-500/15 text-amber-300 border border-amber-500/30'
+                                            : 'bg-purple-500/15 text-purple-300 border border-purple-500/30'
+                                        }`}>
+                                          {div}
+                                        </span>
+                                      );
+                                    })()}
+                                  </div>
                                 </div>
                               </td>
                               <td className="p-3.5 max-w-[200px]">
@@ -3030,11 +3153,33 @@ export const CRMView: React.FC<CRMViewProps> = ({
                   className="bg-zinc-900 border border-zinc-700 text-xs font-semibold rounded-xl px-3 py-2 text-white outline-none focus:border-orange-500"
                 >
                   <option value="all">Semua PIC</option>
-                  {staffUsers.map((s) => (
-                    <option key={s.id} value={s.id}>
-                      {s.name}
-                    </option>
-                  ))}
+                  <optgroup label="🏛️ Divisi Kasir & Front Desk">
+                    {staffUsers
+                      .filter((s) => getStaffDivision(s) === 'Kasir & Front Desk')
+                      .map((s) => (
+                        <option key={s.id} value={s.id}>
+                          {s.name} ({s.roleName || 'Kasir & Front Desk'})
+                        </option>
+                      ))}
+                  </optgroup>
+                  <optgroup label="🏋️ Divisi Pelatihan (PT & Coach)">
+                    {staffUsers
+                      .filter((s) => getStaffDivision(s) === 'Pelatihan')
+                      .map((s) => (
+                        <option key={s.id} value={s.id}>
+                          {s.name} ({s.roleName || 'Pelatih PT'})
+                        </option>
+                      ))}
+                  </optgroup>
+                  <optgroup label="🏢 Divisi Manajemen & Lainnya">
+                    {staffUsers
+                      .filter((s) => getStaffDivision(s) !== 'Kasir & Front Desk' && getStaffDivision(s) !== 'Pelatihan')
+                      .map((s) => (
+                        <option key={s.id} value={s.id}>
+                          {s.name} ({s.roleName || 'Manajemen'})
+                        </option>
+                      ))}
+                  </optgroup>
                 </select>
               </div>
 
@@ -3187,22 +3332,49 @@ export const CRMView: React.FC<CRMViewProps> = ({
               <div className="bg-zinc-950 border border-orange-500/30 rounded-2xl p-3.5 space-y-2">
                 <label className="block text-[10px] font-bold text-orange-400 uppercase tracking-wider flex items-center justify-between">
                   <span>Petugas Front Desk / PIC Penanggung Jawab *</span>
-                  <span className="text-[9px] text-zinc-500 lowercase font-normal">mencegah leads tertukar</span>
+                  <span className="text-[9px] text-zinc-400 font-semibold bg-orange-500/10 border border-orange-500/20 px-2 py-0.5 rounded">
+                    Struktur Devisi Terpisah
+                  </span>
                 </label>
                 <select
                   value={leadPicId}
                   onChange={(e) => setLeadPicId(e.target.value)}
                   className="w-full bg-zinc-900 border border-zinc-700 rounded-xl px-3.5 py-2.5 text-xs text-white outline-none focus:border-orange-500"
                 >
-                  {staffUsers.map((staff) => (
-                    <option key={staff.id} value={staff.id}>
-                      {staff.name} — {staff.roleName || 'Front Desk'} {staff.shift ? `(Shift ${staff.shift})` : ''} {currentUser?.id === staff.id ? '⭐ [Saya]' : ''}
-                    </option>
-                  ))}
+                  <optgroup label="🏛️ Divisi Kasir & Front Desk (Rekomendasi PIC Calon Member)">
+                    {staffUsers
+                      .filter((s) => getStaffDivision(s) === 'Kasir & Front Desk')
+                      .map((staff) => (
+                        <option key={staff.id} value={staff.id}>
+                          {staff.name} — {staff.roleName || 'Kasir & Front Desk'} {staff.shift ? `(Shift ${staff.shift})` : ''} {currentUser?.id === staff.id ? '⭐ [Saya]' : ''}
+                        </option>
+                      ))}
+                  </optgroup>
+                  <optgroup label="🏋️ Divisi Pelatihan (Beda Devisi - Pelatih / Personal Trainer)">
+                    {staffUsers
+                      .filter((s) => getStaffDivision(s) === 'Pelatihan')
+                      .map((staff) => (
+                        <option key={staff.id} value={staff.id}>
+                          {staff.name} — {staff.roleName || 'Pelatih PT'} {staff.shift ? `(Shift ${staff.shift})` : ''} {currentUser?.id === staff.id ? '⭐ [Saya]' : ''}
+                        </option>
+                      ))}
+                  </optgroup>
+                  <optgroup label="🏢 Divisi Manajemen & Operasional">
+                    {staffUsers
+                      .filter((s) => getStaffDivision(s) !== 'Kasir & Front Desk' && getStaffDivision(s) !== 'Pelatihan')
+                      .map((staff) => (
+                        <option key={staff.id} value={staff.id}>
+                          {staff.name} — {staff.roleName || 'Manajemen'} {currentUser?.id === staff.id ? '⭐ [Saya]' : ''}
+                        </option>
+                      ))}
+                  </optgroup>
                 </select>
-                <p className="text-[10px] text-zinc-400">
-                  Petugas terpilih wajib melakukan kontak awal, follow-up, dan mencatat riwayat interaksi.
-                </p>
+                <div className="flex items-start gap-2 bg-zinc-900/80 p-2.5 rounded-xl border border-zinc-800 text-[10px] text-zinc-400">
+                  <Briefcase className="w-3.5 h-3.5 text-orange-400 shrink-0 mt-0.5" />
+                  <span>
+                    <strong>Pemberitahuan Devisi:</strong> Divisi Kasir & Front Desk bertanggung jawab penuh sebagai PIC administrasi & prospek calon member. Divisi Pelatihan khusus menangani program latihan, postur, dan sesi personal training.
+                  </span>
+                </div>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
@@ -3331,32 +3503,88 @@ export const CRMView: React.FC<CRMViewProps> = ({
               </div>
               <div className="text-[11px] text-zinc-400 flex items-center justify-between pt-1 border-t border-zinc-800/80">
                 <span>PIC Saat Ini:</span>
-                <strong className="text-orange-400">
-                  {getStaffById(selectedLeadForHandover.picId)?.name || selectedLeadForHandover.picName || 'Belum Ada PIC'}
-                </strong>
+                <div className="flex items-center gap-1.5">
+                  <strong className="text-orange-400">
+                    {getStaffById(selectedLeadForHandover.picId)?.name || selectedLeadForHandover.picName || 'Belum Ada PIC'}
+                  </strong>
+                  <span className={`text-[9px] px-1.5 py-0.5 rounded font-bold ${
+                    (selectedLeadForHandover.picDivision || getStaffDivision(getStaffById(selectedLeadForHandover.picId))) === 'Kasir & Front Desk'
+                      ? 'bg-blue-500/15 text-blue-300 border border-blue-500/30'
+                      : (selectedLeadForHandover.picDivision || getStaffDivision(getStaffById(selectedLeadForHandover.picId))) === 'Pelatihan'
+                      ? 'bg-amber-500/15 text-amber-300 border border-amber-500/30'
+                      : 'bg-purple-500/15 text-purple-300 border border-purple-500/30'
+                  }`}>
+                    Divisi: {selectedLeadForHandover.picDivision || getStaffDivision(getStaffById(selectedLeadForHandover.picId))}
+                  </span>
+                </div>
               </div>
             </div>
 
             <div className="space-y-4">
               <div>
-                <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-wider mb-1.5">
-                  Alihkan Tanggung Jawab Kepada *
+                <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-wider mb-1.5 flex items-center justify-between">
+                  <span>Alihkan Tanggung Jawab Kepada *</span>
+                  <span className="text-[9px] text-zinc-500 font-normal">Pilih PIC penerima</span>
                 </label>
                 <select
                   value={handoverTargetPicId}
                   onChange={(e) => setHandoverTargetPicId(e.target.value)}
                   className="w-full bg-zinc-950 border border-zinc-700 rounded-xl px-3.5 py-2.5 text-xs text-white outline-none focus:border-orange-500"
                 >
-                  <option value="">-- Pilih Petugas Front Desk Baru --</option>
-                  {staffUsers
-                    .filter((s) => s.id !== selectedLeadForHandover.picId)
-                    .map((staff) => (
-                      <option key={staff.id} value={staff.id}>
-                        {staff.name} ({staff.roleName || 'Front Desk'} • Shift {staff.shift || '-'})
-                      </option>
-                    ))}
+                  <option value="">-- Pilih Petugas / PIC Baru --</option>
+                  <optgroup label="🏛️ Divisi Kasir & Front Desk (Internal Divisi)">
+                    {staffUsers
+                      .filter((s) => s.id !== selectedLeadForHandover.picId && getStaffDivision(s) === 'Kasir & Front Desk')
+                      .map((staff) => (
+                        <option key={staff.id} value={staff.id}>
+                          {staff.name} ({staff.roleName || 'Kasir & Front Desk'} • Shift {staff.shift || '-'})
+                        </option>
+                      ))}
+                  </optgroup>
+                  <optgroup label="🏋️ Divisi Pelatihan (Beda Devisi - Pelatih / PT)">
+                    {staffUsers
+                      .filter((s) => s.id !== selectedLeadForHandover.picId && getStaffDivision(s) === 'Pelatihan')
+                      .map((staff) => (
+                        <option key={staff.id} value={staff.id}>
+                          {staff.name} ({staff.roleName || 'Pelatih PT'} • Shift {staff.shift || '-'})
+                        </option>
+                      ))}
+                  </optgroup>
+                  <optgroup label="🏢 Divisi Manajemen & Lainnya">
+                    {staffUsers
+                      .filter((s) => s.id !== selectedLeadForHandover.picId && getStaffDivision(s) !== 'Kasir & Front Desk' && getStaffDivision(s) !== 'Pelatihan')
+                      .map((staff) => (
+                        <option key={staff.id} value={staff.id}>
+                          {staff.name} ({staff.roleName} • Shift {staff.shift || '-'})
+                        </option>
+                      ))}
+                  </optgroup>
                 </select>
               </div>
+
+              {/* Notice if crossing division boundaries */}
+              {handoverTargetPicId && (
+                (() => {
+                  const targetStaff = getStaffById(handoverTargetPicId);
+                  const currentStaff = getStaffById(selectedLeadForHandover.picId);
+                  const currentDiv = selectedLeadForHandover.picDivision || getStaffDivision(currentStaff);
+                  const targetDiv = getStaffDivision(targetStaff);
+                  if (currentDiv !== targetDiv) {
+                    return (
+                      <div className="bg-amber-500/10 border border-amber-500/30 rounded-2xl p-3 flex items-start gap-2.5 text-amber-300 text-xs">
+                        <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+                        <div>
+                          <strong className="block font-bold">Peringatan: Oper Alih Beda Devisi!</strong>
+                          <p className="text-[11px] text-amber-200/90 mt-0.5 leading-relaxed">
+                            Anda mengalihkan tanggung jawab dari <strong>{currentDiv}</strong> ke <strong>{targetDiv}</strong> ({targetStaff?.name}). Divisi Kasir & Front Desk dan Divisi Pelatihan adalah unit kerja terpisah. Pastikan catatan alasan mencantumkan kebutuhan khusus (misal: pendampingan sesi latihan fisik/trial postur).
+                          </p>
+                        </div>
+                      </div>
+                    );
+                  }
+                  return null;
+                })()
+              )}
 
               <div>
                 <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-wider mb-1.5">
@@ -3365,16 +3593,77 @@ export const CRMView: React.FC<CRMViewProps> = ({
                 <textarea
                   value={handoverReason}
                   onChange={(e) => setHandoverReason(e.target.value)}
-                  rows={3}
+                  rows={2}
                   placeholder="Cth: Pergantian shift siang ke sore. Member sudah janjian mau trial jam 18:30 WIB, tolong disapa dan dampingi saat datang."
                   className="w-full bg-zinc-950 border border-zinc-700 rounded-xl p-3 text-xs text-white outline-none focus:border-orange-500"
                 ></textarea>
               </div>
 
+              {/* OTORISASI SANDI / PASSWORD OPER ALIH PIC CRM LEADS */}
+              {isLeadHandoverPasswordRequired && (
+                <div className="bg-amber-500/10 border border-amber-500/30 rounded-2xl p-3.5 space-y-2.5">
+                  <div className="flex items-center justify-between">
+                    <label className="text-[11px] font-bold text-amber-400 flex items-center gap-1.5 uppercase tracking-wider">
+                      <Lock className="w-3.5 h-3.5" />
+                      Sandi Otorisasi Keamanan *
+                    </label>
+                    {isAdminOrManager && picProtection.allowAdminBypass && (
+                      <span className="text-[9px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 font-bold border border-emerald-500/30 flex items-center gap-1">
+                        <ShieldCheck className="w-3 h-3" />
+                        Bypass Admin Aktif
+                      </span>
+                    )}
+                  </div>
+                  <div className="relative">
+                    <KeyRound className="w-3.5 h-3.5 text-zinc-500 absolute left-3 top-1/2 -translate-y-1/2" />
+                    <input
+                      type={showHandoverPassword ? 'text' : 'password'}
+                      value={handoverPassword}
+                      onChange={(e) => {
+                        setHandoverPassword(e.target.value);
+                        if (handoverPasswordError) setHandoverPasswordError('');
+                      }}
+                      placeholder={
+                        isAdminOrManager && picProtection.allowAdminBypass
+                          ? 'Boleh kosong (Hak Akses Admin) atau ketik sandi...'
+                          : 'Ketik sandi otorisasi untuk konfirmasi oper alih...'
+                      }
+                      className={`w-full bg-zinc-950 border ${
+                        handoverPasswordError
+                          ? 'border-rose-500 focus:border-rose-500'
+                          : 'border-zinc-700 focus:border-amber-500'
+                      } rounded-xl pl-9 pr-10 py-2.5 text-xs text-white outline-none transition`}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowHandoverPassword(!showHandoverPassword)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-white p-1"
+                      title={showHandoverPassword ? 'Sembunyikan sandi' : 'Tampilkan sandi'}
+                    >
+                      {showHandoverPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                    </button>
+                  </div>
+                  {handoverPasswordError ? (
+                    <p className="text-[11px] text-rose-400 font-medium flex items-center gap-1">
+                      <AlertCircle className="w-3 h-3 shrink-0" />
+                      <span>{handoverPasswordError}</span>
+                    </p>
+                  ) : (
+                    <p className="text-[10px] text-zinc-400 leading-relaxed">
+                      Sandi diperlukan untuk mencegah pengoperan/pencurian prospek calon member antar staf tanpa izin.
+                    </p>
+                  )}
+                </div>
+              )}
+
               <div className="flex gap-2 pt-2">
                 <button
                   type="button"
-                  onClick={() => setSelectedLeadForHandover(null)}
+                  onClick={() => {
+                    setSelectedLeadForHandover(null);
+                    setHandoverPassword('');
+                    setHandoverPasswordError('');
+                  }}
                   className="flex-1 py-2.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-xl text-xs font-bold transition"
                 >
                   Batal
@@ -3386,7 +3675,36 @@ export const CRMView: React.FC<CRMViewProps> = ({
                       showToast('Pilih Petugas', 'Silakan tentukan petugas yang akan menerima prospek.', 'warning');
                       return;
                     }
+
+                    if (isLeadHandoverPasswordRequired) {
+                      const canBypass = isAdminOrManager && picProtection.allowAdminBypass;
+                      if (!canBypass || handoverPassword.trim().length > 0) {
+                        if (!handoverPassword.trim()) {
+                          setHandoverPasswordError('Sandi otorisasi keamanan wajib dimasukkan.');
+                          showToast(
+                            'Sandi Diperlukan 🔒',
+                            'Masukkan sandi otorisasi untuk melakukan oper alih prospek.',
+                            'warning'
+                          );
+                          return;
+                        }
+                        const isValid = verifyPicPassword(handoverPassword);
+                        if (!isValid) {
+                          setHandoverPasswordError('Sandi otorisasi salah. Hubungi Administrator / Manager.');
+                          showToast(
+                            'Sandi Salah ❌',
+                            'Sandi otorisasi tidak cocok. Oper alih dibatalkan.',
+                            'error'
+                          );
+                          return;
+                        }
+                      }
+                    }
+
                     handlePerformHandover(selectedLeadForHandover, handoverTargetPicId, handoverReason);
+                    setSelectedLeadForHandover(null);
+                    setHandoverPassword('');
+                    setHandoverPasswordError('');
                   }}
                   className="flex-1 py-2.5 bg-orange-500 hover:bg-orange-600 text-white rounded-xl text-xs font-bold shadow-md transition flex items-center justify-center gap-1.5"
                 >
@@ -3445,11 +3763,22 @@ export const CRMView: React.FC<CRMViewProps> = ({
                   </span>
                 </div>
                 <div className="leading-tight">
-                  <span className="text-[11px] font-bold text-zinc-200 block">
-                    PIC: {getStaffById(selectedLeadForDetail.picId)?.name || selectedLeadForDetail.picName || 'Belum Ada PIC'}
-                  </span>
-                  <span className="text-[9px] text-zinc-500">
-                    Shift {getStaffById(selectedLeadForDetail.picId)?.shift || selectedLeadForDetail.picShift || '-'}
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <span className="text-[11px] font-bold text-zinc-200">
+                      PIC: {getStaffById(selectedLeadForDetail.picId)?.name || selectedLeadForDetail.picName || 'Belum Ada PIC'}
+                    </span>
+                    <span className={`text-[8px] px-1.5 py-0.5 rounded font-bold ${
+                      (selectedLeadForDetail.picDivision || getStaffDivision(getStaffById(selectedLeadForDetail.picId))) === 'Kasir & Front Desk'
+                        ? 'bg-blue-500/15 text-blue-300 border border-blue-500/30'
+                        : (selectedLeadForDetail.picDivision || getStaffDivision(getStaffById(selectedLeadForDetail.picId))) === 'Pelatihan'
+                        ? 'bg-amber-500/15 text-amber-300 border border-amber-500/30'
+                        : 'bg-purple-500/15 text-purple-300 border border-purple-500/30'
+                    }`}>
+                      {selectedLeadForDetail.picDivision || getStaffDivision(getStaffById(selectedLeadForDetail.picId))}
+                    </span>
+                  </div>
+                  <span className="text-[9px] text-zinc-500 block">
+                    {getStaffById(selectedLeadForDetail.picId)?.roleName || selectedLeadForDetail.picRole || 'Front Desk'} • Shift {getStaffById(selectedLeadForDetail.picId)?.shift || selectedLeadForDetail.picShift || '-'}
                   </span>
                 </div>
               </div>
@@ -3465,10 +3794,23 @@ export const CRMView: React.FC<CRMViewProps> = ({
                   onClick={() => {
                     setSelectedLeadForHandover(selectedLeadForDetail);
                     setHandoverTargetPicId(staffUsers.find((s) => s.id !== selectedLeadForDetail.picId)?.id || '');
+                    setHandoverPassword('');
+                    setShowHandoverPassword(false);
+                    setHandoverPasswordError('');
                   }}
+                  title={
+                    isLeadHandoverPasswordRequired
+                      ? 'Oper Alih / Handover ke Petugas Lain (Dilindungi Sandi Keamanan)'
+                      : 'Oper Alih / Handover ke Petugas Lain'
+                  }
                   className="bg-zinc-800 hover:bg-zinc-700 text-orange-400 text-xs font-bold px-3 py-1.5 rounded-xl transition flex items-center gap-1.5 border border-zinc-700"
                 >
-                  <ArrowRightLeft className="w-3.5 h-3.5" /> Oper Alih
+                  {isLeadHandoverPasswordRequired ? (
+                    <Lock className="w-3.5 h-3.5 text-amber-400" />
+                  ) : (
+                    <ArrowRightLeft className="w-3.5 h-3.5" />
+                  )}
+                  <span>Oper Alih</span>
                 </button>
                 {selectedLeadForDetail.status !== 'Member' && (
                   <button
@@ -3679,14 +4021,30 @@ export const CRMView: React.FC<CRMViewProps> = ({
                           </span>
                           <span className="text-zinc-500">{ho.date} {ho.time}</span>
                         </div>
-                        <div className="flex items-center gap-2 text-xs">
-                          <span className="bg-zinc-900 border border-zinc-800 px-2 py-1 rounded-lg text-zinc-300">
-                            {ho.fromPicName}
-                          </span>
+                        <div className="flex items-center gap-2 text-xs flex-wrap">
+                          <div className="flex items-center gap-1.5 bg-zinc-900 border border-zinc-800 px-2 py-1 rounded-lg text-zinc-300">
+                            <span>{ho.fromPicName}</span>
+                            {ho.fromPicDivision && (
+                              <span className="text-[8px] px-1 py-0.2 rounded bg-zinc-800 text-zinc-400 font-semibold">
+                                {ho.fromPicDivision}
+                              </span>
+                            )}
+                          </div>
                           <ChevronRight className="w-3 h-3 text-zinc-500 shrink-0" />
-                          <span className="bg-orange-500/20 border border-orange-500/30 px-2 py-1 rounded-lg text-orange-400 font-bold">
-                            {ho.toPicName}
-                          </span>
+                          <div className="flex items-center gap-1.5 bg-orange-500/20 border border-orange-500/30 px-2 py-1 rounded-lg text-orange-400 font-bold">
+                            <span>{ho.toPicName}</span>
+                            {ho.toPicDivision && (
+                              <span className={`text-[8px] px-1 py-0.2 rounded font-semibold ${
+                                ho.toPicDivision === 'Kasir & Front Desk'
+                                  ? 'bg-blue-500/20 text-blue-300 border border-blue-500/30'
+                                  : ho.toPicDivision === 'Pelatihan'
+                                  ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
+                                  : 'bg-purple-500/20 text-purple-300 border border-purple-500/30'
+                              }`}>
+                                {ho.toPicDivision}
+                              </span>
+                            )}
+                          </div>
                         </div>
                         <p className="text-xs text-zinc-300 bg-zinc-900/60 p-2 rounded-xl italic">
                           "{ho.reason}"

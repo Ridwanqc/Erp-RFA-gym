@@ -1,5 +1,23 @@
 export type UserRole = 'admin' | 'kasir' | 'leader_pt' | 'pt' | 'teknisi' | 'manager';
 
+export type DivisionType = 'Kasir & Front Desk' | 'Pelatihan' | 'Manajemen' | 'Teknisi' | string;
+
+export function getStaffDivision(user?: { role?: string; roleName?: string; division?: string } | null): string {
+  if (user?.division) return user.division;
+  const role = (user?.role || '').toLowerCase();
+  const roleName = (user?.roleName || '').toLowerCase();
+  if (role === 'kasir' || roleName.includes('kasir') || roleName.includes('front desk') || roleName.includes('cs') || roleName.includes('receptionist')) {
+    return 'Kasir & Front Desk';
+  }
+  if (role === 'pt' || role === 'leader_pt' || roleName.includes('pt') || roleName.includes('pelatih') || roleName.includes('coach') || roleName.includes('instruktur')) {
+    return 'Pelatihan';
+  }
+  if (role === 'teknisi' || roleName.includes('teknisi') || roleName.includes('maintenance')) {
+    return 'Teknisi';
+  }
+  return 'Manajemen';
+}
+
 export const ALL_BRANCHES_ID = 'ALL';
 
 export interface User {
@@ -9,6 +27,7 @@ export interface User {
   email?: string;
   role: UserRole;
   roleName: string;
+  division?: DivisionType;             // Divisi Resmi Organisasi (misal: 'Kasir & Front Desk', 'Pelatihan', dll)
   shift: 'Pagi' | 'Siang' | 'Malam' | string;
   baseSalary: number;
   password: string;
@@ -138,6 +157,41 @@ export interface Member {
   address?: string;
   birthDate?: string;
   emergencyContact?: string;
+  originGuestPassId?: string; // Tautan jika member berasal dari konversi Tiket Visit Harian
+}
+
+export interface GuestPassVisitRecord {
+  id: string; // e.g. "VISIT-12345"
+  date: string;
+  time: string;
+  price: number;
+  paymentMethod: 'Cash' | 'QRIS' | 'Transfer' | 'Debit' | string;
+  lockerNum?: string;
+  hasTowel?: boolean;
+  picId?: string;
+  picName?: string;
+  notes?: string;
+}
+
+export interface GuestPassVisitor {
+  id: string; // e.g. "GP-001"
+  name: string;
+  phone: string;
+  gender?: 'L' | 'P';
+  branchId?: string;
+  firstVisitDate: string; // YYYY-MM-DD
+  lastVisitDate: string; // YYYY-MM-DD
+  totalVisits: number;
+  totalSpend: number;
+  status: 'Aktif Visit' | 'Terkonversi Member';
+  convertedMemberId?: string;
+  convertedMemberName?: string;
+  convertedAt?: string;
+  notes?: string;
+  lastPaymentMethod?: 'Cash' | 'QRIS' | 'Transfer' | 'Debit' | string;
+  lastPicId?: string;
+  lastPicName?: string;
+  visitHistory?: GuestPassVisitRecord[];
 }
 
 export interface Product {
@@ -319,7 +373,7 @@ export interface Transaction {
   cogs?: number;
   profit?: number;
   method: 'Tunai' | 'QRIS' | 'Transfer' | 'EDC' | 'Kasbon' | 'Cicilan 2x' | 'Split Payment' | string;
-  status: 'Paid' | 'DP 50%' | 'BELUM LUNAS' | 'VOID';
+  status: 'Paid' | 'DP 50%' | 'BELUM LUNAS' | 'VOID' | 'REFUND';
   cashier: string;
   bankDest?: 'Artha Graha' | 'Mandiri' | string;
   itemsJSON?: string;
@@ -331,6 +385,15 @@ export interface Transaction {
   initialCashPaid?: number;  // Cash or bank inflow that happened specifically on transaction creation date
   bundleId?: string;
   bundleCode?: string;
+  invoiceNo?: string;
+  subtotal?: number;
+  discount?: number;
+  tax?: number;
+  adminFee?: number;
+  refundDate?: string;
+  refundAmount?: number;
+  refundReason?: string;
+  refundApprovedBy?: string;
   // Class Package fields
   classPackageId?: string;
   classSessionsGranted?: number;
@@ -342,6 +405,16 @@ export interface Transaction {
   // Multi-Branch Unit Identifier
   branchId?: string;
   branchName?: string;
+}
+
+export interface TransactionAuditLog {
+  id: string;
+  transactionId: string;
+  action: 'PRINT' | 'REPRINT' | 'DOWNLOAD_PDF';
+  userId: string;
+  userName: string;
+  timestamp: string;
+  branchId?: string;
 }
 
 export interface Schedule {
@@ -603,6 +676,7 @@ export interface LeadFollowUpRecord {
   picId: string;
   picName: string;
   picRole?: string;
+  picDivision?: string;
   method: 'WhatsApp' | 'Telepon' | 'Tatap Muka' | 'Instagram DM' | string;
   result: string;
   notes: string;
@@ -614,8 +688,10 @@ export interface LeadHandoverRecord {
   time?: string;
   fromPicId: string;
   fromPicName: string;
+  fromPicDivision?: string;
   toPicId: string;
   toPicName: string;
+  toPicDivision?: string;
   reason: string;
 }
 
@@ -630,6 +706,7 @@ export interface Lead {
   picId?: string;
   picName?: string;
   picRole?: string;
+  picDivision?: string;
   picShift?: string;
   assignedAt?: string;
   assignedBy?: string;
@@ -653,6 +730,23 @@ export interface FollowUpLog {
   status: string;
   notes: string;
   method?: string;
+}
+
+export interface DailyGuest {
+  id: string;
+  name: string;
+  phone: string;
+  totalVisits: number;
+  firstVisitDate: string;
+  lastVisitDate: string;
+  lastVisitTime?: string;
+  branchId?: string;
+  branchName?: string;
+  notes?: string;
+  lastPaymentMethod?: 'Cash' | 'QRIS' | 'Transfer' | 'Debit' | string;
+  lastPricePaid?: number;
+  convertedToMember?: boolean;
+  memberId?: string;
 }
 
 export interface LeaveRequest {
@@ -1257,6 +1351,7 @@ export interface PicProtectionConfig {
   requirePasswordOnTransaction?: boolean;
   requirePasswordOnMemberForm?: boolean;
   requirePasswordOnRenewal?: boolean;
+  requirePasswordOnLeadHandover?: boolean; // Oper Alih Prospek CRM Leads
 }
 
 export interface SystemSettings {

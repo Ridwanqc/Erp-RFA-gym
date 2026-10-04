@@ -352,7 +352,8 @@ export const DEFAULT_PIC_PROTECTION: PicProtectionConfig = {
   allowAdminBypass: true,
   requirePasswordOnTransaction: true,
   requirePasswordOnMemberForm: true,
-  requirePasswordOnRenewal: true
+  requirePasswordOnRenewal: true,
+  requirePasswordOnLeadHandover: true
 };
 
 export const DEFAULT_SYSTEM_SETTINGS: SystemSettings = {

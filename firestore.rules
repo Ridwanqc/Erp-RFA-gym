@@ -73,6 +73,11 @@ service cloud.firestore {
              data.status in ['CONFIRMED', 'PENDING', 'COMPLETED', 'CANCELLED'];
     }
 
+    // Connectivity Probe Collection
+    match /test/{docId} {
+      allow read: if true;
+    }
+
     // Admins Collection
     match /admins/{adminId} {
       allow get: if isSignedIn() && (request.auth.uid == adminId || isAdmin());

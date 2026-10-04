@@ -9,8 +9,10 @@ import {
   Star,
   CheckCircle2,
   Sparkles,
-  Play
+  Play,
+  User
 } from 'lucide-react';
+import { Member } from '../../types';
 import { SafeImage } from '../common/SafeImage';
 import { useSettings } from '../../context/SettingsContext';
 
@@ -20,13 +22,17 @@ interface HeroSectionProps {
   onOpenVideoTour?: () => void;
   memberCount: number;
   activeInGymCount?: number;
+  loggedInMember?: Member | null;
+  onOpenMemberArea?: () => void;
 }
 
 export const HeroSection: React.FC<HeroSectionProps> = ({
   onStartBooking,
   onExplorePrograms,
   memberCount,
-  activeInGymCount = 18
+  activeInGymCount = 18,
+  loggedInMember,
+  onOpenMemberArea
 }) => {
   const { settings } = useSettings();
   const gymName = settings?.profile?.gymName || 'RFA GYM';
@@ -92,20 +98,35 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
               Fasilitas fitness premium standar internasional, bimbingan Personal Trainer bersertifikasi, dan studio class terlengkap di Jakarta & sekitarnya. Wujudkan versi terbaik fisik dan mental Anda bersama komunitas juara.
             </p>
 
-            {/* CTA Ganda */}
+            {/* CTA Ganda: Jika member sudah login, sembunyikan Join Now dan sediakan akses langsung ke Portal Member */}
             <div className="flex flex-col sm:flex-row items-center justify-center lg:justify-start gap-4 pt-2">
-              <button
-                onClick={onStartBooking}
-                className="w-full sm:w-auto px-8 py-4 rounded-2xl bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white font-extrabold text-sm sm:text-base flex items-center justify-center gap-3 shadow-xl shadow-orange-500/25 hover:shadow-orange-500/40 hover:-translate-y-0.5 active:translate-y-0 transition-all duration-200 group"
-              >
-                <Flame className="w-5 h-5 text-amber-200" />
-                <span>Join Now • Mulai Latihan</span>
-                <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
-              </button>
+              {loggedInMember ? (
+                <button
+                  type="button"
+                  onClick={onOpenMemberArea}
+                  className="w-full sm:w-auto px-8 py-4 rounded-2xl bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white font-extrabold text-sm sm:text-base flex items-center justify-center gap-3 shadow-xl shadow-orange-500/25 hover:shadow-orange-500/40 hover:-translate-y-0.5 active:translate-y-0 transition-all duration-200 group cursor-pointer"
+                  title={`Buka Dashboard Member: ${loggedInMember.name}`}
+                >
+                  <User className="w-5 h-5 text-amber-200" />
+                  <span>Portal Member: {loggedInMember.name.split(' ')[0]}</span>
+                  <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={onStartBooking}
+                  className="w-full sm:w-auto px-8 py-4 rounded-2xl bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white font-extrabold text-sm sm:text-base flex items-center justify-center gap-3 shadow-xl shadow-orange-500/25 hover:shadow-orange-500/40 hover:-translate-y-0.5 active:translate-y-0 transition-all duration-200 group cursor-pointer"
+                >
+                  <Flame className="w-5 h-5 text-amber-200" />
+                  <span>Join Now • Mulai Latihan</span>
+                  <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+                </button>
+              )}
 
               <button
+                type="button"
                 onClick={onExplorePrograms}
-                className="w-full sm:w-auto px-7 py-4 rounded-2xl bg-zinc-900/90 hover:bg-zinc-800 text-zinc-200 hover:text-white font-bold text-sm sm:text-base border border-zinc-700/80 hover:border-zinc-600 flex items-center justify-center gap-2.5 transition-all shadow-sm"
+                className="w-full sm:w-auto px-7 py-4 rounded-2xl bg-zinc-900/90 hover:bg-zinc-800 text-zinc-200 hover:text-white font-bold text-sm sm:text-base border border-zinc-700/80 hover:border-zinc-600 flex items-center justify-center gap-2.5 transition-all shadow-sm cursor-pointer"
               >
                 <span>Lihat Program & Jadwal</span>
               </button>

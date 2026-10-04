@@ -20,12 +20,14 @@ interface ContactLocationSectionProps {
   onOpenStaffLogin: () => void;
   onOpenMemberArea: () => void;
   onOpenReservation: (branchId?: string) => void;
+  isMemberLoggedIn?: boolean;
 }
 
 export const ContactLocationSection: React.FC<ContactLocationSectionProps> = ({
   onOpenStaffLogin,
   onOpenMemberArea,
-  onOpenReservation
+  onOpenReservation,
+  isMemberLoggedIn
 }) => {
   const [selectedBranchId, setSelectedBranchId] = useState<string>('BR-001');
   const [contactName, setContactName] = useState('');
@@ -174,13 +176,16 @@ export const ContactLocationSection: React.FC<ContactLocationSectionProps> = ({
             </div>
 
             <div className="pt-2 flex flex-wrap items-center gap-3">
-              <button
-                onClick={() => onOpenReservation(activeBranch.id)}
-                className="px-6 py-3 rounded-xl bg-orange-500 hover:bg-orange-600 text-white font-bold text-xs flex items-center gap-2 shadow-md shadow-orange-500/20 active:scale-95 transition-all"
-              >
-                <span>Join Now di Cabang {activeBranch.shortName}</span>
-                <ArrowRight className="w-4 h-4" />
-              </button>
+              {!isMemberLoggedIn && (
+                <button
+                  type="button"
+                  onClick={() => onOpenReservation(activeBranch.id)}
+                  className="px-6 py-3 rounded-xl bg-orange-500 hover:bg-orange-600 text-white font-bold text-xs flex items-center gap-2 shadow-md shadow-orange-500/20 active:scale-95 transition-all cursor-pointer"
+                >
+                  <span>Join Now di Cabang {activeBranch.shortName}</span>
+                  <ArrowRight className="w-4 h-4" />
+                </button>
+              )}
 
               <a
                 href={`https://wa.me/${activeBranch.whatsapp}?text=${encodeURIComponent(

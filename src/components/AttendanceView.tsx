@@ -1131,17 +1131,21 @@ export const AttendanceView: React.FC<AttendanceViewProps> = ({
                                         : att.lockerNumber;
                                     if (num) onReleaseLocker(num);
                                   }}
-                                  className="px-2.5 py-1.5 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 text-xs font-bold border border-amber-500/30 transition flex items-center gap-1"
-                                  title="Terima kembali kunci loker saja tanpa checkout member"
+                                  className="p-2 sm:p-2.5 rounded-xl bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 border border-amber-500/30 transition flex items-center justify-center shrink-0 cursor-pointer shadow-sm active:scale-95"
+                                  title={`Terima Kunci Loker #${att.lockerNumber}`}
+                                  aria-label={`Terima Kunci Loker #${att.lockerNumber}`}
                                 >
-                                  <Key className="w-3.5 h-3.5" /> Terima Kunci
+                                  <Key className="w-4 h-4" />
                                 </button>
                               )}
                               <button
+                                type="button"
                                 onClick={() => onCheckoutMember(att.id)}
-                                className="px-3 py-1.5 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 text-xs font-bold border border-rose-500/30 transition flex items-center gap-1 shrink-0"
+                                className="p-2 sm:p-2.5 rounded-xl bg-rose-500/15 hover:bg-rose-500/25 text-rose-400 border border-rose-500/30 transition flex items-center justify-center shrink-0 cursor-pointer shadow-sm active:scale-95"
+                                title={att.lockerNumber && !att.lockerReturned ? `Checkout & Terima Kunci Loker #${att.lockerNumber}` : 'Checkout Member (Keluar Gym)'}
+                                aria-label={att.lockerNumber && !att.lockerReturned ? `Checkout & Terima Kunci Loker #${att.lockerNumber}` : 'Checkout Member'}
                               >
-                                <LogOut className="w-3.5 h-3.5" /> {att.lockerNumber && !att.lockerReturned ? 'Checkout & Terima Kunci' : 'Checkout Member'}
+                                <LogOut className="w-4 h-4" />
                               </button>
                             </div>
                           ) : (

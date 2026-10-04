@@ -260,14 +260,16 @@ export const LandingHeader: React.FC<LandingHeaderProps> = ({
                 </button>
               )}
 
-              {/* Join Now CTA */}
-              <button
-                onClick={() => onOpenReservation()}
-                className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-black uppercase tracking-wider bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white transition-all shadow-md shadow-orange-500/25 hover:shadow-orange-500/40 active:scale-95 whitespace-nowrap"
-              >
-                <Sparkles className="w-3.5 h-3.5 text-amber-200" />
-                <span>Join Now</span>
-              </button>
+              {/* Join Now CTA - Sembunyikan jika member sudah login */}
+              {!loggedInMember && (
+                <button
+                  onClick={() => onOpenReservation()}
+                  className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-black uppercase tracking-wider bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white transition-all shadow-md shadow-orange-500/25 hover:shadow-orange-500/40 active:scale-95 whitespace-nowrap"
+                >
+                  <Sparkles className="w-3.5 h-3.5 text-amber-200" />
+                  <span>Join Now</span>
+                </button>
+              )}
 
               {/* Member Area Portal */}
               {loggedInMember ? (
@@ -323,13 +325,16 @@ export const LandingHeader: React.FC<LandingHeaderProps> = ({
                 <span className="font-mono font-bold text-white">{activeInGymCount}</span>
               </button>
 
-              <button
-                onClick={() => onOpenReservation()}
-                className="px-3 py-1.5 rounded-lg text-xs font-black bg-gradient-to-r from-orange-500 to-amber-500 text-white flex items-center gap-1 shadow-md shadow-orange-500/20 uppercase tracking-wider"
-              >
-                <Sparkles className="w-3.5 h-3.5 text-amber-200" />
-                <span>Join Now</span>
-              </button>
+              {/* Mobile Join Now Button: Sembunyikan jika member sudah login */}
+              {!loggedInMember && (
+                <button
+                  onClick={() => onOpenReservation()}
+                  className="px-3 py-1.5 rounded-lg text-xs font-black bg-gradient-to-r from-orange-500 to-amber-500 text-white flex items-center gap-1 shadow-md shadow-orange-500/20 uppercase tracking-wider"
+                >
+                  <Sparkles className="w-3.5 h-3.5 text-amber-200" />
+                  <span>Join Now</span>
+                </button>
+              )}
 
               <button
                 onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
@@ -362,16 +367,19 @@ export const LandingHeader: React.FC<LandingHeaderProps> = ({
             </div>
 
             <div className="pt-3 border-t border-zinc-800/80 flex flex-col gap-2">
-              <button
-                onClick={() => {
-                  setMobileMenuOpen(false);
-                  onOpenReservation();
-                }}
-                className="w-full py-3 rounded-xl bg-gradient-to-r from-orange-500 to-amber-500 text-white text-xs font-black uppercase tracking-wider flex items-center justify-center gap-2 shadow-lg shadow-orange-500/25"
-              >
-                <Sparkles className="w-4 h-4 text-amber-200" />
-                <span>Join Now • Daftar Member Sekarang</span>
-              </button>
+              {/* Drawer Join Now Button: Sembunyikan jika member sudah login */}
+              {!loggedInMember && (
+                <button
+                  onClick={() => {
+                    setMobileMenuOpen(false);
+                    onOpenReservation();
+                  }}
+                  className="w-full py-3 rounded-xl bg-gradient-to-r from-orange-500 to-amber-500 text-white text-xs font-black uppercase tracking-wider flex items-center justify-center gap-2 shadow-lg shadow-orange-500/25"
+                >
+                  <Sparkles className="w-4 h-4 text-amber-200" />
+                  <span>Join Now • Daftar Member Sekarang</span>
+                </button>
+              )}
 
               <button
                 onClick={() => {

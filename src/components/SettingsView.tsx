@@ -1344,6 +1344,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                         ? Sparkles
                         : opt.iconType === 'monitor'
                         ? Monitor
+                        : opt.iconType === 'layers'
+                        ? Layers
                         : Sun;
 
                     return (
@@ -2211,6 +2213,27 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                       onChange={(e) => {
                         updatePicProtectionConfig({ requirePasswordOnTransaction: e.target.checked });
                         notifySuccess('Cakupan Diperbarui', 'Pengaturan form membership diperbarui.');
+                      }}
+                      className="w-4 h-4 mt-1 accent-orange-500 rounded cursor-pointer shrink-0"
+                    />
+                  </div>
+
+                  {/* Scope 4: Oper Alih Prospek Calon Member (CRM Leads) */}
+                  <div className="p-3.5 bg-zinc-950/70 border border-zinc-800 rounded-2xl flex items-start justify-between gap-3">
+                    <div className="space-y-1">
+                      <label className="text-xs font-bold text-white block">
+                        Proteksi Oper Alih Prospek CRM Leads
+                      </label>
+                      <p className="text-[11px] text-zinc-400 leading-snug">
+                        Wajibkan sandi otorisasi saat staf melakukan serah terima atau oper alih (handover) prospek calon member di menu <em>Pipeline Prospek Calon Member (CRM Leads)</em>.
+                      </p>
+                    </div>
+                    <input
+                      type="checkbox"
+                      checked={picProtection.requirePasswordOnLeadHandover !== false}
+                      onChange={(e) => {
+                        updatePicProtectionConfig({ requirePasswordOnLeadHandover: e.target.checked });
+                        notifySuccess('Cakupan Diperbarui', 'Pengaturan oper alih CRM Leads diperbarui.');
                       }}
                       className="w-4 h-4 mt-1 accent-orange-500 rounded cursor-pointer shrink-0"
                     />

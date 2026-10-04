@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   UserCheck,
   Search,
@@ -63,8 +63,12 @@ import {
   User as StaffUser,
   Schedule,
   MemberFreezeRecord,
-  LockerSlot
+  LockerSlot,
+  GuestPassVisitor,
+  GuestPassVisitRecord,
+  Lead
 } from '../types';
+import { INITIAL_GUEST_VISITORS } from '../data/initialData';
 import { formatRp, formatDateIndo, getDayDiff, APP_TODAY, getTimestamp } from '../utils/formatters';
 import {
   getRecommendedLocker,
@@ -77,6 +81,7 @@ import { LockerManagementView } from './LockerManagementView';
 import { PicPasswordModal } from './PicPasswordModal';
 import { ReceiptModal } from './ReceiptModal';
 import { RealTimeClock } from './RealTimeClock';
+import { TransactionActions } from './transaction/TransactionActions';
 import { useSettings } from '../context/SettingsContext';
 import { DEFAULT_PIC_PROTECTION } from '../data/settingsData';
 import { OnlineReservation } from '../types/landingTypes';
@@ -111,6 +116,12 @@ interface FrontDeskPortalViewProps {
   onlineReservations?: OnlineReservation[];
   onCheckinReservation?: (resId: string) => void;
   onCancelReservation?: (resId: string) => void;
+  onReprintReceipt?: (trx: Transaction) => void;
+  initialTab?: 'radar' | 'checkin' | 'members' | 'lockers' | 'pos_desk' | 'helpdesk' | 'suggestions' | 'reservations' | 'guest_passes';
+  guestVisitors?: GuestPassVisitor[];
+  onUpdateGuestVisitors?: React.Dispatch<React.SetStateAction<GuestPassVisitor[]>>;
+  onAddGuestVisitor?: (guest: GuestPassVisitor) => void;
+  onAddLead?: (lead: Lead) => void;
 }
 
 // Quick Desk POS Catalog Item
@@ -264,10 +275,27 @@ export const FrontDeskPortalView: React.FC<FrontDeskPortalViewProps> = ({
   isStoreClosed = false,
   onlineReservations = [],
   onCheckinReservation,
-  onCancelReservation
+  onCancelReservation,
+  onReprintReceipt,
+  initialTab = 'radar',
+  guestVisitors: guestVisitorsProp,
+  onUpdateGuestVisitors,
+  onAddGuestVisitor,
+  onAddLead
 }) => {
+  // Guest Pass Directory State
+  const [localGuestVisitors, setLocalGuestVisitors] = useState<GuestPassVisitor[]>(INITIAL_GUEST_VISITORS);
+  const currentGuestVisitors = guestVisitorsProp || localGuestVisitors;
+  const updateGuestVisitors = onUpdateGuestVisitors || setLocalGuestVisitors;
+
   // Main Sub-Tab Mode
-  const [activeTab, setActiveTab] = useState<'radar' | 'checkin' | 'members' | 'lockers' | 'pos_desk' | 'helpdesk' | 'suggestions' | 'reservations'>('radar');
+  const [activeTab, setActiveTab] = useState<'radar' | 'checkin' | 'members' | 'lockers' | 'pos_desk' | 'helpdesk' | 'suggestions' | 'reservations' | 'guest_passes'>(initialTab);
+
+  useEffect(() => {
+    if (initialTab) {
+      setActiveTab(initialTab);
+    }
+  }, [initialTab]);
 
   // Online Reservation Search & Status Filter
   const [reservationSearchQuery, setReservationSearchQuery] = useState('');
@@ -321,6 +349,12 @@ export const FrontDeskPortalView: React.FC<FrontDeskPortalViewProps> = ({
 
   // Walk-In Guest Pass Modal State
   const [isGuestPassModalOpen, setIsGuestPassModalOpen] = useState(false);
+  const [guestSearchQuery, setGuestSearchQuery] = useState('');
+  const [selectedExistingGuest, setSelectedExistingGuest] = useState<GuestPassVisitor | null>(null);
+  const [convertingGuestPassId, setConvertingGuestPassId] = useState<string | null>(null);
+  const [guestPassTableSearch, setGuestPassTableSearch] = useState('');
+  const [guestPassFilter, setGuestPassFilter] = useState<'ALL' | 'ACTIVE_VISIT' | 'CONVERTED' | 'REPEAT'>('ALL');
+  const [selectedGuestForDetail, setSelectedGuestForDetail] = useState<GuestPassVisitor | null>(null);
   const [guestPassForm, setGuestPassForm] = useState({
     name: '',
     phone: '',
@@ -771,13 +805,16 @@ export const FrontDeskPortalView: React.FC<FrontDeskPortalViewProps> = ({
     };
 
     onAddTransaction(newTrx);
+    if (onReprintReceipt) {
+      onReprintReceipt(newTrx);
+    }
     setIsRenewalModalOpen(false);
     setSelectedMemberForRenewal(null);
     setRenewalPackageId('');
 
     showToast(
       'Perpanjangan Berhasil! 🎉',
-      `Masa aktif ${selectedMemberForRenewal.name} diperpanjang hingga ${formatDateIndo(newExpiredDate)}.`,
+      `Masa aktif ${selectedMemberForRenewal.name} diperpanjang hingga ${formatDateIndo(newExpiredDate)}. Nota pembayaran siap dicetak.`,
       'success'
     );
   };
@@ -844,6 +881,27 @@ export const FrontDeskPortalView: React.FC<FrontDeskPortalViewProps> = ({
         picNames: newMember.picName
       };
       onAddTransaction(trx);
+      if (onReprintReceipt) {
+        onReprintReceipt(trx);
+      }
+    }
+
+    // If converted from a Guest Pass visitor, mark that visitor as Terkonversi Member and link new member ID
+    if (convertingGuestPassId) {
+      updateGuestVisitors((prev) =>
+        prev.map((g) =>
+          g.id === convertingGuestPassId
+            ? {
+                ...g,
+                status: 'Terkonversi Member',
+                convertedMemberId: newMember.id,
+                convertedMemberName: newMember.name,
+                convertedAt: `${APP_TODAY} ${getTimestamp()}`
+              }
+            : g
+        )
+      );
+      setConvertingGuestPassId(null);
     }
 
     setIsNewMemberModalOpen(false);
@@ -879,6 +937,65 @@ export const FrontDeskPortalView: React.FC<FrontDeskPortalViewProps> = ({
     const phoneWithCode = cleanPhone.startsWith('0') ? '62' + cleanPhone.slice(1) : cleanPhone;
     const msg = `Halo Kak ${member.name}! Kami merindukan semangat latihan Kakak di GymPro! 💪✨ Sudah sekitar ${daysAgo} hari Kakak belum mampir ke gym. Jika ada kendala program latihan atau jadwal, tim kami siap membantu ya Kak. Sampai jumpa di gym! 🏋️`;
     return `https://wa.me/${phoneWithCode}?text=${encodeURIComponent(msg)}`;
+  };
+
+  // ---------------------------------------------------------------------------
+  // GUEST PASS ACTIONS: CONVERT TO MEMBER & LEAD PIPELINE
+  // ---------------------------------------------------------------------------
+  const handleStartConvertToMember = (guest: GuestPassVisitor) => {
+    setConvertingGuestPassId(guest.id);
+    const defaultPkg = packages.find((p) => p.cat === 'Membership') || packages[0];
+    setNewMemberForm({
+      name: guest.name,
+      phone: guest.phone,
+      gender: guest.gender || 'L',
+      packageId: defaultPkg?.id || '',
+      paymentMethod: 'QRIS',
+      notes: `Konversi dari Tamu Visit Harian (ID: ${guest.id}, Total Kunjungan: ${guest.totalVisits}x, Belanja Tiket: ${formatRp(guest.totalSpend)}).`,
+      assignedStaffId: currentUser?.id || 'S01'
+    });
+    setIsRegPicLocked(true);
+    setIsGuestPassModalOpen(false);
+    setIsNewMemberModalOpen(true);
+    showToast(
+      'Mulai Konversi Jadi Member ⚡',
+      `Data tamu ${guest.name} telah dipindahkan ke formulir registrasi member baru. Silakan pilih paket dan proses pembayaran.`,
+      'info'
+    );
+  };
+
+  const handleExportGuestToLead = (guest: GuestPassVisitor) => {
+    if (onAddLead) {
+      const newLead: Lead = {
+        id: `L-GP-${Date.now().toString().slice(-4)}`,
+        date: APP_TODAY,
+        name: guest.name,
+        phone: guest.phone,
+        source: 'Visit Harian (Guest Pass)',
+        status: 'Follow Up',
+        priority: guest.totalVisits >= 2 ? 'Tinggi' : 'Sedang',
+        picId: currentUser?.id || 'S01',
+        picName: currentUser?.name || 'Front Desk',
+        picRole: currentUser?.roleName || 'Kasir & Front Desk',
+        picDivision: 'Kasir & Front Desk',
+        notes: `Prospek potensial dari Tamu Visit Harian (${guest.totalVisits}x kunjungan, total belanja tiket: ${formatRp(guest.totalSpend)}). Tertarik upgrade membership resmi.`
+      };
+      onAddLead(newLead);
+      showToast(
+        'Tamu Masuk ke Pipeline CRM 🎯',
+        `${guest.name} berhasil ditambahkan ke Prospek CRM Leads untuk difollow-up tim sales/front desk via WhatsApp.`,
+        'success'
+      );
+    } else {
+      showToast('Info CRM', `${guest.name} siap di-follow up.`, 'info');
+    }
+  };
+
+  const getWhatsAppGuestFollowUpUrl = (guest: GuestPassVisitor) => {
+    const cleanPhone = (guest.phone || '').replace(/[^0-9]/g, '');
+    const phoneWithCode = cleanPhone.startsWith('0') ? '62' + cleanPhone.slice(1) : cleanPhone;
+    const greeting = `Halo Kak ${guest.name}! 👋\n\nTerima kasih banyak telah berkunjung dan berlatih di *GymPro Fitness Center*.\n\nKami mencatat Kakak sudah berkunjung sebanyak *${guest.totalVisits}x* dengan Tiket Visit Harian. Senang sekali melihat dedikasi latihan Kakak! 💪✨\n\n🔥 *Penawaran Eksklusif Upgrade Member*:\nDaripada membeli tiket visit harian setiap kali datang, kami punya promo spesial jika Kakak upgrade menjadi *Member Resmi* hari ini:\n- Bebas biaya admin pendaftaran\n- Akses tak terbatas seluruh fasilitas & kelas studio\n- Bonus 1 sesi konsultasi Personal Trainer gratis\n\nApakah tertarik untuk kami siapkan membershipnya, Kak? Kami siap bantu langsung di front desk! 🙌`;
+    return `https://wa.me/${phoneWithCode}?text=${encodeURIComponent(greeting)}`;
   };
 
   // ---------------------------------------------------------------------------
@@ -1010,25 +1127,29 @@ export const FrontDeskPortalView: React.FC<FrontDeskPortalViewProps> = ({
 
     onAddTransaction(newTrx);
 
-    // Set receipt modal data
-    setReceiptModalData({
-      trxId,
-      date: APP_TODAY,
-      time: getTimestamp(),
-      customerName,
-      memberId: deskCustomerType === 'member' ? selectedDeskMemberId : undefined,
-      cashierName: currentUser?.name || 'Kasir Front Desk',
-      items: quickCart.map((i) => ({
-        name: i.product.name,
-        price: i.product.price,
-        qty: i.qty,
-        total: i.product.price * i.qty
-      })),
-      total: cartTotal,
-      paymentMethod: deskPaymentMethod,
-      cashGiven: deskPaymentMethod === 'Cash' ? deskCashGiven : undefined,
-      changeGiven: deskPaymentMethod === 'Cash' ? changeAmount : undefined
-    });
+    if (onReprintReceipt) {
+      onReprintReceipt(newTrx);
+    } else {
+      // Fallback local receipt modal data
+      setReceiptModalData({
+        trxId,
+        date: APP_TODAY,
+        time: getTimestamp(),
+        customerName,
+        memberId: deskCustomerType === 'member' ? selectedDeskMemberId : undefined,
+        cashierName: currentUser?.name || 'Kasir Front Desk',
+        items: quickCart.map((i) => ({
+          name: i.product.name,
+          price: i.product.price,
+          qty: i.qty,
+          total: i.product.price * i.qty
+        })),
+        total: cartTotal,
+        paymentMethod: deskPaymentMethod,
+        cashGiven: deskPaymentMethod === 'Cash' ? deskCashGiven : undefined,
+        changeGiven: deskPaymentMethod === 'Cash' ? changeAmount : undefined
+      });
+    }
 
     // If replacement card was purchased, auto-annotate member
     if (quickCart.some((i) => i.product.id === 'DP-01') && activeMemberSelected) {
@@ -1443,6 +1564,24 @@ export const FrontDeskPortalView: React.FC<FrontDeskPortalViewProps> = ({
         >
           <Users className="w-4 h-4 text-sky-400" />
           Operasional Member ({members.length})
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setActiveTab('guest_passes')}
+          className={`px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 shrink-0 ${
+            activeTab === 'guest_passes'
+              ? 'bg-orange-500 text-white shadow-md'
+              : 'text-zinc-400 hover:text-white hover:bg-zinc-800/50'
+          }`}
+        >
+          <TicketIcon className="w-4 h-4 text-amber-400" />
+          Buku Tamu & Tiket Visit ({currentGuestVisitors.length})
+          {currentGuestVisitors.filter((g) => g.totalVisits >= 2 && g.status === 'Aktif Visit').length > 0 && (
+            <span className="px-1.5 py-0.2 rounded-full bg-amber-500 text-black text-[10px] font-black">
+              {currentGuestVisitors.filter((g) => g.totalVisits >= 2 && g.status === 'Aktif Visit').length} Hot Leads
+            </span>
+          )}
         </button>
 
         <button
@@ -3135,6 +3274,113 @@ export const FrontDeskPortalView: React.FC<FrontDeskPortalViewProps> = ({
               </div>
             </div>
           </div>
+
+          {/* Log & Cetak Ulang Nota Kasir Hari Ini */}
+          <div className="bg-zinc-900 border border-zinc-800 rounded-3xl p-5 shadow-lg space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-zinc-800">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 bg-emerald-500/10 text-emerald-400 rounded-xl border border-emerald-500/20">
+                  <Receipt className="w-4 h-4" />
+                </div>
+                <div>
+                  <h4 className="text-sm font-bold text-white">Log Transaksi & Cetak Ulang Nota Hari Ini</h4>
+                  <p className="text-[11px] text-zinc-400">
+                    Daftar seluruh nota penjualan meja kasir, tiket visit tamu, dan pendaftaran member hari ini ({transactions.filter((t) => t.date === APP_TODAY).length} transaksi).
+                  </p>
+                </div>
+              </div>
+              <span className="text-xs font-mono font-bold text-emerald-400 bg-emerald-500/10 px-3 py-1 rounded-xl border border-emerald-500/20">
+                Omset Kasir Hari Ini: {formatRp(transactions.filter((t) => t.date === APP_TODAY && t.status !== 'VOID').reduce((s, t) => s + (t.amountPaid || t.amount), 0))}
+              </span>
+            </div>
+
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs">
+                <thead className="bg-zinc-950 text-zinc-400 border-b border-zinc-800">
+                  <tr>
+                    <th className="py-2.5 px-3 uppercase text-[10px] font-bold">ID / Jam</th>
+                    <th className="py-2.5 px-3 uppercase text-[10px] font-bold">Pelanggan / Member</th>
+                    <th className="py-2.5 px-3 uppercase text-[10px] font-bold">Rincian Transaksi</th>
+                    <th className="py-2.5 px-3 uppercase text-[10px] font-bold">Metode</th>
+                    <th className="py-2.5 px-3 uppercase text-[10px] font-bold text-right">Total Bayar</th>
+                    <th className="py-2.5 px-3 uppercase text-[10px] font-bold text-center">Aksi Nota</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-zinc-800 bg-zinc-950/40">
+                  {transactions
+                    .filter((t) => t.date === APP_TODAY)
+                    .slice(0, 15)
+                    .map((t) => (
+                      <tr key={t.id} className="hover:bg-zinc-800/40">
+                        <td className="py-2.5 px-3">
+                          <span className="font-mono font-bold text-white block">{t.id}</span>
+                          <span className="text-[10px] text-zinc-500">{t.time || 'Hari ini'}</span>
+                        </td>
+                        <td className="py-2.5 px-3">
+                          <span className="font-semibold text-zinc-200 block">{t.customer}</span>
+                          <span className="text-[10px] text-zinc-500">Kasir: {t.cashier || 'Front Desk'}</span>
+                        </td>
+                        <td className="py-2.5 px-3 text-zinc-300 max-w-xs truncate" title={t.desc}>
+                          {t.desc}
+                        </td>
+                        <td className="py-2.5 px-3">
+                          <span className="px-2 py-0.5 rounded bg-zinc-800 text-[10px] text-zinc-300 border border-zinc-700">
+                            {t.method}
+                          </span>
+                        </td>
+                        <td className="py-2.5 px-3 text-right font-bold text-emerald-400 font-mono">
+                          {formatRp(t.amountPaid || t.amount)}
+                        </td>
+                        <td className="py-2.5 px-3 text-center">
+                          <TransactionActions
+                            transaction={t}
+                            onView={(trx) => {
+                              if (onReprintReceipt) {
+                                onReprintReceipt(trx);
+                              } else {
+                                setReceiptModalData({
+                                  trxId: trx.id,
+                                  date: trx.date,
+                                  time: trx.time,
+                                  customerName: trx.customer,
+                                  cashierName: trx.cashier,
+                                  items: [{ name: trx.desc, price: trx.amount, qty: 1, total: trx.amount }],
+                                  total: trx.amount,
+                                  paymentMethod: trx.method
+                                });
+                              }
+                            }}
+                            onPrint={(trx) => {
+                              if (onReprintReceipt) {
+                                onReprintReceipt(trx);
+                              } else {
+                                setReceiptModalData({
+                                  trxId: trx.id,
+                                  date: trx.date,
+                                  time: trx.time,
+                                  customerName: trx.customer,
+                                  cashierName: trx.cashier,
+                                  items: [{ name: trx.desc, price: trx.amount, qty: 1, total: trx.amount }],
+                                  total: trx.amount,
+                                  paymentMethod: trx.method
+                                });
+                              }
+                            }}
+                            size="sm"
+                          />
+                        </td>
+                      </tr>
+                    ))}
+                </tbody>
+              </table>
+
+              {transactions.filter((t) => t.date === APP_TODAY).length === 0 && (
+                <div className="p-6 text-center text-zinc-500 text-xs">
+                  Belum ada transaksi kasir yang tercatat hari ini.
+                </div>
+              )}
+            </div>
+          </div>
         </div>
       )}
 
@@ -3388,6 +3634,681 @@ export const FrontDeskPortalView: React.FC<FrontDeskPortalViewProps> = ({
                   </p>
                 </div>
               ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ------------------------------------------------------------------ */}
+      {/* 9. SUB-VIEW: BUKU TAMU & TIKET VISIT HARIAN (GUEST PASS DIRECTORY) */}
+      {/* ------------------------------------------------------------------ */}
+      {activeTab === 'guest_passes' && (
+        <div className="space-y-6 animate-in fade-in-50 duration-300">
+          {/* Header Banner */}
+          <div className="bg-gradient-to-r from-amber-500/10 via-zinc-900 to-zinc-900 border border-amber-500/20 rounded-3xl p-5 sm:p-6 shadow-xl">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+              <div className="flex items-center gap-3">
+                <div className="p-3 bg-amber-500/20 text-amber-400 rounded-2xl border border-amber-500/30 shrink-0">
+                  <TicketIcon className="w-6 h-6" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h3 className="text-base sm:text-lg font-bold text-white">
+                      Buku Tamu & Direktori Tiket Visit Harian (Guest Pass)
+                    </h3>
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/20 text-amber-400 border border-amber-500/30">
+                      Walk-in & Repeat Visitors
+                    </span>
+                  </div>
+                  <p className="text-xs text-zinc-400 mt-1 max-w-2xl">
+                    Mendata tamu walk-in non-member yang berkunjung harian. Saat tamu datang kembali, staf dapat langsung mencari nama/nomor WhatsApp untuk check-in instan, melihat riwayat kunjungan, atau melakukan <strong>Konversi 1-Klik menjadi Member Resmi</strong>.
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2.5">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelectedExistingGuest(null);
+                    setGuestSearchQuery('');
+                    setGuestPassForm({
+                      name: '',
+                      phone: '',
+                      paymentMethod: 'Cash',
+                      price: 50000,
+                      hasTowel: true,
+                      lockerNum: '01'
+                    });
+                    setIsGuestPassModalOpen(true);
+                  }}
+                  className="px-4 py-2.5 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-zinc-950 font-black rounded-xl text-xs transition shadow-lg shadow-amber-500/20 flex items-center gap-2 active:scale-95"
+                >
+                  <Plus className="w-4 h-4" />
+                  Cetak Tiket Visit Baru
+                </button>
+              </div>
+            </div>
+
+            {/* Quick Metrics */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-6 pt-5 border-t border-zinc-800">
+              <div className="bg-zinc-950/70 p-3.5 rounded-2xl border border-zinc-800/80">
+                <span className="text-[10px] text-zinc-400 font-bold uppercase tracking-wider block">
+                  Total Tamu Terdata
+                </span>
+                <span className="text-xl font-black text-white mt-0.5 block">
+                  {currentGuestVisitors.length}
+                </span>
+                <span className="text-[10px] text-zinc-500">Tamu walk-in non-member</span>
+              </div>
+
+              <div className="bg-zinc-950/70 p-3.5 rounded-2xl border border-zinc-800/80">
+                <span className="text-[10px] text-zinc-400 font-bold uppercase tracking-wider block">
+                  Total Tiket Kunjungan
+                </span>
+                <span className="text-xl font-black text-amber-400 mt-0.5 block">
+                  {currentGuestVisitors.reduce((sum, g) => sum + (g.totalVisits || 0), 0)} Tiket
+                </span>
+                <span className="text-[10px] text-zinc-500">
+                  Total omset: {formatRp(currentGuestVisitors.reduce((sum, g) => sum + (g.totalSpend || 0), 0))}
+                </span>
+              </div>
+
+              <div className="bg-zinc-950/70 p-3.5 rounded-2xl border border-zinc-800/80">
+                <span className="text-[10px] text-orange-400 font-bold uppercase tracking-wider block flex items-center gap-1">
+                  <Flame className="w-3.5 h-3.5" /> Sering Datang (≥ 2x)
+                </span>
+                <span className="text-xl font-black text-orange-400 mt-0.5 block">
+                  {currentGuestVisitors.filter((g) => g.totalVisits >= 2 && g.status === 'Aktif Visit').length} Tamu
+                </span>
+                <span className="text-[10px] text-amber-400 font-medium">Hot Leads paling potensial</span>
+              </div>
+
+              <div className="bg-zinc-950/70 p-3.5 rounded-2xl border border-zinc-800/80">
+                <span className="text-[10px] text-emerald-400 font-bold uppercase tracking-wider block flex items-center gap-1">
+                  <Crown className="w-3.5 h-3.5" /> Terkonversi Jadi Member
+                </span>
+                <span className="text-xl font-black text-emerald-400 mt-0.5 block">
+                  {currentGuestVisitors.filter((g) => g.status === 'Terkonversi Member').length}
+                </span>
+                <span className="text-[10px] text-emerald-400 font-medium">
+                  {currentGuestVisitors.length > 0
+                    ? `${((currentGuestVisitors.filter((g) => g.status === 'Terkonversi Member').length / currentGuestVisitors.length) * 100).toFixed(0)}% Conversion Rate`
+                    : '0%'}
+                </span>
+              </div>
+            </div>
+          </div>
+
+          {/* Search, Filter & Directory Table */}
+          <div className="bg-zinc-900 border border-zinc-800 rounded-3xl p-5 shadow-lg space-y-4">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
+              {/* Search Bar */}
+              <div className="relative flex-1 max-w-md">
+                <Search className="w-4 h-4 text-zinc-500 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                <input
+                  type="text"
+                  placeholder="Cari tamu lama (Nama, No WhatsApp, ID Tamu, Catatan)..."
+                  value={guestPassTableSearch}
+                  onChange={(e) => setGuestPassTableSearch(e.target.value)}
+                  className="w-full pl-10 pr-4 py-2 bg-zinc-950 border border-zinc-800 rounded-xl text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-amber-500"
+                />
+                {guestPassTableSearch && (
+                  <button
+                    type="button"
+                    onClick={() => setGuestPassTableSearch('')}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-white text-xs"
+                  >
+                    ✕
+                  </button>
+                )}
+              </div>
+
+              {/* Filter Pills */}
+              <div className="flex flex-wrap items-center gap-1.5 bg-zinc-950 p-1 rounded-xl border border-zinc-800 text-xs">
+                <button
+                  type="button"
+                  onClick={() => setGuestPassFilter('ALL')}
+                  className={`px-3 py-1.5 rounded-lg font-bold transition ${
+                    guestPassFilter === 'ALL'
+                      ? 'bg-amber-500 text-zinc-950 shadow-sm'
+                      : 'text-zinc-400 hover:text-white'
+                  }`}
+                >
+                  Semua ({currentGuestVisitors.length})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setGuestPassFilter('ACTIVE_VISIT')}
+                  className={`px-3 py-1.5 rounded-lg font-bold transition ${
+                    guestPassFilter === 'ACTIVE_VISIT'
+                      ? 'bg-amber-500 text-zinc-950 shadow-sm'
+                      : 'text-zinc-400 hover:text-white'
+                  }`}
+                >
+                  Aktif Visit ({currentGuestVisitors.filter((g) => g.status === 'Aktif Visit').length})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setGuestPassFilter('REPEAT')}
+                  className={`px-3 py-1.5 rounded-lg font-bold transition flex items-center gap-1 ${
+                    guestPassFilter === 'REPEAT'
+                      ? 'bg-amber-500 text-zinc-950 shadow-sm'
+                      : 'text-zinc-400 hover:text-white'
+                  }`}
+                >
+                  <Flame className="w-3 h-3" />
+                  Sering Datang ≥ 2x ({currentGuestVisitors.filter((g) => g.totalVisits >= 2 && g.status === 'Aktif Visit').length})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setGuestPassFilter('CONVERTED')}
+                  className={`px-3 py-1.5 rounded-lg font-bold transition flex items-center gap-1 ${
+                    guestPassFilter === 'CONVERTED'
+                      ? 'bg-emerald-500 text-zinc-950 shadow-sm'
+                      : 'text-zinc-400 hover:text-white'
+                  }`}
+                >
+                  <Crown className="w-3 h-3" />
+                  Sudah Jadi Member ({currentGuestVisitors.filter((g) => g.status === 'Terkonversi Member').length})
+                </button>
+              </div>
+            </div>
+
+            {/* Visitors Table */}
+            <div className="overflow-x-auto rounded-2xl border border-zinc-800">
+              <table className="w-full text-left text-xs">
+                <thead>
+                  <tr className="bg-zinc-950/80 border-b border-zinc-800 text-zinc-400 font-bold uppercase text-[10px] tracking-wider">
+                    <th className="py-3 px-4">Tamu & ID</th>
+                    <th className="py-3 px-3">Status</th>
+                    <th className="py-3 px-3">WhatsApp / Kontak</th>
+                    <th className="py-3 px-3">Frekuensi Visit</th>
+                    <th className="py-3 px-3">Kunjungan Terakhir</th>
+                    <th className="py-3 px-3">PIC Front Desk</th>
+                    <th className="py-3 px-4">Catatan & Minat</th>
+                    <th className="py-3 px-4 text-right">Aksi Cepat</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-zinc-800/60 bg-zinc-900/40">
+                  {currentGuestVisitors
+                    .filter((g) => {
+                      if (guestPassFilter === 'ACTIVE_VISIT' && g.status !== 'Aktif Visit') return false;
+                      if (guestPassFilter === 'CONVERTED' && g.status !== 'Terkonversi Member') return false;
+                      if (guestPassFilter === 'REPEAT' && (g.totalVisits < 2 || g.status !== 'Aktif Visit')) return false;
+                      if (guestPassTableSearch.trim()) {
+                        const q = guestPassTableSearch.toLowerCase();
+                        const matchName = g.name.toLowerCase().includes(q);
+                        const matchPhone = (g.phone || '').includes(q);
+                        const matchId = g.id.toLowerCase().includes(q);
+                        const matchNotes = (g.notes || '').toLowerCase().includes(q);
+                        if (!matchName && !matchPhone && !matchId && !matchNotes) return false;
+                      }
+                      return true;
+                    })
+                    .map((guest) => {
+                      const isHotLead = guest.totalVisits >= 2 && guest.status === 'Aktif Visit';
+                      const isConverted = guest.status === 'Terkonversi Member';
+
+                      return (
+                        <tr key={guest.id} className="hover:bg-zinc-800/40 transition group">
+                          {/* Name & ID */}
+                          <td className="py-3.5 px-4">
+                            <div className="flex items-center gap-3">
+                              <div className={`w-9 h-9 rounded-xl flex items-center justify-center font-bold text-xs shrink-0 ${
+                                isConverted
+                                  ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+                                  : isHotLead
+                                  ? 'bg-orange-500/20 text-orange-400 border border-orange-500/30'
+                                  : 'bg-zinc-800 text-zinc-300 border border-zinc-700'
+                              }`}>
+                                {guest.name.slice(0, 2).toUpperCase()}
+                              </div>
+                              <div>
+                                <div className="flex items-center gap-2">
+                                  <span className="font-bold text-white text-xs group-hover:text-amber-400 transition">
+                                    {guest.name}
+                                  </span>
+                                  <span className="px-1.5 py-0.2 rounded bg-zinc-800 text-[10px] font-mono text-zinc-400 border border-zinc-700">
+                                    {guest.id}
+                                  </span>
+                                  {guest.gender && (
+                                    <span className="px-1.5 py-0.2 rounded bg-zinc-800 text-[10px] text-zinc-400">
+                                      {guest.gender === 'P' ? 'Wanita' : 'Pria'}
+                                    </span>
+                                  )}
+                                </div>
+                                <span className="text-[11px] text-zinc-500 block">
+                                  Kunjungan Pertama: {formatDateIndo(guest.firstVisitDate)}
+                                </span>
+                              </div>
+                            </div>
+                          </td>
+
+                          {/* Status */}
+                          <td className="py-3.5 px-3">
+                            {isConverted ? (
+                              <div className="space-y-0.5">
+                                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
+                                  <Crown className="w-3 h-3" /> Member Resmi
+                                </span>
+                                {guest.convertedMemberId && (
+                                  <span className="block text-[10px] font-mono text-zinc-400">
+                                    ID: {guest.convertedMemberId}
+                                  </span>
+                                )}
+                              </div>
+                            ) : isHotLead ? (
+                              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-orange-500/15 text-orange-400 border border-orange-500/30">
+                                <Flame className="w-3 h-3" /> Hot Prospect
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/15 text-amber-300 border border-amber-500/30">
+                                <TicketIcon className="w-3 h-3" /> Aktif Visit
+                              </span>
+                            )}
+                          </td>
+
+                          {/* WhatsApp / Phone */}
+                          <td className="py-3.5 px-3">
+                            <div className="flex items-center gap-1.5">
+                              <span className="font-mono text-zinc-300">{guest.phone}</span>
+                              {guest.phone && guest.phone !== '-' && (
+                                <a
+                                  href={getWhatsAppGuestFollowUpUrl(guest)}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  title="Chat WhatsApp Ajakan Member"
+                                  className="p-1 rounded-lg bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500 hover:text-black transition"
+                                >
+                                  <MessageCircle className="w-3.5 h-3.5" />
+                                </a>
+                              )}
+                            </div>
+                          </td>
+
+                          {/* Frekuensi Visit */}
+                          <td className="py-3.5 px-3">
+                            <div className="space-y-0.5">
+                              <div className="flex items-center gap-1.5">
+                                <span className={`px-2 py-0.5 rounded-md font-black text-xs ${
+                                  guest.totalVisits >= 3
+                                    ? 'bg-orange-500/20 text-orange-400 border border-orange-500/30'
+                                    : guest.totalVisits === 2
+                                    ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
+                                    : 'bg-zinc-800 text-zinc-300 border border-zinc-700'
+                                }`}>
+                                  {guest.totalVisits}x Visit
+                                </span>
+                              </div>
+                              <span className="text-[10px] text-zinc-400 font-mono block">
+                                Belanja: {formatRp(guest.totalSpend)}
+                              </span>
+                            </div>
+                          </td>
+
+                          {/* Kunjungan Terakhir */}
+                          <td className="py-3.5 px-3">
+                            <div className="text-zinc-300 font-medium">
+                              {formatDateIndo(guest.lastVisitDate)}
+                            </div>
+                            <span className="text-[10px] text-zinc-500">
+                              {guest.lastVisitDate === APP_TODAY
+                                ? 'Hari ini'
+                                : `${Math.abs(getDayDiff(APP_TODAY, guest.lastVisitDate))} hari lalu`}
+                            </span>
+                          </td>
+
+                          {/* PIC Kasir */}
+                          <td className="py-3.5 px-3">
+                            <div className="flex items-center gap-1.5">
+                              <User className="w-3.5 h-3.5 text-zinc-500" />
+                              <span className="text-zinc-300 font-medium">
+                                {guest.lastPicName || 'Kasir Front Desk'}
+                              </span>
+                            </div>
+                            <span className="text-[10px] text-zinc-500">
+                              Metode: {guest.lastPaymentMethod || 'Cash'}
+                            </span>
+                          </td>
+
+                          {/* Catatan & Minat */}
+                          <td className="py-3.5 px-4 max-w-xs">
+                            <p className="text-zinc-400 text-xs truncate" title={guest.notes}>
+                              {guest.notes || '-'}
+                            </p>
+                          </td>
+
+                          {/* Aksi Cepat */}
+                          <td className="py-3.5 px-4 text-right">
+                            <div className="flex items-center justify-end gap-1.5">
+                              {/* 1. Tombol Visit Ulang */}
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setSelectedExistingGuest(guest);
+                                  setGuestPassForm({
+                                    name: guest.name,
+                                    phone: guest.phone,
+                                    paymentMethod: (guest.lastPaymentMethod as any) || 'Cash',
+                                    price: 50000,
+                                    hasTowel: true,
+                                    lockerNum: '01'
+                                  });
+                                  setIsGuestPassModalOpen(true);
+                                }}
+                                title="Check-in Visit Ulang Tamu Ini"
+                                className="px-2.5 py-1.5 bg-amber-500/15 hover:bg-amber-500 text-amber-400 hover:text-zinc-950 font-bold rounded-xl transition flex items-center gap-1 active:scale-95 text-[11px]"
+                              >
+                                <RefreshCw className="w-3 h-3" />
+                                Visit Ulang
+                              </button>
+
+                              {/* 2. Tombol Konversi Jadi Member */}
+                              {!isConverted && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleStartConvertToMember(guest)}
+                                  title="Konversi Tamu Ini Menjadi Member Resmi"
+                                  className="px-2.5 py-1.5 bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white font-bold rounded-xl transition flex items-center gap-1 shadow-sm active:scale-95 text-[11px]"
+                                >
+                                  <Crown className="w-3 h-3" />
+                                  Jadi Member
+                                </button>
+                              )}
+
+                              {/* 3. Tombol Kirim ke CRM Leads */}
+                              {!isConverted && onAddLead && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleExportGuestToLead(guest)}
+                                  title="Kirim ke Pipeline Prospek CRM"
+                                  className="p-1.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-white rounded-xl transition"
+                                >
+                                  <Send className="w-3.5 h-3.5" />
+                                </button>
+                              )}
+
+                              {/* 4. Tombol Detail, Cetak, PDF Visit */}
+                              {(() => {
+                                const latestVisit = guest.visitHistory?.[0];
+                                const targetTrx = transactions.find((t) => t.customer === guest.name || t.desc.includes(guest.name)) || {
+                                  id: latestVisit?.id ? `TRX-${latestVisit.id}` : `TRX-VISIT-${guest.id}`,
+                                  date: latestVisit?.date || guest.lastVisitDate,
+                                  time: latestVisit?.time || '10:00 WIB',
+                                  desc: `Tiket Visit Harian (Tamu: ${guest.name})`,
+                                  amount: latestVisit?.price || 50000,
+                                  amountPaid: latestVisit?.price || 50000,
+                                  amountRemaining: 0,
+                                  type: 'Membership' as const,
+                                  method: (latestVisit?.paymentMethod as any) || guest.lastPaymentMethod || 'Cash',
+                                  customer: guest.name,
+                                  cashier: latestVisit?.picName || guest.lastPicName || currentUser?.name || 'Kasir Front Desk',
+                                  status: 'Paid',
+                                  branchId: guest.branchId || currentUser?.branchId || 'BR-001',
+                                  branchName: 'GymPro Kelapa Gading'
+                                };
+                                return (
+                                  <TransactionActions
+                                    transaction={targetTrx}
+                                    onView={(trx) => {
+                                      if (onReprintReceipt) {
+                                        onReprintReceipt(trx);
+                                      } else {
+                                        setReceiptModalData({
+                                          trxId: trx.id,
+                                          date: trx.date,
+                                          time: trx.time,
+                                          customerName: trx.customer,
+                                          cashierName: trx.cashier,
+                                          items: [{ name: 'Tiket Visit Harian Gym Pass', price: trx.amount, qty: 1, total: trx.amount }],
+                                          total: trx.amount,
+                                          paymentMethod: trx.method
+                                        });
+                                      }
+                                    }}
+                                    onPrint={(trx) => {
+                                      if (onReprintReceipt) {
+                                        onReprintReceipt(trx);
+                                      } else {
+                                        setReceiptModalData({
+                                          trxId: trx.id,
+                                          date: trx.date,
+                                          time: trx.time,
+                                          customerName: trx.customer,
+                                          cashierName: trx.cashier,
+                                          items: [{ name: 'Tiket Visit Harian Gym Pass', price: trx.amount, qty: 1, total: trx.amount }],
+                                          total: trx.amount,
+                                          paymentMethod: trx.method
+                                        });
+                                      }
+                                    }}
+                                    size="sm"
+                                  />
+                                );
+                              })()}
+
+                              {/* 5. Tombol Riwayat Visit */}
+                              <button
+                                type="button"
+                                onClick={() => setSelectedGuestForDetail(guest)}
+                                title="Lihat Riwayat Kunjungan Lengkap"
+                                className="p-1.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-white rounded-xl transition"
+                              >
+                                <History className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                </tbody>
+              </table>
+
+              {currentGuestVisitors.length === 0 && (
+                <div className="p-8 text-center text-zinc-500 text-xs">
+                  Belum ada data tamu visit harian yang tercatat. Klik tombol <strong>+ Cetak Tiket Visit Baru</strong> untuk mulai mendata tamu walk-in.
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ------------------------------------------------------------------ */}
+      {/* MODAL: RIWAYAT KUNJUNGAN TAMU VISIT HARIAN */}
+      {/* ------------------------------------------------------------------ */}
+      {selectedGuestForDetail && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-zinc-900 border border-zinc-800 rounded-3xl p-6 w-full max-w-lg shadow-2xl space-y-5 animate-in fade-in-50 zoom-in-95 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between pb-3 border-b border-zinc-800">
+              <div className="flex items-center gap-3">
+                <div className="p-2.5 bg-amber-500/20 text-amber-400 rounded-2xl border border-amber-500/30">
+                  <TicketIcon className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-white">{selectedGuestForDetail.name}</h3>
+                  <p className="text-xs text-zinc-400">
+                    ID: {selectedGuestForDetail.id} · Kontak: {selectedGuestForDetail.phone}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSelectedGuestForDetail(null)}
+                className="text-zinc-400 hover:text-white p-1 rounded-lg"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Profile Overview Card */}
+            <div className="grid grid-cols-3 gap-2.5 p-3.5 bg-zinc-950 rounded-2xl border border-zinc-800 text-xs">
+              <div>
+                <span className="text-[10px] text-zinc-500 font-bold block">Status Tamu:</span>
+                <span className={`font-bold mt-0.5 inline-block ${
+                  selectedGuestForDetail.status === 'Terkonversi Member' ? 'text-emerald-400' : 'text-amber-400'
+                }`}>
+                  {selectedGuestForDetail.status}
+                </span>
+              </div>
+              <div>
+                <span className="text-[10px] text-zinc-500 font-bold block">Total Kunjungan:</span>
+                <span className="text-white font-black text-sm block">
+                  {selectedGuestForDetail.totalVisits} Kali Visit
+                </span>
+              </div>
+              <div>
+                <span className="text-[10px] text-zinc-500 font-bold block">Total Belanja Tiket:</span>
+                <span className="text-amber-400 font-bold block">
+                  {formatRp(selectedGuestForDetail.totalSpend)}
+                </span>
+              </div>
+            </div>
+
+            {selectedGuestForDetail.notes && (
+              <div className="p-3 bg-zinc-950/70 border border-zinc-800 rounded-2xl text-xs space-y-1">
+                <span className="text-[10px] text-zinc-400 font-bold block uppercase">Catatan Minat Tamu:</span>
+                <p className="text-zinc-300 italic">{selectedGuestForDetail.notes}</p>
+              </div>
+            )}
+
+            {/* Visit History Log */}
+            <div className="space-y-2">
+              <h4 className="text-xs font-bold text-zinc-300 uppercase tracking-wider flex items-center gap-1.5">
+                <History className="w-3.5 h-3.5 text-amber-400" />
+                Log Riwayat Tiket Visit ({selectedGuestForDetail.visitHistory?.length || 0})
+              </h4>
+
+              <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
+                {selectedGuestForDetail.visitHistory && selectedGuestForDetail.visitHistory.length > 0 ? (
+                  selectedGuestForDetail.visitHistory.map((v, idx) => (
+                    <div key={v.id || idx} className="p-3 bg-zinc-950 rounded-xl border border-zinc-800/80 flex items-center justify-between text-xs">
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span className="font-bold text-white">{formatDateIndo(v.date)}</span>
+                          <span className="text-zinc-500 text-[10px]">· {v.time}</span>
+                          {v.lockerNum && (
+                            <span className="px-1.5 py-0.2 rounded bg-zinc-800 text-[10px] text-amber-400 border border-zinc-700">
+                              Loker #{v.lockerNum}
+                            </span>
+                          )}
+                          {v.hasTowel && (
+                            <span className="px-1.5 py-0.2 rounded bg-zinc-800 text-[10px] text-sky-400 border border-zinc-700">
+                              Handuk
+                            </span>
+                          )}
+                        </div>
+                        <span className="text-[11px] text-zinc-400 block mt-0.5">
+                          Metode: {v.paymentMethod} · Kasir: {v.picName || 'Front Desk'}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="font-bold text-amber-400 font-mono">
+                          {formatRp(v.price)}
+                        </span>
+                        {(() => {
+                          const vTrx: Transaction = {
+                            id: v.id ? `TRX-${v.id}` : `TRX-VISIT-${selectedGuestForDetail.id}`,
+                            date: v.date,
+                            time: v.time,
+                            desc: `Tiket Visit Harian (Tamu: ${selectedGuestForDetail.name})`,
+                            amount: v.price,
+                            amountPaid: v.price,
+                            amountRemaining: 0,
+                            type: 'Membership' as const,
+                            method: (v.paymentMethod as any) || 'Cash',
+                            customer: selectedGuestForDetail.name,
+                            cashier: v.picName || currentUser?.name || 'Kasir Front Desk',
+                            status: 'Paid',
+                            branchId: selectedGuestForDetail.branchId || currentUser?.branchId || 'BR-001'
+                          };
+                          return (
+                            <TransactionActions
+                              transaction={vTrx}
+                              onView={(trx) => {
+                                if (onReprintReceipt) {
+                                  onReprintReceipt(trx);
+                                } else {
+                                  setReceiptModalData({
+                                    trxId: trx.id,
+                                    date: trx.date,
+                                    time: trx.time,
+                                    customerName: trx.customer,
+                                    cashierName: trx.cashier,
+                                    items: [{ name: 'Tiket Visit Harian Gym Pass', price: trx.amount, qty: 1, total: trx.amount }],
+                                    total: trx.amount,
+                                    paymentMethod: trx.method
+                                  });
+                                }
+                              }}
+                              onPrint={(trx) => {
+                                if (onReprintReceipt) {
+                                  onReprintReceipt(trx);
+                                } else {
+                                  setReceiptModalData({
+                                    trxId: trx.id,
+                                    date: trx.date,
+                                    time: trx.time,
+                                    customerName: trx.customer,
+                                    cashierName: trx.cashier,
+                                    items: [{ name: 'Tiket Visit Harian Gym Pass', price: trx.amount, qty: 1, total: trx.amount }],
+                                    total: trx.amount,
+                                    paymentMethod: trx.method
+                                  });
+                                }
+                              }}
+                              size="sm"
+                            />
+                          );
+                        })()}
+                      </div>
+                    </div>
+                  ))
+                ) : (
+                  <div className="p-4 text-center text-zinc-500 text-xs">
+                    Kunjungan tercatat pada {formatDateIndo(selectedGuestForDetail.lastVisitDate)}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Modal Actions */}
+            <div className="flex flex-wrap items-center justify-end gap-2.5 pt-4 border-t border-zinc-800">
+              <button
+                type="button"
+                onClick={() => setSelectedGuestForDetail(null)}
+                className="px-4 py-2 rounded-xl text-zinc-400 hover:text-white font-bold transition text-xs"
+              >
+                Tutup
+              </button>
+
+              {selectedGuestForDetail.phone && (
+                <a
+                  href={getWhatsAppGuestFollowUpUrl(selectedGuestForDetail)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="px-4 py-2 bg-emerald-500/20 hover:bg-emerald-500 text-emerald-400 hover:text-black font-bold rounded-xl transition text-xs flex items-center gap-1.5"
+                >
+                  <MessageCircle className="w-3.5 h-3.5" />
+                  Chat WhatsApp
+                </a>
+              )}
+
+              {selectedGuestForDetail.status !== 'Terkonversi Member' && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    const g = selectedGuestForDetail;
+                    setSelectedGuestForDetail(null);
+                    handleStartConvertToMember(g);
+                  }}
+                  className="px-4 py-2 bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white font-bold rounded-xl transition text-xs flex items-center gap-1.5 shadow-lg active:scale-95"
+                >
+                  <Crown className="w-3.5 h-3.5" />
+                  Konversi Jadi Member Resmi
+                </button>
+              )}
             </div>
           </div>
         </div>
@@ -3807,24 +4728,177 @@ export const FrontDeskPortalView: React.FC<FrontDeskPortalViewProps> = ({
       {/* ------------------------------------------------------------------ */}
       {isGuestPassModalOpen && (
         <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-zinc-900 border border-zinc-800 rounded-3xl p-6 w-full max-w-md shadow-2xl space-y-5 animate-in fade-in-50 zoom-in-95">
+          <div className="bg-zinc-900 border border-zinc-800 rounded-3xl p-6 w-full max-w-lg shadow-2xl space-y-5 animate-in fade-in-50 zoom-in-95 max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between pb-3 border-b border-zinc-800">
               <div className="flex items-center gap-2.5">
                 <div className="p-2 bg-amber-500/20 text-amber-400 rounded-xl border border-amber-500/30">
-                  <TicketIcon className="w-4 h-4" />
+                  <TicketIcon className="w-5 h-5" />
                 </div>
                 <div>
                   <h3 className="text-base font-bold text-white">Tiket Visit Harian (Guest Pass)</h3>
-                  <p className="text-xs text-zinc-400">Akses latihan 1 hari untuk tamu non-member</p>
+                  <p className="text-xs text-zinc-400">Akses latihan 1 hari untuk tamu walk-in non-member</p>
                 </div>
               </div>
               <button
                 type="button"
-                onClick={() => setIsGuestPassModalOpen(false)}
+                onClick={() => {
+                  setIsGuestPassModalOpen(false);
+                  setSelectedExistingGuest(null);
+                  setGuestSearchQuery('');
+                }}
                 className="text-zinc-400 hover:text-white p-1 rounded-lg"
               >
                 <X className="w-5 h-5" />
               </button>
+            </div>
+
+            {/* LIVE AUTOCOMPLETE / INSTANT SEARCH UNTUK TAMU DATANG KEMBALI */}
+            <div className="space-y-1.5 p-3.5 bg-zinc-950 rounded-2xl border border-zinc-800">
+              <label className="text-zinc-300 font-bold block text-xs flex items-center justify-between">
+                <span className="flex items-center gap-1.5 text-amber-400">
+                  <Search className="w-3.5 h-3.5" />
+                  Cari Tamu Lama (Autocomplete Nama / No WhatsApp)
+                </span>
+                {selectedExistingGuest && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSelectedExistingGuest(null);
+                      setGuestSearchQuery('');
+                      setGuestPassForm({
+                        ...guestPassForm,
+                        name: '',
+                        phone: ''
+                      });
+                    }}
+                    className="text-[10px] text-zinc-400 hover:text-amber-400 underline"
+                  >
+                    Reset / Input Tamu Baru
+                  </button>
+                )}
+              </label>
+
+              <div className="relative">
+                <input
+                  type="text"
+                  placeholder="Ketik nama atau nomor HP tamu yang pernah datang..."
+                  value={guestSearchQuery}
+                  onChange={(e) => {
+                    const q = e.target.value;
+                    setGuestSearchQuery(q);
+                    // If user is typing directly, also mirror to guestPassForm.name if not selecting an existing guest
+                    if (!selectedExistingGuest) {
+                      setGuestPassForm((prev) => ({ ...prev, name: q }));
+                    }
+                  }}
+                  className="w-full px-3.5 py-2 bg-zinc-900 border border-zinc-700 rounded-xl text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-amber-500"
+                />
+
+                {/* Autocomplete Dropdown List */}
+                {guestSearchQuery.trim().length > 0 && !selectedExistingGuest && (
+                  <div className="absolute left-0 right-0 top-full mt-1.5 bg-zinc-950 border border-zinc-700 rounded-2xl p-2 shadow-2xl z-30 space-y-1 max-h-48 overflow-y-auto">
+                    {currentGuestVisitors
+                      .filter((g) => {
+                        const q = guestSearchQuery.toLowerCase();
+                        return (
+                          g.name.toLowerCase().includes(q) ||
+                          (g.phone || '').includes(q) ||
+                          g.id.toLowerCase().includes(q)
+                        );
+                      })
+                      .map((g) => (
+                        <div
+                          key={g.id}
+                          onClick={() => {
+                            setSelectedExistingGuest(g);
+                            setGuestSearchQuery(g.name);
+                            setGuestPassForm({
+                              ...guestPassForm,
+                              name: g.name,
+                              phone: g.phone || '',
+                              paymentMethod: (g.lastPaymentMethod as any) || 'Cash'
+                            });
+                          }}
+                          className="p-2.5 rounded-xl hover:bg-zinc-800/80 cursor-pointer transition flex items-center justify-between group"
+                        >
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <span className="font-bold text-white text-xs group-hover:text-amber-400 transition">
+                                {g.name}
+                              </span>
+                              <span className="px-1.5 py-0.2 rounded bg-zinc-800 text-[9px] font-mono text-zinc-400">
+                                {g.id}
+                              </span>
+                              <span className={`text-[9px] font-bold px-1.5 py-0.2 rounded-full border ${
+                                g.status === 'Terkonversi Member'
+                                  ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30'
+                                  : 'bg-amber-500/15 text-amber-400 border-amber-500/30'
+                              }`}>
+                                {g.status}
+                              </span>
+                            </div>
+                            <span className="text-[10px] text-zinc-400 block mt-0.5">
+                              {g.phone} · Terakhir visit: {formatDateIndo(g.lastVisitDate)}
+                            </span>
+                          </div>
+                          <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                            {g.totalVisits}x Visit
+                          </span>
+                        </div>
+                      ))}
+
+                    {currentGuestVisitors.filter((g) => {
+                      const q = guestSearchQuery.toLowerCase();
+                      return (
+                        g.name.toLowerCase().includes(q) ||
+                        (g.phone || '').includes(q) ||
+                        g.id.toLowerCase().includes(q)
+                      );
+                    }).length === 0 && (
+                      <div className="p-2 text-center text-zinc-500 text-xs">
+                        Tamu baru belum terdaftar. Lanjutkan input formulir di bawah untuk mencatat kunjungan pertama.
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {/* RETURNING GUEST RECOGNITION BANNER */}
+              {selectedExistingGuest && (
+                <div className="mt-2.5 p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 text-xs space-y-2 animate-in fade-in-50">
+                  <div className="flex items-start justify-between gap-2">
+                    <div>
+                      <div className="flex items-center gap-1.5 text-amber-300 font-bold">
+                        <Sparkles className="w-4 h-4 text-amber-400" />
+                        Tamu Pernah Berkunjung ({selectedExistingGuest.totalVisits}x Visit Sebelumnya)
+                      </div>
+                      <p className="text-[11px] text-zinc-300 mt-0.5">
+                        Kunjungan terakhir: <strong>{formatDateIndo(selectedExistingGuest.lastVisitDate)}</strong> · Akumulasi belanja: <strong>{formatRp(selectedExistingGuest.totalSpend)}</strong>
+                      </p>
+                    </div>
+                    <span className="px-2 py-1 rounded-lg bg-amber-500 text-zinc-950 font-black text-[11px]">
+                      Kunjungan ke-{selectedExistingGuest.totalVisits + 1}
+                    </span>
+                  </div>
+
+                  {/* SHORTCUT: DIRECT CONVERT TO MEMBER RIGHT FROM MODAL */}
+                  {selectedExistingGuest.status !== 'Terkonversi Member' && (
+                    <div className="pt-2 border-t border-amber-500/20 flex items-center justify-between gap-2">
+                      <span className="text-[11px] text-amber-200">
+                        💡 Tamu sering datang? Tawarkan join member resmi hari ini.
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => handleStartConvertToMember(selectedExistingGuest)}
+                        className="px-2.5 py-1.5 bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white font-bold rounded-lg transition text-[10px] flex items-center gap-1 shadow-sm shrink-0 active:scale-95"
+                      >
+                        <Crown className="w-3.5 h-3.5" />
+                        Konversi Jadi Member
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
 
             <form
@@ -3835,14 +4909,19 @@ export const FrontDeskPortalView: React.FC<FrontDeskPortalViewProps> = ({
                   return;
                 }
 
+                const trimmedName = guestPassForm.name.trim();
+                const cleanPhone = guestPassForm.phone.trim();
+
                 // 1. Record attendance
                 const newAtt: Attendance = {
                   id: `VISIT-${Date.now().toString().slice(-5)}`,
                   date: APP_TODAY,
                   timeIn: getTimestamp(),
-                  memberName: `${guestPassForm.name.trim()} (Tamu)`,
+                  memberName: `${trimmedName} (Tamu)`,
                   type: 'Reguler',
-                  badge: 'Guest Pass Harian'
+                  badge: 'Guest Pass Harian',
+                  lockerNumber: guestPassForm.lockerNum || undefined,
+                  hasTowel: guestPassForm.hasTowel
                 };
                 onAddAttendance(newAtt);
 
@@ -3851,21 +4930,101 @@ export const FrontDeskPortalView: React.FC<FrontDeskPortalViewProps> = ({
                   id: `TRX-VISIT-${Date.now().toString().slice(-5)}`,
                   date: APP_TODAY,
                   time: getTimestamp(),
-                  desc: `Tiket Visit Harian (Tamu: ${guestPassForm.name})`,
+                  desc: `Tiket Visit Harian (Tamu: ${trimmedName}${selectedExistingGuest ? ` - Visit ke-${selectedExistingGuest.totalVisits + 1}` : ''})`,
                   amount: guestPassForm.price,
                   amountPaid: guestPassForm.price,
                   amountRemaining: 0,
                   type: 'Membership',
                   method: guestPassForm.paymentMethod,
-                  customer: guestPassForm.name,
+                  customer: trimmedName,
                   cashier: currentUser?.name || 'Kasir Front Desk',
                   status: 'Paid',
                   picId: currentUser?.id || 'S01',
                   picNames: currentUser?.name || 'Staf Kasir'
                 };
                 onAddTransaction(trx);
+                if (onReprintReceipt) {
+                  onReprintReceipt(trx);
+                } else {
+                  setReceiptModalData({
+                    trxId: trx.id,
+                    date: trx.date,
+                    time: trx.time,
+                    customerName: trx.customer,
+                    cashierName: trx.cashier,
+                    items: [{ name: 'Tiket Visit Harian Gym Pass', price: trx.amount, qty: 1, total: trx.amount }],
+                    total: trx.amount,
+                    paymentMethod: trx.method
+                  });
+                }
+
+                // 3. Update or create GuestPassVisitor record
+                const newVisitLog: GuestPassVisitRecord = {
+                  id: newAtt.id,
+                  date: APP_TODAY,
+                  time: getTimestamp(),
+                  price: guestPassForm.price,
+                  paymentMethod: guestPassForm.paymentMethod,
+                  lockerNum: guestPassForm.lockerNum,
+                  hasTowel: guestPassForm.hasTowel,
+                  picId: currentUser?.id || 'S01',
+                  picName: currentUser?.name || 'Kasir Front Desk',
+                  notes: 'Tiket visit walk-in harian'
+                };
+
+                const existingMatch = selectedExistingGuest ||
+                  currentGuestVisitors.find((g) =>
+                    (cleanPhone && g.phone === cleanPhone) ||
+                    g.name.toLowerCase() === trimmedName.toLowerCase()
+                  );
+
+                let visitNum = 1;
+
+                if (existingMatch) {
+                  visitNum = existingMatch.totalVisits + 1;
+                  updateGuestVisitors((prev) =>
+                    prev.map((g) =>
+                      g.id === existingMatch.id
+                        ? {
+                            ...g,
+                            name: trimmedName,
+                            phone: cleanPhone || g.phone,
+                            lastVisitDate: APP_TODAY,
+                            totalVisits: g.totalVisits + 1,
+                            totalSpend: (g.totalSpend || 0) + guestPassForm.price,
+                            lastPaymentMethod: guestPassForm.paymentMethod,
+                            lastPicId: currentUser?.id || g.lastPicId,
+                            lastPicName: currentUser?.name || g.lastPicName,
+                            visitHistory: [newVisitLog, ...(g.visitHistory || [])]
+                          }
+                        : g
+                    )
+                  );
+                } else {
+                  const newGuestId = `GP-${(currentGuestVisitors.length + 1).toString().padStart(3, '0')}`;
+                  const newVisitor: GuestPassVisitor = {
+                    id: newGuestId,
+                    name: trimmedName,
+                    phone: cleanPhone || '-',
+                    gender: 'L',
+                    branchId: currentUser?.branchId || 'BR-001',
+                    firstVisitDate: APP_TODAY,
+                    lastVisitDate: APP_TODAY,
+                    totalVisits: 1,
+                    totalSpend: guestPassForm.price,
+                    status: 'Aktif Visit',
+                    lastPaymentMethod: guestPassForm.paymentMethod,
+                    lastPicId: currentUser?.id || 'S01',
+                    lastPicName: currentUser?.name || 'Kasir Front Desk',
+                    notes: 'Kunjungan walk-in tiket harian pertama.',
+                    visitHistory: [newVisitLog]
+                  };
+                  updateGuestVisitors((prev) => [newVisitor, ...prev]);
+                }
 
                 setIsGuestPassModalOpen(false);
+                setSelectedExistingGuest(null);
+                setGuestSearchQuery('');
                 setGuestPassForm({
                   name: '',
                   phone: '',
@@ -3875,7 +5034,11 @@ export const FrontDeskPortalView: React.FC<FrontDeskPortalViewProps> = ({
                   lockerNum: '01'
                 });
 
-                showToast('Tiket Visit Dicetak! 🎟️', `${newAtt.memberName} berhasil check-in dengan tiket harian.`, 'success');
+                showToast(
+                  'Tiket Visit Dicetak! 🎟️',
+                  `${trimmedName} berhasil check-in (Kunjungan ke-${visitNum}). Data tercatat otomatis di Buku Tamu Visit Harian.`,
+                  'success'
+                );
               }}
               className="space-y-4 text-xs"
             >
@@ -3887,7 +5050,7 @@ export const FrontDeskPortalView: React.FC<FrontDeskPortalViewProps> = ({
                   placeholder="Contoh: Andi Permana"
                   value={guestPassForm.name}
                   onChange={(e) => setGuestPassForm({ ...guestPassForm, name: e.target.value })}
-                  className="w-full px-3.5 py-2.5 bg-zinc-950 border border-zinc-800 rounded-xl text-white focus:outline-none focus:border-orange-500"
+                  className="w-full px-3.5 py-2.5 bg-zinc-950 border border-zinc-800 rounded-xl text-white focus:outline-none focus:border-amber-500"
                 />
               </div>
 
@@ -3898,7 +5061,7 @@ export const FrontDeskPortalView: React.FC<FrontDeskPortalViewProps> = ({
                   placeholder="08xxxxxxxxxx (untuk follow-up jadi member)"
                   value={guestPassForm.phone}
                   onChange={(e) => setGuestPassForm({ ...guestPassForm, phone: e.target.value })}
-                  className="w-full px-3.5 py-2.5 bg-zinc-950 border border-zinc-800 rounded-xl text-white focus:outline-none focus:border-orange-500"
+                  className="w-full px-3.5 py-2.5 bg-zinc-950 border border-zinc-800 rounded-xl text-white focus:outline-none focus:border-amber-500"
                 />
               </div>
 
@@ -3909,7 +5072,7 @@ export const FrontDeskPortalView: React.FC<FrontDeskPortalViewProps> = ({
                     type="number"
                     value={guestPassForm.price}
                     onChange={(e) => setGuestPassForm({ ...guestPassForm, price: Number(e.target.value) })}
-                    className="w-full px-3.5 py-2.5 bg-zinc-950 border border-zinc-800 rounded-xl text-white focus:outline-none focus:border-orange-500 font-bold text-amber-400"
+                    className="w-full px-3.5 py-2.5 bg-zinc-950 border border-zinc-800 rounded-xl text-white focus:outline-none focus:border-amber-500 font-bold text-amber-400"
                   />
                 </div>
 
@@ -3918,7 +5081,7 @@ export const FrontDeskPortalView: React.FC<FrontDeskPortalViewProps> = ({
                   <select
                     value={guestPassForm.paymentMethod}
                     onChange={(e) => setGuestPassForm({ ...guestPassForm, paymentMethod: e.target.value as any })}
-                    className="w-full px-3.5 py-2.5 bg-zinc-950 border border-zinc-800 rounded-xl text-white focus:outline-none focus:border-orange-500"
+                    className="w-full px-3.5 py-2.5 bg-zinc-950 border border-zinc-800 rounded-xl text-white focus:outline-none focus:border-amber-500"
                   >
                     <option value="Cash">Tunai / Cash</option>
                     <option value="QRIS">QRIS</option>
@@ -3928,10 +5091,41 @@ export const FrontDeskPortalView: React.FC<FrontDeskPortalViewProps> = ({
                 </div>
               </div>
 
+              {/* Loker & Handuk Fasilitas Tambahan */}
+              <div className="p-3 bg-zinc-950 rounded-2xl border border-zinc-800 grid grid-cols-2 gap-3 items-center">
+                <div>
+                  <label className="text-zinc-400 text-[11px] font-bold block mb-1">Nomor Loker Harian</label>
+                  <input
+                    type="text"
+                    value={guestPassForm.lockerNum}
+                    onChange={(e) => setGuestPassForm({ ...guestPassForm, lockerNum: e.target.value })}
+                    placeholder="Misal: 01"
+                    className="w-full px-3 py-1.5 bg-zinc-900 border border-zinc-700 rounded-xl text-xs text-white"
+                  />
+                </div>
+
+                <div className="flex items-center gap-2 pt-4">
+                  <input
+                    type="checkbox"
+                    id="guestHasTowel"
+                    checked={guestPassForm.hasTowel}
+                    onChange={(e) => setGuestPassForm({ ...guestPassForm, hasTowel: e.target.checked })}
+                    className="w-4 h-4 rounded text-amber-500 bg-zinc-900 border-zinc-700"
+                  />
+                  <label htmlFor="guestHasTowel" className="text-xs text-zinc-300 font-medium cursor-pointer">
+                    Pinjam Handuk Steril
+                  </label>
+                </div>
+              </div>
+
               <div className="flex items-center justify-end gap-3 pt-4 border-t border-zinc-800">
                 <button
                   type="button"
-                  onClick={() => setIsGuestPassModalOpen(false)}
+                  onClick={() => {
+                    setIsGuestPassModalOpen(false);
+                    setSelectedExistingGuest(null);
+                    setGuestSearchQuery('');
+                  }}
                   className="px-4 py-2 rounded-xl text-zinc-400 hover:text-white font-bold transition"
                 >
                   Batal

@@ -539,11 +539,11 @@ export const HRAttendanceDashboard: React.FC<HRAttendanceDashboardProps> = ({
               className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-orange-500"
             >
               <option value="all">Semua Divisi & Jabatan</option>
-              <option value="trainer">Personal Trainer (PT)</option>
-              <option value="leader_pt">Leader PT & Master Coach</option>
-              <option value="kasir">Front Desk & Kasir</option>
-              <option value="admin">Admin & Operasional</option>
-              <option value="manager">Manager</option>
+              <option value="kasir">Divisi Kasir & Front Desk (Layanan & POS)</option>
+              <option value="trainer">Divisi Pelatihan - Personal Trainer (PT)</option>
+              <option value="leader_pt">Divisi Pelatihan - Leader PT & Coach</option>
+              <option value="admin">Divisi Manajemen - Admin & Operasional</option>
+              <option value="manager">Divisi Manajemen - Manager</option>
             </select>
           </div>
 

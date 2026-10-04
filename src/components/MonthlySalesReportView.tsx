@@ -42,14 +42,17 @@ import {
 import { Transaction } from '../types';
 import { formatRp, APP_TODAY, formatDateIndo } from '../utils/formatters';
 import { useSettings } from '../context/SettingsContext';
+import { TransactionActions } from './transaction/TransactionActions';
 
 interface MonthlySalesReportViewProps {
   transactions: Transaction[];
+  onReprintReceipt?: (trx: Transaction) => void;
   showToast?: (title: string, message: string, type: 'success' | 'error' | 'warning' | 'info') => void;
 }
 
 export const MonthlySalesReportView: React.FC<MonthlySalesReportViewProps> = ({
   transactions,
+  onReprintReceipt,
   showToast
 }) => {
   // Period filter states
@@ -956,12 +959,13 @@ export const MonthlySalesReportView: React.FC<MonthlySalesReportViewProps> = ({
                   <th className="py-3 px-4 text-right">Nominal Masuk</th>
                   <th className="py-3 px-4 text-center">Status</th>
                   <th className="py-3 px-4">Kasir</th>
+                  <th className="py-3 px-4 text-center">Aksi (Cetak/PDF)</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-zinc-800/60 font-sans">
                 {filteredTransactions.length === 0 ? (
                   <tr>
-                    <td colSpan={7} className="py-8 text-center text-zinc-500">
+                    <td colSpan={8} className="py-8 text-center text-zinc-500">
                       Tidak ada transaksi penjualan yang cocok dengan filter.
                     </td>
                   </tr>
@@ -1013,6 +1017,14 @@ export const MonthlySalesReportView: React.FC<MonthlySalesReportViewProps> = ({
                         </td>
                         <td className="py-3 px-4 text-zinc-400 text-xs">
                           {trx.cashier || '-'}
+                        </td>
+                        <td className="py-3 px-4 text-center whitespace-nowrap">
+                          <TransactionActions
+                            transaction={trx}
+                            onView={onReprintReceipt}
+                            onPrint={onReprintReceipt}
+                            size="sm"
+                          />
                         </td>
                       </tr>
                     );

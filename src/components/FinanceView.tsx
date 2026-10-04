@@ -1,6 +1,8 @@
-import React, { useState, useRef } from 'react';
-import html2canvas from 'html2canvas';
+import React, { useState, useRef, useMemo, useEffect } from 'react';
+import html2canvas from 'html2canvas-pro';
 import { jsPDF } from 'jspdf';
+import autoTable from 'jspdf-autotable';
+import * as XLSX from 'xlsx';
 import {
   BookOpen,
   DollarSign,
@@ -35,7 +37,9 @@ import {
   BarChart3,
   Building2,
   FileText,
-  Loader2
+  FileDown,
+  Loader2,
+  ChevronDown
 } from 'lucide-react';
 import { Transaction, PettyCashItem, DailyClosingRecord, User, ALL_BRANCHES_ID } from '../types';
 import { formatRp, getTimestamp, APP_TODAY, getDayDiff, formatDateIndo } from '../utils/formatters';
@@ -43,6 +47,7 @@ import { FinanceRevenueChart } from './FinanceRevenueChart';
 import { PettyCashManagementView } from './PettyCashManagementView';
 import { FinancialSummaryCard, FinancialSummaryData } from './FinancialSummaryCard';
 import { MonthlySalesReportView } from './MonthlySalesReportView';
+import { TransactionActions } from './transaction/TransactionActions';
 import { useSettings } from '../context/SettingsContext';
 
 interface FinanceViewProps {
@@ -193,9 +198,82 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
   // Buku Besar Search, Filter, & Action modal states
   const [bukubesarSearch, setBukubesarSearch] = useState('');
   const [bukubesarTypeFilter, setBukubesarTypeFilter] = useState<string>('ALL');
+  const [bukubesarPicFilters, setBukubesarPicFilters] = useState<string[]>([]);
+  const [isPicDropdownOpen, setIsPicDropdownOpen] = useState(false);
+  const [picSearchQuery, setPicSearchQuery] = useState('');
+  const picDropdownRef = useRef<HTMLDivElement>(null);
   const [bukubesarStartDate, setBukubesarStartDate] = useState('');
   const [bukubesarEndDate, setBukubesarEndDate] = useState('');
   const [bukubesarDatePreset, setBukubesarDatePreset] = useState<'ALL' | 'TODAY' | '7DAYS' | 'MONTH' | 'CUSTOM'>('ALL');
+  const [isBukuBesarPrintModalOpen, setIsBukuBesarPrintModalOpen] = useState(false);
+  const [isExportingBukubesarPdf, setIsExportingBukubesarPdf] = useState(false);
+  const bukubesarPrintRef = useRef<HTMLDivElement>(null);
+
+  // Click outside listener for PIC multi-select dropdown
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (picDropdownRef.current && !picDropdownRef.current.contains(event.target as Node)) {
+        setIsPicDropdownOpen(false);
+      }
+    };
+    if (isPicDropdownOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [isPicDropdownOpen]);
+
+  const togglePicFilter = (picName: string) => {
+    setBukubesarPicFilters((prev) =>
+      prev.includes(picName) ? prev.filter((p) => p !== picName) : [...prev, picName]
+    );
+  };
+
+  const handleSelectAllPics = (allPicNames: string[]) => {
+    setBukubesarPicFilters(allPicNames);
+  };
+
+  const handleClearPicFilters = () => {
+    setBukubesarPicFilters([]);
+  };
+
+  // Extract unique PIC list from transactions
+  const uniqueBukuBesarPics = useMemo(() => {
+    const map = new Map<string, { id: string; name: string; count: number }>();
+    transactions.forEach((trx) => {
+      if (trx.picNames && trx.picNames.trim()) {
+        const names = trx.picNames.split(',').map((s) => s.trim()).filter(Boolean);
+        names.forEach((name) => {
+          const key = name.toLowerCase();
+          const existing = map.get(key);
+          if (existing) {
+            existing.count += 1;
+          } else {
+            map.set(key, { id: name, name, count: 1 });
+          }
+        });
+      } else if (trx.picId && trx.picId.trim()) {
+        const key = trx.picId.toLowerCase();
+        const existing = map.get(key);
+        if (existing) {
+          existing.count += 1;
+        } else {
+          map.set(key, { id: trx.picId, name: trx.picId, count: 1 });
+        }
+      }
+      if (trx.cashier && trx.cashier.trim()) {
+        const key = trx.cashier.toLowerCase();
+        const existing = map.get(key);
+        if (existing) {
+          existing.count += 1;
+        } else {
+          map.set(key, { id: trx.cashier, name: trx.cashier, count: 1 });
+        }
+      }
+    });
+    return Array.from(map.values()).sort((a, b) => b.count - a.count);
+  }, [transactions]);
 
   const handleSetBukubesarDatePreset = (preset: 'ALL' | 'TODAY' | '7DAYS' | 'MONTH') => {
     setBukubesarDatePreset(preset);
@@ -478,6 +556,24 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
       if (trx.type !== bukubesarTypeFilter) return false;
     }
 
+    if (bukubesarPicFilters.length > 0) {
+      const picNames = (trx.picNames || '').toLowerCase();
+      const picId = (trx.picId || '').toLowerCase();
+      const cashier = (trx.cashier || '').toLowerCase();
+      const picIds = (trx.picIds || []).map((id) => id.toLowerCase());
+
+      const match = bukubesarPicFilters.some((selectedPic) => {
+        const qPic = selectedPic.toLowerCase();
+        return (
+          picNames.includes(qPic) ||
+          picId === qPic ||
+          picIds.includes(qPic) ||
+          cashier.includes(qPic)
+        );
+      });
+      if (!match) return false;
+    }
+
     if (bukubesarStartDate && trx.date < bukubesarStartDate) {
       return false;
     }
@@ -491,7 +587,8 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
       const matchCust = (trx.customer || '').toLowerCase().includes(q);
       const matchDesc = (trx.desc || '').toLowerCase().includes(q);
       const matchMethod = (trx.method || '').toLowerCase().includes(q);
-      return matchId || matchCust || matchDesc || matchMethod;
+      const matchPic = (trx.picNames || '').toLowerCase().includes(q) || (trx.cashier || '').toLowerCase().includes(q);
+      return matchId || matchCust || matchDesc || matchMethod || matchPic;
     }
     return true;
   });
@@ -500,6 +597,499 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
   const totalDebitFiltered = filteredBukubesarTrx
     .filter((t) => t.status !== 'VOID')
     .reduce((sum, t) => sum + (t.amountPaid || t.amount || 0), 0);
+
+  // Export Buku Besar to Excel (.xlsx)
+  const handleExportBukubesarExcel = () => {
+    if (filteredBukubesarTrx.length === 0) {
+      showToast('Data Kosong', 'Tidak ada data transaksi buku besar yang tersaring untuk diunduh.', 'warning');
+      return;
+    }
+
+    try {
+      const exportRows: Record<string, any>[] = filteredBukubesarTrx.map((trx, idx) => ({
+        'No': idx + 1,
+        'No. Transaksi': trx.id,
+        'Tanggal': trx.date,
+        'Jam': trx.time || '',
+        'Cabang': trx.branchName || 'Cabang Utama',
+        'Kategori': trx.type,
+        'Uraian Transaksi': trx.desc || '',
+        'Nama Pelanggan': trx.customer || '',
+        'ID Member': trx.memberId || '',
+        'PIC (Sales / Trainer)': trx.picNames || trx.picId || trx.cashier || '-',
+        'Kasir Bertugas': trx.cashier || '',
+        'Metode Bayar': trx.method || '',
+        'Bank Tujuan': trx.bankDest || '',
+        'Debit Kas Masuk (Rp)': trx.status === 'VOID' ? 0 : (trx.amountPaid || trx.amount || 0),
+        'Total Tagihan (Rp)': trx.amount || 0,
+        'Sisa Piutang (Rp)': trx.amountRemaining || 0,
+        'Status Transaksi': trx.status
+      }));
+
+      // Append Total Summary Row
+      const totalBilled = filteredBukubesarTrx.reduce((s, t) => s + (t.status === 'VOID' ? 0 : (t.amount || 0)), 0);
+      const totalRemaining = filteredBukubesarTrx.reduce((s, t) => s + (t.status === 'VOID' ? 0 : (t.amountRemaining || 0)), 0);
+      exportRows.push({
+        'No': '' as any,
+        'No. Transaksi': 'TOTAL TRANSAKSI',
+        'Tanggal': `${filteredBukubesarTrx.length} Trx`,
+        'Jam': '',
+        'Cabang': bukuBesarBranchFilter === 'ALL' ? 'Semua Cabang' : bukuBesarBranchFilter,
+        'Kategori': bukubesarTypeFilter === 'ALL' ? 'Semua Kategori' : bukubesarTypeFilter,
+        'Uraian Transaksi': `Total Debit Kas Masuk: ${formatRp(totalDebitFiltered)}`,
+        'Nama Pelanggan': '',
+        'ID Member': '',
+        'PIC (Sales / Trainer)': bukubesarPicFilters.length > 0 ? `Filter PIC (${bukubesarPicFilters.length}): ${bukubesarPicFilters.join(', ')}` : 'Semua PIC',
+        'Kasir Bertugas': '',
+        'Metode Bayar': '',
+        'Bank Tujuan': '',
+        'Debit Kas Masuk (Rp)': totalDebitFiltered,
+        'Total Tagihan (Rp)': totalBilled,
+        'Sisa Piutang (Rp)': totalRemaining,
+        'Status Transaksi': `${filteredBukubesarTrx.filter((t) => t.status !== 'VOID').length} Berhasil, ${filteredBukubesarTrx.filter((t) => t.status === 'VOID').length} VOID`
+      });
+
+      const worksheet = XLSX.utils.json_to_sheet(exportRows);
+      worksheet['!cols'] = [
+        { wch: 5 },   // No
+        { wch: 20 },  // No. Transaksi
+        { wch: 13 },  // Tanggal
+        { wch: 10 },  // Jam
+        { wch: 22 },  // Cabang
+        { wch: 16 },  // Kategori
+        { wch: 40 },  // Uraian
+        { wch: 22 },  // Pelanggan
+        { wch: 14 },  // ID Member
+        { wch: 24 },  // PIC
+        { wch: 16 },  // Kasir
+        { wch: 15 },  // Metode
+        { wch: 14 },  // Bank
+        { wch: 22 },  // Debit
+        { wch: 20 },  // Total
+        { wch: 18 },  // Sisa
+        { wch: 16 }   // Status
+      ];
+
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, worksheet, 'Buku Besar');
+
+      const dateStr = bukubesarStartDate && bukubesarEndDate
+        ? `${bukubesarStartDate}_sd_${bukubesarEndDate}`
+        : bukubesarStartDate || bukubesarEndDate || APP_TODAY;
+      const picSuffix = bukubesarPicFilters.length > 0
+        ? `_PIC_${bukubesarPicFilters.map((p) => p.replace(/\s+/g, '_')).join('-')}`
+        : '';
+      const catSuffix = bukubesarTypeFilter !== 'ALL' ? `_${bukubesarTypeFilter.replace(/\s+/g, '_')}` : '';
+      const fileName = `Laporan_Buku_Besar_RFA_GYM_${dateStr}${catSuffix}${picSuffix}.xlsx`;
+
+      const excelBuffer = XLSX.write(workbook, { bookType: 'xlsx', type: 'array' });
+      const blob = new Blob([excelBuffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;charset=UTF-8' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = fileName;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+
+      showToast('Export Excel Berhasil', `File ${fileName} (${filteredBukubesarTrx.length} transaksi) berhasil diunduh.`, 'success');
+    } catch (err) {
+      console.error('Failed to export Excel:', err);
+      showToast('Gagal Export Excel', 'Terjadi kesalahan saat memproses data Excel.', 'error');
+    }
+  };
+
+  // Export Buku Besar to PDF (.pdf) - 100% Native Vector PDF Document (Not a screen snapshot/image)
+  const handleExportBukubesarPdf = () => {
+    if (filteredBukubesarTrx.length === 0) {
+      showToast('Data Kosong', 'Tidak ada data transaksi buku besar yang tersaring untuk diekspor ke PDF.', 'warning');
+      return;
+    }
+
+    setIsExportingBukubesarPdf(true);
+
+    try {
+      const pdf = new jsPDF({
+        orientation: 'landscape',
+        unit: 'mm',
+        format: 'a4'
+      });
+
+      const pdfWidth = pdf.internal.pageSize.getWidth(); // 297mm
+      const pdfHeight = pdf.internal.pageSize.getHeight(); // 210mm
+      const margin = 12;
+      const printableWidth = pdfWidth - margin * 2; // 273mm
+
+      const gymBrand = 'RFA GYM & FITNESS CENTER';
+      const branchTitle = activeBranch?.name
+        ? (activeBranchId === ALL_BRANCHES_ID ? 'Konsolidasi Seluruh Cabang' : activeBranch.name)
+        : 'GymPro Flagship Kelapa Gading';
+
+      // 1. DOKUMEN KOP / HEADER RESMI
+      pdf.setFont('helvetica', 'bold');
+      pdf.setFontSize(14);
+      pdf.setTextColor(24, 24, 27);
+      pdf.text(gymBrand, margin, 14);
+
+      pdf.setFont('helvetica', 'normal');
+      pdf.setFontSize(8.5);
+      pdf.setTextColor(100, 116, 139);
+      pdf.text(branchTitle, margin, 18.5);
+
+      pdf.setFont('helvetica', 'bold');
+      pdf.setFontSize(11);
+      pdf.setTextColor(234, 88, 12);
+      pdf.text('LAPORAN BUKU BESAR TRANSAKSI (GENERAL LEDGER)', margin, 24);
+
+      pdf.setFont('helvetica', 'italic');
+      pdf.setFontSize(7.5);
+      pdf.setTextColor(100, 116, 139);
+      pdf.text('Jurnal Lengkap Penerimaan Kas Masuk, Tagihan, Piutang & Performa Transaksi', margin, 28);
+
+      // Status dokumen & waktu cetak di sisi kanan atas
+      pdf.setFont('helvetica', 'bold');
+      pdf.setFontSize(8);
+      pdf.setTextColor(24, 24, 27);
+      pdf.text('DOKUMEN RESMI AKUNTANSI', pdfWidth - margin, 14, { align: 'right' });
+
+      pdf.setFont('helvetica', 'normal');
+      pdf.setFontSize(7.5);
+      pdf.setTextColor(100, 116, 139);
+      const printDateStr = new Date().toLocaleDateString('id-ID', {
+        day: '2-digit',
+        month: 'short',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+      }) + ' WIB';
+      pdf.text(`Waktu Cetak: ${printDateStr}`, pdfWidth - margin, 18.5, { align: 'right' });
+      pdf.text(`Operator: ${currentUser?.name || 'Administrator Keuangan'}`, pdfWidth - margin, 23, { align: 'right' });
+
+      // Garis aksen pemisah
+      pdf.setDrawColor(249, 115, 22);
+      pdf.setLineWidth(0.8);
+      pdf.line(margin, 30.5, pdfWidth - margin, 30.5);
+
+      // 2. KOTAK METADATA FILTER & REKAPITULASI RINGKASAN
+      const boxY = 33;
+      const boxH = 17;
+      const leftBoxW = 145;
+      const rightBoxW = printableWidth - leftBoxW - 4;
+      const rightBoxX = margin + leftBoxW + 4;
+
+      // Kotak Kiri: Informasi Kriteria Filter
+      pdf.setFillColor(248, 250, 252);
+      pdf.setDrawColor(226, 232, 240);
+      pdf.setLineWidth(0.3);
+      pdf.roundedRect(margin, boxY, leftBoxW, boxH, 1.5, 1.5, 'FD');
+
+      pdf.setFont('helvetica', 'bold');
+      pdf.setFontSize(7.5);
+      pdf.setTextColor(30, 41, 59);
+      pdf.text('PARAMETER FILTER LAPORAN:', margin + 3, boxY + 4.5);
+
+      pdf.setFont('helvetica', 'normal');
+      pdf.setFontSize(7);
+      pdf.setTextColor(71, 85, 105);
+
+      const periodText = bukubesarStartDate && bukubesarEndDate
+        ? `${bukubesarStartDate} s/d ${bukubesarEndDate}`
+        : (bukubesarStartDate || bukubesarEndDate || 'Semua Periode Transaksi');
+      const branchFilterText = bukuBesarBranchFilter === 'ALL' ? 'Semua Cabang' : bukuBesarBranchFilter;
+      const categoryFilterText = bukubesarTypeFilter === 'ALL' ? 'Semua Kategori' : bukubesarTypeFilter;
+      const picFilterText = bukubesarPicFilters.length > 0
+        ? `${bukubesarPicFilters.join(', ')} (${bukubesarPicFilters.length} PIC dipilih)`
+        : 'Semua PIC (Sales, Trainer, Kasir)';
+
+      pdf.text(`• Periode: ${periodText}`, margin + 3, boxY + 8.5);
+      pdf.text(`• Cabang: ${branchFilterText}`, margin + 3, boxY + 12);
+      pdf.text(`• Kategori: ${categoryFilterText}`, margin + 3, boxY + 15.5);
+
+      pdf.text(`• Filter PIC:`, margin + 65, boxY + 8.5);
+      const splitPic = pdf.splitTextToSize(picFilterText, 74);
+      pdf.text(splitPic, margin + 80, boxY + 8.5);
+
+      // Kotak Kanan: 4 Ringkasan Finansial Utama
+      pdf.setFillColor(248, 250, 252);
+      pdf.roundedRect(rightBoxX, boxY, rightBoxW, boxH, 1.5, 1.5, 'FD');
+
+      const colW = rightBoxW / 4;
+      // Kolom 1: Total Transaksi
+      pdf.setFont('helvetica', 'normal');
+      pdf.setFontSize(6.5);
+      pdf.setTextColor(100, 116, 139);
+      pdf.text('TOTAL TRANSAKSI', rightBoxX + 2, boxY + 4.5);
+      pdf.setFont('helvetica', 'bold');
+      pdf.setFontSize(8.5);
+      pdf.setTextColor(15, 23, 42);
+      pdf.text(`${filteredBukubesarTrx.length} Trx`, rightBoxX + 2, boxY + 9.5);
+      pdf.setFontSize(6);
+      pdf.setFont('helvetica', 'normal');
+      pdf.setTextColor(100, 116, 139);
+      pdf.text(`${filteredBukubesarTrx.filter((t) => t.status !== 'VOID').length} Sukses, ${filteredBukubesarTrx.filter((t) => t.status === 'VOID').length} VOID`, rightBoxX + 2, boxY + 14);
+
+      // Kolom 2: Kas Masuk Debit
+      const c2X = rightBoxX + colW;
+      pdf.line(c2X - 1, boxY + 2, c2X - 1, boxY + boxH - 2);
+      pdf.setFont('helvetica', 'normal');
+      pdf.setFontSize(6.5);
+      pdf.setTextColor(100, 116, 139);
+      pdf.text('KAS MASUK (DEBIT)', c2X + 2, boxY + 4.5);
+      pdf.setFont('helvetica', 'bold');
+      pdf.setFontSize(8.5);
+      pdf.setTextColor(16, 185, 129);
+      pdf.text(formatRp(totalDebitFiltered), c2X + 2, boxY + 9.5);
+      pdf.setFontSize(6);
+      pdf.setFont('helvetica', 'normal');
+      pdf.setTextColor(100, 116, 139);
+      pdf.text('Dana riil masuk kas', c2X + 2, boxY + 14);
+
+      // Kolom 3: Total Nilai Tagihan
+      const totalBilled = filteredBukubesarTrx.reduce((s, t) => s + (t.status === 'VOID' ? 0 : (t.amount || 0)), 0);
+      const totalRemaining = filteredBukubesarTrx.reduce((s, t) => s + (t.status === 'VOID' ? 0 : (t.amountRemaining || 0)), 0);
+
+      const c3X = rightBoxX + colW * 2;
+      pdf.line(c3X - 1, boxY + 2, c3X - 1, boxY + boxH - 2);
+      pdf.setFont('helvetica', 'normal');
+      pdf.setFontSize(6.5);
+      pdf.setTextColor(100, 116, 139);
+      pdf.text('NILAI TAGIHAN', c3X + 2, boxY + 4.5);
+      pdf.setFont('helvetica', 'bold');
+      pdf.setFontSize(8.5);
+      pdf.setTextColor(59, 130, 246);
+      pdf.text(formatRp(totalBilled), c3X + 2, boxY + 9.5);
+      pdf.setFontSize(6);
+      pdf.setFont('helvetica', 'normal');
+      pdf.setTextColor(100, 116, 139);
+      pdf.text('Bruto penjualan', c3X + 2, boxY + 14);
+
+      // Kolom 4: Sisa Piutang
+      const c4X = rightBoxX + colW * 3;
+      pdf.line(c4X - 1, boxY + 2, c4X - 1, boxY + boxH - 2);
+      pdf.setFont('helvetica', 'normal');
+      pdf.setFontSize(6.5);
+      pdf.setTextColor(100, 116, 139);
+      pdf.text('SISA PIUTANG', c4X + 2, boxY + 4.5);
+      pdf.setFont('helvetica', 'bold');
+      pdf.setFontSize(8.5);
+      pdf.setTextColor(245, 158, 11);
+      pdf.text(formatRp(totalRemaining), c4X + 2, boxY + 9.5);
+      pdf.setFontSize(6);
+      pdf.setFont('helvetica', 'normal');
+      pdf.setTextColor(100, 116, 139);
+      pdf.text('Belum dilunasi', c4X + 2, boxY + 14);
+
+      // 3. TABEL VEKTOR AUTOTABLE (Text Asli & Multi-Halaman Otomatis)
+      const tableRows = filteredBukubesarTrx.map((trx, idx) => {
+        const picDisplay = trx.picNames || trx.picId || trx.cashier || '-';
+        const cashierDisplay = trx.cashier || '-';
+        const picCombined = (picDisplay !== '-' && cashierDisplay !== '-' && picDisplay !== cashierDisplay)
+          ? `${picDisplay} / ${cashierDisplay}`
+          : (picDisplay !== '-' ? picDisplay : cashierDisplay);
+
+        const amountDebit = trx.status === 'VOID'
+          ? 0
+          : (trx.amountPaid ?? trx.amount ?? 0);
+
+        return [
+          (idx + 1).toString(),
+          `${trx.date || '-'}\n${trx.id}`,
+          trx.branchName || 'Cabang',
+          trx.type || '-',
+          trx.desc || '-',
+          `${trx.customer || 'Umum'}${trx.memberId ? '\n[' + trx.memberId + ']' : ''}`,
+          picCombined,
+          `${trx.method || '-'}${trx.bankDest ? ' (' + trx.bankDest + ')' : ''}`,
+          formatRp(amountDebit),
+          formatRp(trx.amount || 0),
+          formatRp(trx.amountRemaining || 0),
+          trx.status === 'VOID' ? 'VOID' : 'SUKSES'
+        ];
+      });
+
+      autoTable(pdf, {
+        startY: 53,
+        head: [
+          [
+            'No',
+            'Waktu / ID',
+            'Cabang',
+            'Kategori',
+            'Uraian Transaksi',
+            'Pelanggan / Member',
+            'PIC / Kasir',
+            'Metode / Bank',
+            'Kas Masuk (Debit)',
+            'Nilai Tagihan',
+            'Sisa Piutang',
+            'Status'
+          ]
+        ],
+        body: tableRows,
+        foot: [
+          [
+            '',
+            'GRAND TOTAL',
+            '',
+            '',
+            `Total Kas Masuk (Debit): ${formatRp(totalDebitFiltered)}`,
+            '',
+            '',
+            '',
+            formatRp(totalDebitFiltered),
+            formatRp(totalBilled),
+            formatRp(totalRemaining),
+            `${filteredBukubesarTrx.length} Trx`
+          ]
+        ],
+        theme: 'grid',
+        headStyles: {
+          fillColor: [24, 24, 27],
+          textColor: [255, 255, 255],
+          fontSize: 7.5,
+          fontStyle: 'bold',
+          halign: 'left',
+          cellPadding: 2
+        },
+        bodyStyles: {
+          fontSize: 6.8,
+          textColor: [30, 41, 59],
+          cellPadding: 1.6,
+          valign: 'middle'
+        },
+        footStyles: {
+          fillColor: [241, 245, 249],
+          textColor: [15, 23, 42],
+          fontSize: 7.5,
+          fontStyle: 'bold',
+          cellPadding: 2
+        },
+        alternateRowStyles: {
+          fillColor: [248, 250, 252]
+        },
+        columnStyles: {
+          0: { cellWidth: 8, halign: 'center' },
+          1: { cellWidth: 26 },
+          2: { cellWidth: 22 },
+          3: { cellWidth: 18 },
+          4: { cellWidth: 46 },
+          5: { cellWidth: 26 },
+          6: { cellWidth: 26 },
+          7: { cellWidth: 18 },
+          8: { cellWidth: 25, halign: 'right', fontStyle: 'bold' },
+          9: { cellWidth: 22, halign: 'right' },
+          10: { cellWidth: 22, halign: 'right' },
+          11: { cellWidth: 14, halign: 'center' }
+        },
+        margin: { left: margin, right: margin, bottom: 15 },
+        didParseCell: (data) => {
+          if (data.section === 'body') {
+            const rawRow = data.row.raw as any;
+            const rawStatus = rawRow ? rawRow[11] : '';
+            if (rawStatus === 'VOID') {
+              if (data.column.index === 11) {
+                data.cell.styles.textColor = [239, 68, 68];
+                data.cell.styles.fontStyle = 'bold';
+              }
+              data.cell.styles.textColor = [156, 163, 175];
+            } else if (data.column.index === 8) {
+              data.cell.styles.textColor = [16, 185, 129];
+            } else if (data.column.index === 11) {
+              data.cell.styles.textColor = [16, 185, 129];
+              data.cell.styles.fontStyle = 'bold';
+            }
+          }
+          if (data.section === 'foot') {
+            if (data.column.index === 8) {
+              data.cell.styles.textColor = [16, 185, 129];
+            }
+          }
+        }
+      });
+
+      // 4. BAGIAN TANDA TANGAN PENGESAHAN (Signatures)
+      let finalY = (pdf as any).lastAutoTable?.finalY || 100;
+      if (finalY + 36 > pdfHeight - 15) {
+        pdf.addPage();
+        finalY = 20;
+      } else {
+        finalY += 8;
+      }
+
+      const sigBlockW = printableWidth / 3;
+      const sigTitles = [
+        { role: 'Dibuat Oleh:', label: 'PIC / Kasir Bertugas', name: currentUser?.name || 'Kasir Bertugas' },
+        { role: 'Diperiksa Oleh:', label: 'Supervisor Keuangan', name: '( .......................................... )' },
+        { role: 'Disetujui Oleh:', label: 'Branch / General Manager', name: '( .......................................... )' }
+      ];
+
+      sigTitles.forEach((sig, idx) => {
+        const sigX = margin + idx * sigBlockW;
+        pdf.setFont('helvetica', 'normal');
+        pdf.setFontSize(7.5);
+        pdf.setTextColor(100, 116, 139);
+        pdf.text(sig.role, sigX + 4, finalY);
+
+        pdf.setFont('helvetica', 'bold');
+        pdf.text(sig.label, sigX + 4, finalY + 4);
+
+        // Garis tanda tangan
+        pdf.setDrawColor(203, 213, 225);
+        pdf.setLineWidth(0.4);
+        pdf.line(sigX + 4, finalY + 22, sigX + sigBlockW - 8, finalY + 22);
+
+        pdf.setFont('helvetica', 'normal');
+        pdf.setFontSize(7.5);
+        pdf.setTextColor(30, 41, 59);
+        pdf.text(sig.name, sigX + 4, finalY + 26);
+      });
+
+      // 5. RUNNING FOOTER DI SETIAP HALAMAN
+      const totalPages = pdf.getNumberOfPages();
+      for (let i = 1; i <= totalPages; i++) {
+        pdf.setPage(i);
+        pdf.setFont('helvetica', 'normal');
+        pdf.setFontSize(7);
+        pdf.setTextColor(148, 163, 184);
+
+        pdf.text(
+          `GymPro ERP Enterprise • Laporan Resmi Buku Besar Transaksi (General Ledger) • Halaman ${i} dari ${totalPages}`,
+          margin,
+          pdfHeight - 6
+        );
+
+        pdf.text(
+          `Dokumen dicetak sah oleh sistem akuntansi • ID: ${Math.random().toString(36).substring(2, 10).toUpperCase()}`,
+          pdfWidth - margin,
+          pdfHeight - 6,
+          { align: 'right' }
+        );
+      }
+
+      // 6. SIMPAN FILE PDF
+      const dateStr = bukubesarStartDate && bukubesarEndDate
+        ? `${bukubesarStartDate}_sd_${bukubesarEndDate}`
+        : bukubesarStartDate || bukubesarEndDate || APP_TODAY;
+      const picSuffix = bukubesarPicFilters.length > 0
+        ? `_PIC_${bukubesarPicFilters.map((p) => p.replace(/\s+/g, '_')).join('-')}`
+        : '';
+      const catSuffix = bukubesarTypeFilter !== 'ALL' ? `_${bukubesarTypeFilter.replace(/\s+/g, '_')}` : '';
+      const fileName = `Laporan_Buku_Besar_RFA_GYM_${dateStr}${catSuffix}${picSuffix}.pdf`;
+
+      pdf.save(fileName);
+      showToast(
+        'Export PDF Berhasil',
+        `File PDF vektor asli ${fileName} (${filteredBukubesarTrx.length} transaksi) berhasil diunduh tanpa screenshot.`,
+        'success'
+      );
+    } catch (err) {
+      console.error('Failed to export Buku Besar vector PDF:', err);
+      showToast('Gagal Export PDF', 'Terjadi kesalahan saat memproses dokumen PDF vektor.', 'error');
+    } finally {
+      setIsExportingBukubesarPdf(false);
+    }
+  };
 
   const handleOpenVoidModal = (trx: Transaction) => {
     if (trx.status === 'VOID') {
@@ -800,65 +1390,278 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
     }, 150);
   };
 
-  // Handle Clean PDF Generation using html2canvas & jsPDF with standard window.print() integration
-  const handleGeneratePdfReport = async () => {
+  // Handle Clean PDF Generation using jsPDF & autoTable (100% Native Vector PDF Document, No Snapshot)
+  const handleGeneratePdfReport = () => {
     setIsGeneratingPdf(true);
-    setIsClosingPrintOpen(true);
 
     try {
-      // Allow DOM to settle and styles to render
-      await new Promise((resolve) => setTimeout(resolve, 350));
-
-      const element = closingPrintRef.current || document.getElementById('printable-report-content');
-      if (!element) {
-        window.print();
-        return;
-      }
-
-      const canvas = await html2canvas(element, {
-        scale: 2,
-        useCORS: true,
-        logging: false,
-        backgroundColor: '#ffffff',
-        windowWidth: 1024
-      });
-
-      const imgData = canvas.toDataURL('image/png', 1.0);
       const pdf = new jsPDF({
         orientation: 'portrait',
         unit: 'mm',
         format: 'a4'
       });
 
-      const pdfWidth = pdf.internal.pageSize.getWidth();
-      const pdfHeight = pdf.internal.pageSize.getHeight();
-      const margin = 8;
-      const printWidth = pdfWidth - margin * 2;
-      const printHeight = (canvas.height * printWidth) / canvas.width;
+      const pdfWidth = pdf.internal.pageSize.getWidth(); // 210mm
+      const pdfHeight = pdf.internal.pageSize.getHeight(); // 297mm
+      const margin = 14;
+      const printableWidth = pdfWidth - margin * 2; // 182mm
 
-      if (printHeight <= pdfHeight - margin * 2) {
-        pdf.addImage(imgData, 'PNG', margin, margin, printWidth, printHeight);
-      } else {
-        let heightLeft = printHeight;
-        let position = margin;
-        pdf.addImage(imgData, 'PNG', margin, position, printWidth, printHeight);
-        heightLeft -= (pdfHeight - margin * 2);
+      const gymBrand = 'RFA GYM & FITNESS CENTER';
+      const branchTitle = activeBranch?.name
+        ? (activeBranchId === ALL_BRANCHES_ID ? 'Konsolidasi Seluruh Cabang' : activeBranch.name)
+        : 'GymPro Flagship Kelapa Gading';
 
-        while (heightLeft > 0) {
-          position = heightLeft - printHeight + margin;
-          pdf.addPage();
-          pdf.addImage(imgData, 'PNG', margin, position, printWidth, printHeight);
-          heightLeft -= (pdfHeight - margin * 2);
+      // 1. KOP & HEADER DOKUMEN
+      pdf.setFont('helvetica', 'bold');
+      pdf.setFontSize(14);
+      pdf.setTextColor(24, 24, 27);
+      pdf.text(gymBrand, margin, 16);
+
+      pdf.setFont('helvetica', 'normal');
+      pdf.setFontSize(8.5);
+      pdf.setTextColor(100, 116, 139);
+      pdf.text(branchTitle, margin, 21);
+
+      pdf.setFont('helvetica', 'bold');
+      pdf.setFontSize(11);
+      pdf.setTextColor(234, 88, 12);
+      pdf.text('BERITA ACARA TUTUP BUKU HARIAN (DAILY CLOSING)', margin, 27);
+
+      pdf.setFont('helvetica', 'italic');
+      pdf.setFontSize(8);
+      pdf.setTextColor(100, 116, 139);
+      pdf.text(`Rekonsiliasi Kas Operasional Kasir per Tanggal ${formatDateIndo(closingDate)} (${closingDate})`, margin, 31.5);
+
+      // Status dokumen & metadata waktu di kanan atas
+      pdf.setFont('helvetica', 'bold');
+      pdf.setFontSize(8);
+      pdf.setTextColor(24, 24, 27);
+      pdf.text('DOKUMEN RESMI KEUANGAN', pdfWidth - margin, 16, { align: 'right' });
+
+      pdf.setFont('helvetica', 'normal');
+      pdf.setFontSize(7.5);
+      pdf.setTextColor(100, 116, 139);
+      const printDateStr = new Date().toLocaleDateString('id-ID', {
+        day: '2-digit',
+        month: 'short',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+      }) + ' WIB';
+      pdf.text(`Waktu Cetak: ${printDateStr}`, pdfWidth - margin, 21, { align: 'right' });
+      pdf.text(`Kasir Bertugas: ${currentUser?.name || 'Kasir'}`, pdfWidth - margin, 26, { align: 'right' });
+
+      // Garis aksen pemisah
+      pdf.setDrawColor(249, 115, 22);
+      pdf.setLineWidth(0.8);
+      pdf.line(margin, 34, pdfWidth - margin, 34);
+
+      // 2. TABEL RINGKASAN REKONSILIASI KAS (autoTable)
+      const varianceLabel = cashVariance === 0
+        ? 'SESUAI (SEIMBANG)'
+        : (cashVariance > 0 ? `LEBIH FISIK (+${formatRp(cashVariance)})` : `KURANG FISIK (${formatRp(cashVariance)})`);
+
+      autoTable(pdf, {
+        startY: 37,
+        head: [['REKAPITULASI OMSET & KAS OPERASIONAL', 'NILAI BUKUKAN / SISTEM']],
+        body: [
+          ['Total Omset Penerimaan Hari Ini', formatRp(totalOmset)],
+          ['Volume Transaksi Operasional', `${totalTrxCount} Transaksi`],
+          ['Penerimaan Tunai di Laci Kasir (Cash)', formatRp(tunaiLaciKasir)],
+          ['Penerimaan Non-Tunai (Transfer, QRIS, EDC)', formatRp(nonTunaiMasuk)],
+          ['Pengeluaran Kas Kecil (Petty Cash Terverifikasi)', formatRp(selectedDatePettyExpenses)],
+          ['Ekspektasi Fisik Kas di Laci Kasir (Sistem)', formatRp(expectedSystemCash)],
+          ['Hitungan Fisik Uang Aktual di Laci Kasir', formatRp(inputCashNumber)],
+          ['Status Selisih Kas Fisik (Variance)', varianceLabel]
+        ],
+        theme: 'striped',
+        headStyles: {
+          fillColor: [24, 24, 27],
+          textColor: [255, 255, 255],
+          fontSize: 8,
+          fontStyle: 'bold',
+          cellPadding: 2.2
+        },
+        bodyStyles: {
+          fontSize: 7.5,
+          textColor: [30, 41, 59],
+          cellPadding: 1.8
+        },
+        columnStyles: {
+          0: { cellWidth: 110, fontStyle: 'bold' },
+          1: { cellWidth: 72, halign: 'right', fontStyle: 'bold' }
+        },
+        margin: { left: margin, right: margin },
+        didParseCell: (data) => {
+          if (data.section === 'body' && data.row.index === 7) {
+            data.cell.styles.fillColor = cashVariance === 0 ? [240, 253, 244] : [254, 242, 242];
+            data.cell.styles.textColor = cashVariance === 0 ? [22, 101, 52] : [185, 28, 28];
+            data.cell.styles.fontStyle = 'bold';
+          }
         }
+      });
+
+      // 3. TABEL RINCIAN CHANNEL PEMBAYARAN (EDC / TRANSFER / QRIS)
+      let nextY = (pdf as any).lastAutoTable?.finalY + 4 || 95;
+      autoTable(pdf, {
+        startY: nextY,
+        head: [['CHANNEL PEMBAYARAN PERBANKAN', 'QRIS', 'TRANSFER BANK', 'MESIN EDC', 'TOTAL']],
+        body: [
+          [
+            'Bank Mandiri (Rekening Operasional)',
+            formatRp(mandiriQRIS),
+            formatRp(mandiriTransfer),
+            formatRp(mandiriEDC),
+            formatRp(mandiriTotal)
+          ],
+          [
+            'Bank Artha Graha (Rekening Kasir)',
+            formatRp(arthaGrahaQRIS),
+            formatRp(arthaGrahaTransfer),
+            formatRp(arthaGrahaEDC),
+            formatRp(arthaGrahaTotal)
+          ],
+          [
+            'TOTAL KONSOLIDASI NON-TUNAI',
+            formatRp(mandiriQRIS + arthaGrahaQRIS),
+            formatRp(mandiriTransfer + arthaGrahaTransfer),
+            formatRp(mandiriEDC + arthaGrahaEDC),
+            formatRp(nonTunaiMasuk)
+          ]
+        ],
+        theme: 'grid',
+        headStyles: {
+          fillColor: [234, 88, 12],
+          textColor: [255, 255, 255],
+          fontSize: 7.5,
+          fontStyle: 'bold',
+          cellPadding: 2
+        },
+        bodyStyles: {
+          fontSize: 7,
+          textColor: [30, 41, 59],
+          cellPadding: 1.6
+        },
+        columnStyles: {
+          0: { cellWidth: 62, fontStyle: 'bold' },
+          1: { cellWidth: 30, halign: 'right' },
+          2: { cellWidth: 30, halign: 'right' },
+          3: { cellWidth: 30, halign: 'right' },
+          4: { cellWidth: 30, halign: 'right', fontStyle: 'bold' }
+        },
+        margin: { left: margin, right: margin }
+      });
+
+      // 4. TABEL RINCIAN TRANSAKSI HARIAN
+      nextY = (pdf as any).lastAutoTable?.finalY + 4 || 135;
+      const closingDayTrx = transactions.filter((t) => t.date === closingDate && t.status !== 'VOID');
+      const closingTrxRows = closingDayTrx.map((trx, idx) => [
+        (idx + 1).toString(),
+        trx.id,
+        trx.time || '-',
+        trx.type || '-',
+        trx.desc || '-',
+        trx.customer || 'Umum',
+        trx.method || '-',
+        formatRp(trx.amount || 0)
+      ]);
+
+      if (closingTrxRows.length > 0) {
+        autoTable(pdf, {
+          startY: nextY,
+          head: [['No', 'No. Trx', 'Jam', 'Kategori', 'Uraian Transaksi', 'Pelanggan', 'Metode', 'Jumlah']],
+          body: closingTrxRows,
+          theme: 'grid',
+          headStyles: {
+            fillColor: [30, 41, 59],
+            textColor: [255, 255, 255],
+            fontSize: 7.5,
+            fontStyle: 'bold',
+            cellPadding: 1.8
+          },
+          bodyStyles: {
+            fontSize: 6.8,
+            textColor: [30, 41, 59],
+            cellPadding: 1.5
+          },
+          columnStyles: {
+            0: { cellWidth: 8, halign: 'center' },
+            1: { cellWidth: 24 },
+            2: { cellWidth: 12 },
+            3: { cellWidth: 20 },
+            4: { cellWidth: 46 },
+            5: { cellWidth: 26 },
+            6: { cellWidth: 22 },
+            7: { cellWidth: 24, halign: 'right', fontStyle: 'bold' }
+          },
+          margin: { left: margin, right: margin, bottom: 15 }
+        });
+      }
+
+      // 5. TANDA TANGAN PENGESAHAN
+      let finalY = (pdf as any).lastAutoTable?.finalY || 160;
+      if (finalY + 36 > pdfHeight - 15) {
+        pdf.addPage();
+        finalY = 22;
+      } else {
+        finalY += 8;
+      }
+
+      const sigBlockW = printableWidth / 3;
+      const sigTitles = [
+        { role: 'Dibuat Oleh:', label: 'Kasir Bertugas', name: currentUser?.name || 'Kasir Bertugas' },
+        { role: 'Diperiksa Oleh:', label: 'Supervisor Keuangan', name: '( .......................................... )' },
+        { role: 'Disetujui Oleh:', label: 'Branch / General Manager', name: '( .......................................... )' }
+      ];
+
+      sigTitles.forEach((sig, idx) => {
+        const sigX = margin + idx * sigBlockW;
+        pdf.setFont('helvetica', 'normal');
+        pdf.setFontSize(7.5);
+        pdf.setTextColor(100, 116, 139);
+        pdf.text(sig.role, sigX + 2, finalY);
+
+        pdf.setFont('helvetica', 'bold');
+        pdf.text(sig.label, sigX + 2, finalY + 4);
+
+        pdf.setDrawColor(203, 213, 225);
+        pdf.setLineWidth(0.4);
+        pdf.line(sigX + 2, finalY + 22, sigX + sigBlockW - 6, finalY + 22);
+
+        pdf.setFont('helvetica', 'normal');
+        pdf.setFontSize(7.5);
+        pdf.setTextColor(30, 41, 59);
+        pdf.text(sig.name, sigX + 2, finalY + 26);
+      });
+
+      // 6. RUNNING FOOTER DI SEMUA HALAMAN
+      const totalPages = pdf.getNumberOfPages();
+      for (let i = 1; i <= totalPages; i++) {
+        pdf.setPage(i);
+        pdf.setFont('helvetica', 'normal');
+        pdf.setFontSize(7);
+        pdf.setTextColor(148, 163, 184);
+
+        pdf.text(
+          `GymPro ERP Enterprise • Berita Acara Daily Closing (${closingDate}) • Halaman ${i} dari ${totalPages}`,
+          margin,
+          pdfHeight - 6
+        );
+
+        pdf.text(
+          `Dokumen dicetak sah oleh sistem akuntansi GymPro ERP`,
+          pdfWidth - margin,
+          pdfHeight - 6,
+          { align: 'right' }
+        );
       }
 
       const fileName = `GymPro_Laporan_Daily_Closing_${closingDate}.pdf`;
       pdf.save(fileName);
-      showToast('Export PDF Berhasil', `Laporan Daily Closing berhasil digenerate dan diunduh (${fileName}).`, 'success');
+      showToast('Export PDF Berhasil', `Laporan Daily Closing vektor ${fileName} berhasil diunduh tanpa screenshot.`, 'success');
     } catch (err) {
-      console.error('Failed to generate PDF with html2canvas:', err);
-      showToast('Beralih ke Dialog Print', 'Gagal memproses canvas otomatis, membuka jendela Cetak / Simpan PDF browser...', 'info');
-      window.print();
+      console.error('Failed to generate vector PDF report:', err);
+      showToast('Gagal Export PDF', 'Terjadi kesalahan saat memproses dokumen PDF vektor.', 'error');
     } finally {
       setIsGeneratingPdf(false);
     }
@@ -1052,7 +1855,11 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
 
       {/* 0. LAPORAN PENJUALAN BULANAN (RECHARTS BAR CHART & ANALYTICS) */}
       {activeTab === 'bulanan' && (
-        <MonthlySalesReportView transactions={transactions} showToast={showToast} />
+        <MonthlySalesReportView
+          transactions={transactions}
+          onReprintReceipt={handleReprint}
+          showToast={showToast}
+        />
       )}
 
       {/* 1. BUKU PIUTANG & CICILAN */}
@@ -1425,14 +2232,23 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                             </span>
                           </td>
                           <td className="py-3.5 px-4 text-right">
-                            {!isLunas && (
-                              <button
-                                onClick={() => handleOpenPayModal(t)}
-                                className="px-3 py-1.5 bg-orange-500 hover:bg-orange-600 text-white rounded-xl text-xs font-bold shadow-sm transition"
-                              >
-                                Bayar Cicilan
-                              </button>
-                            )}
+                            <div className="flex items-center justify-end gap-1.5">
+                              {!isLunas && (
+                                <button
+                                  onClick={() => handleOpenPayModal(t)}
+                                  className="px-3 py-1.5 bg-orange-500 hover:bg-orange-600 text-white rounded-xl text-xs font-bold shadow-sm transition"
+                                >
+                                  Bayar Cicilan
+                                </button>
+                              )}
+                              <TransactionActions
+                                transaction={t}
+                                onView={(trx) => handleReprint(trx)}
+                                onPrint={(trx) => handleReprint(trx)}
+                                onDownloadPDF={(trx) => handleReprint(trx)}
+                                size="sm"
+                              />
+                            </div>
                           </td>
                         </tr>
                       );
@@ -1469,8 +2285,9 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
       {/* 2. BUKU BESAR TRANSAKSI (GENERAL LEDGER) */}
       {activeTab === 'bukubesar' && (
         <div className="space-y-4">
-          {/* Controls Bar: Search, Category Filters, Date Filter & Print */}
-          <div className="bg-zinc-900/90 border border-zinc-800 rounded-3xl p-4 space-y-3.5">
+          <div className="space-y-4 print:hidden no-print">
+            {/* Controls Bar: Search, Category Filters, Date Filter & Print */}
+            <div className="bg-zinc-900/90 border border-zinc-800 rounded-3xl p-4 space-y-3.5">
             {/* Top Row: Total Buku Besar Info + Date Filter Controls + Print */}
             <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-3.5 pb-3.5 border-b border-zinc-800/80">
               {/* Left: Total Buku Besar Stats */}
@@ -1485,6 +2302,20 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                     {filteredBukubesarTrx.length !== transactions.length && (
                       <span className="text-xs font-bold text-orange-400 bg-orange-500/15 border border-orange-500/30 px-2 py-0.5 rounded-lg">
                         Tersaring: {filteredBukubesarTrx.length} Trx
+                      </span>
+                    )}
+                    {bukubesarPicFilters.length > 0 && (
+                      <span className="text-xs font-bold text-cyan-400 bg-cyan-500/15 border border-cyan-500/30 px-2 py-0.5 rounded-lg flex items-center gap-1.5 flex-wrap">
+                        <UserCheck className="w-3 h-3 shrink-0" />
+                        <span>PIC ({bukubesarPicFilters.length}): {bukubesarPicFilters.join(', ')}</span>
+                        <button
+                          type="button"
+                          onClick={handleClearPicFilters}
+                          className="hover:text-rose-300 ml-0.5 p-0.5 transition"
+                          title="Hapus Semua Filter PIC"
+                        >
+                          <X className="w-2.5 h-2.5" />
+                        </button>
                       </span>
                     )}
                   </div>
@@ -1506,7 +2337,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                 </div>
               </div>
 
-              {/* Right: Date Filter Inputs & Presets + Print */}
+              {/* Right: Date Filter Inputs & Presets + Export Suite */}
               <div className="flex flex-wrap items-center gap-2.5">
                 {/* Date Filter Box */}
                 <div className="flex flex-wrap items-center gap-1.5 bg-zinc-950/90 border border-zinc-800/90 p-1.5 rounded-2xl shadow-inner">
@@ -1570,20 +2401,57 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                   </div>
                 </div>
 
-                {/* Print Button */}
-                <button
-                  onClick={() => window.print()}
-                  className="bg-zinc-800 hover:bg-zinc-700 text-zinc-300 px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 border border-zinc-700/60 shrink-0"
-                >
-                  <Printer className="w-3.5 h-3.5 text-orange-400" />
-                  <span>Cetak Buku Besar</span>
-                </button>
+                {/* Export & Print Suite */}
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  {/* Export Excel Button */}
+                  <button
+                    type="button"
+                    onClick={handleExportBukubesarExcel}
+                    className="bg-emerald-600 hover:bg-emerald-500 text-white px-3 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-sm active:scale-95 shrink-0"
+                    title="Export Laporan Buku Besar ke Microsoft Excel (.xlsx)"
+                  >
+                    <FileSpreadsheet className="w-3.5 h-3.5 text-white" />
+                    <span className="hidden sm:inline">Export</span> Excel
+                  </button>
+
+                  {/* Export PDF Button */}
+                  <button
+                    type="button"
+                    onClick={handleExportBukubesarPdf}
+                    disabled={isExportingBukubesarPdf}
+                    className="bg-rose-600 hover:bg-rose-500 text-white px-3 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-sm active:scale-95 disabled:opacity-50 shrink-0"
+                    title="Export Laporan Buku Besar ke Adobe PDF (.pdf)"
+                  >
+                    {isExportingBukubesarPdf ? (
+                      <>
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        <span>Rendering...</span>
+                      </>
+                    ) : (
+                      <>
+                        <FileDown className="w-3.5 h-3.5 text-white" />
+                        <span className="hidden sm:inline">Export</span> PDF
+                      </>
+                    )}
+                  </button>
+
+                  {/* Cetak / Preview Button */}
+                  <button
+                    type="button"
+                    onClick={() => setIsBukuBesarPrintModalOpen(true)}
+                    className="bg-zinc-800 hover:bg-zinc-700 text-zinc-200 px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 border border-zinc-700/60 shrink-0 shadow-sm active:scale-95"
+                    title="Buka Preview & Cetak Laporan Resmi Buku Besar"
+                  >
+                    <Printer className="w-3.5 h-3.5 text-orange-400" />
+                    <span>Cetak Laporan</span>
+                  </button>
+                </div>
               </div>
             </div>
 
             {/* Filter and Search Row */}
             <div className="flex flex-wrap items-center justify-between gap-3 pt-1 border-t border-zinc-800/80">
-              {/* Category Pills & Branch Filter */}
+              {/* Category Pills & Filters */}
               <div className="flex flex-wrap items-center gap-1.5">
                 {[
                   { label: 'Semua', val: 'ALL' },
@@ -1609,8 +2477,127 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                   </button>
                 ))}
 
+                {/* PIC / Kasir Multi-Select Filter with Popover & Tags */}
+                <div className="relative" ref={picDropdownRef}>
+                  <button
+                    type="button"
+                    onClick={() => setIsPicDropdownOpen(!isPicDropdownOpen)}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-bold transition shadow-xs ${
+                      bukubesarPicFilters.length > 0
+                        ? 'bg-cyan-950/80 border-cyan-500/50 text-cyan-300'
+                        : 'bg-zinc-950 hover:bg-zinc-800 border-zinc-800 text-zinc-300'
+                    }`}
+                    title="Pilih satu atau beberapa PIC (contoh: Ella, Puri)"
+                  >
+                    <UserCheck className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
+                    <span>
+                      {bukubesarPicFilters.length === 0
+                        ? `Pilih PIC (${uniqueBukuBesarPics.length})`
+                        : `${bukubesarPicFilters.length} PIC Dipilih`}
+                    </span>
+                    <ChevronDown className={`w-3.5 h-3.5 text-zinc-400 transition-transform ${isPicDropdownOpen ? 'rotate-180' : ''}`} />
+                  </button>
+
+                  {/* Multi-Select PIC Dropdown Panel */}
+                  {isPicDropdownOpen && (
+                    <div className="absolute left-0 mt-2 w-72 bg-zinc-900 border border-zinc-700/80 rounded-2xl shadow-2xl p-3 z-50 text-xs space-y-2.5">
+                      {/* Search box inside dropdown */}
+                      <div className="relative">
+                        <Search className="w-3 h-3 absolute left-2.5 top-1/2 -translate-y-1/2 text-zinc-500" />
+                        <input
+                          type="text"
+                          value={picSearchQuery}
+                          onChange={(e) => setPicSearchQuery(e.target.value)}
+                          placeholder="Cari PIC (contoh: Ella, Puri)..."
+                          className="w-full bg-zinc-950 border border-zinc-700 rounded-lg pl-7 pr-6 py-1.5 text-xs text-white outline-none focus:border-cyan-500 transition"
+                          autoFocus
+                        />
+                        {picSearchQuery && (
+                          <button
+                            type="button"
+                            onClick={() => setPicSearchQuery('')}
+                            className="absolute right-2 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-white"
+                          >
+                            <X className="w-3 h-3" />
+                          </button>
+                        )}
+                      </div>
+
+                      {/* Select All / Clear All action links */}
+                      <div className="flex items-center justify-between text-[11px] pb-1 border-b border-zinc-800">
+                        <button
+                          type="button"
+                          onClick={() => handleSelectAllPics(uniqueBukuBesarPics.map((p) => p.name))}
+                          className="text-cyan-400 hover:text-cyan-300 font-semibold"
+                        >
+                          Pilih Semua ({uniqueBukuBesarPics.length})
+                        </button>
+                        <button
+                          type="button"
+                          onClick={handleClearPicFilters}
+                          className="text-rose-400 hover:text-rose-300 font-semibold"
+                        >
+                          Hapus Pilihan
+                        </button>
+                      </div>
+
+                      {/* Scrollable list of PIC checkboxes */}
+                      <div className="max-h-56 overflow-y-auto space-y-1 pr-1 scrollbar-thin scrollbar-thumb-zinc-700">
+                        {uniqueBukuBesarPics
+                          .filter((p) => p.name.toLowerCase().includes(picSearchQuery.toLowerCase()))
+                          .map((pic) => {
+                            const isSelected = bukubesarPicFilters.includes(pic.name);
+                            return (
+                              <button
+                                key={pic.id}
+                                type="button"
+                                onClick={() => togglePicFilter(pic.name)}
+                                className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-left transition ${
+                                  isSelected
+                                    ? 'bg-cyan-500/15 text-cyan-200 border border-cyan-500/30'
+                                    : 'text-zinc-300 hover:bg-zinc-800/80 border border-transparent'
+                                }`}
+                              >
+                                <div className="flex items-center gap-2 truncate">
+                                  {isSelected ? (
+                                    <CheckSquare className="w-4 h-4 text-cyan-400 shrink-0" />
+                                  ) : (
+                                    <Square className="w-4 h-4 text-zinc-600 shrink-0" />
+                                  )}
+                                  <span className="font-semibold truncate">{pic.name}</span>
+                                </div>
+                                <span className="text-[10px] text-zinc-500 font-mono bg-zinc-800 px-1.5 py-0.5 rounded ml-2 shrink-0">
+                                  {pic.count} trx
+                                </span>
+                              </button>
+                            );
+                          })}
+                        {uniqueBukuBesarPics.filter((p) => p.name.toLowerCase().includes(picSearchQuery.toLowerCase())).length === 0 && (
+                          <p className="text-zinc-500 text-center py-3 text-[11px]">
+                            Tidak ada PIC cocok dengan "{picSearchQuery}"
+                          </p>
+                        )}
+                      </div>
+
+                      {/* Bottom close button */}
+                      <div className="pt-2 border-t border-zinc-800 flex items-center justify-between">
+                        <span className="text-[11px] text-zinc-400">
+                          {bukubesarPicFilters.length} dari {uniqueBukuBesarPics.length} dipilih
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => setIsPicDropdownOpen(false)}
+                          className="bg-cyan-600 hover:bg-cyan-500 text-white px-3 py-1 rounded-lg text-xs font-bold transition shadow-xs cursor-pointer"
+                        >
+                          Terapkan
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
                 {branches.length > 1 && (
-                  <div className="flex items-center gap-1.5 bg-zinc-950 border border-zinc-800 rounded-xl px-2.5 py-1 ml-1">
+                  <div className="flex items-center gap-1.5 bg-zinc-950 border border-zinc-800 rounded-xl px-2.5 py-1 ml-0.5">
                     <Building2 className="w-3.5 h-3.5 text-amber-400" />
                     <span className="text-[11px] font-bold text-zinc-400">Cabang:</span>
                     <select
@@ -1636,7 +2623,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                   type="text"
                   value={bukubesarSearch}
                   onChange={(e) => setBukubesarSearch(e.target.value)}
-                  placeholder="Cari ID, member, uraian..."
+                  placeholder="Cari ID, member, uraian, PIC..."
                   className="w-full bg-zinc-950 border border-zinc-800 rounded-xl pl-8 pr-7 py-1.5 text-xs text-zinc-200 outline-none focus:border-orange-500 transition"
                 />
                 {bukubesarSearch && (
@@ -1649,6 +2636,40 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                 )}
               </div>
             </div>
+
+            {/* Active PIC Tags row */}
+            {bukubesarPicFilters.length > 0 && (
+              <div className="flex flex-wrap items-center gap-1.5 pt-2 border-t border-zinc-800/80">
+                <span className="text-[11px] font-bold text-zinc-400 flex items-center gap-1">
+                  <UserCheck className="w-3.5 h-3.5 text-cyan-400" />
+                  <span>PIC Terpilih ({bukubesarPicFilters.length}):</span>
+                </span>
+                {bukubesarPicFilters.map((picName) => (
+                  <span
+                    key={picName}
+                    className="inline-flex items-center gap-1.5 bg-cyan-950/80 border border-cyan-500/40 text-cyan-200 text-xs font-bold px-2.5 py-1 rounded-xl shadow-xs"
+                  >
+                    <span>{picName}</span>
+                    <button
+                      type="button"
+                      onClick={() => togglePicFilter(picName)}
+                      className="text-cyan-400 hover:text-rose-400 hover:bg-cyan-900/50 p-0.5 rounded transition"
+                      title={`Hapus tag ${picName}`}
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  </span>
+                ))}
+                <button
+                  type="button"
+                  onClick={handleClearPicFilters}
+                  className="text-[11px] font-bold text-rose-400 hover:text-rose-300 hover:underline px-2 py-1 transition"
+                  title="Hapus semua pilihan PIC"
+                >
+                  Reset Semua
+                </button>
+              </div>
+            )}
           </div>
 
           {/* Ledger Table */}
@@ -1662,6 +2683,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                     <th className="py-3 px-4">Kategori / Tipe</th>
                     <th className="py-3 px-4">Uraian Transaksi</th>
                     <th className="py-3 px-4">Pelanggan / Member</th>
+                    <th className="py-3 px-4">PIC / Kasir</th>
                     <th className="py-3 px-4">Metode / Rekening</th>
                     <th className="py-3 px-4 text-right">Debit (Kas Masuk)</th>
                     <th className="py-3 px-4 text-center">Status</th>
@@ -1671,10 +2693,10 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                 <tbody className="divide-y divide-zinc-800 bg-zinc-950/30 text-xs">
                   {filteredBukubesarTrx.length === 0 ? (
                     <tr>
-                      <td colSpan={9} className="py-12 text-center text-zinc-500">
+                      <td colSpan={10} className="py-12 text-center text-zinc-500">
                         <AlertCircle className="w-8 h-8 mx-auto text-zinc-600 mb-2" />
                         <p className="font-bold text-zinc-400">Tidak ada transaksi yang cocok</p>
-                        <p className="text-[11px] text-zinc-600 mt-0.5">Coba sesuaikan kata kunci pencarian atau filter kategori Anda</p>
+                        <p className="text-[11px] text-zinc-600 mt-0.5">Coba sesuaikan kata kunci pencarian, filter kategori, atau filter PIC Anda</p>
                       </td>
                     </tr>
                   ) : (
@@ -1729,6 +2751,21 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                             {trx.customer}
                           </td>
                           <td className="py-3 px-4">
+                            <div className="flex flex-col gap-0.5">
+                              <span className="font-bold text-cyan-300 flex items-center gap-1">
+                                <UserCheck className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
+                                <span className="truncate max-w-[130px]">
+                                  {trx.picNames || trx.picId || trx.cashier || '-'}
+                                </span>
+                              </span>
+                              {trx.cashier && (trx.picNames || trx.picId) && trx.cashier !== (trx.picNames || trx.picId) && (
+                                <span className="text-[10px] text-zinc-500 truncate max-w-[130px]">
+                                  Kasir: {trx.cashier}
+                                </span>
+                              )}
+                            </div>
+                          </td>
+                          <td className="py-3 px-4">
                             <span className={`font-bold ${isVoid ? 'text-zinc-500 line-through' : 'text-zinc-300'}`}>
                               {trx.method}
                             </span>
@@ -1760,15 +2797,14 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                           </td>
                           <td className="py-3 px-4">
                             <div className="flex items-center justify-center gap-1.5">
-                              {/* 1. Tombol Cetak Ulang */}
-                              <button
-                                onClick={() => handleReprint(trx)}
-                                title="Cetak Ulang Struk / Nota Pembayaran"
-                                className="p-1.5 rounded-lg bg-zinc-800 hover:bg-orange-500/20 text-zinc-400 hover:text-orange-400 border border-zinc-700/60 transition flex items-center gap-1 text-[11px]"
-                              >
-                                <Printer className="w-3.5 h-3.5" />
-                                <span className="hidden xl:inline font-bold">Cetak</span>
-                              </button>
+                              {/* 1. Tombol Detail, Cetak, PDF */}
+                              <TransactionActions
+                                transaction={trx}
+                                onView={(t) => handleReprint(t)}
+                                onPrint={(t) => handleReprint(t)}
+                                onDownloadPDF={(t) => handleReprint(t)}
+                                size="sm"
+                              />
 
                               {/* 2. Tombol Koreksi Salah Metode */}
                               <button
@@ -1809,13 +2845,13 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                 {filteredBukubesarTrx.length > 0 && (
                   <tfoot className="bg-zinc-950 border-t-2 border-zinc-800 text-xs font-bold text-zinc-300">
                     <tr>
-                      <td colSpan={5} className="py-3.5 px-4 text-right">
+                      <td colSpan={6} className="py-3.5 px-4 text-right">
                         Total Kas Masuk (Debit Tersaring):
                       </td>
                       <td className="py-3.5 px-4 text-right font-black text-emerald-400 text-sm">
                         {formatRp(totalDebitFiltered)}
                       </td>
-                      <td colSpan={2} className="py-3.5 px-4 text-center text-zinc-400 font-normal text-[11px]">
+                      <td colSpan={3} className="py-3.5 px-4 text-center text-zinc-400 font-normal text-[11px]">
                         {filteredBukubesarTrx.filter((t) => t.status !== 'VOID').length} Trx Berhasil
                         {filteredBukubesarTrx.filter((t) => t.status === 'VOID').length > 0 && (
                           <span className="text-rose-400 font-semibold ml-1.5">
@@ -1829,6 +2865,258 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
               </table>
             </div>
           </div>
+        </div>
+
+          {/* PRINT & PDF PREVIEW MODAL: BUKU BESAR TRANSAKSI */}
+          {isBukuBesarPrintModalOpen && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-xs p-3 sm:p-4 overflow-y-auto print:static print:inset-auto print:z-auto print:p-0 print:m-0 print:bg-white print:overflow-visible">
+              <div
+                ref={bukubesarPrintRef}
+                id="printable-bukubesar-content"
+                className="bg-white text-zinc-900 border border-zinc-200 rounded-3xl shadow-2xl w-full max-w-5xl p-6 my-auto max-h-[95vh] overflow-y-auto print:max-h-none print:overflow-visible print:border-none print:shadow-none print:max-w-full print:p-0 print:m-0"
+                style={{ backgroundColor: '#ffffff', color: '#18181b' }}
+              >
+                {/* Header */}
+                <div className="flex justify-between items-start border-b border-zinc-200 pb-4 mb-4">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-orange-500 flex items-center justify-center text-white font-black text-sm shadow-sm print:bg-black">
+                      GP
+                    </div>
+                    <div>
+                      <h2 className="text-lg font-black text-zinc-900 tracking-tight">
+                        {activeBranch?.name ? activeBranch.name.toUpperCase() : 'GYMPRO ERP ENTERPRISE'}
+                      </h2>
+                      <p className="text-xs font-semibold text-zinc-500">
+                        LAPORAN BUKU BESAR TRANSAKSI (GENERAL CASH LEDGER)
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setIsBukuBesarPrintModalOpen(false)}
+                    className="p-1.5 rounded-lg text-zinc-400 hover:text-zinc-700 hover:bg-zinc-100 print:hidden cursor-pointer transition"
+                    title="Tutup Preview"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
+
+                {/* Filter & Metadata Badges */}
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 bg-zinc-50 border border-zinc-200 p-3 rounded-2xl text-xs mb-4">
+                  <div>
+                    <span className="text-zinc-500 block text-[10px] uppercase font-bold">Periode:</span>
+                    <span className="font-bold text-zinc-900">
+                      {bukubesarStartDate && bukubesarEndDate
+                        ? `${formatDateIndo(bukubesarStartDate)} s/d ${formatDateIndo(bukubesarEndDate)}`
+                        : bukubesarStartDate
+                        ? `Dari ${formatDateIndo(bukubesarStartDate)}`
+                        : bukubesarEndDate
+                        ? `Sampai ${formatDateIndo(bukubesarEndDate)}`
+                        : 'Semua Periode (Seluruh Waktu)'}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-zinc-500 block text-[10px] uppercase font-bold">Cabang:</span>
+                    <span className="font-bold text-zinc-900">
+                      {bukuBesarBranchFilter === 'ALL'
+                        ? 'Semua Cabang'
+                        : branches.find((b) => b.id === bukuBesarBranchFilter)?.name || bukuBesarBranchFilter}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-zinc-500 block text-[10px] uppercase font-bold">Filter PIC / Kasir:</span>
+                    <span className="font-bold text-cyan-700">
+                      {bukubesarPicFilters.length > 0 ? bukubesarPicFilters.join(', ') : 'Semua PIC & Kasir'}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-zinc-500 block text-[10px] uppercase font-bold">Filter Kategori:</span>
+                    <span className="font-bold text-zinc-900">
+                      {bukubesarTypeFilter === 'ALL' ? 'Semua Kategori' : bukubesarTypeFilter}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-zinc-500 block text-[10px] uppercase font-bold">Total Transaksi:</span>
+                    <span className="font-bold text-zinc-900">
+                      {filteredBukubesarTrx.length} Transaksi ({filteredBukubesarTrx.filter((t) => t.status !== 'VOID').length} Sukses, {filteredBukubesarTrx.filter((t) => t.status === 'VOID').length} VOID)
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-zinc-500 block text-[10px] uppercase font-bold">Waktu Cetak:</span>
+                    <span className="font-bold text-zinc-900">{getTimestamp()}</span>
+                  </div>
+                  <div className="col-span-2">
+                    <span className="text-zinc-500 block text-[10px] uppercase font-bold">Dicetak Oleh:</span>
+                    <span className="font-bold text-zinc-900">{currentUser?.name || 'Administrator Keuangan'}</span>
+                  </div>
+                </div>
+
+                {/* Financial Summary */}
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 mb-4">
+                  <div className="bg-emerald-50 border border-emerald-200 p-2.5 rounded-xl">
+                    <span className="text-[10px] font-bold text-emerald-700 uppercase block">Total Kas Masuk (Debit)</span>
+                    <span className="text-sm font-black text-emerald-800">{formatRp(totalDebitFiltered)}</span>
+                  </div>
+                  <div className="bg-zinc-50 border border-zinc-200 p-2.5 rounded-xl">
+                    <span className="text-[10px] font-bold text-zinc-600 uppercase block">Total Nilai Tagihan</span>
+                    <span className="text-sm font-black text-zinc-800">
+                      {formatRp(filteredBukubesarTrx.filter((t) => t.status !== 'VOID').reduce((s, t) => s + (t.amount || 0), 0))}
+                    </span>
+                  </div>
+                  <div className="bg-amber-50 border border-amber-200 p-2.5 rounded-xl">
+                    <span className="text-[10px] font-bold text-amber-700 uppercase block">Sisa Piutang Berjalan</span>
+                    <span className="text-sm font-black text-amber-800">
+                      {formatRp(filteredBukubesarTrx.filter((t) => t.status !== 'VOID').reduce((s, t) => s + (t.amountRemaining || 0), 0))}
+                    </span>
+                  </div>
+                  <div className="bg-rose-50 border border-rose-200 p-2.5 rounded-xl">
+                    <span className="text-[10px] font-bold text-rose-700 uppercase block">Transaksi VOID</span>
+                    <span className="text-sm font-black text-rose-800">
+                      {filteredBukubesarTrx.filter((t) => t.status === 'VOID').length} Trx
+                    </span>
+                  </div>
+                </div>
+
+                {/* Ledger Table */}
+                <div className="border border-zinc-200 rounded-xl overflow-hidden mb-5">
+                  <table className="w-full text-left text-xs border-collapse">
+                    <thead className="bg-zinc-100 text-zinc-700 border-b border-zinc-200 text-[10px] uppercase font-bold">
+                      <tr>
+                        <th className="py-2 px-2.5 text-center w-8">No</th>
+                        <th className="py-2 px-2.5">Waktu / ID</th>
+                        <th className="py-2 px-2.5">Cabang</th>
+                        <th className="py-2 px-2.5">Kategori</th>
+                        <th className="py-2 px-2.5">Uraian Transaksi</th>
+                        <th className="py-2 px-2.5">Pelanggan</th>
+                        <th className="py-2 px-2.5">PIC / Kasir</th>
+                        <th className="py-2 px-2.5">Metode</th>
+                        <th className="py-2 px-2.5 text-right">Debit Kas Masuk</th>
+                        <th className="py-2 px-2.5 text-center">Status</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-zinc-200 text-[11px]">
+                      {filteredBukubesarTrx.map((trx, idx) => {
+                        const isVoid = trx.status === 'VOID';
+                        return (
+                          <tr key={trx.id} className={isVoid ? 'bg-rose-50/50 text-zinc-400' : 'hover:bg-zinc-50'}>
+                            <td className="py-1.5 px-2.5 text-center font-mono text-zinc-500">{idx + 1}</td>
+                            <td className="py-1.5 px-2.5 font-mono">
+                              <span className={`font-bold block ${isVoid ? 'line-through text-zinc-400' : 'text-zinc-900'}`}>
+                                {trx.id}
+                              </span>
+                              <span className="text-[10px] text-zinc-500">{trx.date} {trx.time}</span>
+                            </td>
+                            <td className="py-1.5 px-2.5 font-medium text-zinc-700">{trx.branchName || 'Cabang Utama'}</td>
+                            <td className="py-1.5 px-2.5 font-semibold text-zinc-700">{trx.type}</td>
+                            <td className="py-1.5 px-2.5 text-zinc-800 max-w-[180px] truncate">{trx.desc}</td>
+                            <td className="py-1.5 px-2.5 font-medium text-zinc-900">{trx.customer}</td>
+                            <td className="py-1.5 px-2.5">
+                              <span className="font-bold text-cyan-800 block">{trx.picNames || trx.picId || trx.cashier || '-'}</span>
+                              {trx.cashier && (trx.picNames || trx.picId) && trx.cashier !== (trx.picNames || trx.picId) && (
+                                <span className="text-[9px] text-zinc-500 block">Kasir: {trx.cashier}</span>
+                              )}
+                            </td>
+                            <td className="py-1.5 px-2.5 text-zinc-700">
+                              {trx.method} {trx.bankDest ? `(${trx.bankDest})` : ''}
+                            </td>
+                            <td className={`py-1.5 px-2.5 text-right font-black ${isVoid ? 'line-through text-zinc-400' : 'text-emerald-700'}`}>
+                              {formatRp(isVoid ? 0 : (trx.amountPaid || trx.amount || 0))}
+                            </td>
+                            <td className="py-1.5 px-2.5 text-center">
+                              <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold uppercase ${
+                                isVoid ? 'bg-rose-100 text-rose-700' : 'bg-emerald-100 text-emerald-800'
+                              }`}>
+                                {trx.status}
+                              </span>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                    <tfoot className="bg-zinc-100 font-bold border-t-2 border-zinc-300 text-xs">
+                      <tr>
+                        <td colSpan={8} className="py-2.5 px-3 text-right text-zinc-700">
+                          Total Kas Masuk (Debit Tersaring):
+                        </td>
+                        <td className="py-2.5 px-3 text-right font-black text-emerald-700 text-sm">
+                          {formatRp(totalDebitFiltered)}
+                        </td>
+                        <td className="py-2.5 px-3 text-center text-zinc-600 text-[10px]">
+                          {filteredBukubesarTrx.filter((t) => t.status !== 'VOID').length} Trx
+                        </td>
+                      </tr>
+                    </tfoot>
+                  </table>
+                </div>
+
+                {/* Signatures */}
+                <div className="grid grid-cols-3 gap-6 pt-4 border-t border-zinc-200 text-center text-xs mb-6">
+                  <div>
+                    <p className="text-zinc-500 text-[10px] uppercase font-bold">Dibuat Oleh (PIC / Kasir)</p>
+                    <div className="h-14" />
+                    <p className="font-bold text-zinc-900 border-t border-zinc-300 pt-1">
+                      {bukubesarPicFilters.length > 0 ? bukubesarPicFilters.join(', ') : currentUser?.name || 'Kasir / Staf'}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-zinc-500 text-[10px] uppercase font-bold">Diperiksa Oleh (Supervisor)</p>
+                    <div className="h-14" />
+                    <p className="font-bold text-zinc-900 border-t border-zinc-300 pt-1">Finance & Audit Supervisor</p>
+                  </div>
+                  <div>
+                    <p className="text-zinc-500 text-[10px] uppercase font-bold">Disetujui Oleh (Manajemen)</p>
+                    <div className="h-14" />
+                    <p className="font-bold text-zinc-900 border-t border-zinc-300 pt-1">Branch / General Manager</p>
+                  </div>
+                </div>
+
+                {/* Action buttons (hidden during print) */}
+                <div className="flex flex-wrap justify-end gap-2.5 pt-4 border-t border-zinc-200 print:hidden">
+                  <button
+                    type="button"
+                    onClick={() => setIsBukuBesarPrintModalOpen(false)}
+                    className="px-4 py-2 rounded-xl bg-zinc-200 hover:bg-zinc-300 text-zinc-800 text-xs font-bold transition cursor-pointer"
+                  >
+                    Tutup
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleExportBukubesarExcel}
+                    className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-sm active:scale-95"
+                  >
+                    <FileSpreadsheet className="w-3.5 h-3.5 text-white" />
+                    <span>Download Excel (.xlsx)</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleExportBukubesarPdf}
+                    disabled={isExportingBukubesarPdf}
+                    className="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-sm active:scale-95 disabled:opacity-50"
+                  >
+                    {isExportingBukubesarPdf ? (
+                      <>
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        <span>Rendering PDF...</span>
+                      </>
+                    ) : (
+                      <>
+                        <FileDown className="w-3.5 h-3.5 text-white" />
+                        <span>Download PDF (.pdf)</span>
+                      </>
+                    )}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => window.print()}
+                    className="px-5 py-2 rounded-xl bg-orange-500 hover:bg-orange-600 text-white text-xs font-bold transition flex items-center gap-2 cursor-pointer shadow-md active:scale-95"
+                  >
+                    <Printer className="w-4 h-4 text-white" />
+                    <span>Cetak Sekarang (Print)</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
@@ -1902,17 +3190,17 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                   onClick={handleGeneratePdfReport}
                   disabled={isGeneratingPdf}
                   className="bg-rose-500 hover:bg-rose-600 text-white px-3.5 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-sm active:scale-95 disabled:opacity-50"
-                  title="Generate Laporan PDF Daily Closing menggunakan html2canvas"
+                  title="Generate Laporan PDF Daily Closing Vektor Asli"
                 >
                   {isGeneratingPdf ? (
                     <>
                       <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                      <span>Rendering PDF...</span>
+                      <span>Menyusun PDF...</span>
                     </>
                   ) : (
                     <>
                       <FileText className="w-3.5 h-3.5" />
-                      <span>Export PDF (html2canvas)</span>
+                      <span>Export PDF (Vector)</span>
                     </>
                   )}
                 </button>
@@ -1952,7 +3240,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                     onClick={handleGeneratePdfReport}
                     disabled={isGeneratingPdf}
                     className="bg-rose-500 hover:bg-rose-600 text-white px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-xs active:scale-95 disabled:opacity-50"
-                    title="Generate Laporan PDF Daily Closing menggunakan html2canvas"
+                    title="Generate Laporan PDF Daily Closing Vektor Asli"
                   >
                     {isGeneratingPdf ? (
                       <>
@@ -1962,7 +3250,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                     ) : (
                       <>
                         <FileText className="w-3.5 h-3.5" />
-                        <span>Export PDF</span>
+                        <span>Export PDF (Vector)</span>
                       </>
                     )}
                   </button>
@@ -2096,6 +3384,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                         <th className="py-2.5 px-3">Metode & Bank</th>
                         <th className="py-2.5 px-3 text-right">Nilai Transaksi</th>
                         <th className="py-2.5 px-3 text-center">Status</th>
+                        <th className="py-2.5 px-3 text-center">Aksi (Cetak/PDF)</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-zinc-800/60 font-sans">
@@ -2140,11 +3429,19 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                                 </span>
                               )}
                             </td>
+                            <td className="py-2.5 px-3 text-center whitespace-nowrap">
+                              <TransactionActions
+                                transaction={trx}
+                                onView={handleReprint}
+                                onPrint={handleReprint}
+                                size="sm"
+                              />
+                            </td>
                           </tr>
                         ))}
                       {targetClosingTrx.length === 0 && (
                         <tr>
-                          <td colSpan={6} className="py-8 text-center text-zinc-500">
+                          <td colSpan={7} className="py-8 text-center text-zinc-500">
                             Tidak ada transaksi tercatat pada tanggal {closingDate}.
                           </td>
                         </tr>
@@ -2568,12 +3865,12 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
                     {isGeneratingPdf ? (
                       <>
                         <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                        <span>Rendering PDF...</span>
+                        <span>Menyusun PDF...</span>
                       </>
                     ) : (
                       <>
                         <FileText className="w-3.5 h-3.5" />
-                        <span>Download PDF (html2canvas)</span>
+                        <span>Download PDF (Vector)</span>
                       </>
                     )}
                   </button>

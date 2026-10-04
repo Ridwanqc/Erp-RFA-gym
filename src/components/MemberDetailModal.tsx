@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { X, Calendar, CreditCard, Dumbbell, History, Phone, ShieldCheck, AlertCircle, Clock, UserCheck, IdCard, Crown, Sparkles, CheckCircle2, Snowflake, PlayCircle, ArrowRight, Camera, QrCode } from 'lucide-react';
+import { X, Calendar, CreditCard, Dumbbell, History, Phone, ShieldCheck, AlertCircle, Clock, UserCheck, IdCard, Crown, Sparkles, CheckCircle2, Snowflake, PlayCircle, ArrowRight, Camera, QrCode, Printer } from 'lucide-react';
 import { Member, Attendance, Transaction, Schedule, FollowUpLog, MemberMembershipRecord, PTPurchaseRecord, MemberFreezeRecord } from '../types';
 import { formatRp, APP_TODAY, formatDateIndo } from '../utils/formatters';
 import { getMemberStatus } from '../utils/memberStatus';
 import { sortAttendancesByNewest } from '../data/lockerData';
 import { MemberCameraCaptureModal } from './MemberCameraCaptureModal';
 import { MemberQRCodeModal } from './MemberQRCodeModal';
+import { TransactionActions } from './transaction/TransactionActions';
 
 interface MemberDetailModalProps {
   isOpen: boolean;
@@ -19,6 +20,7 @@ interface MemberDetailModalProps {
   ptPurchases?: PTPurchaseRecord[];
   freezeRecords?: MemberFreezeRecord[];
   onOpenPayPiutang?: (trx: Transaction) => void;
+  onReprintReceipt?: (trx: Transaction) => void;
   onOpenIDCard?: (member: Member) => void;
   onOpenFreeze?: (member: Member) => void;
   onOpenUnfreeze?: (member: Member, record?: MemberFreezeRecord) => void;
@@ -39,6 +41,7 @@ export const MemberDetailModal: React.FC<MemberDetailModalProps> = ({
   ptPurchases = [],
   freezeRecords = [],
   onOpenPayPiutang,
+  onReprintReceipt,
   onOpenIDCard,
   onOpenFreeze,
   onOpenUnfreeze,
@@ -743,6 +746,7 @@ export const MemberDetailModal: React.FC<MemberDetailModalProps> = ({
                         <th className="py-2.5 px-3 uppercase text-[10px] font-bold text-right">Nilai Transaksi</th>
                         <th className="py-2.5 px-3 uppercase text-[10px] font-bold text-right">Sisa Piutang</th>
                         <th className="py-2.5 px-3 uppercase text-[10px] font-bold text-center">Status</th>
+                        <th className="py-2.5 px-3 uppercase text-[10px] font-bold text-center">Aksi</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-zinc-800 bg-zinc-950/40">
@@ -771,6 +775,17 @@ export const MemberDetailModal: React.FC<MemberDetailModalProps> = ({
                             >
                               {trx.status}
                             </span>
+                          </td>
+                          <td className="py-2.5 px-3 text-center">
+                            {onReprintReceipt && (
+                              <TransactionActions
+                                transaction={trx}
+                                onView={(t) => onReprintReceipt(t)}
+                                onPrint={(t) => onReprintReceipt(t)}
+                                onDownloadPDF={(t) => onReprintReceipt(t)}
+                                size="sm"
+                              />
+                            )}
                           </td>
                         </tr>
                       ))}

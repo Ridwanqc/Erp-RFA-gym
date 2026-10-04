@@ -113,6 +113,7 @@ export default defineConfig(() => {
     resolve: {
       alias: {
         '@': path.resolve(import.meta.dirname, '.'),
+        html2canvas: 'html2canvas-pro',
       },
     },
     build: {

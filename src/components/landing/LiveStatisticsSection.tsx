@@ -20,9 +20,10 @@ import {
   Clock,
   ChevronRight,
   MessageCircle,
-  ExternalLink
+  ExternalLink,
+  User
 } from 'lucide-react';
-import { Attendance } from '../../types';
+import { Attendance, Member } from '../../types';
 import { BRANCH_CONTACTS, getDynamicBranchContacts } from '../../data/landingData';
 import { APP_TODAY } from '../../utils/formatters';
 
@@ -35,6 +36,8 @@ interface LiveStatisticsSectionProps {
   onCtaClick?: () => void;
   onOpenJoinNow?: (plan?: string, branchId?: string) => void;
   onOpenInquiry?: (topic?: string, branchId?: string) => void;
+  loggedInMember?: Member | null;
+  onOpenMemberArea?: () => void;
 }
 
 export const LiveStatisticsSection: React.FC<LiveStatisticsSectionProps> = ({
@@ -45,7 +48,9 @@ export const LiveStatisticsSection: React.FC<LiveStatisticsSectionProps> = ({
   attendances = [],
   onCtaClick,
   onOpenJoinNow,
-  onOpenInquiry
+  onOpenInquiry,
+  loggedInMember,
+  onOpenMemberArea
 }) => {
   const [isSyncing, setIsSyncing] = useState(false);
   const [lastSyncTime, setLastSyncTime] = useState('Baru saja (Real-Time)');
@@ -192,13 +197,82 @@ export const LiveStatisticsSection: React.FC<LiveStatisticsSectionProps> = ({
         </div>
 
         {/* ========================================================================= */}
-        {/* PROMINENT "JOIN NOW" CALL-TO-ACTION BANNER                                */}
-        {/* Direct registration and inquiry linking to branch WhatsApp numbers       */}
+        {/* PROMINENT "JOIN NOW" CALL-TO-ACTION BANNER OR MEMBER STATUS HUB          */}
+        {/* Sembunyikan fitur Join Now jika member sudah login                       */}
         {/* ========================================================================= */}
         <div id="join-now" className="scroll-mt-28 mb-16 relative">
           <span id="live-occupancy" className="absolute -top-28 left-0 pointer-events-none" />
 
-          <div className="relative rounded-3xl overflow-hidden bg-gradient-to-b from-zinc-900 via-zinc-950 to-black border-2 border-orange-500/40 p-6 sm:p-10 lg:p-12 shadow-2xl shadow-orange-500/10">
+          {loggedInMember ? (
+            /* MEMBER SUDAH LOGIN: TAMPILKAN HUB STATUS MEMBER RESMI (SEMBUYIKAN JOIN NOW) */
+            <div className="relative rounded-3xl overflow-hidden bg-gradient-to-b from-zinc-900 via-zinc-950 to-black border-2 border-emerald-500/40 p-6 sm:p-10 lg:p-12 shadow-2xl shadow-emerald-500/10">
+              <div className="absolute top-0 right-1/4 w-96 h-96 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none animate-pulse" />
+              <div className="absolute bottom-0 left-10 w-80 h-80 bg-orange-500/10 rounded-full blur-3xl pointer-events-none" />
+
+              <div className="relative z-10 flex flex-wrap items-center justify-between gap-4 pb-6 border-b border-zinc-800/80">
+                <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 text-xs font-bold">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                  <span>Akun Member Terverifikasi & Aktif</span>
+                </div>
+                <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-orange-500/10 border border-orange-500/30 text-orange-400 text-xs font-black tracking-wider uppercase">
+                  <span>ID Member: {loggedInMember.id}</span>
+                </div>
+              </div>
+
+              <div className="relative z-10 my-6">
+                <div className="inline-flex items-center gap-2 text-xs font-black uppercase tracking-widest text-emerald-400 mb-2">
+                  <Sparkles className="w-4 h-4" />
+                  <span>Selamat Datang Kembali</span>
+                </div>
+                <h2 className="text-3xl sm:text-4xl font-black text-white">
+                  Halo, <span className="bg-gradient-to-r from-orange-400 to-amber-300 bg-clip-text text-transparent">{loggedInMember.name}</span>!
+                </h2>
+                <p className="mt-3 text-zinc-300 text-sm sm:text-base leading-relaxed max-w-2xl">
+                  Anda sudah terdaftar sebagai anggota resmi RFA Gym. Pantau sisa masa aktif membership, kuota personal trainer, atau kartu digital Anda langsung melalui portal khusus member.
+                </p>
+                <div className="mt-5 flex flex-wrap gap-2.5 text-xs">
+                  <span className="px-3.5 py-1.5 rounded-xl bg-zinc-900 border border-zinc-800 text-zinc-300 flex items-center gap-1.5">
+                    Status: <strong className="text-emerald-400 font-bold">{loggedInMember.status || 'Aktif'}</strong>
+                  </span>
+                  <span className="px-3.5 py-1.5 rounded-xl bg-zinc-900 border border-zinc-800 text-zinc-300 flex items-center gap-1.5">
+                    Paket: <strong className="text-orange-400 font-bold">{loggedInMember.membershipType || 'All-Access Pro'}</strong>
+                  </span>
+                  {loggedInMember.expired && (
+                    <span className="px-3.5 py-1.5 rounded-xl bg-zinc-900 border border-zinc-800 text-zinc-300 flex items-center gap-1.5">
+                      Berlaku Hingga: <strong className="text-white font-mono">{loggedInMember.expired}</strong>
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              <div className="relative z-10 mt-6 pt-6 border-t border-zinc-800/80 flex flex-wrap items-center gap-3">
+                {onOpenMemberArea && (
+                  <button
+                    type="button"
+                    onClick={onOpenMemberArea}
+                    className="px-6 py-3.5 rounded-2xl bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white font-extrabold text-xs sm:text-sm flex items-center gap-2.5 shadow-xl shadow-orange-500/25 active:scale-95 transition-all cursor-pointer"
+                  >
+                    <User className="w-4 h-4 text-amber-200" />
+                    <span>Buka Portal & Kartu Digital Member</span>
+                    <ArrowRight className="w-4 h-4" />
+                  </button>
+                )}
+                <a
+                  href={`https://wa.me/${branchContacts[0]?.whatsapp || '6281234567890'}?text=${encodeURIComponent(
+                    `Halo Front Desk RFA Gym, saya ${loggedInMember.name} (ID: ${loggedInMember.id}) ingin bertanya mengenai sesi latihan dan fasilitas.`
+                  )}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="px-5 py-3.5 rounded-2xl bg-zinc-900 hover:bg-zinc-800 text-emerald-400 font-bold text-xs sm:text-sm border border-emerald-500/30 flex items-center gap-2 transition-all active:scale-95"
+                >
+                  <MessageCircle className="w-4 h-4 text-emerald-400" />
+                  <span>Chat Front Desk Cabang</span>
+                </a>
+              </div>
+            </div>
+          ) : (
+            /* MEMBER BELUM LOGIN: TAMPILKAN BANNER PROMOSI JOIN NOW */
+            <div className="relative rounded-3xl overflow-hidden bg-gradient-to-b from-zinc-900 via-zinc-950 to-black border-2 border-orange-500/40 p-6 sm:p-10 lg:p-12 shadow-2xl shadow-orange-500/10">
             {/* Ambient Background Glows */}
             <div className="absolute top-0 right-1/4 w-96 h-96 bg-orange-500/15 rounded-full blur-3xl pointer-events-none animate-pulse" />
             <div className="absolute bottom-0 left-10 w-80 h-80 bg-amber-500/10 rounded-full blur-3xl pointer-events-none" />
@@ -461,6 +535,7 @@ export const LiveStatisticsSection: React.FC<LiveStatisticsSectionProps> = ({
               </div>
             </div>
           </div>
+          )}
         </div>
 
         {/* 3 Branch Hubs: Displaying Official WhatsApp & Direct Action */}
@@ -501,22 +576,26 @@ export const LiveStatisticsSection: React.FC<LiveStatisticsSectionProps> = ({
                 <button
                   type="button"
                   onClick={() => handleOpenBranchWhatsApp(branch.id)}
-                  className="flex-1 py-2 px-3 rounded-xl bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 font-bold text-xs border border-emerald-500/40 flex items-center justify-center gap-1.5 transition-all"
+                  className={`py-2 px-3 rounded-xl bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 font-bold text-xs border border-emerald-500/40 flex items-center justify-center gap-1.5 transition-all ${
+                    loggedInMember ? 'w-full' : 'flex-1'
+                  }`}
                   title={`Chat WhatsApp resmi ${branch.shortName}`}
                 >
                   <MessageCircle className="w-3.5 h-3.5 text-emerald-400" />
-                  <span>Chat WA</span>
+                  <span>{loggedInMember ? `Chat WhatsApp ${branch.shortName}` : 'Chat WA'}</span>
                 </button>
 
-                <button
-                  type="button"
-                  onClick={() => handleJoinClick('All-Access Pro (3 Bulan)', branch.id)}
-                  className="flex-1 py-2 px-3 rounded-xl bg-orange-500 hover:bg-orange-600 text-white font-bold text-xs flex items-center justify-center gap-1.5 transition-all shadow-sm"
-                  title={`Daftar ke ${branch.shortName}`}
-                >
-                  <span>Join Cabang Ini</span>
-                  <ArrowRight className="w-3.5 h-3.5" />
-                </button>
+                {!loggedInMember && (
+                  <button
+                    type="button"
+                    onClick={() => handleJoinClick('All-Access Pro (3 Bulan)', branch.id)}
+                    className="flex-1 py-2 px-3 rounded-xl bg-orange-500 hover:bg-orange-600 text-white font-bold text-xs flex items-center justify-center gap-1.5 transition-all shadow-sm"
+                    title={`Daftar ke ${branch.shortName}`}
+                  >
+                    <span>Join Cabang Ini</span>
+                    <ArrowRight className="w-3.5 h-3.5" />
+                  </button>
+                )}
               </div>
             </div>
           ))}

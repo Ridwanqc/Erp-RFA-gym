@@ -35,6 +35,7 @@ import { Product, Transaction } from '../types';
 import { formatRp, formatDateIndo, APP_TODAY } from '../utils/formatters';
 import { useSettings } from '../context/SettingsContext';
 import { StockTransferModal } from './StockTransferModal';
+import { TransactionActions } from './transaction/TransactionActions';
 
 interface ProductManagementViewProps {
   products: Product[];
@@ -43,6 +44,7 @@ interface ProductManagementViewProps {
   onDeleteProduct: (productId: string) => void;
   onAddStock: (productId: string, qty: number, note?: string) => void;
   onNavigateTab: (tab: any) => void;
+  onReprintReceipt?: (trx: Transaction) => void;
 }
 
 // Preset photo options for quick product creation
@@ -74,7 +76,8 @@ export const ProductManagementView: React.FC<ProductManagementViewProps> = ({
   onSaveProduct,
   onDeleteProduct,
   onAddStock,
-  onNavigateTab
+  onNavigateTab,
+  onReprintReceipt
 }) => {
   const { branches, activeBranchId, activeBranch, isAllBranches, stockTransfers } = useSettings();
   // Top Level View Switcher
@@ -1713,6 +1716,7 @@ export const ProductManagementView: React.FC<ProductManagementViewProps> = ({
                       <th className="py-3 px-4 text-center">Status</th>
                       <th className="py-3 px-4 text-right">Total Transaksi</th>
                       <th className="py-3 px-4 text-right">Laba</th>
+                      <th className="py-3 px-4 text-center">Aksi (Cetak/PDF)</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-zinc-800/80 text-xs">
@@ -1764,8 +1768,8 @@ export const ProductManagementView: React.FC<ProductManagementViewProps> = ({
                             <span
                               className={`px-2.5 py-1 rounded-full text-[10px] font-black border ${
                                 isUnpaid
-                                  ? 'bg-rose-500/20 text-rose-300 border-rose-500/40'
-                                  : 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
+                                    ? 'bg-rose-500/20 text-rose-300 border-rose-500/40'
+                                    : 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
                               }`}
                             >
                               {trx.status === 'Paid' ? 'LUNAS' : trx.status}
@@ -1778,6 +1782,15 @@ export const ProductManagementView: React.FC<ProductManagementViewProps> = ({
 
                           <td className="py-3 px-4 text-right font-bold text-emerald-400">
                             +{formatRp(trx.calculatedProfit)}
+                          </td>
+
+                          <td className="py-3 px-4 text-center whitespace-nowrap">
+                            <TransactionActions
+                              transaction={trx}
+                              onView={onReprintReceipt}
+                              onPrint={onReprintReceipt}
+                              size="sm"
+                            />
                           </td>
                         </tr>
                       );

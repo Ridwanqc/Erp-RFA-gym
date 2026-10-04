@@ -144,6 +144,115 @@ body, #root, header, aside, main, div, button, input, select {
   border-color: #1e293b !important;
 }
 
+/* --------------------------------------------------------------------------
+   Mode: Claymorphism 3D (Tactile Pillowy Clay & Soft Double Shadows)
+   -------------------------------------------------------------------------- */
+[data-theme="claymorphism"] body,
+[data-theme="claymorphism"] #root,
+[data-theme="claymorphism"] .bg-zinc-950,
+[data-theme="claymorphism"] .bg-\[\#09090b\] {
+  background-color: #1e202e !important;
+  color: #f1f5f9 !important;
+}
+
+/* Primary Clay Cards & Elevated Panels */
+[data-theme="claymorphism"] .bg-zinc-900,
+[data-theme="claymorphism"] .bg-zinc-900\/90,
+[data-theme="claymorphism"] .bg-zinc-900\/95,
+[data-theme="claymorphism"] .bg-zinc-900\/80,
+[data-theme="claymorphism"] .bg-zinc-900\/60,
+[data-theme="claymorphism"] .bg-zinc-900\/40 {
+  background-color: #282b3d !important;
+  border-color: rgba(255, 255, 255, 0.08) !important;
+  box-shadow: 8px 8px 18px rgba(13, 14, 23, 0.45),
+              -4px -4px 12px rgba(255, 255, 255, 0.035),
+              inset 2px 2px 4px rgba(255, 255, 255, 0.1),
+              inset -2px -2px 5px rgba(13, 14, 23, 0.4) !important;
+}
+
+/* Recessed Clay Wells & Deep Sections */
+[data-theme="claymorphism"] .bg-zinc-950\/80,
+[data-theme="claymorphism"] .bg-zinc-950\/60,
+[data-theme="claymorphism"] .bg-zinc-950\/40,
+[data-theme="claymorphism"] .bg-zinc-950\/30 {
+  background-color: #191b26 !important;
+  box-shadow: inset 4px 4px 8px rgba(10, 11, 18, 0.55),
+              inset -2px -2px 4px rgba(255, 255, 255, 0.03) !important;
+  border-color: rgba(255, 255, 255, 0.06) !important;
+}
+
+/* Clay Borders */
+[data-theme="claymorphism"] .border-zinc-800,
+[data-theme="claymorphism"] .border-zinc-800\/80,
+[data-theme="claymorphism"] .border-zinc-800\/90,
+[data-theme="claymorphism"] .border-zinc-700,
+[data-theme="claymorphism"] .border-zinc-700\/80 {
+  border-color: rgba(255, 255, 255, 0.08) !important;
+}
+
+/* Clay Interactive Inputs & Form Controls */
+[data-theme="claymorphism"] input,
+[data-theme="claymorphism"] select,
+[data-theme="claymorphism"] textarea {
+  background-color: #181a25 !important;
+  color: #f8fafc !important;
+  border-color: rgba(255, 255, 255, 0.09) !important;
+  border-radius: 0.85rem !important;
+  box-shadow: inset 3px 3px 7px rgba(10, 11, 18, 0.55),
+              inset -2px -2px 4px rgba(255, 255, 255, 0.04) !important;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+[data-theme="claymorphism"] input:focus,
+[data-theme="claymorphism"] select:focus,
+[data-theme="claymorphism"] textarea:focus {
+  border-color: var(--primary-accent, #f97316) !important;
+  box-shadow: inset 3px 3px 7px rgba(10, 11, 18, 0.55),
+              0 0 0 2px var(--primary-accent-soft, rgba(249, 115, 22, 0.2)) !important;
+}
+
+/* Clay Hover States */
+[data-theme="claymorphism"] .hover\:bg-zinc-800:hover,
+[data-theme="claymorphism"] .hover\:bg-zinc-800\/30:hover,
+[data-theme="claymorphism"] .hover\:bg-zinc-800\/40:hover,
+[data-theme="claymorphism"] .hover\:bg-zinc-800\/50:hover,
+[data-theme="claymorphism"] .hover\:bg-zinc-800\/70:hover {
+  background-color: #33374c !important;
+  box-shadow: 5px 5px 12px rgba(13, 14, 23, 0.4),
+              -2px -2px 6px rgba(255, 255, 255, 0.05),
+              inset 2px 2px 3px rgba(255, 255, 255, 0.12),
+              inset -2px -2px 4px rgba(13, 14, 23, 0.35) !important;
+}
+
+/* Clay Buttons - Tactile Cushion Effect */
+[data-theme="claymorphism"] button:not(.no-clay):not(.p-1):not(.p-0) {
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+[data-theme="claymorphism"] button:not(.no-clay):active {
+  transform: translateY(1.5px) scale(0.985);
+}
+
+/* Clay Modals & Overlays */
+[data-theme="claymorphism"] [role="dialog"] > div,
+[data-theme="claymorphism"] .modal-content {
+  box-shadow: 14px 14px 32px rgba(10, 11, 18, 0.65),
+              -6px -6px 18px rgba(255, 255, 255, 0.04),
+              inset 2px 2px 5px rgba(255, 255, 255, 0.12),
+              inset -3px -3px 6px rgba(10, 11, 18, 0.45) !important;
+}
+
+/* Clay Pattern Backgrounds */
+[data-theme="claymorphism"][data-pattern="grid"] {
+  background-image: radial-gradient(rgba(255, 255, 255, 0.08) 1.5px, transparent 1.5px);
+  background-size: 24px 24px;
+}
+
+[data-theme="claymorphism"][data-pattern="dots"] {
+  background-image: radial-gradient(rgba(255, 255, 255, 0.12) 2px, transparent 2px);
+  background-size: 18px 18px;
+}
+
 /* Mode: Daylight Clean (Modern Light) */
 [data-theme="light"] body,
 [data-theme="light"] #root,
@@ -438,5 +547,23 @@ body, #root, header, aside, main, div, button, input, select {
   .receipt-avoid-break {
     break-inside: avoid !important;
     page-break-inside: avoid !important;
+  }
+
+  /* Specific rule for TransactionPrint / TransactionReceipt / TransactionInvoice */
+  body.printing-transaction * {
+    visibility: hidden;
+  }
+
+  body.printing-transaction .transaction-print,
+  body.printing-transaction .transaction-print * {
+    visibility: visible;
+  }
+
+  .transaction-print {
+    background: #ffffff !important;
+    color: #000000 !important;
+    box-shadow: none !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
   }
 }

@@ -16,7 +16,8 @@ import {
   INITIAL_PT_PURCHASES,
   INITIAL_PT_ASSIGNMENTS,
   INITIAL_WORK_SCHEDULES,
-  INITIAL_LEAVES
+  INITIAL_LEAVES,
+  INITIAL_GUEST_VISITORS
 } from './data/initialData';
 import {
   User,
@@ -54,6 +55,7 @@ import {
   WorkSchedule,
   LeaveRequest,
   LockerSlot,
+  GuestPassVisitor,
   ALL_BRANCHES_ID
 } from './types';
 import { INITIAL_LOCKERS, sortAttendancesByNewest, syncLockersWithAttendances } from './data/lockerData';
@@ -573,6 +575,26 @@ export default function App() {
     localStorage.setItem('rfa_freeze_records', JSON.stringify(freezeRecords));
   }, [freezeRecords]);
 
+  // ==================== GUEST PASS / BUKU TAMU VISIT HARIAN STATE ====================
+  const [guestVisitors, setGuestVisitors] = useState<GuestPassVisitor[]>(() => {
+    const saved = localStorage.getItem('rfa_guest_visitors');
+    if (!saved) return INITIAL_GUEST_VISITORS;
+    try {
+      const parsed: GuestPassVisitor[] = JSON.parse(saved);
+      const existingIds = new Set(parsed.map((g) => g.id));
+      const missing = INITIAL_GUEST_VISITORS.filter((g) => !existingIds.has(g.id));
+      return missing.length > 0 ? [...parsed, ...missing] : parsed;
+    } catch {
+      return INITIAL_GUEST_VISITORS;
+    }
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('rfa_guest_visitors', JSON.stringify(guestVisitors));
+    } catch {}
+  }, [guestVisitors]);
+
   // ==================== INVENTARIS & ASET STATE ====================
   const [gymAssets, setGymAssets] = useState<GymAsset[]>(() => {
     try {
@@ -1049,6 +1071,11 @@ export default function App() {
     return leads.filter((l) => l.branchId === activeBranchId || (!l.branchId && activeBranchId === 'BR-001'));
   }, [leads, isAllBranches, activeBranchId]);
 
+  const activeBranchFilteredGuestVisitors = useMemo(() => {
+    if (isAllBranches) return guestVisitors;
+    return guestVisitors.filter((g) => g.branchId === activeBranchId || (!g.branchId && activeBranchId === 'BR-001'));
+  }, [guestVisitors, isAllBranches, activeBranchId]);
+
   // Global Modals
   const [activeReceipt, setActiveReceipt] = useState<Transaction | null>(null);
   const [activeIDCardMember, setActiveIDCardMember] = useState<Member | null>(null);
@@ -1301,6 +1328,8 @@ export default function App() {
 
     // Record optional admin fee transaction to cash flow
     if (record.adminFee && record.adminFee > 0) {
+      const branchIdToTag = isAllBranches ? (branches[0]?.id || 'BR-001') : activeBranchId;
+      const branchNameToTag = activeBranchId === ALL_BRANCHES_ID ? (branches[0]?.name || 'GymPro Flagship Kelapa Gading') : activeBranch.name;
       const feeTrx: Transaction = {
         id: 'TRX-FRZ-' + Math.floor(100000 + Math.random() * 900000),
         date: record.startDate || APP_TODAY,
@@ -1315,10 +1344,13 @@ export default function App() {
         cashier: record.staffName || currentUser?.name || 'Kasir',
         initialCashPaid: record.adminFee,
         amountPaid: record.adminFee,
-        amountRemaining: 0
+        amountRemaining: 0,
+        branchId: branchIdToTag,
+        branchName: branchNameToTag
       };
       setTransactions((tPrev) => [feeTrx, ...tPrev]);
       saveTransactionToFirestore(feeTrx).catch(() => {});
+      setActiveReceipt(feeTrx);
     }
 
     const daysCount = record.freezeDays || record.plannedDays;
@@ -1664,7 +1696,7 @@ export default function App() {
     );
 
     // Open receipt modal
-    setActiveReceipt(newTrx);
+    setActiveReceipt(stampedTrx);
   };
 
   // Handler: POS Checkout
@@ -2910,8 +2942,9 @@ export default function App() {
             />
           )}
 
-          {activeTab === 'front-desk-portal' && (
+          {(activeTab === 'front-desk-portal' || activeTab === 'guest-pass') && (
             <FrontDeskPortalView
+              initialTab={activeTab === 'guest-pass' ? 'guest_passes' : 'radar'}
               members={activeBranchFilteredMembers}
               attendances={activeBranchFilteredAttendances}
               lockers={lockers}
@@ -2932,9 +2965,19 @@ export default function App() {
               bundlePackages={bundlePackages}
               transactions={activeBranchFilteredTransactions}
               onAddTransaction={(trx) => {
-                setTransactions((prev) => [trx, ...prev]);
-                saveTransactionToFirestore(trx).catch(console.error);
+                const branchIdToTag = trx.branchId || (isAllBranches ? (branches[0]?.id || 'BR-001') : activeBranchId);
+                const branchNameToTag = trx.branchName || (activeBranchId === ALL_BRANCHES_ID ? (branches[0]?.name || 'GymPro Flagship Kelapa Gading') : activeBranch.name);
+                const stampedTrx: Transaction = {
+                  ...trx,
+                  branchId: branchIdToTag,
+                  branchName: branchNameToTag
+                };
+                setTransactions((prev) => [stampedTrx, ...prev]);
+                saveTransactionToFirestore(stampedTrx).catch(console.error);
+                // Pastikan setiap transaksi langsung memicu cetak bill / struk resmi
+                setActiveReceipt(stampedTrx);
               }}
+              onReprintReceipt={(trx) => setActiveReceipt(trx)}
               currentUser={currentUser}
               staffUsers={activeBranchFilteredStaffUsers}
               schedules={schedules}
@@ -2956,6 +2999,12 @@ export default function App() {
               onlineReservations={reservations}
               onCheckinReservation={handleCheckinReservation}
               onCancelReservation={handleCancelReservation}
+              guestVisitors={activeBranchFilteredGuestVisitors}
+              onUpdateGuestVisitors={setGuestVisitors}
+              onAddLead={(newLead) => {
+                setLeads((prev) => [newLead, ...prev]);
+                saveLeadToFirestore(newLead).catch(() => {});
+              }}
             />
           )}
 
@@ -3015,6 +3064,8 @@ export default function App() {
               onNavigateTab={(tab) => setActiveTab(tab)}
               isStoreClosed={isStoreClosed}
               showToast={showToast}
+              transactions={activeBranchFilteredTransactions}
+              onReprintReceipt={(trx) => setActiveReceipt(trx)}
             />
           )}
 
@@ -3440,6 +3491,7 @@ export default function App() {
         memberMemberships={memberMemberships}
         ptPurchases={ptPurchases}
         freezeRecords={freezeRecords}
+        onReprintReceipt={(trx) => setActiveReceipt(trx)}
         onClose={() => setActiveDetailMember(null)}
         onOpenIDCard={(m) => {
           setActiveIDCardMember(m);

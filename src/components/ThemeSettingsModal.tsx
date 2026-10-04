@@ -86,6 +86,8 @@ export const ThemeSettingsModal: React.FC<ThemeSettingsModalProps> = ({
         return <Monitor className="w-5 h-5 text-cyan-400" />;
       case 'sun':
         return <Sun className="w-5 h-5 text-yellow-400" />;
+      case 'layers':
+        return <Layers className="w-5 h-5 text-indigo-400" />;
       default:
         return <Palette className="w-5 h-5 text-orange-400" />;
     }

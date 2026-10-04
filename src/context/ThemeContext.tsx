@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 
-export type ThemeMode = 'dark' | 'midnight' | 'slate' | 'light';
+export type ThemeMode = 'dark' | 'midnight' | 'slate' | 'light' | 'claymorphism';
 export type AccentColor = 'orange' | 'emerald' | 'cyan' | 'violet' | 'red' | 'amber';
 export type ContentDensity = 'comfortable' | 'compact';
 export type BackgroundPattern = 'none' | 'grid' | 'dots';
@@ -28,7 +28,7 @@ export interface ThemeModeOption {
   id: ThemeMode;
   name: string;
   desc: string;
-  iconType: 'moon' | 'sparkles' | 'monitor' | 'sun';
+  iconType: 'moon' | 'sparkles' | 'monitor' | 'sun' | 'layers';
   bgPreview: string;
   cardPreview: string;
 }
@@ -57,6 +57,14 @@ export const THEME_MODE_OPTIONS: ThemeModeOption[] = [
     iconType: 'monitor',
     bgPreview: 'bg-[#0b1120]',
     cardPreview: 'bg-[#111827]'
+  },
+  {
+    id: 'claymorphism',
+    name: 'Claymorphism 3D',
+    desc: 'Desain 3D clay taktil & empuk dengan bayangan timbul ganda dan permukaan halus modern.',
+    iconType: 'layers',
+    bgPreview: 'bg-[#1e202e]',
+    cardPreview: 'bg-[#292c3d]'
   },
   {
     id: 'light',

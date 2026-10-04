@@ -30,7 +30,8 @@ import {
   Palette,
   Settings,
   FileSpreadsheet,
-  Globe
+  Globe,
+  Ticket
 } from 'lucide-react';
 import { User, UserRole } from '../types';
 import { PWAInstallButton } from './PWAInstallButton';
@@ -39,6 +40,7 @@ import { useTheme } from '../context/ThemeContext';
 export type ActiveTab =
   | 'dashboard'
   | 'front-desk-portal'
+  | 'guest-pass'
   | 'leader-pt'
   | 'pt-package-performance'
   | 'trainer-portal'
@@ -174,6 +176,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
             {
               id: 'front-desk-portal',
               label: 'Portal Kasir & Front Desk',
+              roles: ['admin', 'kasir', 'leader_pt']
+            },
+            {
+              id: 'guest-pass',
+              label: 'Tiket Visit (Guest Pass)',
               roles: ['admin', 'kasir', 'leader_pt']
             },
             {
