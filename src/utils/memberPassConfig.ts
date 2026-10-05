@@ -13,6 +13,7 @@ export interface PassBackgroundConfig {
   darkOverlay: number; // 0 - 90 (%)
   showArmorPanels: boolean;
   showHexMesh: boolean;
+  showBrandLogo?: boolean;
   backgroundColor: string;
   blendMode: 'normal' | 'multiply' | 'overlay' | 'screen' | 'luminosity';
 }
@@ -133,6 +134,7 @@ export const DEFAULT_PASS_BACKGROUND_CONFIG: PassBackgroundConfig = {
   darkOverlay: 0,
   showArmorPanels: false,
   showHexMesh: false,
+  showBrandLogo: false,
   backgroundColor: '#0a0b0e',
   blendMode: 'normal'
 };

@@ -8,6 +8,7 @@ import { DataExportModal } from './DataExportModal';
 import { PicPasswordModal } from './PicPasswordModal';
 import { useSettings } from '../context/SettingsContext';
 import { DEFAULT_PIC_PROTECTION } from '../data/settingsData';
+import { OfficialIdCardSection } from './OfficialIdCardSection';
 
 interface MasterDataViewProps {
   members: Member[];
@@ -1199,122 +1200,31 @@ export const MasterDataView: React.FC<MasterDataViewProps> = ({
                 )}
               </div>
 
-              {/* SEKSI KHUSUS: DATA KARTU IDENTITAS */}
-              <div className="bg-zinc-950/80 border border-orange-500/30 p-4 rounded-2xl space-y-3 relative overflow-hidden">
-                <div className="flex items-center justify-between pb-2 border-b border-zinc-800">
-                  <div className="flex items-center gap-2">
-                    <ShieldCheck className="w-4 h-4 text-orange-400" />
-                    <h4 className="text-xs font-bold text-white uppercase tracking-wider">
-                      Kartu Identitas Resmi ({activeTab === 'member' ? 'Member' : 'Karyawan'})
-                    </h4>
-                  </div>
-                  <span className="text-[10px] text-zinc-400 font-medium">KTP / SIM / Paspor</span>
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                  <div>
-                    <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-wider mb-1">
-                      Jenis Identitas
-                    </label>
-                    <select
-                      value={idType}
-                      onChange={(e) => setIdType(e.target.value as any)}
-                      className="w-full bg-zinc-900 border border-zinc-700 rounded-xl px-3 py-2 text-xs text-white outline-none focus:border-orange-500"
-                    >
-                      <option value="KTP">KTP (Kartu Tanda Penduduk)</option>
-                      <option value="SIM">SIM (Surat Izin Mengemudi)</option>
-                      <option value="Paspor">Paspor</option>
-                      <option value="Kartu Pelajar">Kartu Pelajar / Mahasiswa</option>
-                    </select>
-                  </div>
-
-                  <div className="sm:col-span-2">
-                    <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-wider mb-1">
-                      Nomor {idType} / NIK
-                    </label>
-                    <input
-                      type="text"
-                      value={idNumber}
-                      onChange={(e) => setIdNumber(e.target.value)}
-                      placeholder="Cth: 3171011504880001 (16 digit NIK)..."
-                      className="w-full bg-zinc-900 border border-zinc-700 rounded-xl px-3 py-2 text-xs text-white font-mono outline-none focus:border-orange-500"
-                    />
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-wider mb-1">
-                      Tanggal Lahir (sesuai identitas)
-                    </label>
-                    <input
-                      type="date"
-                      value={birthDate}
-                      onChange={(e) => setBirthDate(e.target.value)}
-                      className="w-full bg-zinc-900 border border-zinc-700 rounded-xl px-3 py-2 text-xs text-white outline-none focus:border-orange-500"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-wider mb-1">
-                      Kontak Darurat / Kerabat
-                    </label>
-                    <input
-                      type="text"
-                      value={emergencyContact}
-                      onChange={(e) => setEmergencyContact(e.target.value)}
-                      placeholder="Nama & No HP Kerabat..."
-                      className="w-full bg-zinc-900 border border-zinc-700 rounded-xl px-3 py-2 text-xs text-white outline-none focus:border-orange-500"
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-wider mb-1">
-                    Alamat Domisili Sesuai Identitas
-                  </label>
-                  <textarea
-                    rows={2}
-                    value={address}
-                    onChange={(e) => setAddress(e.target.value)}
-                    placeholder="Alamat jalan, kelurahan, kecamatan, kota..."
-                    className="w-full bg-zinc-900 border border-zinc-700 rounded-xl px-3 py-2 text-xs text-white outline-none focus:border-orange-500 resize-none"
-                  />
-                </div>
-
-                {/* Upload Foto Scan Kartu Identitas */}
-                <div>
-                  <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-wider mb-1.5">
-                    Upload Foto / Scan Kartu Identitas ({idType})
-                  </label>
-                  <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
-                    <label className="cursor-pointer px-4 py-2 bg-zinc-900 hover:bg-zinc-800 text-zinc-300 border border-zinc-700 rounded-xl text-xs font-bold transition flex items-center gap-2">
-                      <Upload className="w-3.5 h-3.5 text-orange-400" />
-                      <span>{idPhoto ? 'Ganti Berkas Scan' : 'Pilih File Scan / Foto'}</span>
-                      <input type="file" accept="image/*" onChange={handleIdPhotoFile} className="hidden" />
-                    </label>
-
-                    {idPhoto && (
-                      <button
-                        type="button"
-                        onClick={() => setIdPhoto('')}
-                        className="px-3 py-2 text-rose-400 hover:bg-rose-500/10 rounded-xl text-xs font-bold transition flex items-center gap-1"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" /> Hapus Berkas
-                      </button>
-                    )}
-                  </div>
-
-                  {idPhoto && (
-                    <div className="mt-3 relative w-full sm:w-64 h-32 rounded-xl overflow-hidden border border-zinc-700 bg-zinc-900 group">
-                      <img src={idPhoto} alt="Scan KTP" className="w-full h-full object-cover" />
-                      <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition flex items-center justify-center text-white text-[11px] font-semibold">
-                        Preview Kartu Identitas
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </div>
+              {/* SEKSI KHUSUS: DATA KARTU IDENTITAS RESMI DENGAN CLIENT-SIDE OCR (TESSERACT.JS) */}
+              <OfficialIdCardSection
+                value={{
+                  jenisIdentitas: idType,
+                  nomorIdentitas: idNumber,
+                  tanggalLahir: birthDate,
+                  kontakDarurat: emergencyContact,
+                  alamatDomisili: address,
+                  fotoIdentitas: idPhoto
+                }}
+                onChange={(updated) => {
+                  setIdType(updated.jenisIdentitas);
+                  setIdNumber(updated.nomorIdentitas);
+                  setBirthDate(updated.tanggalLahir);
+                  setEmergencyContact(updated.kontakDarurat);
+                  setAddress(updated.alamatDomisili);
+                  setIdPhoto(updated.fotoIdentitas || '');
+                }}
+                onAutoFillName={(detectedName) => {
+                  if (!name.trim()) {
+                    setName(detectedName);
+                  }
+                }}
+                showToast={showToast}
+              />
 
               <div className="flex gap-2 pt-2">
                 <button

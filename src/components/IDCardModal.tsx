@@ -31,11 +31,9 @@ import {
   LogOut,
   Camera,
   Clock,
-  Building2,
   Flame
 } from 'lucide-react';
 import { Member, Attendance } from '../types';
-import { useSettings } from '../context/SettingsContext';
 import { APP_TODAY, getTimestamp } from '../utils/formatters';
 import { generateBarcodeSVGPaths } from '../utils/barcodeGenerator';
 import {
@@ -199,18 +197,10 @@ export const IDCardModal: React.FC<IDCardModalProps> = ({
   const qrRef = useRef<HTMLCanvasElement | null>(null);
   const cardRef = useRef<HTMLDivElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
-  const logoFileInputRef = useRef<HTMLInputElement | null>(null);
-
-  // Settings context for business profile & company logo
-  const { settings, updateProfileConfig } = useSettings();
-  const companyLogoUrl = settings?.profile?.logoUrl || '';
-  const companyGymName = settings?.profile?.gymName || 'RFA GYM';
 
   // Customization drawer toggle & active tab
   const [showCostumePanel, setShowCostumePanel] = useState(true);
-  const [activeCostumeTab, setActiveCostumeTab] = useState<'barcode' | 'text' | 'background' | 'theme' | 'logo'>('barcode');
-  const [logoInputUrl, setLogoInputUrl] = useState(companyLogoUrl);
-  const [isUploadingLogo, setIsUploadingLogo] = useState(false);
+  const [activeCostumeTab, setActiveCostumeTab] = useState<'barcode' | 'text' | 'background' | 'theme'>('barcode');
 
   // Dynamic Background Configuration state (Persisted in localStorage)
   const [bgConfig, setBgConfig] = useState<PassBackgroundConfig>(() => getPassBackgroundConfig());
@@ -660,52 +650,6 @@ export const IDCardModal: React.FC<IDCardModalProps> = ({
     handleResetBackgroundToDefault();
   };
 
-  // Company logo upload & synchronization handlers
-  const handleLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    if (!file.type.startsWith('image/')) {
-      if (showToast) showToast('Format File Tidak Sesuai', 'Harap gunakan gambar PNG, JPG, atau SVG.', 'error');
-      return;
-    }
-    if (file.size > 5 * 1024 * 1024) {
-      if (showToast) showToast('File Terlalu Besar', 'Maksimal ukuran file logo adalah 5MB.', 'error');
-      return;
-    }
-    setIsUploadingLogo(true);
-    const reader = new FileReader();
-    reader.onload = (ev) => {
-      const dataUrl = ev.target?.result as string;
-      if (dataUrl) {
-        updateProfileConfig({ logoUrl: dataUrl });
-        setLogoInputUrl(dataUrl);
-        setSaveSuccessMsg('Logo perusahaan berhasil diperbarui dan diterapkan ke kartu member!');
-        if (showToast) showToast('Logo Berhasil Diterapkan', 'Logo perusahaan berhasil diunggah ke kartu.', 'success');
-      }
-      setIsUploadingLogo(false);
-    };
-    reader.onerror = () => {
-      setIsUploadingLogo(false);
-      if (showToast) showToast('Gagal Membaca File', 'Terjadi kesalahan saat memproses gambar.', 'error');
-    };
-    reader.readAsDataURL(file);
-    e.target.value = '';
-  };
-
-  const handleApplyLogoUrl = () => {
-    const trimmed = logoInputUrl.trim();
-    updateProfileConfig({ logoUrl: trimmed });
-    setSaveSuccessMsg(trimmed ? 'Tautan logo perusahaan berhasil disimpan!' : 'Logo direset ke standar RFA.');
-    if (showToast) showToast('Logo Disimpan', trimmed ? 'Logo perusahaan berhasil disinkronkan.' : 'Logo kembali ke default.', 'success');
-  };
-
-  const handleRemoveCompanyLogo = () => {
-    updateProfileConfig({ logoUrl: '' });
-    setLogoInputUrl('');
-    setSaveSuccessMsg('Logo kustom dihapus, kembali ke logo resmi RFA GYM.');
-    if (showToast) showToast('Logo Dihapus', 'Kembali ke logo default resmi RFA GYM.', 'info');
-  };
-
   // Test scan simulation
   const handleTestScan = () => {
     playBeep(false);
@@ -966,17 +910,6 @@ export const IDCardModal: React.FC<IDCardModalProps> = ({
                   }`}
                 >
                   <Palette className="w-3 h-3" /> Aksen
-                </button>
-                <button
-                  onClick={() => setActiveCostumeTab('logo')}
-                  className={`flex-1 py-1.5 px-1.5 rounded-lg text-[11px] font-bold transition flex items-center justify-center gap-1 ${
-                    activeCostumeTab === 'logo'
-                      ? 'bg-yellow-500 text-zinc-950 shadow-sm'
-                      : 'text-zinc-400 hover:text-white'
-                  }`}
-                  title="Logo Usaha & Brand Gym"
-                >
-                  <Building2 className="w-3 h-3" /> Logo
                 </button>
               </div>
 
@@ -1601,106 +1534,6 @@ export const IDCardModal: React.FC<IDCardModalProps> = ({
                   </div>
                 </div>
               )}
-
-              {/* TAB 5: LOGO PERUSAHAAN / BRAND GYM */}
-              {activeCostumeTab === 'logo' && (
-                <div className="space-y-4 animate-in fade-in">
-                  <div className="flex items-center justify-between pb-2 border-b border-zinc-800">
-                    <div>
-                      <label className="text-xs font-bold text-zinc-200 block">
-                        Logo Perusahaan & Kartu Member:
-                      </label>
-                      <span className="text-[11px] text-zinc-400">
-                        Logo ini otomatis tampil di kartu member dan sinkron dengan landing page serta profil gym.
-                      </span>
-                    </div>
-                    {companyLogoUrl && (
-                      <span className="px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 flex items-center gap-1 shrink-0">
-                        <Check className="w-3 h-3" /> Kustom Aktif
-                      </span>
-                    )}
-                  </div>
-
-                  {/* Current Logo Preview */}
-                  <div className="p-3 rounded-xl bg-zinc-900 border border-zinc-800 flex items-center gap-3">
-                    <div className="w-14 h-14 rounded-xl bg-black/80 border border-zinc-700 p-1 flex items-center justify-center overflow-hidden shrink-0">
-                      {companyLogoUrl ? (
-                        <img src={companyLogoUrl} alt="Logo Perusahaan" className="w-full h-full object-contain" />
-                      ) : (
-                        <div className="w-full h-full bg-gradient-to-tr from-orange-600 to-amber-500 rounded-lg flex items-center justify-center text-white font-black text-lg">
-                          R
-                        </div>
-                      )}
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <div className="text-xs font-black text-white truncate">
-                        {companyGymName}
-                      </div>
-                      <div className="text-[11px] text-zinc-400">
-                        {companyLogoUrl ? 'Logo khusus aktif pada pass & landing page' : 'Menggunakan logo default resmi RFA GYM'}
-                      </div>
-                      {companyLogoUrl && (
-                        <button
-                          type="button"
-                          onClick={handleRemoveCompanyLogo}
-                          className="mt-1 text-[10px] text-red-400 hover:text-red-300 font-bold flex items-center gap-1 cursor-pointer"
-                        >
-                          <Trash2 className="w-3 h-3" /> Hapus Logo & Gunakan Default
-                        </button>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Upload File */}
-                  <div className="space-y-2">
-                    <label className="text-xs font-bold text-zinc-300 block">
-                      Unggah Gambar Logo Baru:
-                    </label>
-                    <input
-                      ref={logoFileInputRef}
-                      type="file"
-                      accept="image/*"
-                      onChange={handleLogoUpload}
-                      className="hidden"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => logoFileInputRef.current?.click()}
-                      disabled={isUploadingLogo}
-                      className="w-full py-2.5 px-3 rounded-xl bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white font-bold text-xs flex items-center justify-center gap-2 shadow-md transition cursor-pointer disabled:opacity-50"
-                    >
-                      <Upload className="w-3.5 h-3.5" />
-                      <span>{isUploadingLogo ? 'Memproses File...' : 'Pilih File Logo (PNG, JPG, SVG)'}</span>
-                    </button>
-                    <span className="text-[10px] text-zinc-500 block">
-                      Format disarankan: PNG transparan atau SVG rasio 1:1, maks 5 MB.
-                    </span>
-                  </div>
-
-                  {/* URL Input */}
-                  <div className="space-y-1.5 pt-2 border-t border-zinc-800">
-                    <label className="text-xs font-bold text-zinc-300 block">
-                      Atau Masukkan URL Gambar Logo:
-                    </label>
-                    <div className="flex gap-2">
-                      <input
-                        type="text"
-                        placeholder="https://example.com/logo.png"
-                        value={logoInputUrl}
-                        onChange={(e) => setLogoInputUrl(e.target.value)}
-                        className="flex-1 bg-zinc-900 border border-zinc-700 rounded-xl px-3 py-1.5 text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-yellow-500"
-                      />
-                      <button
-                        type="button"
-                        onClick={handleApplyLogoUrl}
-                        className="px-3.5 py-1.5 bg-yellow-500 hover:bg-yellow-400 text-zinc-950 font-bold text-xs rounded-xl transition shrink-0 cursor-pointer"
-                      >
-                        Terapkan
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              )}
             </div>
           )}
 
@@ -1753,99 +1586,6 @@ export const IDCardModal: React.FC<IDCardModalProps> = ({
                     backgroundColor: `rgba(0, 0, 0, ${bgConfig.darkOverlay / 100})`
                   }}
                 />
-              )}
-
-              {/* BRAND LOGO & HEADER: Custom Company Logo or Vector Branding */}
-              {companyLogoUrl ? (
-                <div className="relative pt-5 px-5 z-20 flex items-center justify-between">
-                  <div className="flex items-center gap-2.5 px-3 py-1.5 rounded-2xl bg-black/75 backdrop-blur-md border border-white/20 shadow-2xl">
-                    <div className="w-8 h-8 rounded-lg overflow-hidden bg-zinc-900 border border-white/10 p-0.5 flex items-center justify-center shrink-0">
-                      <img
-                        src={companyLogoUrl}
-                        alt="Logo Perusahaan"
-                        className="w-full h-full object-contain"
-                        onError={(e) => {
-                          e.currentTarget.style.display = 'none';
-                        }}
-                      />
-                    </div>
-                    <div className="flex flex-col">
-                      <span className="text-xs font-black text-white tracking-wider leading-tight">
-                        {companyGymName}
-                      </span>
-                      <span
-                        className="text-[8px] font-extrabold tracking-widest uppercase"
-                        style={{ color: currentTheme.primaryColor }}
-                      >
-                        {membershipLabel}
-                      </span>
-                    </div>
-                  </div>
-
-                  {showBranchTag && (
-                    <div className="px-2 py-0.5 rounded-full text-[8px] font-black uppercase tracking-wider bg-black/60 border border-white/10 text-zinc-300">
-                      CENTRAL
-                    </div>
-                  )}
-                </div>
-              ) : (
-                !isDedicatedSvgBg && (
-                  <div className="relative pt-6 px-6 z-10 flex items-center gap-3">
-                    <div
-                      className="w-12 h-12 shrink-0 relative flex items-center justify-center filter"
-                      style={{ filter: `drop-shadow(0 0 8px ${currentTheme.glowColor})` }}
-                    >
-                      <svg viewBox="0 0 100 100" className="w-full h-full">
-                        <defs>
-                          <linearGradient id={`rfaFlame_${selectedThemeId}`} x1="0%" y1="0%" x2="100%" y2="100%">
-                            <stop offset="0%" stopColor={currentTheme.gradientTo} />
-                            <stop offset="50%" stopColor={currentTheme.gradientVia} />
-                            <stop offset="100%" stopColor={currentTheme.gradientFrom} />
-                          </linearGradient>
-                        </defs>
-                        <path
-                          d="M 18,32 C 30,12 70,8 88,14 C 74,22 55,24 45,28 C 65,28 85,38 82,54 C 80,66 65,72 50,72 L 40,72 L 58,92 C 50,92 42,90 32,80 L 22,66 L 26,45 Z"
-                          fill={`url(#rfaFlame_${selectedThemeId})`}
-                        />
-                        <path
-                          d="M 38,36 C 45,34 62,35 64,48 C 65,56 55,60 44,60 L 32,60 Z"
-                          fill="#0a0b0e"
-                        />
-                        <path
-                          d="M 12,32 C 26,18 52,14 76,14 C 54,20 34,26 18,38 Z"
-                          fill={currentTheme.gradientTo}
-                        />
-                      </svg>
-                    </div>
-
-                    <div className="flex flex-col">
-                      <div className="flex items-baseline gap-1.5 leading-none">
-                        <span className="text-white font-black text-xl tracking-wider font-sans">
-                          RFA
-                        </span>
-                        <span
-                          className="font-black text-xl tracking-wider font-sans"
-                          style={{ color: currentTheme.primaryColor }}
-                        >
-                          GYM
-                        </span>
-                      </div>
-                      <div
-                        className="flex items-center gap-1 mt-1 text-[8.5px] font-bold tracking-[0.25em] uppercase"
-                        style={{ color: currentTheme.primaryColor }}
-                      >
-                        <span className="w-2.5 h-[1px] bg-current opacity-70" />
-                        <span>FITNESS CENTER</span>
-                        <span className="w-2.5 h-[1px] bg-current opacity-70" />
-                      </div>
-                      {showBranchTag && (
-                        <span className="text-[7.5px] text-zinc-300 tracking-wider uppercase font-semibold mt-0.5">
-                          RFA CENTRAL BRANCH
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                )
               )}
 
               {/* 7. QR CODE TAB PILL (Protruding from Right Edge) */}

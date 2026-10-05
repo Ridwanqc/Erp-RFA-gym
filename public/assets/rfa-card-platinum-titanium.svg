@@ -62,29 +62,6 @@
   <rect x="22" y="22" width="556" height="1006" rx="30" fill="none"
         stroke="#ffffff" stroke-width="0.8" opacity="0.25" />
 
-  <!-- 4. TOP BRANDING: LASER-ETCHED RFA PLATINUM -->
-  <g transform="translate(60, 48)">
-    <g transform="translate(0, 0) scale(0.95)" filter="url(#silverGlow)">
-      <path d="M 18,36 C 36,12 86,6 108,14 C 90,24 68,26 55,30 C 80,30 105,42 101,62 C 98,76 80,84 62,84 L 50,84 L 72,110 C 62,110 52,107 40,96 L 27,78 L 32,54 Z"
-            fill="url(#platinumGrad)" />
-      <path d="M 46,42 C 55,40 76,41 78,57 C 79,67 67,71 54,71 L 40,71 Z" fill="#0c0d12" />
-      <path d="M 12,36 C 30,20 62,16 92,16 C 65,23 40,30 20,44 Z" fill="#ffffff" opacity="0.8" />
-    </g>
-
-    <g transform="translate(135, 26)">
-      <text x="0" y="30" font-family="'Plus Jakarta Sans', Arial, sans-serif" font-weight="900" font-size="36" letter-spacing="3" fill="url(#silverSheen)">
-        RFA GYM
-      </text>
-      <g transform="translate(0, 48)">
-        <line x1="0" y1="-5" x2="30" y2="-5" stroke="url(#platinumGrad)" stroke-width="1.5" />
-        <text x="36" y="0" font-family="'Plus Jakarta Sans', Arial, sans-serif" font-weight="800" font-size="11.5" fill="#e2e8f0" letter-spacing="4.5">
-          PLATINUM TITANIUM ELITE
-        </text>
-        <line x1="235" y1="-5" x2="265" y2="-5" stroke="url(#platinumGrad)" stroke-width="1.5" />
-      </g>
-    </g>
-  </g>
-
   <!-- 5. PLATINUM EMV SMART CHIP -->
   <g transform="translate(56, 172)" filter="url(#silverGlow)">
     <rect x="0" y="0" width="76" height="58" rx="8" fill="url(#silverChip)" stroke="#334155" stroke-width="1.2" />

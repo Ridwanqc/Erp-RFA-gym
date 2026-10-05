@@ -35,6 +35,7 @@ interface QRCodeScannerModalProps {
   onAddAttendance: (newAtt: Attendance, memberToUpdate?: Member) => void;
   onCheckoutMember: (attId: string) => void;
   showToast: (title: string, message: string, type: 'success' | 'error' | 'warning' | 'info') => void;
+  onScanMember?: (member: Member) => void;
 }
 
 // Helper: match decoded text to a gym member
@@ -146,7 +147,8 @@ export const QRCodeScannerModal: React.FC<QRCodeScannerModalProps> = ({
   lockers = [],
   onAddAttendance,
   onCheckoutMember,
-  showToast
+  showToast,
+  onScanMember
 }) => {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -261,11 +263,15 @@ export const QRCodeScannerModal: React.FC<QRCodeScannerModalProps> = ({
     const chosenType = explicitVisitType || visitType;
 
     if (activeSession) {
-      // Check-out logic
+      // Check-out logic (2nd scan)
       onCheckoutMember(activeSession.id);
       playBeep(false);
       if ('vibrate' in navigator) navigator.vibrate?.([50, 50, 50]);
-      showToast('Check-Out Berhasil', `Sampai jumpa lagi, ${member.name}! Sesi latihan selesai.`, 'success');
+      showToast(
+        'Check-Out Berhasil (Scan ke-2)',
+        `Sampai jumpa lagi, ${member.name}! Sesi latihan selesai & kunci loker dikembalikan otomatis.`,
+        'info'
+      );
 
       setRecentScans((prev) => [
         {
@@ -278,7 +284,7 @@ export const QRCodeScannerModal: React.FC<QRCodeScannerModalProps> = ({
         ...prev.slice(0, 4)
       ]);
     } else {
-      // Check-in logic
+      // Check-in logic (1st scan)
       let updatedMember = undefined;
       if (chosenType === 'PT') {
         if ((member.ptQuota || 0) <= 0) {
@@ -315,7 +321,7 @@ export const QRCodeScannerModal: React.FC<QRCodeScannerModalProps> = ({
       playBeep(false);
       if ('vibrate' in navigator) navigator.vibrate?.(100);
       showToast(
-        'Check-In Berhasil',
+        'Check-In Berhasil (Scan ke-1)',
         `Selamat datang, ${member.name}!${allocatedLockerNum ? ` Kunci Loker #${allocatedLockerNum} (${member.gender === 'P' ? 'Wanita' : 'Pria'}) diserahkan.` : ''}`,
         'success'
       );
@@ -338,8 +344,8 @@ export const QRCodeScannerModal: React.FC<QRCodeScannerModalProps> = ({
       setScannedRawText(null);
       setCountdown(null);
       isProcessingRef.current = false;
-    }, 1200);
-  }, [visitType, getActiveSession, onCheckoutMember, onAddAttendance, playBeep, showToast]);
+    }, 1100);
+  }, [visitType, getActiveSession, onCheckoutMember, onAddAttendance, playBeep, showToast, lockers]);
 
   // Handle successful QR detection
   const handleQRDetected = useCallback((rawContent: string) => {
@@ -350,15 +356,23 @@ export const QRCodeScannerModal: React.FC<QRCodeScannerModalProps> = ({
     const matched = findMemberFromQR(rawContent, members);
 
     if (matched) {
+      if (onScanMember) {
+        playBeep(false);
+        onScanMember(matched);
+        onClose();
+        isProcessingRef.current = false;
+        return;
+      }
+
       setDetectedMember(matched);
       playBeep(false);
 
       if (autoCheckIn) {
-        // Auto check-in after brief 0.8s confirmation countdown
+        // Direct auto-attendance: 1st scan check-in, 2nd scan check-out with 350ms instant feedback
         setCountdown(1);
         countdownTimerRef.current = setTimeout(() => {
           handleExecuteAction(matched);
-        }, 800);
+        }, 350);
       }
     } else {
       playBeep(true);
@@ -368,7 +382,7 @@ export const QRCodeScannerModal: React.FC<QRCodeScannerModalProps> = ({
         isProcessingRef.current = false;
       }, 1500);
     }
-  }, [members, autoCheckIn, playBeep, showToast, handleExecuteAction]);
+  }, [members, onScanMember, onClose, autoCheckIn, playBeep, showToast, handleExecuteAction]);
 
   // Continuous frame analysis loop
   const scanLoop = useCallback(() => {
@@ -596,11 +610,11 @@ export const QRCodeScannerModal: React.FC<QRCodeScannerModalProps> = ({
                   Scanner ID Card Member
                 </h3>
                 <span className="bg-emerald-500/20 text-emerald-400 text-[10px] font-bold px-2 py-0.5 rounded-full border border-emerald-500/30 flex items-center gap-1">
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping"></span> Live
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping"></span> Live Auto-Absen
                 </span>
               </div>
               <p className="text-xs text-zinc-400">
-                Arahkan kamera ke QR Code pada kartu digital member
+                Scan 1x untuk Absen Masuk • Scan 2x untuk Out otomatis
               </p>
             </div>
           </div>
@@ -802,12 +816,12 @@ export const QRCodeScannerModal: React.FC<QRCodeScannerModalProps> = ({
               {/* Status Action Badge */}
               <div className="text-right shrink-0">
                 {activeSessionForDetected ? (
-                  <span className="bg-rose-500/20 text-rose-400 border border-rose-500/30 text-[11px] font-bold px-2.5 py-1 rounded-xl flex items-center gap-1.5">
-                    <LogOut className="w-3.5 h-3.5" /> Akan Checkout
+                  <span className="bg-rose-500/20 text-rose-400 border border-rose-500/30 text-[11px] font-bold px-2.5 py-1 rounded-xl flex items-center gap-1.5 animate-pulse">
+                    <LogOut className="w-3.5 h-3.5" /> Scan 2: Otomatis Out
                   </span>
                 ) : (
-                  <span className="bg-orange-500/20 text-orange-400 border border-orange-500/30 text-[11px] font-bold px-2.5 py-1 rounded-xl flex items-center gap-1.5">
-                    <UserCheck className="w-3.5 h-3.5" /> Akan Check-In
+                  <span className="bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 text-[11px] font-bold px-2.5 py-1 rounded-xl flex items-center gap-1.5 animate-pulse">
+                    <UserCheck className="w-3.5 h-3.5" /> Scan 1: Otomatis Masuk
                   </span>
                 )}
               </div>
@@ -852,20 +866,24 @@ export const QRCodeScannerModal: React.FC<QRCodeScannerModalProps> = ({
                 className={`flex-1 py-3 rounded-2xl text-xs font-black uppercase tracking-wider flex items-center justify-center gap-2 shadow-lg transition ${
                   activeSessionForDetected
                     ? 'bg-rose-500 hover:bg-rose-600 text-white shadow-rose-500/20'
-                    : 'bg-orange-500 hover:bg-orange-600 text-zinc-950 shadow-orange-500/20'
+                    : 'bg-emerald-500 hover:bg-emerald-600 text-zinc-950 shadow-emerald-500/20'
                 }`}
               >
                 {activeSessionForDetected ? (
                   <>
                     <LogOut className="w-4 h-4" />
-                    <span>Konfirmasi Check-Out Sekarang</span>
+                    <span>
+                      {autoCheckIn && countdown !== null
+                        ? 'Memproses Out Otomatis (Scan 2)...'
+                        : 'Konfirmasi Check-Out Sekarang'}
+                    </span>
                   </>
                 ) : (
                   <>
                     <UserCheck className="w-4 h-4" />
                     <span>
                       {autoCheckIn && countdown !== null
-                        ? `Memproses Otomatis (${countdown}s)...`
+                        ? 'Memproses Check-In Otomatis (Scan 1)...'
                         : 'Konfirmasi Check-In Sekarang'}
                     </span>
                   </>

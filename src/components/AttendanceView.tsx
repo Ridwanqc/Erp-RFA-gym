@@ -89,6 +89,8 @@ export const AttendanceView: React.FC<AttendanceViewProps> = ({
   const [selectedStaffId, setSelectedStaffId] = useState('');
 
   // Modals state
+  const [isCheckInModalOpen, setIsCheckInModalOpen] = useState(false);
+  const [isSubmittingCheckIn, setIsSubmittingCheckIn] = useState(false);
   const [isSlipModalOpen, setIsSlipModalOpen] = useState(false);
   const [isLockerManagementOpen, setIsLockerManagementOpen] = useState(false);
   const [lastCheckInSlip, setLastCheckInSlip] = useState<{
@@ -234,8 +236,9 @@ export const AttendanceView: React.FC<AttendanceViewProps> = ({
   }, [selectedMemberObj, transactions, lockers, attendances]);
 
   // Handle member check-in with automatic IN / OUT toggle logic & Locker Assignment
-  const handleMemberSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleMemberSubmit = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    if (isSubmittingCheckIn) return;
     if (!selectedMemberId) {
       showToast('Peringatan', 'Pilih member terlebih dahulu.', 'warning');
       return;
@@ -269,67 +272,79 @@ export const AttendanceView: React.FC<AttendanceViewProps> = ({
       (a) => (a.memberId === member.id || a.memberName === member.name) && a.date === APP_TODAY && !a.timeOut
     );
 
-    if (activeSession) {
-      // Auto Checkout & Release Locker
-      onCheckoutMember(activeSession.id);
-      setSelectedMemberId('');
-      return;
-    }
-
-    // Check PT Quota if visitType === 'PT'
-    let updatedMember = undefined;
-    if (visitType === 'PT') {
-      if ((member.ptQuota || 0) <= 0) {
-        showToast('Kuota Habis', `Member ${member.name} tidak memiliki sisa kuota sesi PT. Silakan beli paket PT terlebih dahulu.`, 'warning');
+    setIsSubmittingCheckIn(true);
+    try {
+      if (activeSession) {
+        // Auto Checkout & Release Locker
+        await new Promise((resolve) => setTimeout(resolve, 350));
+        onCheckoutMember(activeSession.id);
+        setSelectedMemberId('');
+        setIsCheckInModalOpen(false);
+        showToast('Checkout Berhasil', `${member.name} telah checkout dan mengembalikan kunci loker.`, 'info');
         return;
       }
-      // Deduct quota
-      updatedMember = { ...member, ptQuota: member.ptQuota - 1 };
-    }
 
-    const assignedLocker = withoutLocker ? null : selectedLockerNumber;
-    const timeInStr = getTimestamp();
+      // Check PT Quota if visitType === 'PT'
+      let updatedMember = undefined;
+      if (visitType === 'PT') {
+        if ((member.ptQuota || 0) <= 0) {
+          showToast('Kuota Habis', `Member ${member.name} tidak memiliki sisa kuota sesi PT. Silakan beli paket PT terlebih dahulu.`, 'warning');
+          return;
+        }
+        // Deduct quota
+        updatedMember = { ...member, ptQuota: member.ptQuota - 1 };
+      }
 
-    const branchIdToTag = member.branchId || (isAllBranches ? 'BR-001' : activeBranch?.id);
-    const branchNameToTag = member.branchName || (isAllBranches ? 'Cabang Utama' : activeBranch?.name);
+      const assignedLocker = withoutLocker ? null : selectedLockerNumber;
+      const timeInStr = getTimestamp();
 
-    const newAttendance: Attendance = {
-      id: 'ATT-' + Date.now(),
-      branchId: branchIdToTag,
-      branchName: branchNameToTag,
-      date: APP_TODAY,
-      timeIn: timeInStr,
-      timeOut: '',
-      memberId: member.id,
-      memberName: member.name,
-      type: visitType,
-      badge: visitType === 'PT' ? 'Sesi PT' : 'Gym Reguler',
-      lockerNumber: assignedLocker || undefined,
-      lockerGender: member.gender === 'P' ? 'Wanita' : 'Pria',
-      hasTowel: assignedLocker ? hasTowel : false,
-      lockerReturned: false
-    };
+      const branchIdToTag = member.branchId || (isAllBranches ? 'BR-001' : activeBranch?.id);
+      const branchNameToTag = member.branchName || (isAllBranches ? 'Cabang Utama' : activeBranch?.name);
 
-    onAddAttendance(newAttendance, updatedMember);
-
-    // Prepare check-in slip for display / thermal print
-    if (assignedLocker) {
-      const lockerSlotObj = lockers.find((l) => l.number === assignedLocker);
-      setLastCheckInSlip({
-        member,
-        lockerNumber: assignedLocker,
-        lockerLabel: lockerSlotObj?.label || `#${assignedLocker}`,
-        gender: member.gender === 'P' ? 'Wanita' : 'Pria',
+      const newAttendance: Attendance = {
+        id: 'ATT-' + Date.now(),
+        branchId: branchIdToTag,
+        branchName: branchNameToTag,
+        date: APP_TODAY,
         timeIn: timeInStr,
-        type: visitType === 'PT' ? 'Sesi Personal Trainer' : 'Gym Reguler',
-        hasTowel
-      });
-      setIsSlipModalOpen(true);
-    } else {
-      showToast('Check-In Berhasil', `Selamat berlatih, ${member.name}! (Tanpa Kunci Loker)`, 'success');
-    }
+        timeOut: '',
+        memberId: member.id,
+        memberName: member.name,
+        type: visitType,
+        badge: visitType === 'PT' ? 'Sesi PT' : 'Gym Reguler',
+        lockerNumber: assignedLocker || undefined,
+        lockerGender: member.gender === 'P' ? 'Wanita' : 'Pria',
+        hasTowel: assignedLocker ? hasTowel : false,
+        lockerReturned: false
+      };
 
-    setSelectedMemberId('');
+      await new Promise((resolve) => setTimeout(resolve, 350));
+      onAddAttendance(newAttendance, updatedMember);
+
+      // Prepare check-in slip for display / thermal print
+      if (assignedLocker) {
+        const lockerSlotObj = lockers.find((l) => l.number === assignedLocker);
+        setLastCheckInSlip({
+          member,
+          lockerNumber: assignedLocker,
+          lockerLabel: lockerSlotObj?.label || `#${assignedLocker}`,
+          gender: member.gender === 'P' ? 'Wanita' : 'Pria',
+          timeIn: timeInStr,
+          type: visitType === 'PT' ? 'Sesi Personal Trainer' : 'Gym Reguler',
+          hasTowel
+        });
+        setIsSlipModalOpen(true);
+      } else {
+        showToast('Check-In Berhasil', `Selamat berlatih, ${member.name}! (Tanpa Kunci Loker)`, 'success');
+      }
+
+      setIsCheckInModalOpen(false);
+      setSelectedMemberId('');
+      setSelectedLockerNumber(null);
+      setWithoutLocker(false);
+    } finally {
+      setIsSubmittingCheckIn(false);
+    }
   };
 
   // Handle staff clock in / out
@@ -548,456 +563,58 @@ export const AttendanceView: React.FC<AttendanceViewProps> = ({
                 </button>
               </div>
 
-              <form onSubmit={handleMemberSubmit} className="space-y-4">
+              <div className="space-y-4">
                 {/* Member Search Selector */}
                 <div>
                   <SearchableMemberSelect
                     members={members}
                     selectedMemberId={selectedMemberId}
-                    onSelectMember={(id) => setSelectedMemberId(id)}
+                    onSelectMember={(id) => {
+                      setSelectedMemberId(id);
+                      if (id) {
+                        setIsCheckInModalOpen(true);
+                      }
+                    }}
                     attendances={attendances}
                     placeholder="Ketik nama, no. HP, atau ID member (M001)..."
                     label="Pilih / Scan Kartu Member"
                   />
                 </div>
 
-                {/* FRONT DESK CO-PILOT / SMART OPERATIONAL GUIDANCE BOX */}
-                {selectedMemberObj && deskCoPilot && (
-                  <div className="bg-zinc-950 border border-zinc-800 rounded-2xl p-4 space-y-3 animate-in fade-in duration-200">
-                    <div className="flex items-center justify-between pb-2 border-b border-zinc-800/80">
-                      <div className="flex items-center gap-2 text-xs font-bold text-white">
-                        <div className="w-6 h-6 rounded-lg bg-orange-500/20 text-orange-400 flex items-center justify-center">
-                          <Sparkles className="w-3.5 h-3.5" />
-                        </div>
-                        <div>
-                          <span className="font-black text-white">Asisten & Panduan Front Desk</span>
-                          <span className="text-[10px] text-zinc-400 block font-normal">Saran interaksi & SOP layanan member</span>
-                        </div>
-                      </div>
-                      <span className="text-[10px] px-2.5 py-0.5 rounded-lg font-bold bg-zinc-800 text-zinc-300 border border-zinc-700/60">
-                        {deskCoPilot.genderLabel}
-                      </span>
-                    </div>
-
-                    {/* 0. FRIENDLY GREETING & VISIT STATS CUE */}
-                    <div className="p-2.5 bg-zinc-900/90 border border-zinc-800 rounded-xl flex items-start gap-2.5 text-xs">
-                      <div className="w-6 h-6 rounded-lg bg-blue-500/10 text-blue-400 flex items-center justify-center shrink-0 mt-0.5">
-                        <UserCheck className="w-3.5 h-3.5" />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center justify-between gap-1">
-                          <p className="font-bold text-blue-300 text-[11px] uppercase tracking-wider">
-                            Sapaan Ramah Kasir
-                          </p>
-                          <span className="text-[10px] text-zinc-400 font-medium">
-                            Kunjungan ke-{deskCoPilot.monthlyVisits + 1} bulan ini
+                {/* Quick Info & Re-open Modal Trigger (if closed while member selected) */}
+                {selectedMemberObj && (
+                  <div className="p-3.5 bg-zinc-950/80 border border-orange-500/30 rounded-2xl flex items-center justify-between gap-3 animate-in fade-in">
+                    <div className="flex items-center gap-3 min-w-0">
+                      <img
+                        src={selectedMemberObj.photo || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=200&auto=format&fit=crop'}
+                        alt={selectedMemberObj.name}
+                        onError={(e) => {
+                          (e.target as HTMLImageElement).src = 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=200&auto=format&fit=crop';
+                        }}
+                        className="w-11 h-11 rounded-xl object-cover border border-zinc-700 shrink-0"
+                      />
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2">
+                          <p className="text-xs sm:text-sm font-bold text-white truncate">{selectedMemberObj.name}</p>
+                          <span className="text-[10px] font-mono font-bold text-orange-400 bg-orange-500/10 px-1.5 py-0.2 rounded border border-orange-500/20">
+                            {selectedMemberObj.id}
                           </span>
                         </div>
-                        <p className="text-zinc-200 font-medium text-xs mt-0.5">
-                          "{deskCoPilot.greetingScript}"
+                        <p className="text-[11px] text-zinc-400 truncate mt-0.5">
+                          {selectedMemberObj.membershipType || 'Member'} • {formatDateIndo(selectedMemberObj.expired)}
                         </p>
                       </div>
                     </div>
-
-                    {/* 1. BIRTHDAY ALERT */}
-                    {deskCoPilot.isBirthdayToday && (
-                      <div className="p-2.5 bg-gradient-to-r from-amber-500/20 to-orange-500/10 border border-amber-500/40 rounded-xl flex items-start gap-2.5 text-xs shadow-sm">
-                        <Gift className="w-5 h-5 text-amber-400 shrink-0 mt-0.5 animate-bounce" />
-                        <div className="flex-1">
-                          <p className="font-black text-amber-300 flex items-center gap-1.5">
-                            <span>HARI INI ULANG TAHUN MEMBER! 🎉</span>
-                            <span className="text-[9px] px-1.5 py-0.2 bg-amber-500/30 text-amber-200 rounded font-black">Spesial</span>
-                          </p>
-                          <p className="text-[11px] text-zinc-300 mt-0.5">
-                            Ucapkan: <em>"Selamat Ulang Tahun dari keluarga GymPro, Kak {selectedMemberObj.name}!"</em>
-                          </p>
-                          <div className="mt-1.5 flex items-center gap-2">
-                            <span className="text-[10px] text-amber-400 font-bold bg-amber-500/10 border border-amber-500/30 px-2 py-0.5 rounded-lg">
-                              🎁 Hak Member: 1x Complimentary Healthy Shake / Air Minum
-                            </span>
-                          </div>
-                        </div>
-                      </div>
-                    )}
-
-                    {/* 2. MEMBERSHIP EXPIRY CUES */}
-                    {deskCoPilot.isExpired ? (
-                      <div className="p-2.5 bg-rose-500/15 border border-rose-500/40 rounded-xl flex items-start gap-2 text-xs">
-                        <AlertTriangle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
-                        <div>
-                          <p className="font-bold text-rose-300">Masa Aktif Telah Expired ({formatDateIndo(selectedMemberObj.expired)})</p>
-                          <p className="text-[11px] text-zinc-300 mt-0.5 leading-relaxed">
-                            Akses gate masuk tertahan. Saran Kasir: <em>"{deskCoPilot.renewalScript}"</em>
-                          </p>
-                        </div>
-                      </div>
-                    ) : deskCoPilot.isExpiringSoon ? (
-                      <div className="p-2.5 bg-amber-500/15 border border-amber-500/40 rounded-xl flex items-start gap-2 text-xs">
-                        <AlertCircle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
-                        <div>
-                          <p className="font-bold text-amber-300 flex items-center gap-1.5">
-                            <span>Peluang Perpanjangan ({deskCoPilot.daysLeft} Hari Lagi Expired)</span>
-                            <span className="text-[9px] px-1.5 py-0.2 rounded bg-amber-500/20 text-amber-300 font-black">Follow Up</span>
-                          </p>
-                          <p className="text-[11px] text-zinc-300 mt-0.5 leading-relaxed">
-                            Sapa ramah: <em>"{deskCoPilot.renewalScript}"</em>
-                          </p>
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="p-2 bg-emerald-950/20 border border-emerald-800/30 rounded-xl flex items-center justify-between text-xs">
-                        <span className="text-zinc-300 flex items-center gap-1.5 text-[11px]">
-                          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
-                          Masa Aktif Normal: s.d. {formatDateIndo(selectedMemberObj.expired)}
-                        </span>
-                        <span className="text-emerald-400 font-bold text-[10px]">{deskCoPilot.daysLeft} Hari Lagi</span>
-                      </div>
-                    )}
-
-                    {/* 3. PT SESSIONS OPPORTUNITY */}
-                    {deskCoPilot.hasPT && (
-                      <div className="p-2.5 bg-purple-500/15 border border-purple-500/40 rounded-xl flex items-start justify-between gap-2 text-xs">
-                        <div className="flex items-start gap-2">
-                          <Dumbbell className="w-4 h-4 text-purple-400 shrink-0 mt-0.5" />
-                          <div>
-                            <p className="font-bold text-purple-300 flex items-center gap-1.5">
-                              <span>Memiliki {deskCoPilot.ptQuota} Sesi PT Aktif</span>
-                              {deskCoPilot.isLastPT ? (
-                                <span className="bg-rose-500 text-white text-[9px] px-1.5 py-0.2 rounded font-black">Sesi Terakhir!</span>
-                              ) : deskCoPilot.ptQuota <= 2 ? (
-                                <span className="bg-amber-500 text-zinc-950 text-[9px] px-1.5 py-0.2 rounded font-black">Sisa Kritis</span>
-                              ) : null}
-                            </p>
-                            <p className="text-[11px] text-zinc-300 mt-0.5">
-                              Trainer PIC: <strong>{deskCoPilot.picName}</strong>. <em>{deskCoPilot.ptScript}</em>
-                            </p>
-                          </div>
-                        </div>
-
-                        {visitType !== 'PT' && (
-                          <button
-                            type="button"
-                            onClick={() => setVisitType('PT')}
-                            className="px-2.5 py-1 bg-purple-500 hover:bg-purple-600 text-white font-bold rounded-lg text-[10px] shrink-0 transition shadow-sm"
-                          >
-                            Set Sesi PT
-                          </button>
-                        )}
-                      </div>
-                    )}
-
-                    {/* 4. UNPAID DEBT / INSTALLMENT ALERT */}
-                    {deskCoPilot.totalDebt > 0 && (
-                      <div className="p-2.5 bg-red-950/30 border border-red-800/40 rounded-xl flex items-start gap-2 text-xs">
-                        <CreditCard className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
-                        <div>
-                          <p className="font-bold text-rose-300">Ada Cicilan Belum Lunas: {formatRp(deskCoPilot.totalDebt)}</p>
-                          <p className="text-[11px] text-zinc-300 mt-0.5">
-                            {deskCoPilot.debtScript}
-                          </p>
-                        </div>
-                      </div>
-                    )}
-
-                    {/* 5. MEMBER NOTES */}
-                    {selectedMemberObj.notes && (
-                      <div className="text-[11px] text-zinc-400 flex items-start gap-1.5 pt-1 border-t border-zinc-800/60">
-                        <FileText className="w-3.5 h-3.5 text-zinc-500 shrink-0 mt-0.5" />
-                        <span>Catatan Khusus: <em className="text-zinc-300">{selectedMemberObj.notes}</em></span>
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                {/* VISIT TYPE SELECTOR */}
-                <div>
-                  <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-wider mb-1.5 ml-1">
-                    Tipe Kunjungan Latihan
-                  </label>
-                  <div className="grid grid-cols-2 gap-2.5">
-                    <label
-                      className={`cursor-pointer text-center p-3 rounded-2xl border text-xs font-bold transition flex flex-col items-center gap-1 ${
-                        visitType === 'Reguler'
-                          ? 'bg-blue-500/20 border-blue-500 text-blue-400 shadow-sm'
-                          : 'border-zinc-800 text-zinc-400 hover:border-zinc-700 bg-zinc-950/40'
-                      }`}
+                    <button
+                      type="button"
+                      onClick={() => setIsCheckInModalOpen(true)}
+                      className="px-3.5 py-2 bg-orange-500 hover:bg-orange-600 text-zinc-950 font-black rounded-xl text-xs transition shrink-0 flex items-center gap-1.5 shadow-md shadow-orange-500/20 cursor-pointer"
                     >
-                      <input
-                        type="radio"
-                        name="visitType"
-                        value="Reguler"
-                        checked={visitType === 'Reguler'}
-                        onChange={() => setVisitType('Reguler')}
-                        className="sr-only"
-                      />
-                      <span className="flex items-center gap-1.5">
-                        <UserCheck className="w-3.5 h-3.5" /> Gym Reguler
-                      </span>
-                      <span className="text-[10px] font-normal text-zinc-500">Akses fasilitas fitness</span>
-                    </label>
-
-                    <label
-                      className={`cursor-pointer text-center p-3 rounded-2xl border text-xs font-bold transition flex flex-col items-center gap-1 ${
-                        visitType === 'PT'
-                          ? 'bg-purple-500/20 border-purple-500 text-purple-400 shadow-sm'
-                          : 'border-zinc-800 text-zinc-400 hover:border-zinc-700 bg-zinc-950/40'
-                      }`}
-                    >
-                      <input
-                        type="radio"
-                        name="visitType"
-                        value="PT"
-                        checked={visitType === 'PT'}
-                        onChange={() => setVisitType('PT')}
-                        className="sr-only"
-                      />
-                      <span className="flex items-center gap-1.5">
-                        <Dumbbell className="w-3.5 h-3.5" /> Sesi PT (-1 Kuota)
-                      </span>
-                      <span className="text-[10px] font-normal text-zinc-500">Bersama Personal Trainer</span>
-                    </label>
-                  </div>
-                </div>
-
-                {/* LOCKER KEY ASSIGNMENT SECTION (PAS SEDANG ABSEN SEKALIAN BERIKAN KUNCI LOKER) */}
-                {!activeSelectedMemberSession && (
-                  <div className="bg-zinc-950/90 border border-zinc-800 rounded-2xl p-4 space-y-3">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <div className="w-7 h-7 rounded-lg bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-emerald-400">
-                          <Key className="w-4 h-4" />
-                        </div>
-                        <div>
-                          <p className="text-xs font-black text-white flex items-center gap-1.5">
-                            <span>Penyerahan Kunci Loker</span>
-                            <span className="text-[9px] px-1.5 py-0.2 rounded font-extrabold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 uppercase">
-                              Otomatis
-                            </span>
-                          </p>
-                          <p className="text-[10px] text-zinc-400">Alokasikan loker sesuai gender member</p>
-                        </div>
-                      </div>
-
-                      <label className="flex items-center gap-1.5 cursor-pointer text-[11px] font-bold text-zinc-400 hover:text-white">
-                        <input
-                          type="checkbox"
-                          checked={withoutLocker}
-                          onChange={(e) => setWithoutLocker(e.target.checked)}
-                          className="w-3.5 h-3.5 rounded accent-orange-500"
-                        />
-                        <span>Tanpa Loker</span>
-                      </label>
-                    </div>
-
-                    {!withoutLocker ? (
-                      <div className="space-y-3 pt-1">
-                        {/* Currently Selected Locker Banner */}
-                        {selectedLockerNumber ? (
-                          <div className="p-3 rounded-2xl bg-emerald-950/40 border border-emerald-500/40 flex items-center justify-between gap-2 animate-in fade-in">
-                            <div className="flex items-center gap-2.5">
-                              <div className="w-9 h-9 rounded-xl bg-emerald-500 text-zinc-950 font-black flex items-center justify-center text-sm shadow-md shrink-0">
-                                #{selectedLockerNumber < 10 ? '0' + selectedLockerNumber : selectedLockerNumber}
-                              </div>
-                              <div>
-                                <p className="text-xs font-black text-white flex items-center gap-1.5">
-                                  <span>Kunci Loker #{selectedLockerNumber < 10 ? '0' + selectedLockerNumber : selectedLockerNumber} Siap Diserahkan</span>
-                                  {selectedMemberObj?.gender && (
-                                    <span className={`text-[9px] px-1.5 py-0.2 rounded font-black ${
-                                      selectedMemberObj.gender === 'P' ? 'bg-pink-500/20 text-pink-300' : 'bg-blue-500/20 text-blue-300'
-                                    }`}>
-                                      Area {selectedMemberObj.gender === 'P' ? 'Wanita' : 'Pria'}
-                                    </span>
-                                  )}
-                                </p>
-                                <p className="text-[10px] text-zinc-400 mt-0.5">
-                                  {selectedLockerNumber === deskCoPilot?.recLocker?.number
-                                    ? '⭐ Rekomendasi otomatis sistem (loker terdekat & steril)'
-                                    : 'Dipilih manual oleh front desk'}
-                                </p>
-                              </div>
-                            </div>
-
-                            {deskCoPilot?.recLocker && selectedLockerNumber !== deskCoPilot.recLocker.number && (
-                              <button
-                                type="button"
-                                onClick={() => setSelectedLockerNumber(deskCoPilot.recLocker?.number || null)}
-                                className="text-[10px] font-black px-2.5 py-1 bg-emerald-500 hover:bg-emerald-400 text-zinc-950 rounded-xl transition shrink-0"
-                              >
-                                Gunakan Rekomendasi (#{deskCoPilot.recLocker.number})
-                              </button>
-                            )}
-                          </div>
-                        ) : deskCoPilot?.recLocker ? (
-                          <div className="p-2.5 rounded-xl bg-emerald-950/30 border border-emerald-800/40 flex items-center justify-between text-xs">
-                            <div className="flex items-center gap-2">
-                              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
-                              <span className="text-zinc-300 text-[11px]">
-                                Rekomendasi: <strong className="text-white">Loker {deskCoPilot.recLocker.gender} #{deskCoPilot.recLocker.number}</strong> ({deskCoPilot.recLocker.label})
-                              </span>
-                            </div>
-                            <button
-                              type="button"
-                              onClick={() => setSelectedLockerNumber(deskCoPilot.recLocker?.number || null)}
-                              className="text-[10px] font-black px-2 py-0.5 bg-emerald-500 text-zinc-950 rounded-lg hover:bg-emerald-400 transition"
-                            >
-                              Gunakan Rekomendasi
-                            </button>
-                          </div>
-                        ) : null}
-
-                        {/* Quick 1-Tap Locker Chips */}
-                        {deskCoPilot?.availableGenderLockers && deskCoPilot.availableGenderLockers.length > 0 && (
-                          <div className="space-y-1.5">
-                            <div className="flex items-center justify-between text-[10px] font-bold text-zinc-400 uppercase tracking-wider">
-                              <span>Pilih Cepat Kunci ({selectedMemberObj?.gender === 'P' ? 'Wanita' : 'Pria'}):</span>
-                              <span className="text-emerald-400 font-semibold lowercase">
-                                {deskCoPilot.availableGenderLockers.length} loker siap pakai
-                              </span>
-                            </div>
-                            <div className="flex flex-wrap gap-1.5">
-                              {deskCoPilot.availableGenderLockers.map((l) => {
-                                const isSel = selectedLockerNumber === l.number;
-                                return (
-                                  <button
-                                    key={l.number}
-                                    type="button"
-                                    onClick={() => {
-                                      setSelectedLockerNumber(l.number);
-                                      setWithoutLocker(false);
-                                    }}
-                                    className={`px-2.5 py-1.5 rounded-xl text-xs font-black transition flex items-center gap-1 border ${
-                                      isSel
-                                        ? 'bg-emerald-500 text-zinc-950 border-emerald-400 shadow-md shadow-emerald-500/20 scale-105 ring-2 ring-emerald-400/50'
-                                        : 'bg-zinc-900 hover:bg-zinc-800 text-zinc-300 border-zinc-700/80 hover:border-emerald-500/50'
-                                    }`}
-                                  >
-                                    <Key className="w-3 h-3" />
-                                    <span>#{l.number < 10 ? '0' + l.number : l.number}</span>
-                                    {l.label && <span className="text-[10px] opacity-75">({l.label})</span>}
-                                  </button>
-                                );
-                              })}
-                            </div>
-                          </div>
-                        )}
-
-                        {/* Full Locker selection dropdown */}
-                        <div>
-                          <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-wider mb-1">
-                            Atau Pilih dari Seluruh Daftar Loker:
-                          </label>
-                          <select
-                            value={selectedLockerNumber || ''}
-                            onChange={(e) => setSelectedLockerNumber(e.target.value ? Number(e.target.value) : null)}
-                            className="w-full bg-zinc-900 border border-zinc-700/80 rounded-xl px-3 py-2 text-xs text-white outline-none focus:border-orange-500 font-semibold"
-                          >
-                            <option value="">-- Pilih Nomor Kunci Loker --</option>
-                            <optgroup label="Loker Pria (#01 - #15)">
-                              {lockers
-                                .filter((l) => l.gender === 'Pria')
-                                .map((l) => (
-                                  <option
-                                    key={l.number}
-                                    value={l.number}
-                                    disabled={l.isOccupied}
-                                    className={l.isOccupied ? 'text-zinc-600 bg-zinc-950' : 'text-white bg-zinc-900'}
-                                  >
-                                    Loker #{l.number < 10 ? '0' + l.number : l.number} ({l.label || `P-${l.number}`}) - {l.isOccupied ? `Terpakai (${l.memberName || 'Member'})` : 'TERSEDIA ✓'}
-                                  </option>
-                                ))}
-                            </optgroup>
-                            <optgroup label="Loker Wanita (#16 - #30)">
-                              {lockers
-                                .filter((l) => l.gender === 'Wanita')
-                                .map((l) => (
-                                  <option
-                                    key={l.number}
-                                    value={l.number}
-                                    disabled={l.isOccupied}
-                                    className={l.isOccupied ? 'text-zinc-600 bg-zinc-950' : 'text-white bg-zinc-900'}
-                                  >
-                                    Loker #{l.number < 10 ? '0' + l.number : l.number} ({l.label || `W-${l.number}`}) - {l.isOccupied ? `Terpakai (${l.memberName || 'Member'})` : 'TERSEDIA ✓'}
-                                  </option>
-                                ))}
-                            </optgroup>
-                          </select>
-                        </div>
-
-                        {/* Towel Checkbox */}
-                        <div className="flex items-center justify-between pt-1">
-                          <label className="flex items-center gap-2 cursor-pointer text-xs text-zinc-300">
-                            <input
-                              type="checkbox"
-                              checked={hasTowel}
-                              onChange={(e) => setHasTowel(e.target.checked)}
-                              className="w-4 h-4 rounded accent-orange-500"
-                            />
-                            <span>Sertakan Handuk Gym Bersih Higienis (1 Pcs)</span>
-                          </label>
-
-                          <div className="text-[10px] text-zinc-500">
-                            Pria: <strong className="text-blue-400">{lockerStats.priaAvailable}</strong> • Wanita: <strong className="text-pink-400">{lockerStats.wanitaAvailable}</strong> Kosong
-                          </div>
-                        </div>
-                      </div>
-                    ) : (
-                      <p className="text-[11px] text-zinc-500 italic">
-                        Member check-in tanpa menggunakan kunci loker fasilitas.
-                      </p>
-                    )}
+                      <UserCheck className="w-3.5 h-3.5" /> Buka Detail
+                    </button>
                   </div>
                 )}
-
-                {/* FREEZE ALERT */}
-                {selectedMemberObj && (selectedMemberObj.isFrozen || selectedMemberObj.status === 'FREEZE') && (
-                  <div className="p-3 bg-sky-950/40 border border-sky-500/40 rounded-2xl flex items-start gap-2.5">
-                    <span className="w-2 h-2 rounded-full bg-sky-400 mt-1.5 shrink-0 animate-pulse" />
-                    <div className="text-xs">
-                      <p className="font-bold text-sky-300">Status Member: FREEZE (Dibekukan)</p>
-                      <p className="text-zinc-400 text-[11px] mt-0.5">
-                        Alasan: <strong className="text-white">{selectedMemberObj.freezeReason || 'Cuti'}</strong>. Akses gate masuk gym ditolak sampai member di-unfreeze.
-                      </p>
-                    </div>
-                  </div>
-                )}
-
-                {/* SUBMIT BUTTON WITH CLEAR CONTEXT */}
-                {activeSelectedMemberSession ? (
-                  <button
-                    type="submit"
-                    className="w-full bg-rose-500 hover:bg-rose-600 text-white font-black py-3.5 rounded-2xl shadow-lg shadow-rose-500/20 transition text-xs uppercase tracking-wider flex items-center justify-center gap-2 cursor-pointer"
-                  >
-                    <LogOut className="w-4 h-4" />
-                    Proses Checkout & Terima Kunci Loker ({selectedMemberObj?.name || 'Keluar'})
-                  </button>
-                ) : selectedMemberObj && (selectedMemberObj.isFrozen || selectedMemberObj.status === 'FREEZE') ? (
-                  <button
-                    type="submit"
-                    className="w-full bg-sky-900/60 border border-sky-500/50 text-sky-300 font-black py-3.5 rounded-2xl shadow-lg shadow-sky-500/10 transition text-xs uppercase tracking-wider flex items-center justify-center gap-2"
-                  >
-                    <AlertCircle className="w-4 h-4 text-sky-400" /> Akses Ditolak (Member Freeze)
-                  </button>
-                ) : (
-                  <button
-                    type="submit"
-                    disabled={!selectedMemberId}
-                    className={`w-full py-3.5 rounded-2xl transition text-xs uppercase tracking-wider flex items-center justify-center gap-2 ${
-                      selectedMemberId
-                        ? 'bg-orange-500 hover:bg-orange-600 text-zinc-950 font-black shadow-lg shadow-orange-500/20 cursor-pointer'
-                        : 'bg-zinc-800 text-zinc-500 cursor-not-allowed'
-                    }`}
-                  >
-                    <UserCheck className="w-4 h-4" />
-                    {selectedMemberObj
-                      ? withoutLocker
-                        ? `Check-In Sekarang (Tanpa Kunci Loker)`
-                        : selectedLockerNumber
-                        ? `Check-In & Serahkan Kunci Loker #${selectedLockerNumber < 10 ? '0' + selectedLockerNumber : selectedLockerNumber} (${selectedMemberObj.gender === 'P' ? 'Wanita' : 'Pria'})`
-                        : `Check-In Sekarang (Pilih Loker)`
-                      : 'Pilih Member Dahulu'}
-                  </button>
-                )}
-              </form>
+              </div>
             </div>
           </div>
 
@@ -1509,7 +1126,7 @@ export const AttendanceView: React.FC<AttendanceViewProps> = ({
         </div>
       )}
 
-      {/* QR CODE SCANNER OVERLAY MODAL */}
+      {/* QR CODE SCANNER OVERLAY MODAL (DIRECT AUTO ATTENDANCE: 1X IN, 2X OUT) */}
       <QRCodeScannerModal
         isOpen={isScannerOpen}
         onClose={() => setIsScannerOpen(false)}
@@ -1520,6 +1137,601 @@ export const AttendanceView: React.FC<AttendanceViewProps> = ({
         onCheckoutMember={onCheckoutMember}
         showToast={showToast}
       />
+
+      {/* POPUP / MODAL DETAIL FAST-TRACK CHECK-IN (BERADA DI TENGAH LAYAR) */}
+      {isCheckInModalOpen && selectedMemberObj && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 md:p-6 overflow-y-auto animate-in fade-in duration-200">
+          {/* Overlay / Background Transparan Gelap */}
+          <div
+            className="fixed inset-0 bg-black/80 backdrop-blur-sm transition-opacity"
+            onClick={() => !isSubmittingCheckIn && setIsCheckInModalOpen(false)}
+          />
+
+          {/* Modal Container: Di tengah layar, 2-kolom landscape sesuai screenshot, responsive, border-radius & shadow mengikuti desain aplikasi */}
+          <div className="relative w-full max-w-5xl 2xl:max-w-6xl max-h-[92vh] flex flex-col bg-zinc-900 border border-zinc-800 rounded-3xl shadow-2xl shadow-black/95 overflow-hidden z-10 my-auto">
+            {/* Modal Header */}
+            <div className="p-4 sm:p-5 border-b border-zinc-800 flex items-center justify-between bg-zinc-950/80 shrink-0">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-orange-500/15 border border-orange-500/30 flex items-center justify-center text-orange-400 font-bold shrink-0">
+                  <QrCode className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base sm:text-lg font-black text-white leading-tight">Detail Fast-Track Check-In</h3>
+                  <p className="text-xs text-zinc-400">Verifikasi identitas member dan alokasi loker</p>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                disabled={isSubmittingCheckIn}
+                onClick={() => setIsCheckInModalOpen(false)}
+                className="p-2 rounded-xl text-zinc-400 hover:text-white hover:bg-zinc-800 transition disabled:opacity-50 cursor-pointer"
+                title="Tutup Modal"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Modal Scrollable Body: 2-Column Grid Matching Screenshot */}
+            <div className="p-4 sm:p-6 overflow-y-auto scrollbar-thin scrollbar-thumb-zinc-800">
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 lg:gap-5 items-start">
+                
+                {/* LEFT COLUMN: MEMBER PROFILE & ASISTEN PANDUAN FRONT DESK */}
+                <div className="space-y-4">
+                  {/* 1. MEMBER PHOTO & IDENTITY CARD */}
+                  <div className="bg-zinc-950/90 border border-zinc-800/80 rounded-2xl p-4 flex items-center gap-4">
+                    {/* Foto Member (Sedikit diperbesar, object-cover, rounded-2xl, placeholder fallback) */}
+                    <div className="relative shrink-0">
+                      <img
+                        src={
+                          selectedMemberObj.photo ||
+                          'https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=200&auto=format&fit=crop'
+                        }
+                        alt={selectedMemberObj.name}
+                        onError={(e) => {
+                          (e.target as HTMLImageElement).src =
+                            'https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=200&auto=format&fit=crop';
+                        }}
+                        className="w-20 h-20 sm:w-22 sm:h-22 rounded-2xl object-cover border border-zinc-700/80 shadow-md"
+                      />
+                      <span
+                        className="absolute -bottom-1 -right-1 px-1.5 py-0.5 bg-zinc-900/90 text-zinc-300 text-[10px] font-bold rounded-md border border-zinc-700/80 shadow-sm"
+                      >
+                        {selectedMemberObj.gender === 'P' ? 'Wanita' : 'Pria'}
+                      </span>
+                    </div>
+
+                    {/* Info Identitas Member */}
+                    <div className="flex-1 min-w-0 space-y-1">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <h4 className="text-base sm:text-lg font-black text-white leading-tight truncate">
+                          {selectedMemberObj.name}
+                        </h4>
+                        <span className="text-[11px] font-mono font-bold text-orange-400 bg-orange-500/20 px-1.5 py-0.5 rounded border border-orange-500/30">
+                          {selectedMemberObj.id}
+                        </span>
+                      </div>
+
+                      <p className="text-xs text-zinc-400">
+                        Paket: <strong className="text-white font-bold">{selectedMemberObj.membershipType || 'Reguler Member'}</strong>
+                      </p>
+
+                      <div className="flex flex-wrap items-center gap-2 pt-1">
+                        {/* Status Membership & Masa Berlaku / Expired Date */}
+                        {selectedMemberObj.isFrozen || selectedMemberObj.status === 'FREEZE' ? (
+                          <span className="px-2.5 py-1 rounded-xl bg-sky-500/15 border border-sky-500/30 text-sky-300 font-bold text-[11px] flex items-center gap-1.5">
+                            <span className="w-1.5 h-1.5 rounded-full bg-sky-400 animate-pulse" />
+                            Freeze ({selectedMemberObj.freezeReason || 'Cuti'})
+                          </span>
+                        ) : deskCoPilot?.isExpired ? (
+                          <span className="px-2.5 py-1 rounded-xl bg-rose-500/15 border border-rose-500/30 text-rose-300 font-bold text-[11px] flex items-center gap-1.5">
+                            <AlertCircle className="w-3.5 h-3.5" />
+                            Expired ({formatDateIndo(selectedMemberObj.expired)})
+                          </span>
+                        ) : deskCoPilot?.isExpiringSoon ? (
+                          <span className="px-2.5 py-1 rounded-xl bg-amber-500/15 border border-amber-500/30 text-amber-300 font-bold text-[11px] flex items-center gap-1.5">
+                            <AlertCircle className="w-3.5 h-3.5" />
+                            Aktif s.d {formatDateIndo(selectedMemberObj.expired)}
+                          </span>
+                        ) : (
+                          <span className="px-2.5 py-1 rounded-xl bg-emerald-950/50 border border-emerald-500/30 text-emerald-400 font-bold text-[11px] flex items-center gap-1.5">
+                            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                            Aktif s.d {formatDateIndo(selectedMemberObj.expired)}
+                          </span>
+                        )}
+
+                        {/* Sisa Kuota PT */}
+                        <span className="px-2.5 py-1 rounded-xl bg-purple-950/40 border border-purple-500/30 text-purple-300 font-bold text-[11px] flex items-center gap-1.5">
+                          <Dumbbell className="w-3.5 h-3.5 text-purple-400" />
+                          PT: <strong className="text-white">{selectedMemberObj.ptQuota || 0} Sesi</strong>
+                        </span>
+
+                        {/* Jam Check-In Jika Sedang Di Gym */}
+                        {activeSelectedMemberSession && (
+                          <span className="px-2.5 py-1 rounded-xl bg-blue-500/15 border border-blue-500/30 text-blue-300 font-bold text-[11px] flex items-center gap-1.5">
+                            <Clock className="w-3.5 h-3.5" />
+                            Masuk: {activeSelectedMemberSession.timeIn} (Loker #{activeSelectedMemberSession.lockerNumber || '-'})
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* 2. ASISTEN & PANDUAN FRONT DESK (CO-PILOT) */}
+                  {deskCoPilot && (
+                    <div className="bg-zinc-950/90 border border-zinc-800/80 rounded-2xl p-4 space-y-2.5 animate-in fade-in duration-200">
+                      <div className="flex items-center justify-between pb-2 border-b border-zinc-800/80">
+                        <div className="flex items-center gap-2 text-xs font-bold text-white">
+                          <div className="w-6 h-6 rounded-lg bg-orange-500/20 text-orange-400 flex items-center justify-center">
+                            <Sparkles className="w-3.5 h-3.5" />
+                          </div>
+                          <div>
+                            <span className="font-black text-white">Asisten & Panduan Front Desk</span>
+                            <span className="text-[10px] text-zinc-400 block font-normal">Saran interaksi & SOP layanan member</span>
+                          </div>
+                        </div>
+                        <span className="text-[10px] px-2.5 py-0.5 rounded-lg font-bold bg-zinc-800 text-zinc-300 border border-zinc-700/60">
+                          {deskCoPilot.genderLabel}
+                        </span>
+                      </div>
+
+                      {/* Sapaan Ramah Kasir & Info Kunjungan */}
+                      <div className="p-2.5 bg-zinc-900/90 border border-zinc-800 rounded-xl flex items-start gap-2.5 text-xs">
+                        <div className="w-6 h-6 rounded-lg bg-blue-500/10 text-blue-400 flex items-center justify-center shrink-0 mt-0.5">
+                          <UserCheck className="w-3.5 h-3.5" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center justify-between gap-1">
+                            <p className="font-bold text-blue-300 text-[11px] uppercase tracking-wider">
+                              SAPAAN RAMAH KASIR
+                            </p>
+                            <span className="text-[10px] text-zinc-400 font-medium">
+                              Kunjungan ke-{deskCoPilot.monthlyVisits + 1} bulan ini
+                            </span>
+                          </div>
+                          <p className="text-zinc-200 font-medium text-xs mt-0.5">
+                            "{deskCoPilot.greetingScript}"
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* Ulang Tahun Member */}
+                      {deskCoPilot.isBirthdayToday && (
+                        <div className="p-2.5 bg-gradient-to-r from-amber-500/20 to-orange-500/10 border border-amber-500/40 rounded-xl flex items-start gap-2.5 text-xs shadow-sm">
+                          <Gift className="w-5 h-5 text-amber-400 shrink-0 mt-0.5 animate-bounce" />
+                          <div className="flex-1">
+                            <p className="font-black text-amber-300 flex items-center gap-1.5">
+                              <span>HARI INI ULANG TAHUN MEMBER! 🎉</span>
+                              <span className="text-[9px] px-1.5 py-0.2 bg-amber-500/30 text-amber-200 rounded font-black">Spesial</span>
+                            </p>
+                            <p className="text-[11px] text-zinc-300 mt-0.5">
+                              Ucapkan: <em>"Selamat Ulang Tahun dari keluarga GymPro, Kak {selectedMemberObj.name}!"</em>
+                            </p>
+                            <div className="mt-1.5 flex items-center gap-2">
+                              <span className="text-[10px] text-amber-400 font-bold bg-amber-500/10 border border-amber-500/30 px-2 py-0.5 rounded-lg">
+                                🎁 Hak Member: 1x Complimentary Healthy Shake / Air Minum
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Cues Masa Aktif */}
+                      {deskCoPilot.isExpired ? (
+                        <div className="p-2.5 bg-rose-500/15 border border-rose-500/40 rounded-xl flex items-start gap-2 text-xs">
+                          <AlertTriangle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
+                          <div>
+                            <p className="font-bold text-rose-300">Masa Aktif Telah Expired ({formatDateIndo(selectedMemberObj.expired)})</p>
+                            <p className="text-[11px] text-zinc-300 mt-0.5 leading-relaxed">
+                              Akses gate masuk tertahan. Saran Kasir: <em>"{deskCoPilot.renewalScript}"</em>
+                            </p>
+                          </div>
+                        </div>
+                      ) : deskCoPilot.isExpiringSoon ? (
+                        <div className="p-2.5 bg-amber-500/15 border border-amber-500/40 rounded-xl flex items-start gap-2 text-xs">
+                          <AlertCircle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+                          <div>
+                            <p className="font-bold text-amber-300 flex items-center gap-1.5">
+                              <span>Peluang Perpanjangan ({deskCoPilot.daysLeft} Hari Lagi Expired)</span>
+                              <span className="text-[9px] px-1.5 py-0.2 rounded bg-amber-500/20 text-amber-300 font-black">Follow Up</span>
+                            </p>
+                            <p className="text-[11px] text-zinc-300 mt-0.5 leading-relaxed">
+                              Sapa ramah: <em>"{deskCoPilot.renewalScript}"</em>
+                            </p>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="p-2 bg-emerald-950/20 border border-emerald-800/30 rounded-xl flex items-center justify-between text-xs">
+                          <span className="text-zinc-300 flex items-center gap-1.5 text-[11px]">
+                            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                            Masa Aktif Normal: s.d. {formatDateIndo(selectedMemberObj.expired)}
+                          </span>
+                          <span className="text-emerald-400 font-bold text-[10px]">{deskCoPilot.daysLeft} Hari Lagi</span>
+                        </div>
+                      )}
+
+                      {/* Cues Sesi PT */}
+                      {deskCoPilot.hasPT && (
+                        <div className="p-2.5 bg-purple-500/15 border border-purple-500/40 rounded-xl flex items-start justify-between gap-2 text-xs">
+                          <div className="flex items-start gap-2">
+                            <Dumbbell className="w-4 h-4 text-purple-400 shrink-0 mt-0.5" />
+                            <div>
+                              <p className="font-bold text-purple-300 flex items-center gap-1.5">
+                                <span>Memiliki {deskCoPilot.ptQuota} Sesi PT Aktif</span>
+                                {deskCoPilot.isLastPT ? (
+                                  <span className="bg-rose-500 text-white text-[9px] px-1.5 py-0.2 rounded font-black">Sesi Terakhir!</span>
+                                ) : deskCoPilot.ptQuota <= 2 ? (
+                                  <span className="bg-amber-500 text-zinc-950 text-[9px] px-1.5 py-0.2 rounded font-black">Sisa Kritis</span>
+                                ) : null}
+                              </p>
+                              <p className="text-[11px] text-zinc-300 mt-0.5">
+                                Trainer PIC: <strong>{deskCoPilot.picName}</strong>. <em>{deskCoPilot.ptScript}</em>
+                              </p>
+                            </div>
+                          </div>
+
+                          {visitType !== 'PT' && (
+                            <button
+                              type="button"
+                              onClick={() => setVisitType('PT')}
+                              className="px-2.5 py-1 bg-purple-500 hover:bg-purple-600 text-white font-bold rounded-lg text-[10px] shrink-0 transition shadow-sm cursor-pointer"
+                            >
+                              Set Sesi PT
+                            </button>
+                          )}
+                        </div>
+                      )}
+
+                      {/* Cicilan Belum Lunas */}
+                      {deskCoPilot.totalDebt > 0 && (
+                        <div className="p-2.5 bg-red-950/30 border border-red-800/40 rounded-xl flex items-start gap-2 text-xs">
+                          <CreditCard className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
+                          <div>
+                            <p className="font-bold text-rose-300">Ada Cicilan Belum Lunas: {formatRp(deskCoPilot.totalDebt)}</p>
+                            <p className="text-[11px] text-zinc-300 mt-0.5">
+                              {deskCoPilot.debtScript}
+                            </p>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Catatan Khusus */}
+                      {selectedMemberObj.notes && (
+                        <div className="text-[11px] text-zinc-400 flex items-start gap-1.5 pt-1 border-t border-zinc-800/60">
+                          <FileText className="w-3.5 h-3.5 text-zinc-500 shrink-0 mt-0.5" />
+                          <span>Catatan Khusus: <em className="text-zinc-300">{selectedMemberObj.notes}</em></span>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* FREEZE ALERT */}
+                  {selectedMemberObj && (selectedMemberObj.isFrozen || selectedMemberObj.status === 'FREEZE') && (
+                    <div className="p-3 bg-sky-950/40 border border-sky-500/40 rounded-2xl flex items-start gap-2.5">
+                      <span className="w-2 h-2 rounded-full bg-sky-400 mt-1.5 shrink-0 animate-pulse" />
+                      <div className="text-xs">
+                        <p className="font-bold text-sky-300">Status Member: FREEZE (Dibekukan)</p>
+                        <p className="text-zinc-400 text-[11px] mt-0.5">
+                          Alasan: <strong className="text-white">{selectedMemberObj.freezeReason || 'Cuti'}</strong>. Akses gate
+                          masuk gym ditolak sampai member di-unfreeze.
+                        </p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* RIGHT COLUMN: PENYERAHAN KUNCI LOKER & TIPE KUNJUNGAN LATIHAN */}
+                <div className="space-y-4">
+                  {/* PENYERAHAN KUNCI LOKER (ALOKASI LOKER SESUAI GENDER) */}
+                  <div className="bg-zinc-950/90 border border-zinc-800/80 rounded-2xl p-4 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <div className="w-7 h-7 rounded-lg bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-emerald-400">
+                          <Key className="w-4 h-4" />
+                        </div>
+                        <div>
+                          <p className="text-xs font-black text-white flex items-center gap-1.5">
+                            <span>Penyerahan Kunci Loker</span>
+                            <span className="text-[9px] px-1.5 py-0.2 rounded font-extrabold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 uppercase">
+                              OTOMATIS
+                            </span>
+                          </p>
+                          <p className="text-[10px] text-zinc-400">Alokasikan loker sesuai gender member</p>
+                        </div>
+                      </div>
+
+                      <label className="flex items-center gap-1.5 cursor-pointer text-[11px] font-bold text-zinc-400 hover:text-white select-none">
+                        <input
+                          type="checkbox"
+                          checked={withoutLocker}
+                          onChange={(e) => setWithoutLocker(e.target.checked)}
+                          className="w-3.5 h-3.5 rounded accent-orange-500"
+                        />
+                        <span>Tanpa Loker</span>
+                      </label>
+                    </div>
+
+                    {!withoutLocker ? (
+                      <div className="space-y-3 pt-1">
+                        {/* Currently Selected Locker Banner */}
+                        {selectedLockerNumber ? (
+                          <div className="p-3 rounded-2xl bg-emerald-950/40 border border-emerald-500/40 flex items-center justify-between gap-2 animate-in fade-in">
+                            <div className="flex items-center gap-2.5">
+                              <div className="w-9 h-9 rounded-xl bg-emerald-500 text-zinc-950 font-black flex items-center justify-center text-sm shadow-md shrink-0">
+                                #{selectedLockerNumber < 10 ? '0' + selectedLockerNumber : selectedLockerNumber}
+                              </div>
+                              <div>
+                                <p className="text-xs font-black text-white flex items-center gap-1.5">
+                                  <span>Kunci Loker #{selectedLockerNumber < 10 ? '0' + selectedLockerNumber : selectedLockerNumber} Siap Diserahkan</span>
+                                  {selectedMemberObj?.gender && (
+                                    <span
+                                      className={`text-[9px] px-1.5 py-0.2 rounded font-black ${
+                                        selectedMemberObj.gender === 'P'
+                                          ? 'bg-pink-500/20 text-pink-300'
+                                          : 'bg-blue-500/20 text-blue-300'
+                                      }`}
+                                    >
+                                      Area {selectedMemberObj.gender === 'P' ? 'Wanita' : 'Pria'}
+                                    </span>
+                                  )}
+                                </p>
+                                <p className="text-[10px] text-zinc-400 mt-0.5">
+                                  {selectedLockerNumber === deskCoPilot?.recLocker?.number
+                                    ? '⭐ Rekomendasi otomatis sistem (loker terdekat & steril)'
+                                    : 'Dipilih manual oleh front desk'}
+                                </p>
+                              </div>
+                            </div>
+
+                            {deskCoPilot?.recLocker && selectedLockerNumber !== deskCoPilot.recLocker.number && (
+                              <button
+                                type="button"
+                                onClick={() => setSelectedLockerNumber(deskCoPilot.recLocker?.number || null)}
+                                className="text-[10px] font-black px-2.5 py-1 bg-emerald-500 hover:bg-emerald-400 text-zinc-950 rounded-xl transition shrink-0 cursor-pointer"
+                              >
+                                Gunakan Rekomendasi (#{deskCoPilot.recLocker.number})
+                              </button>
+                            )}
+                          </div>
+                        ) : deskCoPilot?.recLocker ? (
+                          <div className="p-2.5 rounded-xl bg-emerald-950/30 border border-emerald-800/40 flex items-center justify-between text-xs">
+                            <div className="flex items-center gap-2">
+                              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
+                              <span className="text-zinc-300 text-[11px]">
+                                Rekomendasi:{' '}
+                                <strong className="text-white">
+                                  Loker {deskCoPilot.recLocker.gender} #{deskCoPilot.recLocker.number}
+                                </strong>{' '}
+                                ({deskCoPilot.recLocker.label})
+                              </span>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => setSelectedLockerNumber(deskCoPilot.recLocker?.number || null)}
+                              className="text-[10px] font-black px-2 py-0.5 bg-emerald-500 text-zinc-950 rounded-lg hover:bg-emerald-400 transition cursor-pointer"
+                            >
+                              Gunakan Rekomendasi
+                            </button>
+                          </div>
+                        ) : null}
+
+                        {/* Quick 1-Tap Locker Chips */}
+                        {deskCoPilot?.availableGenderLockers && deskCoPilot.availableGenderLockers.length > 0 && (
+                          <div className="space-y-1.5">
+                            <div className="flex items-center justify-between text-[10px] font-bold text-zinc-400 uppercase tracking-wider">
+                              <span>Pilih Cepat Kunci ({selectedMemberObj?.gender === 'P' ? 'Wanita' : 'Pria'}):</span>
+                              <span className="text-emerald-400 font-semibold lowercase">
+                                {deskCoPilot.availableGenderLockers.length} loker siap pakai
+                              </span>
+                            </div>
+                            <div className="flex flex-wrap gap-1.5">
+                              {deskCoPilot.availableGenderLockers.map((l) => {
+                                const isSel = selectedLockerNumber === l.number;
+                                return (
+                                  <button
+                                    key={l.number}
+                                    type="button"
+                                    onClick={() => {
+                                      setSelectedLockerNumber(l.number);
+                                      setWithoutLocker(false);
+                                    }}
+                                    className={`px-2.5 py-1.5 rounded-xl text-xs font-black transition flex items-center gap-1 border cursor-pointer ${
+                                      isSel
+                                        ? 'bg-emerald-500 text-zinc-950 border-emerald-400 shadow-md shadow-emerald-500/20 scale-105 ring-2 ring-emerald-400/50'
+                                        : 'bg-zinc-900 hover:bg-zinc-800 text-zinc-300 border-zinc-700/80 hover:border-emerald-500/50'
+                                    }`}
+                                  >
+                                    <Key className="w-3 h-3" />
+                                    <span>#{l.number < 10 ? '0' + l.number : l.number}</span>
+                                    {l.label && <span className="text-[10px] opacity-75">({l.label})</span>}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Full Locker selection dropdown */}
+                        <div>
+                          <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-wider mb-1">
+                            Atau Pilih dari Seluruh Daftar Loker:
+                          </label>
+                          <select
+                            value={selectedLockerNumber || ''}
+                            onChange={(e) => setSelectedLockerNumber(e.target.value ? Number(e.target.value) : null)}
+                            className="w-full bg-zinc-900 border border-zinc-700/80 rounded-xl px-3 py-2 text-xs text-white outline-none focus:border-orange-500 font-semibold"
+                          >
+                            <option value="">-- Pilih Nomor Kunci Loker --</option>
+                            <optgroup label="Loker Pria (#01 - #15)">
+                              {lockers
+                                .filter((l) => l.gender === 'Pria')
+                                .map((l) => (
+                                  <option
+                                    key={l.number}
+                                    value={l.number}
+                                    disabled={l.isOccupied}
+                                    className={l.isOccupied ? 'text-zinc-600 bg-zinc-950' : 'text-white bg-zinc-900'}
+                                  >
+                                    Loker #{l.number < 10 ? '0' + l.number : l.number} ({l.label || `P-${l.number}`}) -{' '}
+                                    {l.isOccupied ? `Terpakai (${l.memberName || 'Member'})` : 'TERSEDIA ✓'}
+                                  </option>
+                                ))}
+                            </optgroup>
+                            <optgroup label="Loker Wanita (#16 - #30)">
+                              {lockers
+                                .filter((l) => l.gender === 'Wanita')
+                                .map((l) => (
+                                  <option
+                                    key={l.number}
+                                    value={l.number}
+                                    disabled={l.isOccupied}
+                                    className={l.isOccupied ? 'text-zinc-600 bg-zinc-950' : 'text-white bg-zinc-900'}
+                                  >
+                                    Loker #{l.number < 10 ? '0' + l.number : l.number} ({l.label || `W-${l.number}`}) -{' '}
+                                    {l.isOccupied ? `Terpakai (${l.memberName || 'Member'})` : 'TERSEDIA ✓'}
+                                  </option>
+                                ))}
+                            </optgroup>
+                          </select>
+                        </div>
+
+                        {/* Towel Checkbox */}
+                        <div className="flex items-center justify-between pt-1">
+                          <label className="flex items-center gap-2 cursor-pointer text-xs text-zinc-300 select-none">
+                            <input
+                              type="checkbox"
+                              checked={hasTowel}
+                              onChange={(e) => setHasTowel(e.target.checked)}
+                              className="w-4 h-4 rounded accent-orange-500"
+                            />
+                            <span>Sertakan Handuk Gym Bersih Higienis (1 Pcs)</span>
+                          </label>
+
+                          <div className="text-[10px] text-zinc-500">
+                            Pria: <strong className="text-blue-400">{lockerStats.priaAvailable}</strong> • Wanita:{' '}
+                            <strong className="text-pink-400">{lockerStats.wanitaAvailable}</strong> Kosong
+                          </div>
+                        </div>
+                      </div>
+                    ) : (
+                      <p className="text-[11px] text-zinc-500 italic">
+                        Member check-in tanpa menggunakan kunci loker fasilitas.
+                      </p>
+                    )}
+                  </div>
+
+                  {/* TIPE KUNJUNGAN LATIHAN */}
+                  <div className="bg-zinc-950/90 border border-zinc-800/80 rounded-2xl p-4 space-y-2.5">
+                    <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-wider">
+                      TIPE KUNJUNGAN LATIHAN
+                    </label>
+                    <div className="grid grid-cols-2 gap-2.5">
+                      <label
+                        className={`cursor-pointer text-center p-3 rounded-2xl border text-xs font-bold transition flex flex-col items-center gap-1 ${
+                          visitType === 'Reguler'
+                            ? 'bg-blue-500/20 border-blue-500 text-blue-400 shadow-sm'
+                            : 'border-zinc-800 text-zinc-400 hover:border-zinc-700 bg-zinc-900/40'
+                        }`}
+                      >
+                        <input
+                          type="radio"
+                          name="modalVisitType"
+                          value="Reguler"
+                          checked={visitType === 'Reguler'}
+                          onChange={() => setVisitType('Reguler')}
+                          className="sr-only"
+                        />
+                        <span className="flex items-center gap-1.5">
+                          <UserCheck className="w-3.5 h-3.5" /> Gym Reguler
+                        </span>
+                        <span className="text-[10px] font-normal text-zinc-500">Akses fasilitas fitness</span>
+                      </label>
+
+                      <label
+                        className={`cursor-pointer text-center p-3 rounded-2xl border text-xs font-bold transition flex flex-col items-center gap-1 ${
+                          visitType === 'PT'
+                            ? 'bg-purple-500/20 border-purple-500 text-purple-400 shadow-sm'
+                            : 'border-zinc-800 text-zinc-400 hover:border-zinc-700 bg-zinc-900/40'
+                        }`}
+                      >
+                        <input
+                          type="radio"
+                          name="modalVisitType"
+                          value="PT"
+                          checked={visitType === 'PT'}
+                          onChange={() => setVisitType('PT')}
+                          className="sr-only"
+                        />
+                        <span className="flex items-center gap-1.5">
+                          <Dumbbell className="w-3.5 h-3.5" /> Sesi PT (-1 Kuota)
+                        </span>
+                        <span className="text-[10px] font-normal text-zinc-500">Bersama Personal Trainer</span>
+                      </label>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Modal Footer / Anti-Double-Click Action Buttons Matching Screenshot */}
+            <div className="p-4 sm:p-5 border-t border-zinc-800 bg-zinc-950/90 flex flex-col sm:flex-row items-center gap-4 shrink-0">
+              <button
+                type="button"
+                disabled={isSubmittingCheckIn}
+                onClick={() => setIsCheckInModalOpen(false)}
+                className="w-full sm:w-auto px-8 py-4 rounded-2xl border border-zinc-800 bg-zinc-900/90 hover:bg-zinc-800 text-white font-black text-sm transition order-2 sm:order-1 disabled:opacity-50 cursor-pointer shadow-md"
+              >
+                Batal
+              </button>
+
+              <button
+                type="button"
+                disabled={isSubmittingCheckIn || !selectedMemberId}
+                onClick={() => handleMemberSubmit()}
+                className={`w-full sm:flex-1 py-4 px-6 rounded-2xl transition text-sm sm:text-base font-black uppercase tracking-wider flex items-center justify-center gap-2.5 order-1 sm:order-2 shadow-xl ${
+                  isSubmittingCheckIn
+                    ? 'bg-orange-500/60 text-zinc-950 cursor-not-allowed opacity-80'
+                    : activeSelectedMemberSession
+                    ? 'bg-rose-500 hover:bg-rose-600 text-white shadow-rose-500/20 cursor-pointer'
+                    : selectedMemberObj && (selectedMemberObj.isFrozen || selectedMemberObj.status === 'FREEZE')
+                    ? 'bg-sky-900/60 border border-sky-500/50 text-sky-300 cursor-not-allowed'
+                    : 'bg-orange-500 hover:bg-orange-600 text-zinc-950 shadow-orange-500/25 cursor-pointer'
+                }`}
+              >
+                {isSubmittingCheckIn ? (
+                  <>
+                    <RefreshCw className="w-5 h-5 animate-spin text-zinc-950" />
+                    <span>SEDANG MEMPROSES...</span>
+                  </>
+                ) : activeSelectedMemberSession ? (
+                  <>
+                    <LogOut className="w-5 h-5" />
+                    <span>PROSES CHECKOUT & TERIMA KUNCI LOKER ({selectedMemberObj.name.toUpperCase()})</span>
+                  </>
+                ) : selectedMemberObj && (selectedMemberObj.isFrozen || selectedMemberObj.status === 'FREEZE') ? (
+                  <>
+                    <AlertCircle className="w-5 h-5 text-sky-400" />
+                    <span>AKSES DITOLAK (MEMBER FREEZE)</span>
+                  </>
+                ) : (
+                  <>
+                    <UserCheck className="w-5 h-5 text-zinc-950" />
+                    <span>
+                      {withoutLocker
+                        ? `CHECK-IN SEKARANG (TANPA KUNCI LOKER)`
+                        : selectedLockerNumber
+                        ? `CHECK-IN & SERAHKAN KUNCI LOKER #${
+                            selectedLockerNumber < 10 ? '0' + selectedLockerNumber : selectedLockerNumber
+                          } (${selectedMemberObj.gender === 'P' ? 'WANITA' : 'PRIA'})`
+                        : `CHECK-IN SEKARANG (PILIH LOKER)`}
+                    </span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* MODAL: SLIP PENYERAHAN KUNCI LOKER (PRINT & DISPLAY) */}
       {isSlipModalOpen && lastCheckInSlip && (
