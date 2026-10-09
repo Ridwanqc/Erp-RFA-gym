@@ -4430,7 +4430,7 @@ export const FrontDeskPortalView: React.FC<FrontDeskPortalViewProps> = ({
                           onClick={() => {
                             if (isRegPicLocked) {
                               const isProtected = picProtection.requirePasswordToChangePic && (picProtection.requirePasswordOnMemberForm !== false);
-                              const canBypass = (currentUser?.role === 'admin' || currentUser?.role === 'manager') && picProtection.allowAdminBypass;
+                              const canBypass = (currentUser?.role === 'admin' || currentUser?.role === 'admin_cabang' || currentUser?.role === 'manager') && picProtection.allowAdminBypass;
 
                               if (isProtected && !canBypass) {
                                 setPasswordUnlockTarget('reg');
@@ -4642,7 +4642,7 @@ export const FrontDeskPortalView: React.FC<FrontDeskPortalViewProps> = ({
                         onClick={() => {
                           if (isRenewalPicLocked) {
                             const isProtected = picProtection.requirePasswordToChangePic && (picProtection.requirePasswordOnRenewal !== false);
-                            const canBypass = (currentUser?.role === 'admin' || currentUser?.role === 'manager') && picProtection.allowAdminBypass;
+                            const canBypass = (currentUser?.role === 'admin' || currentUser?.role === 'admin_cabang' || currentUser?.role === 'manager') && picProtection.allowAdminBypass;
 
                             if (isProtected && !canBypass) {
                               setPasswordUnlockTarget('renewal');

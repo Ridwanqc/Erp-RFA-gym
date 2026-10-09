@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { X, Calendar, CreditCard, Dumbbell, History, Phone, ShieldCheck, AlertCircle, Clock, UserCheck, IdCard, Crown, Sparkles, CheckCircle2, Snowflake, PlayCircle, ArrowRight, Camera, QrCode, Printer } from 'lucide-react';
-import { Member, Attendance, Transaction, Schedule, FollowUpLog, MemberMembershipRecord, PTPurchaseRecord, MemberFreezeRecord } from '../types';
+import { X, Calendar, CreditCard, Dumbbell, History, Phone, ShieldCheck, AlertCircle, Clock, UserCheck, IdCard, Crown, Sparkles, CheckCircle2, Snowflake, PlayCircle, ArrowRight, Camera, QrCode, Printer, Activity } from 'lucide-react';
+import { Member, Attendance, Transaction, Schedule, FollowUpLog, MemberMembershipRecord, PTPurchaseRecord, MemberFreezeRecord, BodyCompositionRecord } from '../types';
 import { formatRp, APP_TODAY, formatDateIndo } from '../utils/formatters';
 import { getMemberStatus } from '../utils/memberStatus';
 import { sortAttendancesByNewest } from '../data/lockerData';
+import { getBMICategory } from '../data/bodyCompositionData';
 import { MemberCameraCaptureModal } from './MemberCameraCaptureModal';
 import { MemberQRCodeModal } from './MemberQRCodeModal';
 import { TransactionActions } from './transaction/TransactionActions';
@@ -19,9 +20,11 @@ interface MemberDetailModalProps {
   memberMemberships?: MemberMembershipRecord[];
   ptPurchases?: PTPurchaseRecord[];
   freezeRecords?: MemberFreezeRecord[];
+  bodyCompositionRecords?: BodyCompositionRecord[];
   onOpenPayPiutang?: (trx: Transaction) => void;
   onReprintReceipt?: (trx: Transaction) => void;
   onOpenIDCard?: (member: Member) => void;
+  onOpenBodyComposition?: (member: Member) => void;
   onOpenFreeze?: (member: Member) => void;
   onOpenUnfreeze?: (member: Member, record?: MemberFreezeRecord) => void;
   onUpdateMember?: (updatedMember: Member) => void;
@@ -40,16 +43,18 @@ export const MemberDetailModal: React.FC<MemberDetailModalProps> = ({
   memberMemberships = [],
   ptPurchases = [],
   freezeRecords = [],
+  bodyCompositionRecords = [],
   onOpenPayPiutang,
   onReprintReceipt,
   onOpenIDCard,
+  onOpenBodyComposition,
   onOpenFreeze,
   onOpenUnfreeze,
   onUpdateMember,
   onUpdatePhoto,
   showToast
 }) => {
-  const [activeSubTab, setActiveSubTab] = useState<'info' | 'absen' | 'trx' | 'pt' | 'fu' | 'freeze'>('info');
+  const [activeSubTab, setActiveSubTab] = useState<'info' | 'inbody' | 'absen' | 'trx' | 'pt' | 'fu' | 'freeze'>('info');
   const [isCameraModalOpen, setIsCameraModalOpen] = useState(false);
   const [isQRCodeModalOpen, setIsQRCodeModalOpen] = useState(false);
   const [localPhoto, setLocalPhoto] = useState(member?.photo || '');
@@ -95,6 +100,15 @@ export const MemberDetailModal: React.FC<MemberDetailModalProps> = ({
   const memberFollowUps = followUpList.filter((f) => f.memberId === member.id);
   const memberFreezeRecords = freezeRecords.filter((fr) => fr.memberId === member.id);
   const activeFreezeRecord = memberFreezeRecords.find((fr) => fr.status === 'FREEZE') || null;
+
+  const memberBodyRecords = (bodyCompositionRecords || [])
+    .filter((r) => r.memberId === member.id)
+    .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+  const latestBodyRecord = memberBodyRecords.length > 0 ? memberBodyRecords[0] : null;
+  const initialBodyRecord = memberBodyRecords.length > 0 ? memberBodyRecords[memberBodyRecords.length - 1] : null;
+  const weightDelta = initialBodyRecord && latestBodyRecord
+    ? Math.round((latestBodyRecord.weight - initialBodyRecord.weight) * 10) / 10
+    : 0;
 
   // Active membership record (from Bundling or Regular)
   const activeMembership = memberMemberships.find((m) => m.memberId === member.id && m.status === 'AKTIF');
@@ -212,6 +226,21 @@ export const MemberDetailModal: React.FC<MemberDetailModalProps> = ({
                 <span className="hidden sm:inline">Digital Pass</span>
               </button>
             )}
+
+            {onOpenBodyComposition && (
+              <button
+                type="button"
+                onClick={() => {
+                  onOpenBodyComposition(member);
+                  onClose();
+                }}
+                className="px-3 py-2 bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border border-amber-500/30 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer"
+                title="Lihat Metrik & Input InBody Tubuh Member"
+              >
+                <Activity className="w-4 h-4" />
+                <span className="hidden sm:inline">InBody</span>
+              </button>
+            )}
             <button onClick={onClose} className="text-zinc-400 hover:text-white p-2 rounded-xl hover:bg-zinc-800 transition">
               <X className="w-5 h-5" />
             </button>
@@ -222,6 +251,7 @@ export const MemberDetailModal: React.FC<MemberDetailModalProps> = ({
         <div className="flex bg-zinc-950/80 border-b border-zinc-800 px-4 py-2 gap-2 overflow-x-auto scrollbar-none shrink-0">
           {[
             { id: 'info', label: 'Ringkasan 360', icon: ShieldCheck },
+            { id: 'inbody', label: `InBody & Progres (${memberBodyRecords.length})`, icon: Activity },
             { id: 'freeze', label: `Riwayat Freeze (${memberFreezeRecords.length})`, icon: Snowflake },
             { id: 'absen', label: `Riwayat Visit (${memberAttendances.length})`, icon: UserCheck },
             { id: 'trx', label: `Transaksi & Piutang (${memberTransactions.length})`, icon: CreditCard },
@@ -562,6 +592,174 @@ export const MemberDetailModal: React.FC<MemberDetailModalProps> = ({
                 <div className="sm:col-span-2 bg-zinc-950 border border-zinc-800 p-4 rounded-2xl text-xs">
                   <span className="text-zinc-400 font-bold uppercase tracking-wider text-[10px] block mb-1">Catatan Member:</span>
                   <p className="text-zinc-200 leading-relaxed italic">"{member.notes}"</p>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* TAB: INBODY & PROGRES */}
+          {activeSubTab === 'inbody' && (
+            <div className="space-y-4">
+              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center bg-zinc-950 p-4 rounded-2xl border border-zinc-800 gap-3">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-amber-500/20 text-amber-400 flex items-center justify-center border border-amber-500/30 shrink-0">
+                    <Activity className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h4 className="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-2">
+                      Evaluasi Fisik & Komposisi Tubuh (InBody)
+                    </h4>
+                    <p className="text-[11px] text-zinc-400 mt-0.5">
+                      Data berat badan, kadar lemak, massa otot, dan lingkar tubuh {member.name}.
+                    </p>
+                  </div>
+                </div>
+
+                {onOpenBodyComposition && (
+                  <button
+                    type="button"
+                    onClick={() => onOpenBodyComposition(member)}
+                    className="px-3.5 py-2 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-zinc-950 font-black text-xs transition flex items-center gap-1.5 shadow-md shadow-amber-500/20 cursor-pointer shrink-0"
+                  >
+                    <Activity className="w-4 h-4" />
+                    <span>Buka Modul InBody Lengkap</span>
+                  </button>
+                )}
+              </div>
+
+              {memberBodyRecords.length === 0 ? (
+                <div className="p-8 text-center bg-zinc-950/60 rounded-2xl border border-zinc-800 space-y-3">
+                  <Activity className="w-8 h-8 text-zinc-600 mx-auto" />
+                  <p className="text-zinc-400 text-xs">
+                    Member ini belum memiliki riwayat pengukuran InBody.
+                  </p>
+                  {onOpenBodyComposition && (
+                    <button
+                      type="button"
+                      onClick={() => onOpenBodyComposition(member)}
+                      className="px-4 py-2 rounded-xl bg-orange-500 hover:bg-orange-600 text-white font-bold text-xs inline-flex items-center gap-1.5"
+                    >
+                      <span>Mulai Evaluasi Tubuh Pertama</span>
+                    </button>
+                  )}
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {/* Metric Summary Cards */}
+                  {latestBodyRecord && (
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                      <div className="p-3.5 rounded-2xl bg-zinc-950 border border-zinc-800">
+                        <span className="text-[10px] text-zinc-400 uppercase font-bold block">Berat Badan</span>
+                        <div className="flex items-baseline gap-1 mt-1">
+                          <span className="text-xl font-black text-white">{latestBodyRecord.weight}</span>
+                          <span className="text-xs text-zinc-400">kg</span>
+                        </div>
+                        {weightDelta !== 0 && (
+                          <span className={`text-[10px] font-bold mt-1 block ${weightDelta < 0 ? 'text-emerald-400' : 'text-amber-400'}`}>
+                            {weightDelta > 0 ? `+${weightDelta}` : weightDelta} kg vs awal
+                          </span>
+                        )}
+                      </div>
+
+                      <div className="p-3.5 rounded-2xl bg-zinc-950 border border-zinc-800">
+                        <span className="text-[10px] text-zinc-400 uppercase font-bold block">Indeks BMI</span>
+                        <div className="flex items-baseline gap-1 mt-1">
+                          <span className="text-xl font-black text-amber-400">{latestBodyRecord.bmi}</span>
+                        </div>
+                        <span className="text-[10px] text-zinc-400 mt-1 block truncate">
+                          {getBMICategory(latestBodyRecord.bmi).label.split('(')[0].trim()}
+                        </span>
+                      </div>
+
+                      <div className="p-3.5 rounded-2xl bg-zinc-950 border border-zinc-800">
+                        <span className="text-[10px] text-zinc-400 uppercase font-bold block">Body Fat</span>
+                        <div className="flex items-baseline gap-1 mt-1">
+                          <span className="text-xl font-black text-rose-400">{latestBodyRecord.bodyFatPercentage ?? '-'}</span>
+                          {latestBodyRecord.bodyFatPercentage && <span className="text-xs text-zinc-400">%</span>}
+                        </div>
+                        <span className="text-[10px] text-zinc-500 mt-1 block">Lemak tubuh</span>
+                      </div>
+
+                      <div className="p-3.5 rounded-2xl bg-zinc-950 border border-zinc-800">
+                        <span className="text-[10px] text-zinc-400 uppercase font-bold block">Massa Otot</span>
+                        <div className="flex items-baseline gap-1 mt-1">
+                          <span className="text-xl font-black text-emerald-400">{latestBodyRecord.muscleMass ?? '-'}</span>
+                          {latestBodyRecord.muscleMass && <span className="text-xs text-zinc-400">kg</span>}
+                        </div>
+                        <span className="text-[10px] text-zinc-500 mt-1 block">Skeletal muscle</span>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Circumference summary */}
+                  {latestBodyRecord && (latestBodyRecord.waist || latestBodyRecord.chest) && (
+                    <div className="p-3.5 rounded-2xl bg-zinc-950 border border-zinc-800">
+                      <span className="text-[10px] text-zinc-400 font-bold uppercase tracking-wider block mb-2">
+                        Ukuran Lingkar Tubuh Terkini (cm)
+                      </span>
+                      <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 text-center text-xs">
+                        <div className="p-2 rounded-xl bg-zinc-900 border border-zinc-800">
+                          <span className="text-[9px] text-zinc-500 uppercase block">Dada</span>
+                          <span className="font-bold text-white">{latestBodyRecord.chest ?? '-'} cm</span>
+                        </div>
+                        <div className="p-2 rounded-xl bg-zinc-900 border border-zinc-800">
+                          <span className="text-[9px] text-zinc-500 uppercase block">Pinggang</span>
+                          <span className="font-bold text-amber-400">{latestBodyRecord.waist ?? '-'} cm</span>
+                        </div>
+                        <div className="p-2 rounded-xl bg-zinc-900 border border-zinc-800">
+                          <span className="text-[9px] text-zinc-500 uppercase block">Pinggul</span>
+                          <span className="font-bold text-white">{latestBodyRecord.hips ?? '-'} cm</span>
+                        </div>
+                        <div className="p-2 rounded-xl bg-zinc-900 border border-zinc-800">
+                          <span className="text-[9px] text-zinc-500 uppercase block">Lengan</span>
+                          <span className="font-bold text-white">{latestBodyRecord.armRight ?? '-'} cm</span>
+                        </div>
+                        <div className="p-2 rounded-xl bg-zinc-900 border border-zinc-800">
+                          <span className="text-[9px] text-zinc-500 uppercase block">Paha</span>
+                          <span className="font-bold text-white">{latestBodyRecord.thighRight ?? '-'} cm</span>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* History List */}
+                  <div className="space-y-2">
+                    <h5 className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider">
+                      Riwayat Evaluasi ({memberBodyRecords.length})
+                    </h5>
+                    {memberBodyRecords.map((r) => (
+                      <div
+                        key={r.id}
+                        className="p-3 rounded-2xl bg-zinc-950 border border-zinc-800 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs"
+                      >
+                        <div className="space-y-1">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="font-bold text-white">{formatDateIndo(r.date)}</span>
+                            {r.time && <span className="text-zinc-500 font-mono text-[10px]">{r.time}</span>}
+                            {r.selfReported || r.trainerName?.includes('Mandiri') ? (
+                              <span className="px-2 py-0.5 rounded bg-blue-500/15 text-blue-400 border border-blue-500/30 text-[9px] font-black">
+                                📱 INPUT MANDIRI MEMBER
+                              </span>
+                            ) : (
+                              <span className="px-2 py-0.5 rounded bg-amber-500/15 text-amber-400 border border-amber-500/30 text-[9px] font-black">
+                                👨‍🏫 TRAINER: {r.trainerName || 'Staf PT'}
+                              </span>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-3 text-[11px] text-zinc-300 flex-wrap">
+                            <span>BB: <strong className="text-white">{r.weight} kg</strong></span>
+                            <span>BMI: <strong className="text-amber-400">{r.bmi}</strong></span>
+                            {r.bodyFatPercentage && <span>Fat: <strong className="text-rose-400">{r.bodyFatPercentage}%</strong></span>}
+                            {r.muscleMass && <span>Otot: <strong className="text-emerald-400">{r.muscleMass} kg</strong></span>}
+                            {r.waist && <span>Pinggang: <strong>{r.waist} cm</strong></span>}
+                          </div>
+                          {r.notes && (
+                            <p className="text-[11px] text-zinc-400 italic">"{r.notes}"</p>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               )}
             </div>

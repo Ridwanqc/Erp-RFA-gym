@@ -1,11 +1,32 @@
-export type UserRole = 'admin' | 'kasir' | 'leader_pt' | 'pt' | 'teknisi' | 'manager';
+export type UserRole = 'admin' | 'admin_cabang' | 'kasir' | 'leader_pt' | 'pt' | 'teknisi' | 'manager';
 
-export type DivisionType = 'Kasir & Front Desk' | 'Pelatihan' | 'Manajemen' | 'Teknisi' | string;
+export function isSuperAdmin(roleOrUser?: UserRole | { role?: UserRole } | null): boolean {
+  if (!roleOrUser) return false;
+  const role = typeof roleOrUser === 'string' ? roleOrUser : roleOrUser.role;
+  return role === 'admin';
+}
+
+export function isBranchAdmin(roleOrUser?: UserRole | { role?: UserRole } | null): boolean {
+  if (!roleOrUser) return false;
+  const role = typeof roleOrUser === 'string' ? roleOrUser : roleOrUser.role;
+  return role === 'admin_cabang';
+}
+
+export function canManageBranchOnly(roleOrUser?: UserRole | { role?: UserRole } | null): boolean {
+  if (!roleOrUser) return false;
+  const role = typeof roleOrUser === 'string' ? roleOrUser : roleOrUser.role;
+  return role === 'admin_cabang';
+}
+
+export type DivisionType = 'Kasir & Front Desk' | 'Pelatihan' | 'Manajemen' | 'Manajemen Cabang' | 'Teknisi' | string;
 
 export function getStaffDivision(user?: { role?: string; roleName?: string; division?: string } | null): string {
   if (user?.division) return user.division;
   const role = (user?.role || '').toLowerCase();
   const roleName = (user?.roleName || '').toLowerCase();
+  if (role === 'admin_cabang' || roleName.includes('admin cabang') || roleName.includes('admin unit')) {
+    return 'Manajemen Cabang';
+  }
   if (role === 'kasir' || roleName.includes('kasir') || roleName.includes('front desk') || roleName.includes('cs') || roleName.includes('receptionist')) {
     return 'Kasir & Front Desk';
   }
@@ -417,6 +438,17 @@ export interface TransactionAuditLog {
   branchId?: string;
 }
 
+export type PTBookingSource = 'PORTAL_MEMBER' | 'BACKOFFICE' | 'ADMIN' | 'TRAINER' | 'LEADER_PT';
+
+export type PTBookingStatus =
+  | 'PENDING'
+  | 'CONFIRMED'
+  | 'RESCHEDULED'
+  | 'COMPLETED'
+  | 'CANCELLED'
+  | 'NO_SHOW'
+  | 'EXPIRED';
+
 export interface Schedule {
   id: string;
   memberName: string;
@@ -425,8 +457,12 @@ export interface Schedule {
   trainerId?: string;
   date: string; // YYYY-MM-DD
   time: string; // HH:mm
+  endTime?: string; // HH:mm
   status: 'Menunggu' | 'Selesai' | 'Batal' | 'Reschedule' | 'No-Show' | 'Hangus';
   sessionStatus?: 'AVAILABLE' | 'BOOKED' | 'RESCHEDULED' | 'COMPLETED' | 'CANCELLED' | 'EXPIRED';
+  source?: PTBookingSource;
+  bookingId?: string;
+  bookingCode?: string;
   valStaf: boolean;
   valTrainer: boolean;
   valMember: boolean;
@@ -440,6 +476,8 @@ export interface Schedule {
   sessionNumber?: number;
   ptComponentValue?: number;
   commissionAmount?: number;
+  branchId?: string;
+  branchName?: string;
 }
 
 export interface TrainerWorkoutLog {
@@ -565,6 +603,8 @@ export interface PTPurchaseRecord {
   bundleTrxId?: string;
   ptComponentValue?: number;
   commissionRate?: number;
+  branchId?: string;
+  branchName?: string;
 }
 
 export interface TrainingSessionDetail {
@@ -579,6 +619,123 @@ export interface TrainingSessionDetail {
   valMember?: boolean;
 }
 
+export interface PTBookingHistory {
+  id: string;
+  bookingId: string;
+  action: string;
+  oldValue?: string;
+  newValue?: string;
+  changedBy: string;
+  changedRole: string;
+  source: PTBookingSource;
+  createdAt: string;
+  notes?: string;
+}
+
+export interface PTBooking {
+  id: string; // e.g. "PTB-2026-0001"
+  bookingCode: string; // e.g. "BK-PT-8941"
+  memberId: string;
+  memberName: string;
+  memberPhone?: string;
+  memberPhoto?: string;
+  ptPackageId: string; // references PTPurchaseRecord.id
+  packageName: string;
+  totalSessions: number;
+  sessionNumber: number; // e.g. 5
+  trainerId: string;
+  trainerName: string;
+  branchId?: string;
+  branchName?: string;
+  bookingDate: string; // YYYY-MM-DD
+  startTime: string; // HH:mm (e.g. "18:00")
+  endTime: string; // HH:mm (e.g. "19:00")
+  status: PTBookingStatus;
+  source: PTBookingSource;
+  notes?: string;
+  workoutFocus?: string;
+  scheduleId?: string; // linked to Schedule.id in ERP calendar
+  createdAt: string;
+  updatedAt: string;
+  createdBy: string;
+  history?: PTBookingHistory[];
+}
+
+export interface TrainerChangeRequest {
+  id: string; // e.g. "TCR-001"
+  memberId: string;
+  memberName: string;
+  memberPhone?: string;
+  ptPackageId: string;
+  packageName: string;
+  currentTrainerId: string;
+  currentTrainerName: string;
+  preferredTrainerId?: string;
+  preferredTrainerName?: string;
+  reason: string;
+  status: 'PENDING' | 'APPROVED' | 'REJECTED';
+  requestedAt: string;
+  reviewedBy?: string;
+  reviewedAt?: string;
+  assignedTrainerId?: string;
+  assignedTrainerName?: string;
+  reviewNotes?: string;
+}
+
+export interface PTBackofficeNotification {
+  id: string;
+  bookingId: string;
+  title: string;
+  message: string;
+  targetRole: 'TRAINER' | 'LEADER_PT' | 'ADMIN' | 'ALL';
+  trainerId?: string;
+  memberId: string;
+  memberName: string;
+  bookingDate: string;
+  timeSlot: string;
+  createdAt: string;
+  isRead?: boolean;
+}
+
+export interface BodyCompositionRecord {
+  id: string; // e.g. "BC-2026-001"
+  memberId: string;
+  memberName: string;
+  date: string; // YYYY-MM-DD
+  time?: string; // HH:mm WIB
+  trainerId?: string;
+  trainerName?: string;
+  selfReported?: boolean; // True if input mandiri oleh member sendiri
+  // Core Metrics
+  weight: number; // kg
+  height: number; // cm
+  bmi: number; // weight / (height/100)^2
+  bodyFatPercentage?: number; // %
+  muscleMass?: number; // kg
+  visceralFat?: number; // Level 1 - 20
+  basalMetabolicRate?: number; // kcal (BMR)
+  bodyWaterPercentage?: number; // %
+  boneMass?: number; // kg
+  // Anthropometric Circumferences (cm)
+  chest?: number;
+  waist?: number;
+  hips?: number;
+  armRight?: number;
+  armLeft?: number;
+  thighRight?: number;
+  thighLeft?: number;
+  // Health & Targets
+  bloodPressure?: string; // e.g. "120/80"
+  restingHeartRate?: number; // bpm
+  targetWeight?: number; // kg
+  fitnessGoal?: 'Weight Loss' | 'Muscle Gain' | 'Endurance' | 'Rehabilitation' | 'General Fitness' | string;
+  notes?: string;
+  trainerRecommendations?: string;
+  branchId?: string;
+  branchName?: string;
+  createdAt?: string;
+}
+
 export interface StudioClass {
   id: string;
   name: string;
@@ -590,7 +747,10 @@ export interface StudioClass {
   capacity: number;
   booked: string[]; // member names
   bookedMembers?: string[];
+  checkedInMembers?: string[]; // Member IDs that have attended
   room?: string;
+  category?: 'Zumba & Dance' | 'Yoga & Pilates' | 'Combat & Martial' | 'RPM / Cycling' | 'Strength & Conditioning' | string;
+  description?: string;
 }
 
 export interface LockerSlot {
@@ -852,6 +1012,8 @@ export interface DailyClosingRecord {
   arthaSales?: number;
   pettyExpenses?: number;
   expectedCash?: number;
+  openingFloat?: number; // Modal Awal / Cash Float Laci Kas
+  modalAwal?: number;    // Alias untuk Modal Awal Laci
   arthaQRIS?: number;
   arthaTF?: number;
   arthaEDC?: number;

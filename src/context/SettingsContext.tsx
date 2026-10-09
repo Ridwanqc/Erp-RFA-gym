@@ -466,17 +466,18 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const filterByBranch = <T extends { branchId?: string }>(items: T[], customBranchId?: string): T[] => {
     const targetId = customBranchId !== undefined ? customBranchId : activeBranchId;
     if (targetId === ALL_BRANCHES_ID) return items;
-    return items.filter((item) => !item.branchId || item.branchId === targetId);
+    return items.filter((item) => item.branchId === targetId || (!item.branchId && targetId === 'BR-001'));
   };
 
   const canUserAccessBranch = (user: User | null, targetBranchId: string): boolean => {
     if (!user) return true;
-    if (user.role === 'admin' || user.role === 'manager') return true;
+    // Hanya Super Admin (Admin Utama) yang memiliki hak akses lintas cabang dan konsolidasi pusat
+    if (user.role === 'admin') return true;
+    // Semua peran selain Admin Utama TIDAK BISA mengakses holding / semua cabang
     if (targetBranchId === ALL_BRANCHES_ID) return false;
-    if (!user.branchId) return true;
-    if (user.branchId === targetBranchId) return true;
-    if (user.allowedBranchIds && user.allowedBranchIds.includes(targetBranchId)) return true;
-    return false;
+    // Terkunci strictly pada unit cabang yang ditugaskan
+    const userBranch = user.branchId || 'BR-001';
+    return targetBranchId === userBranch || Boolean(user.allowedBranchIds && user.allowedBranchIds.includes(targetBranchId));
   };
 
   const recordStockTransfer = (transferData: Omit<StockTransferRecord, 'id' | 'createdAt'>): StockTransferRecord => {

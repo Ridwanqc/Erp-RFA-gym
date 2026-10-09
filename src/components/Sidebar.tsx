@@ -46,6 +46,8 @@ export type ActiveTab =
   | 'trainer-portal'
   | 'absen'
   | 'jadwal-pt'
+  | 'studio-class'
+  | 'body-composition'
   | 'freeze'
   | 'pos'
   | 'products'
@@ -58,6 +60,7 @@ export type ActiveTab =
   | 'hr-payroll'
   | 'piutang'
   | 'laporan'
+  | 'laporan-harian'
   | 'laporan-bulanan'
   | 'tutup-toko'
   | 'google-sheets'
@@ -151,15 +154,15 @@ export const Sidebar: React.FC<SidebarProps> = ({
       items: [
         {
           id: 'dashboard' as ActiveTab,
-          label: 'Dashboard Admin',
+          label: role === 'admin_cabang' ? 'Dashboard Unit Cabang' : 'Dashboard Admin',
           icon: LayoutDashboard,
-          roles: ['admin'] as UserRole[]
+          roles: ['admin', 'admin_cabang'] as UserRole[]
         },
         {
           id: 'absen' as ActiveTab,
           label: 'Absensi & Presensi',
           icon: UserCheck,
-          roles: ['admin', 'kasir', 'leader_pt', 'pt'] as UserRole[]
+          roles: ['admin', 'admin_cabang', 'kasir', 'leader_pt', 'pt'] as UserRole[]
         }
       ]
     },
@@ -170,44 +173,49 @@ export const Sidebar: React.FC<SidebarProps> = ({
           id: 'membership-group',
           label: 'Keanggotaan',
           icon: Crown,
-          roles: ['admin', 'kasir', 'leader_pt'] as UserRole[],
+          roles: ['admin', 'admin_cabang', 'kasir', 'leader_pt'] as UserRole[],
           badge: freezeCount > 0 ? freezeCount : undefined,
           subItems: [
             {
               id: 'front-desk-portal',
               label: 'Portal Kasir & Front Desk',
-              roles: ['admin', 'kasir', 'leader_pt']
+              roles: ['admin', 'admin_cabang', 'kasir', 'leader_pt']
             },
             {
               id: 'guest-pass',
               label: 'Tiket Visit (Guest Pass)',
-              roles: ['admin', 'kasir', 'leader_pt']
+              roles: ['admin', 'admin_cabang', 'kasir', 'leader_pt']
             },
             {
               id: 'membership',
               label: 'Paket & Pembelian',
-              roles: ['admin', 'kasir']
+              roles: ['admin', 'admin_cabang', 'kasir']
             },
             {
               id: 'freeze',
               label: 'Freeze & Cuti Member',
               badge: freezeCount > 0 ? freezeCount : undefined,
-              roles: ['admin', 'kasir', 'leader_pt']
+              roles: ['admin', 'admin_cabang', 'kasir', 'leader_pt']
             },
             {
               id: 'master-data',
               label: 'Direktori Member 360',
-              roles: ['admin', 'leader_pt', 'kasir']
+              roles: ['admin', 'admin_cabang', 'leader_pt', 'kasir']
             },
             {
               id: 'bundling-reports',
               label: 'Paket Bundling & Komisi',
-              roles: ['admin', 'leader_pt', 'kasir']
+              roles: ['admin', 'admin_cabang', 'leader_pt', 'kasir']
+            },
+            {
+              id: 'body-composition',
+              label: 'Komposisi Tubuh & InBody',
+              roles: ['admin', 'admin_cabang', 'leader_pt', 'pt', 'kasir']
             },
             {
               id: 'crm',
               label: 'CRM & Leads Kanban',
-              roles: ['admin', 'leader_pt', 'kasir']
+              roles: ['admin', 'admin_cabang', 'leader_pt', 'kasir']
             }
           ]
         }
@@ -220,29 +228,39 @@ export const Sidebar: React.FC<SidebarProps> = ({
           id: 'pt-group',
           label: 'Personal Training',
           icon: Dumbbell,
-          roles: ['admin', 'leader_pt', 'pt', 'kasir'] as UserRole[],
+          roles: ['admin', 'admin_cabang', 'leader_pt', 'pt', 'kasir'] as UserRole[],
           badge: ptWaitingCount > 0 ? ptWaitingCount : undefined,
           subItems: [
             {
               id: 'leader-pt',
               label: 'PT Management (Antrian)',
               badge: ptWaitingCount > 0 ? ptWaitingCount : undefined,
-              roles: ['admin', 'leader_pt', 'kasir']
+              roles: ['admin', 'admin_cabang', 'leader_pt', 'kasir']
             },
             {
               id: 'jadwal-pt',
               label: 'Jadwal & Sesi PT',
-              roles: ['admin', 'leader_pt', 'pt']
+              roles: ['admin', 'admin_cabang', 'leader_pt', 'pt']
+            },
+            {
+              id: 'studio-class',
+              label: 'Jadwal & Booking Kelas Studio',
+              roles: ['admin', 'admin_cabang', 'leader_pt', 'pt', 'kasir']
+            },
+            {
+              id: 'body-composition',
+              label: 'InBody & Evaluasi Fisik',
+              roles: ['admin', 'admin_cabang', 'leader_pt', 'pt']
             },
             {
               id: 'trainer-portal',
               label: 'Portal Fokus Trainer',
-              roles: ['admin', 'leader_pt', 'pt']
+              roles: ['admin', 'admin_cabang', 'leader_pt', 'pt']
             },
             {
               id: 'pt-package-performance',
               label: 'Performa Trainer × Paket',
-              roles: ['admin', 'leader_pt']
+              roles: ['admin', 'admin_cabang', 'leader_pt']
             }
           ]
         }
@@ -255,22 +273,22 @@ export const Sidebar: React.FC<SidebarProps> = ({
           id: 'pos-group',
           label: 'Kasir POS & Produk',
           icon: ShoppingBag,
-          roles: ['admin', 'kasir'] as UserRole[],
+          roles: ['admin', 'admin_cabang', 'kasir'] as UserRole[],
           subItems: [
             {
               id: 'front-desk-portal',
               label: 'Portal Fokus Member',
-              roles: ['admin', 'kasir']
+              roles: ['admin', 'admin_cabang', 'kasir']
             },
             {
               id: 'pos',
               label: 'Kasir POS FnB & Retail',
-              roles: ['admin', 'kasir']
+              roles: ['admin', 'admin_cabang', 'kasir']
             },
             {
               id: 'products',
               label: 'Katalog Produk & Stok',
-              roles: ['admin', 'kasir']
+              roles: ['admin', 'admin_cabang', 'kasir']
             }
           ]
         }
@@ -283,13 +301,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
           id: 'inventaris' as ActiveTab,
           label: 'Inventaris & Servis Alat',
           icon: Wrench,
-          roles: ['admin', 'manager', 'teknisi', 'kasir', 'leader_pt'] as UserRole[]
+          roles: ['admin', 'admin_cabang', 'manager', 'teknisi', 'kasir', 'leader_pt'] as UserRole[]
         },
         {
           id: 'lockers' as ActiveTab,
           label: 'Manajemen & Input Loker',
           icon: Lock,
-          roles: ['admin', 'kasir', 'manager', 'teknisi', 'leader_pt'] as UserRole[]
+          roles: ['admin', 'admin_cabang', 'kasir', 'manager', 'teknisi', 'leader_pt'] as UserRole[]
         }
       ]
     },
@@ -300,29 +318,34 @@ export const Sidebar: React.FC<SidebarProps> = ({
           id: 'keuangan-group',
           label: 'Keuangan & Akuntansi',
           icon: CircleDollarSign,
-          roles: ['admin', 'kasir'] as UserRole[],
+          roles: ['admin', 'admin_cabang', 'kasir'] as UserRole[],
           badge: piutangCount > 0 ? piutangCount : undefined,
           subItems: [
             {
               id: 'piutang',
               label: 'Buku Piutang & Cicilan',
               badge: piutangCount > 0 ? piutangCount : undefined,
-              roles: ['admin', 'kasir']
+              roles: ['admin', 'admin_cabang', 'kasir']
             },
             {
               id: 'laporan',
               label: 'Buku Besar Transaksi',
-              roles: ['admin', 'kasir']
+              roles: ['admin', 'admin_cabang', 'kasir']
+            },
+            {
+              id: 'laporan-harian',
+              label: 'Laporan Penjualan Harian',
+              roles: ['admin', 'admin_cabang', 'kasir', 'manager', 'leader_pt']
             },
             {
               id: 'laporan-bulanan',
               label: 'Laporan Penjualan Bulanan',
-              roles: ['admin', 'kasir', 'manager', 'leader_pt']
+              roles: ['admin', 'admin_cabang', 'kasir', 'manager', 'leader_pt']
             },
             {
               id: 'tutup-toko',
               label: 'Daily Closing Kas',
-              roles: ['admin', 'kasir']
+              roles: ['admin', 'admin_cabang', 'kasir']
             },
             {
               id: 'google-sheets',
@@ -340,7 +363,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           id: 'hr-payroll' as ActiveTab,
           label: 'HR, Jadwal & Presensi',
           icon: UsersRound,
-          roles: ['admin', 'manager', 'leader_pt'] as UserRole[]
+          roles: ['admin', 'admin_cabang', 'manager', 'leader_pt'] as UserRole[]
         }
       ]
     },
@@ -357,37 +380,37 @@ export const Sidebar: React.FC<SidebarProps> = ({
           id: 'settings-group',
           label: 'Pengaturan Sistem',
           icon: Settings,
-          roles: ['admin', 'manager', 'kasir'] as UserRole[],
+          roles: ['admin', 'admin_cabang', 'manager', 'kasir'] as UserRole[],
           subItems: [
             {
               id: 'settings-printer',
               label: 'Setting Printer & Struk',
-              roles: ['admin', 'manager', 'kasir']
+              roles: ['admin', 'admin_cabang', 'manager', 'kasir']
             },
             {
               id: 'settings-theme',
               label: 'Setting Tema & Tampilan',
-              roles: ['admin', 'manager', 'kasir']
+              roles: ['admin', 'admin_cabang', 'manager', 'kasir']
             },
             {
               id: 'settings-roles',
               label: 'Manajemen Role & Akses',
-              roles: ['admin', 'manager']
+              roles: ['admin']
             },
             {
               id: 'settings-branches',
               label: 'Kelola Cabang & Outlet',
-              roles: ['admin', 'manager']
+              roles: ['admin', 'admin_cabang']
             },
             {
               id: 'settings-profile',
               label: 'Profil Usaha',
-              roles: ['admin', 'manager']
+              roles: ['admin']
             },
             {
               id: 'settings-finance',
               label: 'Pajak & Rekening Kas',
-              roles: ['admin', 'manager']
+              roles: ['admin', 'admin_cabang', 'manager']
             },
             {
               id: 'settings-backup',
@@ -397,7 +420,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             {
               id: 'settings',
               label: 'Semua Pengaturan',
-              roles: ['admin', 'manager', 'kasir']
+              roles: ['admin', 'admin_cabang', 'manager', 'kasir']
             }
           ]
         }

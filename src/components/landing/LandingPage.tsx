@@ -1,5 +1,16 @@
 import React, { useState, useEffect } from 'react';
-import { Member, StudioClass, User, Attendance } from '../../types';
+import {
+  Member,
+  StudioClass,
+  User,
+  Attendance,
+  BodyCompositionRecord,
+  PTPurchaseRecord,
+  PTBooking,
+  Schedule,
+  TrainerChangeRequest,
+  PTBackofficeNotification
+} from '../../types';
 import { LandingProgram, OnlineReservation } from '../../types/landingTypes';
 import { INITIAL_ONLINE_RESERVATIONS } from '../../data/landingData';
 import { APP_TODAY } from '../../utils/formatters';
@@ -30,6 +41,23 @@ interface LandingPageProps {
   reservations?: OnlineReservation[];
   onCompleteReservation?: (newRes: OnlineReservation) => void;
   onCancelReservation?: (resId: string) => void;
+  bodyCompositionRecords?: BodyCompositionRecord[];
+  onSaveBodyCompositionRecord?: (record: BodyCompositionRecord) => void;
+  ptPurchases?: PTPurchaseRecord[];
+  bookings?: PTBooking[];
+  schedules?: Schedule[];
+  trainerChangeRequests?: TrainerChangeRequest[];
+  onAddBooking?: (booking: PTBooking, notification: PTBackofficeNotification) => void;
+  onRescheduleBooking?: (
+    bookingId: string,
+    newDate: string,
+    newStartTime: string,
+    newEndTime: string,
+    notes?: string
+  ) => void;
+  onCancelBooking?: (bookingId: string, reason?: string) => void;
+  onRequestChangeTrainer?: (request: TrainerChangeRequest) => void;
+  showToast?: (title: string, message: string, type: 'success' | 'error' | 'warning' | 'info') => void;
 }
 
 export const LandingPage: React.FC<LandingPageProps> = ({
@@ -43,7 +71,18 @@ export const LandingPage: React.FC<LandingPageProps> = ({
   onBookStudioClass,
   reservations: propReservations,
   onCompleteReservation: propOnCompleteReservation,
-  onCancelReservation: propOnCancelReservation
+  onCancelReservation: propOnCancelReservation,
+  bodyCompositionRecords,
+  onSaveBodyCompositionRecord,
+  ptPurchases = [],
+  bookings = [],
+  schedules = [],
+  trainerChangeRequests = [],
+  onAddBooking,
+  onRescheduleBooking,
+  onCancelBooking,
+  onRequestChangeTrainer,
+  showToast
 }) => {
   const [activeSection, setActiveSection] = useState<string>('hero');
 
@@ -301,6 +340,18 @@ export const LandingPage: React.FC<LandingPageProps> = ({
           setIsMemberModalOpen(false);
           handleOpenReservation();
         }}
+        bodyCompositionRecords={bodyCompositionRecords}
+        onSaveBodyCompositionRecord={onSaveBodyCompositionRecord}
+        ptPurchases={ptPurchases}
+        bookings={bookings}
+        schedules={schedules}
+        trainers={staffUsers.filter((s) => s.role === 'pt' || s.role === 'leader_pt')}
+        trainerChangeRequests={trainerChangeRequests}
+        onAddBooking={onAddBooking}
+        onRescheduleBooking={onRescheduleBooking}
+        onCancelBooking={onCancelBooking}
+        onRequestChangeTrainer={onRequestChangeTrainer}
+        showToast={showToast}
       />
     </div>
   );

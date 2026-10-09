@@ -10,9 +10,13 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
   Settings,
-  Globe
+  Globe,
+  Bell,
+  CheckCircle2,
+  Clock,
+  Dumbbell
 } from 'lucide-react';
-import { User } from '../types';
+import { User, PTBackofficeNotification } from '../types';
 import { PWAInstallButton } from './PWAInstallButton';
 import { RealTimeClock } from './RealTimeClock';
 
@@ -30,6 +34,8 @@ interface HeaderProps {
   onOpenSettings?: (subTab?: 'printer' | 'theme' | 'roles' | 'profile' | 'branches' | 'finance' | 'templates' | 'backup') => void;
   onOpenAddBranchModal?: () => void;
   onOpenLandingPage?: () => void;
+  ptNotifications?: PTBackofficeNotification[];
+  onNavigateTab?: (tab: any) => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -45,32 +51,49 @@ export const Header: React.FC<HeaderProps> = ({
   firebaseConnected = true,
   onOpenSettings,
   onOpenAddBranchModal,
-  onOpenLandingPage
+  onOpenLandingPage,
+  ptNotifications = [],
+  onNavigateTab
 }) => {
   const [isProfileOpen, setIsProfileOpen] = useState(false);
+  const [isNotifOpen, setIsNotifOpen] = useState(false);
   const profileMenuRef = useRef<HTMLDivElement | null>(null);
+  const notifMenuRef = useRef<HTMLDivElement | null>(null);
 
-  // Close profile dropdown when clicking outside or pressing Escape
+  // Filter notifications relevant to current user
+  const relevantNotifications = ptNotifications.filter((n) => {
+    if (n.targetRole === 'ALL') return true;
+    if (currentUser?.role === 'admin' || currentUser?.role === 'admin_cabang') return true;
+    if (currentUser?.role === 'leader_pt') return true;
+    if (currentUser?.role === 'pt' && n.trainerId === currentUser.id) return true;
+    return false;
+  });
+
+  const unreadCount = relevantNotifications.filter((n) => !n.isRead).length;
+
+  // Close dropdowns when clicking outside
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
       if (profileMenuRef.current && !profileMenuRef.current.contains(e.target as Node)) {
         setIsProfileOpen(false);
       }
+      if (notifMenuRef.current && !notifMenuRef.current.contains(e.target as Node)) {
+        setIsNotifOpen(false);
+      }
     };
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         setIsProfileOpen(false);
+        setIsNotifOpen(false);
       }
     };
-    if (isProfileOpen) {
-      document.addEventListener('mousedown', handleClickOutside);
-      document.addEventListener('keydown', handleKeyDown);
-    }
+    document.addEventListener('mousedown', handleClickOutside);
+    document.addEventListener('keydown', handleKeyDown);
     return () => {
       document.removeEventListener('mousedown', handleClickOutside);
       document.removeEventListener('keydown', handleKeyDown);
     };
-  }, [isProfileOpen]);
+  }, []);
 
   return (
     <header className="h-16 border-b border-zinc-800 flex items-center justify-between px-3 sm:px-5 lg:px-6 z-30 shrink-0 bg-[#09090b]/90 backdrop-blur-md sticky top-0 w-full">
@@ -146,6 +169,89 @@ export const Header: React.FC<HeaderProps> = ({
           </button>
         )}
 
+        {/* Backoffice PT & System Notifications Bell */}
+        <div className="relative" ref={notifMenuRef}>
+          <button
+            type="button"
+            onClick={() => setIsNotifOpen(!isNotifOpen)}
+            className="relative p-2.5 rounded-xl bg-zinc-900/90 hover:bg-zinc-800 border border-zinc-800 text-zinc-300 hover:text-white transition active:scale-95 min-h-[44px] min-w-[44px] flex items-center justify-center"
+            title="Notifikasi Booking PT & Sistem"
+          >
+            <Bell className="w-4 h-4 text-orange-400" />
+            {unreadCount > 0 && (
+              <span className="absolute -top-1 -right-1 px-1.5 py-0.2 rounded-full bg-rose-500 text-white font-black text-[9px] border border-zinc-950 animate-pulse">
+                {unreadCount}
+              </span>
+            )}
+          </button>
+
+          {isNotifOpen && (
+            <div className="absolute right-0 mt-2 w-80 sm:w-96 rounded-2xl bg-zinc-950 border border-zinc-800 shadow-2xl p-3 space-y-2 z-50 animate-in fade-in slide-in-from-top-2">
+              <div className="flex items-center justify-between pb-2 border-b border-zinc-800 px-1">
+                <div className="flex items-center gap-1.5">
+                  <Bell className="w-4 h-4 text-orange-400" />
+                  <span className="text-xs font-black text-white">Notifikasi Backoffice</span>
+                </div>
+                <span className="text-[10px] text-zinc-400 font-bold bg-zinc-800 px-2 py-0.5 rounded">
+                  {relevantNotifications.length} Pesan
+                </span>
+              </div>
+
+              <div className="max-h-72 overflow-y-auto space-y-2 p-0.5">
+                {relevantNotifications.length === 0 ? (
+                  <div className="p-4 text-center text-xs text-zinc-500">
+                    Belum ada notifikasi baru.
+                  </div>
+                ) : (
+                  relevantNotifications.map((notif) => (
+                    <div
+                      key={notif.id}
+                      className={`p-3 rounded-xl border text-xs space-y-1 transition ${
+                        notif.isRead
+                          ? 'bg-zinc-900/50 border-zinc-800 text-zinc-400'
+                          : 'bg-zinc-900 border-orange-500/30 text-zinc-200'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="font-extrabold text-orange-400 text-[11px] truncate">
+                          {notif.title}
+                        </span>
+                        <span className="text-[9px] text-zinc-500 font-mono shrink-0">
+                          {notif.createdAt}
+                        </span>
+                      </div>
+                      <p className="text-[11px] leading-relaxed text-zinc-300">{notif.message}</p>
+                      <div className="flex items-center justify-between pt-1">
+                        <span className="text-[10px] text-zinc-400">
+                          {notif.bookingDate} ({notif.timeSlot})
+                        </span>
+                        {onNavigateTab && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setIsNotifOpen(false);
+                              if (currentUser?.role === 'leader_pt') {
+                                onNavigateTab('leader-pt');
+                              } else if (currentUser?.role === 'pt') {
+                                onNavigateTab('trainer-portal');
+                              } else {
+                                onNavigateTab('jadwal-pt');
+                              }
+                            }}
+                            className="text-[10px] text-orange-400 font-bold hover:underline"
+                          >
+                            Buka Jadwal &rarr;
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+
         {/* User Profile Trigger & Dropdown */}
         <div className="relative" ref={profileMenuRef}>
           <button
@@ -165,12 +271,22 @@ export const Header: React.FC<HeaderProps> = ({
               alt={currentUser?.name || 'User'}
               className="w-8 h-8 rounded-lg object-cover border border-zinc-700 shrink-0"
             />
-            <div className="hidden md:block truncate max-w-[120px] lg:max-w-[150px]">
+            <div className="hidden md:block truncate max-w-[140px] lg:max-w-[180px]">
               <p className="text-xs font-bold text-white truncate leading-tight">
                 {currentUser?.name || 'Pengguna'}
               </p>
-              <p className="text-[10px] text-orange-400 uppercase font-semibold truncate leading-none mt-0.5">
-                {currentUser?.roleName || 'Staf'}
+              <p className={`text-[10px] uppercase font-bold truncate leading-none mt-0.5 ${
+                currentUser?.role === 'admin'
+                  ? 'text-rose-400'
+                  : currentUser?.role === 'admin_cabang'
+                  ? 'text-teal-400'
+                  : 'text-orange-400'
+              }`}>
+                {currentUser?.role === 'admin'
+                  ? 'Super Admin (HQ)'
+                  : currentUser?.role === 'admin_cabang'
+                  ? 'Admin Cabang'
+                  : currentUser?.roleName || 'Staf'}
               </p>
             </div>
             <ChevronDown
@@ -265,12 +381,33 @@ export const Header: React.FC<HeaderProps> = ({
                 <div className="flex items-center justify-between p-2 rounded-xl hover:bg-zinc-800/50 transition">
                   <div className="flex items-center gap-2">
                     <Shield className="w-4 h-4 text-orange-400" />
-                    <span>Hak Akses Role</span>
+                    <span>Tipe Wewenang</span>
                   </div>
-                  <span className="font-bold text-white uppercase text-[11px]">
-                    {currentUser?.role}
+                  <span className={`font-bold uppercase text-[11px] px-2 py-0.5 rounded ${
+                    currentUser?.role === 'admin'
+                      ? 'bg-rose-500/20 text-rose-300 border border-rose-500/30'
+                      : currentUser?.role === 'admin_cabang'
+                      ? 'bg-teal-500/20 text-teal-300 border border-teal-500/30'
+                      : 'bg-zinc-800 text-zinc-300'
+                  }`}>
+                    {currentUser?.role === 'admin'
+                      ? 'Super Admin (HQ)'
+                      : currentUser?.role === 'admin_cabang'
+                      ? 'Admin Unit Cabang'
+                      : currentUser?.role}
                   </span>
                 </div>
+                {currentUser?.branchName && (
+                  <div className="flex items-center justify-between p-2 rounded-xl hover:bg-zinc-800/50 transition">
+                    <div className="flex items-center gap-2">
+                      <UserIcon className="w-4 h-4 text-teal-400" />
+                      <span>Unit Kerja</span>
+                    </div>
+                    <span className="text-zinc-200 font-semibold text-[11px] truncate max-w-[150px]">
+                      {currentUser?.branchName}
+                    </span>
+                  </div>
+                )}
                 <div className="flex items-center justify-between p-2 rounded-xl hover:bg-zinc-800/50 transition">
                   <div className="flex items-center gap-2">
                     <UserIcon className="w-4 h-4 text-emerald-400" />
@@ -279,6 +416,51 @@ export const Header: React.FC<HeaderProps> = ({
                   <span className="text-emerald-400 font-bold text-[11px]">Sesi Aktif</span>
                 </div>
               </div>
+
+              {/* Quick User Switcher Demo Helper */}
+              {onSwitchUser && staffUsers && staffUsers.length > 0 && (
+                <div className="p-3 border-t border-zinc-800 bg-zinc-950/40">
+                  <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider mb-2 flex items-center justify-between">
+                    <span>Simulasi Ganti Role Staf:</span>
+                    <span className="text-orange-400 font-mono">1-Klik</span>
+                  </p>
+                  <div className="grid grid-cols-2 gap-1.5 max-h-36 overflow-y-auto scrollbar-thin scrollbar-thumb-zinc-800 pr-1">
+                    {staffUsers
+                      .filter((u) => u.id !== currentUser?.id)
+                      .slice(0, 6)
+                      .map((u) => {
+                        const isAdm = u.role === 'admin';
+                        const isAdmCab = u.role === 'admin_cabang';
+                        return (
+                          <button
+                            key={u.id}
+                            type="button"
+                            onClick={() => {
+                              setIsProfileOpen(false);
+                              onSwitchUser(u.id);
+                            }}
+                            className={`p-1.5 rounded-xl text-left border transition text-[11px] flex items-center gap-1.5 cursor-pointer ${
+                              isAdm
+                                ? 'bg-rose-500/10 hover:bg-rose-500/20 text-rose-300 border-rose-500/30'
+                                : isAdmCab
+                                ? 'bg-teal-500/10 hover:bg-teal-500/20 text-teal-300 border-teal-500/30'
+                                : 'bg-zinc-800/60 hover:bg-zinc-700/80 text-zinc-300 border-zinc-700'
+                            }`}
+                            title={`Beralih ke ${u.name} (${u.roleName})`}
+                          >
+                            <span className="text-xs">{isAdm ? '👑' : isAdmCab ? '🏢' : '👤'}</span>
+                            <div className="truncate min-w-0">
+                              <p className="font-bold truncate text-[10px]">{u.name.split(' ')[0]}</p>
+                              <p className="text-[9px] text-zinc-400 truncate">
+                                {isAdm ? 'Super Admin' : isAdmCab ? 'Admin Cabang' : u.role}
+                              </p>
+                            </div>
+                          </button>
+                        );
+                      })}
+                  </div>
+                </div>
+              )}
 
               {/* Logout Button */}
               {onLogout && (

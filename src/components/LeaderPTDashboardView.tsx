@@ -56,9 +56,11 @@ import {
   Line,
   CartesianGrid
 } from 'recharts';
-import { Member, Schedule, User, StaffAttendance, Attendance, PTPurchaseRecord, PTTrainerAssignment, BundlePackage, Transaction, TrainerCommissionRecord } from '../types';
+import { Member, Schedule, User, StaffAttendance, Attendance, PTPurchaseRecord, PTTrainerAssignment, BundlePackage, Transaction, TrainerCommissionRecord, PTBooking, TrainerChangeRequest } from '../types';
 import { APP_TODAY, formatDateIndo, getDayDiff, formatRp, getTimestamp } from '../utils/formatters';
 import { TrainerCommissionPieChart } from './TrainerCommissionPieChart';
+import { LeaderPTBookingsTab } from './LeaderPTBookingsTab';
+import { LeaderPTTrainerChangeTab } from './LeaderPTTrainerChangeTab';
 
 interface LeaderPTDashboardViewProps {
   members: Member[];
@@ -72,6 +74,11 @@ interface LeaderPTDashboardViewProps {
   bundlePackages?: BundlePackage[];
   transactions?: Transaction[];
   trainerCommissions?: TrainerCommissionRecord[];
+  ptBookings?: PTBooking[];
+  trainerChangeRequests?: TrainerChangeRequest[];
+  onApproveTrainerChange?: (requestId: string, newTrainerId: string, newTrainerName: string, notes?: string) => void;
+  onRejectTrainerChange?: (requestId: string, notes?: string) => void;
+  onUpdatePTBookingStatus?: (bookingId: string, newStatus: any, notes?: string) => void;
   onUpdateMember?: (updatedMember: Member) => void;
   onUpdatePTPurchase?: (purchase: PTPurchaseRecord) => void;
   onAssignPTTrainer?: (
@@ -103,6 +110,11 @@ export const LeaderPTDashboardView: React.FC<LeaderPTDashboardViewProps> = ({
   bundlePackages = [],
   transactions = [],
   trainerCommissions = [],
+  ptBookings = [],
+  trainerChangeRequests = [],
+  onApproveTrainerChange,
+  onRejectTrainerChange,
+  onUpdatePTBookingStatus,
   onUpdateMember,
   onUpdatePTPurchase,
   onAssignPTTrainer,
@@ -114,7 +126,7 @@ export const LeaderPTDashboardView: React.FC<LeaderPTDashboardViewProps> = ({
   showToast
 }) => {
   // Role permissions
-  const isAdmin = currentUser?.role === 'admin';
+  const isAdmin = currentUser?.role === 'admin' || currentUser?.role === 'admin_cabang';
   const isLeaderPT = currentUser?.role === 'leader_pt';
   const isKasir = currentUser?.role === 'kasir';
   const isTrainer = currentUser?.role === 'pt';
@@ -122,7 +134,17 @@ export const LeaderPTDashboardView: React.FC<LeaderPTDashboardViewProps> = ({
 
   // Active Main View / Tab state
   const [activeQueueTab, setActiveQueueTab] = useState<
-    'waiting' | 'assigned' | 'scheduled' | 'in_progress' | 'completed' | 'unpaid' | 'history' | 'trainers' | 'analytics'
+    | 'waiting'
+    | 'assigned'
+    | 'scheduled'
+    | 'in_progress'
+    | 'completed'
+    | 'unpaid'
+    | 'history'
+    | 'trainers'
+    | 'analytics'
+    | 'bookings'
+    | 'change_requests'
   >('waiting');
 
   // Active Filter / Tab state (legacy & sub-tables)
@@ -1149,7 +1171,7 @@ export const LeaderPTDashboardView: React.FC<LeaderPTDashboardViewProps> = ({
       date: quickDate,
       time: quickTime,
       status: 'Menunggu',
-      valStaf: currentUser?.role === 'leader_pt' || currentUser?.role === 'admin',
+      valStaf: currentUser?.role === 'leader_pt' || currentUser?.role === 'admin' || currentUser?.role === 'admin_cabang',
       valTrainer: false,
       valMember: false,
       note: quickNote || 'Sesi PT dibuat langsung via Leader Dashboard'
@@ -1541,6 +1563,35 @@ export const LeaderPTDashboardView: React.FC<LeaderPTDashboardViewProps> = ({
             >
               <Activity className="w-3.5 h-3.5 text-orange-400" />
               📊 Analitik & Health Retensi
+            </button>
+
+            <button
+              onClick={() => setActiveQueueTab('bookings')}
+              className={`px-3 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 cursor-pointer ${
+                activeQueueTab === 'bookings'
+                  ? 'bg-orange-500 text-white shadow-md shadow-orange-500/20 font-black'
+                  : 'bg-zinc-800/80 text-orange-400 hover:bg-zinc-800 border border-orange-500/40'
+              }`}
+            >
+              <Calendar className="w-3.5 h-3.5 text-orange-400" />
+              <span>📋 Booking PT ({ptBookings.length})</span>
+              {ptBookings.filter((b) => b.source === 'PORTAL_MEMBER').length > 0 && (
+                <span className="px-1.5 py-0.5 rounded-full text-[9px] bg-orange-400 text-zinc-950 font-black">
+                  {ptBookings.filter((b) => b.source === 'PORTAL_MEMBER').length} Portal
+                </span>
+              )}
+            </button>
+
+            <button
+              onClick={() => setActiveQueueTab('change_requests')}
+              className={`px-3 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 cursor-pointer ${
+                activeQueueTab === 'change_requests'
+                  ? 'bg-amber-500 text-zinc-950 shadow-md shadow-amber-500/20 font-black'
+                  : 'bg-zinc-800/80 text-amber-300 hover:bg-zinc-800 border border-amber-500/30'
+              }`}
+            >
+              <RefreshCw className="w-3.5 h-3.5 text-amber-400" />
+              <span>👤 Request Ganti Trainer ({trainerChangeRequests.filter((r) => r.status === 'PENDING').length})</span>
             </button>
           </div>
         </div>
@@ -2130,6 +2181,27 @@ export const LeaderPTDashboardView: React.FC<LeaderPTDashboardViewProps> = ({
               <span>Menampilkan seluruh metrik retensi member, komposisi sesi, dan tren distribusi harian di bawah.</span>
               <span className="text-orange-400 font-bold">Scroll ke bawah untuk audit lengkap ↓</span>
             </div>
+          )}
+
+          {/* TAB: BOOKING PT (PORTAL MEMBER & BACKOFFICE) */}
+          {activeQueueTab === 'bookings' && (
+            <LeaderPTBookingsTab
+              bookings={ptBookings}
+              trainers={trainers}
+              onUpdateBookingStatus={onUpdatePTBookingStatus}
+              showToast={showToast}
+            />
+          )}
+
+          {/* TAB: PERMINTAAN GANTI TRAINER */}
+          {activeQueueTab === 'change_requests' && (
+            <LeaderPTTrainerChangeTab
+              changeRequests={trainerChangeRequests}
+              trainers={trainers}
+              onApproveRequest={onApproveTrainerChange || (() => {})}
+              onRejectRequest={onRejectTrainerChange || (() => {})}
+              showToast={showToast}
+            />
           )}
         </div>
       </div>

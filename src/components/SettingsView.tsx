@@ -611,13 +611,13 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
           {[
             { id: 'printer', label: 'Printer & Struk POS', icon: Printer, badge: settings.printer.paperWidth },
             { id: 'theme', label: 'Tema & Tampilan', icon: Palette, badge: `${theme.mode}` },
-            { id: 'roles', label: 'Manajemen Role & Akses', icon: ShieldCheck, badge: 'RBAC' },
+            ...(!isSuperAdmin ? [] : [{ id: 'roles', label: 'Manajemen Role & Akses', icon: ShieldCheck, badge: 'RBAC' }]),
             { id: 'security', label: 'Keamanan & Password PIC', icon: KeyRound, badge: picProtection.requirePasswordToChangePic ? 'Aktif 🔒' : 'Off' },
-            { id: 'branches', label: 'Kelola Cabang & Outlet', icon: Building2, badge: `${branches.length} Outlet` },
-            { id: 'profile', label: 'Profil Usaha', icon: Sliders },
+            { id: 'branches', label: currentUser?.role === 'admin_cabang' ? 'Profil Unit Cabang' : 'Kelola Cabang & Outlet', icon: Building2, badge: currentUser?.role === 'admin_cabang' ? 'Unit Anda' : `${branches.length} Outlet` },
+            ...(!isSuperAdmin ? [] : [{ id: 'profile', label: 'Profil Usaha HQ', icon: Sliders }]),
             { id: 'finance', label: 'Pajak & Rekening Kas', icon: CreditCard },
             { id: 'templates', label: 'Template Pesan WA', icon: MessageSquare },
-            { id: 'backup', label: 'Backup & Database', icon: Database }
+            ...(!isSuperAdmin ? [] : [{ id: 'backup', label: 'Backup & Database', icon: Database }])
           ].map((tab) => {
             const Icon = tab.icon;
             const isActive = activeTab === tab.id;
@@ -1865,11 +1865,12 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                         }
                         className="bg-zinc-900 border border-zinc-700 text-white rounded-xl px-2.5 py-1.5 text-xs font-bold focus:outline-none focus:border-orange-500"
                       >
-                        <option value="admin">Admin</option>
+                        <option value="admin">Super Admin (HQ)</option>
+                        <option value="admin_cabang">Admin Unit Cabang</option>
                         <option value="manager">Manager</option>
-                        <option value="kasir">Kasir</option>
+                        <option value="kasir">Kasir & Front Desk</option>
                         <option value="leader_pt">Leader PT</option>
-                        <option value="pt">PT</option>
+                        <option value="pt">Pelatih PT</option>
                         <option value="teknisi">Teknisi</option>
                       </select>
 

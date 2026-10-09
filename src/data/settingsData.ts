@@ -165,11 +165,30 @@ export const DEFAULT_ROLE_DEFINITIONS: Record<UserRole, RoleDefinition> = {
   admin: {
     role: 'admin',
     roleName: 'Super Administrator',
-    description: 'Akses penuh tanpa batasan ke seluruh sistem, audit log, keuangan, dan pengaturan.',
+    description: 'Akses penuh tanpa batasan ke seluruh sistem, audit log, keuangan, dan pengaturan lintas cabang & holding pusat.',
     badgeColor: 'bg-rose-500/20 text-rose-400 border-rose-500/30',
     isSystemRole: true,
     permissions: SYSTEM_MODULES.reduce((acc, m) => {
       acc[m.id] = { view: true, create: true, edit: true, delete: true, voidRefund: true, export: true };
+      return acc;
+    }, {} as Record<string, { view: boolean; create: boolean; edit: boolean; delete: boolean; voidRefund?: boolean; export?: boolean }>)
+  },
+  admin_cabang: {
+    role: 'admin_cabang',
+    roleName: 'Admin Unit Cabang',
+    description: 'Wewenang penuh untuk memantau, mengelola, dan mengatur operasional di unit cabangnya sendiri (Member, Kasir POS, Absensi, Staf Cabang, Loker, Inventaris, Petty Cash & Laporan Keuangan Unit). Tidak memiliki akses ke unit cabang lain atau konsolidasi holding pusat.',
+    badgeColor: 'bg-teal-500/20 text-teal-300 border-teal-500/40',
+    isSystemRole: true,
+    permissions: SYSTEM_MODULES.reduce((acc, m) => {
+      const isGlobalOnly = m.id === 'google-sheets';
+      acc[m.id] = {
+        view: true,
+        create: !isGlobalOnly,
+        edit: !isGlobalOnly,
+        delete: m.id !== 'settings',
+        voidRefund: true,
+        export: true
+      };
       return acc;
     }, {} as Record<string, { view: boolean; create: boolean; edit: boolean; delete: boolean; voidRefund?: boolean; export?: boolean }>)
   },

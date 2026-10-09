@@ -64,7 +64,7 @@ export const MembershipView: React.FC<MembershipViewProps> = ({
 
   const handleRequestUnlockPic = (target: 'p1' | 'p2' | 'p3' | 'closing') => {
     const isProtected = picProtection.requirePasswordToChangePic && (picProtection.requirePasswordOnTransaction !== false);
-    const canBypass = (currentUser?.role === 'admin' || currentUser?.role === 'manager') && picProtection.allowAdminBypass;
+    const canBypass = (currentUser?.role === 'admin' || currentUser?.role === 'admin_cabang' || currentUser?.role === 'manager') && picProtection.allowAdminBypass;
 
     if (isProtected && !canBypass) {
       setUnlockPicTarget(target);

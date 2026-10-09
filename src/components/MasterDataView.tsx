@@ -111,7 +111,9 @@ export const MasterDataView: React.FC<MasterDataViewProps> = ({
     setStaffRole('kasir');
     setMemberPicId('');
     setIsPicLocked(false);
-    const defBranch = activeBranchId === ALL_BRANCHES_ID ? (branches[0]?.id || 'BR-001') : activeBranchId;
+    const defBranch = currentUser?.role === 'admin_cabang' && currentUser.branchId
+      ? currentUser.branchId
+      : (activeBranchId === ALL_BRANCHES_ID ? (branches[0]?.id || 'BR-001') : activeBranchId);
     setPersonBranchId(defBranch);
     setAllowedBranchIds([defBranch]);
     setIsModalOpen(true);
@@ -219,7 +221,9 @@ export const MasterDataView: React.FC<MasterDataViewProps> = ({
     } else {
       const roleName =
         staffRole === 'admin'
-          ? 'System Admin'
+          ? 'System Admin (HQ)'
+          : staffRole === 'admin_cabang'
+          ? 'Admin Unit Cabang'
           : staffRole === 'kasir'
           ? 'Kasir & Front Desk'
           : staffRole === 'leader_pt'
@@ -773,6 +777,17 @@ export const MasterDataView: React.FC<MasterDataViewProps> = ({
                 </button>
                 <button
                   type="button"
+                  onClick={() => setStaffRoleFilter('admin_cabang')}
+                  className={`text-xs font-bold px-3 py-1 rounded-xl transition shrink-0 ${
+                    staffRoleFilter === 'admin_cabang'
+                      ? 'bg-teal-500 text-white shadow-sm font-black'
+                      : 'bg-zinc-950 text-teal-400 hover:text-teal-300 border border-zinc-800'
+                  }`}
+                >
+                  Admin Cabang ({staffUsers.filter((s) => s.role === 'admin_cabang').length})
+                </button>
+                <button
+                  type="button"
                   onClick={() => setStaffRoleFilter('admin')}
                   className={`text-xs font-bold px-3 py-1 rounded-xl transition shrink-0 ${
                     staffRoleFilter === 'admin'
@@ -780,7 +795,7 @@ export const MasterDataView: React.FC<MasterDataViewProps> = ({
                       : 'bg-zinc-950 text-purple-400 hover:text-purple-300 border border-zinc-800'
                   }`}
                 >
-                  Admin / Manager ({staffUsers.filter((s) => s.role === 'admin').length})
+                  Super Admin HQ ({staffUsers.filter((s) => s.role === 'admin').length})
                 </button>
               </div>
 
@@ -875,23 +890,31 @@ export const MasterDataView: React.FC<MasterDataViewProps> = ({
                       </span>
                     </td>
                     <td className="py-3 px-4 text-right space-x-1.5">
-                      <button
-                        onClick={() => openEditModal(s)}
-                        className="px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-xl text-xs font-bold transition"
-                      >
-                        Edit
-                      </button>
-                      <button
-                        onClick={() => {
-                          if (confirm(`Hapus staf ${s.name}?`)) {
-                            onDeleteStaff(s.id);
-                            showToast('Staf Dihapus', `Data ${s.name} telah dihapus.`, 'info');
-                          }
-                        }}
-                        className="px-3 py-1.5 bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/30 rounded-xl text-xs font-bold transition"
-                      >
-                        Hapus
-                      </button>
+                      {currentUser?.role === 'admin_cabang' && s.role === 'admin' ? (
+                        <span className="text-[10px] text-rose-400 bg-rose-500/10 border border-rose-500/20 px-2 py-1 rounded-lg font-bold inline-block">
+                          🔒 Akun HQ
+                        </span>
+                      ) : (
+                        <>
+                          <button
+                            onClick={() => openEditModal(s)}
+                            className="px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-xl text-xs font-bold transition"
+                          >
+                            Edit
+                          </button>
+                          <button
+                            onClick={() => {
+                              if (confirm(`Hapus staf ${s.name}?`)) {
+                                onDeleteStaff(s.id);
+                                showToast('Staf Dihapus', `Data ${s.name} telah dihapus.`, 'info');
+                              }
+                            }}
+                            className="px-3 py-1.5 bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/30 rounded-xl text-xs font-bold transition"
+                          >
+                            Hapus
+                          </button>
+                        </>
+                      )}
                     </td>
                   </tr>
                 ))
@@ -1008,17 +1031,33 @@ export const MasterDataView: React.FC<MasterDataViewProps> = ({
                     <Building2 className="w-3.5 h-3.5 text-orange-400" />
                     <span>{activeTab === 'member' ? 'Cabang / Home Outlet Member *' : 'Penugasan Cabang Utama *'}</span>
                   </label>
-                  <select
-                    value={personBranchId}
-                    onChange={(e) => setPersonBranchId(e.target.value)}
-                    className="w-full bg-zinc-900 border border-zinc-700 rounded-xl px-3 py-2 text-xs text-white outline-none focus:border-orange-500 font-medium"
-                  >
-                    {branches.map((b) => (
-                      <option key={b.id} value={b.id}>
-                        [{b.code}] {b.name} ({b.city})
-                      </option>
-                    ))}
-                  </select>
+                  {currentUser?.role !== 'admin' ? (
+                    <div className="w-full bg-zinc-950/80 border border-teal-500/30 rounded-xl px-3 py-2 text-xs text-white font-medium flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <span className="text-[10px] font-mono font-bold bg-teal-500/20 text-teal-300 px-1.5 py-0.5 rounded border border-teal-500/30">
+                          {branches.find((b) => b.id === (currentUser?.branchId || personBranchId))?.code || 'CAB'}
+                        </span>
+                        <span className="font-bold">
+                          {branches.find((b) => b.id === (currentUser?.branchId || personBranchId))?.name || 'Unit Cabang Anda'}
+                        </span>
+                      </div>
+                      <span className="text-[9px] font-extrabold uppercase bg-teal-500/20 text-teal-300 px-2 py-0.5 rounded-full border border-teal-500/40">
+                        🔒 Terkunci Unit
+                      </span>
+                    </div>
+                  ) : (
+                    <select
+                      value={personBranchId}
+                      onChange={(e) => setPersonBranchId(e.target.value)}
+                      className="w-full bg-zinc-900 border border-zinc-700 rounded-xl px-3 py-2 text-xs text-white outline-none focus:border-orange-500 font-medium"
+                    >
+                      {branches.map((b) => (
+                        <option key={b.id} value={b.id}>
+                          [{b.code}] {b.name} ({b.city})
+                        </option>
+                      ))}
+                    </select>
+                  )}
                 </div>
 
                 {activeTab === 'member' ? (
@@ -1121,10 +1160,14 @@ export const MasterDataView: React.FC<MasterDataViewProps> = ({
                         onChange={(e) => setStaffRole(e.target.value as any)}
                         className="w-full bg-zinc-900 border border-zinc-700 rounded-xl px-3 py-2 text-xs text-white outline-none focus:border-orange-500"
                       >
-                        <option value="admin">System Admin</option>
+                        {currentUser?.role !== 'admin_cabang' && (
+                          <option value="admin">System Admin (HQ Pusat)</option>
+                        )}
+                        <option value="admin_cabang">Admin Unit Cabang</option>
                         <option value="kasir">Kasir & Front Desk</option>
                         <option value="leader_pt">Leader PT</option>
                         <option value="pt">Pelatih PT</option>
+                        <option value="teknisi">Teknisi & Maintenance</option>
                       </select>
                     </div>
 
@@ -1156,45 +1199,60 @@ export const MasterDataView: React.FC<MasterDataViewProps> = ({
                     </div>
 
                     <div>
-                      <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-wider mb-1 flex items-center justify-between">
-                        <span>Hak Akses Cabang (Multi-Branch Permission)</span>
-                        <span className="text-[10px] text-orange-400 font-normal">
-                          {allowedBranchIds.length === branches.length ? 'Semua Cabang' : `${allowedBranchIds.length} Cabang`}
-                        </span>
-                      </label>
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 p-2.5 rounded-xl bg-zinc-900 border border-zinc-800">
-                        {branches.map((b) => {
-                          const isChecked = allowedBranchIds.includes(b.id);
-                          return (
-                            <label
-                              key={b.id}
-                              className={`flex items-center gap-2 p-2 rounded-lg cursor-pointer transition text-xs ${
-                                isChecked
-                                  ? 'bg-orange-500/10 border border-orange-500/30 text-white font-medium'
-                                  : 'hover:bg-zinc-800 text-zinc-400 border border-transparent'
-                              }`}
-                            >
-                              <input
-                                type="checkbox"
-                                checked={isChecked}
-                                onChange={(e) => {
-                                  if (e.target.checked) {
-                                    setAllowedBranchIds([...allowedBranchIds, b.id]);
-                                  } else {
-                                    if (allowedBranchIds.length > 1) {
-                                      setAllowedBranchIds(allowedBranchIds.filter((id) => id !== b.id));
-                                    } else {
-                                      showToast('Peringatan', 'Minimal harus memilih satu cabang yang diizinkan.', 'warning');
-                                    }
-                                  }
-                                }}
-                                className="accent-orange-500 rounded"
-                              />
-                              <span className="truncate">[{b.code}] {b.name}</span>
-                            </label>
-                          );
-                        })}
-                      </div>
+                      {currentUser?.role === 'admin_cabang' ? (
+                        <div className="p-3 rounded-2xl bg-teal-500/10 border border-teal-500/30 text-teal-300 space-y-1">
+                          <div className="flex items-center gap-2">
+                            <Building2 className="w-4 h-4 text-teal-400 shrink-0" />
+                            <span className="font-bold text-xs">Penugasan Unit Kerja:</span>
+                            <span className="text-white font-extrabold">{branches.find((b) => b.id === (currentUser.branchId || personBranchId))?.name || 'Unit Cabang Anda'}</span>
+                          </div>
+                          <p className="text-[10px] text-teal-400/80">
+                            Sebagai Admin Cabang, wewenang Anda dikunci khusus untuk mendaftarkan dan mengelola staf di unit Anda sendiri.
+                          </p>
+                        </div>
+                      ) : (
+                        <>
+                          <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-wider mb-1 flex items-center justify-between">
+                            <span>Hak Akses Cabang (Multi-Branch Permission)</span>
+                            <span className="text-[10px] text-orange-400 font-normal">
+                              {allowedBranchIds.length === branches.length ? 'Semua Cabang' : `${allowedBranchIds.length} Cabang`}
+                            </span>
+                          </label>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 p-2.5 rounded-xl bg-zinc-900 border border-zinc-800">
+                            {branches.map((b) => {
+                              const isChecked = allowedBranchIds.includes(b.id);
+                              return (
+                                <label
+                                  key={b.id}
+                                  className={`flex items-center gap-2 p-2 rounded-lg cursor-pointer transition text-xs ${
+                                    isChecked
+                                      ? 'bg-orange-500/10 border border-orange-500/30 text-white font-medium'
+                                      : 'hover:bg-zinc-800 text-zinc-400 border border-transparent'
+                                  }`}
+                                >
+                                  <input
+                                    type="checkbox"
+                                    checked={isChecked}
+                                    onChange={(e) => {
+                                      if (e.target.checked) {
+                                        setAllowedBranchIds([...allowedBranchIds, b.id]);
+                                      } else {
+                                        if (allowedBranchIds.length > 1) {
+                                          setAllowedBranchIds(allowedBranchIds.filter((id) => id !== b.id));
+                                        } else {
+                                          showToast('Peringatan', 'Minimal harus memilih satu cabang yang diizinkan.', 'warning');
+                                        }
+                                      }
+                                    }}
+                                    className="accent-orange-500 rounded"
+                                  />
+                                  <span className="truncate">[{b.code}] {b.name}</span>
+                                </label>
+                              );
+                            })}
+                          </div>
+                        </>
+                      )}
                     </div>
                   </>
                 )}

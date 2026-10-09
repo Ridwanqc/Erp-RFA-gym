@@ -35,14 +35,17 @@ export const MultiBranchBar: React.FC<MultiBranchBarProps> = ({
 }) => {
   const { branches, activeBranchId, activeBranch, isAllBranches, setActiveBranchId, canUserAccessBranch } = useSettings();
 
-  const isSuperUser = !currentUser || currentUser.role === 'admin' || currentUser.role === 'manager';
-  const isBranchLocked = !isSuperUser && currentUser?.branchId && (!currentUser.allowedBranchIds || currentUser.allowedBranchIds.length <= 1);
+  const isSuperUser = currentUser?.role === 'admin';
+  const isAdminCabang = currentUser?.role === 'admin_cabang';
+  const isBranchLocked = !isSuperUser;
 
   return (
     <div
       className={`border-b transition-colors duration-200 ${
         isAllBranches
           ? 'bg-gradient-to-r from-amber-950/40 via-zinc-900 to-zinc-950 border-amber-500/30'
+          : isAdminCabang
+          ? 'bg-gradient-to-r from-teal-950/30 via-zinc-900 to-zinc-950 border-teal-500/30'
           : 'bg-zinc-900/80 border-zinc-800 backdrop-blur-sm'
       } px-3 sm:px-5 lg:px-6 py-2 ${className}`}
     >
@@ -68,23 +71,28 @@ export const MultiBranchBar: React.FC<MultiBranchBarProps> = ({
           ) : (
             <div className="flex items-center gap-2 min-w-0">
               <span className="flex h-2 w-2 relative">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                <span className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${isAdminCabang ? 'bg-teal-400' : 'bg-emerald-400'}`}></span>
+                <span className={`relative inline-flex rounded-full h-2 w-2 ${isAdminCabang ? 'bg-teal-500' : 'bg-emerald-500'}`}></span>
               </span>
               <div className="flex items-center gap-1.5 min-w-0">
-                <Building2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                <Building2 className={`w-4 h-4 shrink-0 ${isAdminCabang ? 'text-teal-400' : 'text-emerald-400'}`} />
                 <span className="text-xs font-black text-white truncate">
                   {activeBranch.name}
                 </span>
                 <span className="px-1.5 py-0.2 rounded text-[10px] font-mono font-bold bg-zinc-800 text-zinc-300 border border-zinc-700 shrink-0">
                   {activeBranch.code}
                 </span>
-                {activeBranch.isMainBranch && (
-                  <span className="px-1.5 py-0.2 rounded text-[9px] font-bold uppercase bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 shrink-0 hidden sm:inline">
-                    Pusat
+                {isAdminCabang && (
+                  <span className="px-2 py-0.5 rounded-full text-[9px] font-extrabold uppercase bg-teal-500/20 text-teal-300 border border-teal-500/40 shrink-0 flex items-center gap-1">
+                    🔒 Admin Unit Khusus
                   </span>
                 )}
-                {isBranchLocked && (
+                {activeBranch.isMainBranch && !isAdminCabang && (
+                  <span className="px-1.5 py-0.2 rounded text-[9px] font-bold uppercase bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 shrink-0 hidden sm:inline">
+                    Pusat (HQ)
+                  </span>
+                )}
+                {!isAdminCabang && isBranchLocked && (
                   <span className="px-1.5 py-0.2 rounded text-[9px] font-bold uppercase bg-amber-500/15 text-amber-300 border border-amber-500/30 shrink-0 flex items-center gap-0.5">
                     🔒 Unit Kerja
                   </span>
@@ -117,7 +125,14 @@ export const MultiBranchBar: React.FC<MultiBranchBarProps> = ({
 
         {/* Right: Quick Switcher Pills */}
         <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5 scrollbar-none shrink-0">
-          {isBranchLocked ? (
+          {isAdminCabang ? (
+            <div className="text-[11px] bg-teal-950/80 border border-teal-500/30 text-teal-300 px-3 py-1 rounded-xl flex items-center gap-2 shadow-sm">
+              <span className="w-1.5 h-1.5 rounded-full bg-teal-400 animate-pulse" />
+              <span className="text-zinc-400 text-[10px]">Wewenang Unit:</span>
+              <span className="font-extrabold text-white">{activeBranch.name}</span>
+              <span className="text-[9px] text-teal-400 hidden lg:inline font-mono">(Hanya Unit Ini)</span>
+            </div>
+          ) : isBranchLocked ? (
             <div className="text-[11px] text-zinc-400 bg-zinc-800/80 px-2.5 py-1 rounded-lg border border-zinc-700 flex items-center gap-1.5">
               <span className="text-zinc-500 text-[10px]">Akses Cabang:</span>
               <span className="font-bold text-emerald-400">{activeBranch.name}</span>

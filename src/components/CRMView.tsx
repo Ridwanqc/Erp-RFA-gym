@@ -174,7 +174,7 @@ export const CRMView: React.FC<CRMViewProps> = ({
   const picProtection = settings.picProtection || DEFAULT_PIC_PROTECTION;
   const isLeadHandoverPasswordRequired =
     picProtection.requirePasswordToChangePic && (picProtection.requirePasswordOnLeadHandover !== false);
-  const isAdminOrManager = currentUser?.role === 'admin' || currentUser?.role === 'manager';
+  const isAdminOrManager = currentUser?.role === 'admin' || currentUser?.role === 'admin_cabang' || currentUser?.role === 'manager';
 
   // Handover / Oper Alih PIC modal state
   const [selectedLeadForHandover, setSelectedLeadForHandover] = useState<Lead | null>(null);

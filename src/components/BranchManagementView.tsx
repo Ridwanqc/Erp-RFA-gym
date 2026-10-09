@@ -59,10 +59,16 @@ export const BranchManagementView: React.FC<BranchManagementViewProps> = ({
   const [editingBranch, setEditingBranch] = useState<GymBranch | null>(null);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
 
-  const isSuperAdmin = currentUser?.role === 'admin' || currentUser?.role === 'manager';
+  const isSuperAdmin = currentUser?.role === 'admin';
+  const isAdminCabang = currentUser?.role === 'admin_cabang';
+  const canEditCurrentBranch = isSuperAdmin || (isAdminCabang && editingBranch?.id === currentUser?.branchId);
 
-  // Filtered branches
+  // Filtered branches: for non-admin (Admin Cabang & staf), strictly limit to their own unit
   const filteredBranches = branches.filter((b) => {
+    if (!isSuperAdmin) {
+      const userBranch = currentUser?.branchId || 'BR-001';
+      if (b.id !== userBranch) return false;
+    }
     const matchesSearch =
       b.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       b.code.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -423,18 +429,19 @@ export const BranchManagementView: React.FC<BranchManagementViewProps> = ({
                     )}
 
                     {/* Edit Button */}
-                    {isSuperAdmin && (
+                    {(isSuperAdmin || (isAdminCabang && branch.id === currentUser?.branchId)) && (
                       <button
                         type="button"
                         onClick={() => handleOpenEditModal(branch)}
-                        className="p-2.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-white transition border border-zinc-700 cursor-pointer"
-                        title="Edit Informasi Cabang"
+                        className="p-2.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-teal-400 hover:text-teal-300 transition border border-zinc-700 cursor-pointer flex items-center gap-1.5 px-3 text-xs font-bold"
+                        title="Edit Informasi & Kontak Cabang"
                       >
-                        <Edit2 className="w-4 h-4" />
+                        <Edit2 className="w-3.5 h-3.5" />
+                        <span>Edit Unit</span>
                       </button>
                     )}
 
-                    {/* Delete button or Set HQ */}
+                    {/* Delete button (Super Admin only) */}
                     {isSuperAdmin && !branch.isMainBranch && (
                       <button
                         type="button"

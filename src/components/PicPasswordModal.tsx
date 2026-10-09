@@ -34,7 +34,7 @@ export const PicPasswordModal: React.FC<PicPasswordModalProps> = ({
   const [isShaking, setIsShaking] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  const isAdmin = currentUser?.role === 'admin' || currentUser?.role === 'manager';
+  const isAdmin = currentUser?.role === 'admin' || currentUser?.role === 'admin_cabang' || currentUser?.role === 'manager';
   const canBypass = isAdmin && picProtection.allowAdminBypass;
 
   useEffect(() => {

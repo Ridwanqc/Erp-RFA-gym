@@ -69,7 +69,8 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin, staffUsers, onBac
         const idMatch = u.id?.toLowerCase() === cleanUsername;
         const nameMatch = u.name?.toLowerCase() === cleanUsername;
         const phoneMatch = u.phone?.replace(/[^0-9]/g, '') === cleanUsername.replace(/[^0-9]/g, '');
-        return accMatch || idMatch || nameMatch || phoneMatch;
+        const roleAlias = (cleanUsername === 'admin_cabang' && u.role === 'admin_cabang');
+        return accMatch || idMatch || nameMatch || phoneMatch || roleAlias;
       });
 
       if (!matchedUser) {
@@ -387,6 +388,145 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin, staffUsers, onBac
                   </svg>
                   <span>Masuk dengan Google (Firebase Auth)</span>
                 </button>
+
+                {/* Quick Demo Role Selector (1-Click Login) */}
+                <div className="pt-4 mt-2 border-t border-zinc-800">
+                  <div className="flex items-center justify-between mb-2.5">
+                    <span className="text-[11px] font-black uppercase tracking-wider text-zinc-400 flex items-center gap-1.5">
+                      <Sparkles className="w-3.5 h-3.5 text-orange-400" />
+                      <span>Uji Coba Cepat (Akun Demo Staf):</span>
+                    </span>
+                    <span className="text-[10px] text-zinc-500 font-mono">Password: 123</span>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    {/* Super Admin HQ */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const target = staffUsers.find((u) => u.accId === 'admin') || staffUsers[0];
+                        if (target) onLogin(target, rememberMe);
+                      }}
+                      className="p-2.5 rounded-2xl bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/30 text-left transition flex items-start gap-2.5 group cursor-pointer"
+                    >
+                      <div className="w-8 h-8 rounded-xl bg-rose-500/20 text-rose-300 border border-rose-500/30 flex items-center justify-center font-black text-xs shrink-0 group-hover:scale-105 transition">
+                        👑
+                      </div>
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-1">
+                          <p className="text-xs font-bold text-white group-hover:text-rose-300 transition truncate">
+                            Admin Utama (HQ)
+                          </p>
+                        </div>
+                        <p className="text-[10px] text-zinc-400 truncate">Semua Cabang (Konsolidasi)</p>
+                      </div>
+                    </button>
+
+                    {/* Admin Cabang KGD */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const target = staffUsers.find((u) => u.accId === 'admin_kgd') ||
+                          staffUsers.find((u) => u.role === 'admin_cabang' && u.branchId === 'BR-001') ||
+                          staffUsers.find((u) => u.role === 'admin_cabang');
+                        if (target) onLogin(target, rememberMe);
+                      }}
+                      className="p-2.5 rounded-2xl bg-teal-500/10 hover:bg-teal-500/20 border border-teal-500/30 text-left transition flex items-start gap-2.5 group cursor-pointer"
+                    >
+                      <div className="w-8 h-8 rounded-xl bg-teal-500/20 text-teal-300 border border-teal-500/30 flex items-center justify-center font-black text-xs shrink-0 group-hover:scale-105 transition">
+                        🏢
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-xs font-bold text-white group-hover:text-teal-300 transition truncate">
+                          Admin Cabang KGD
+                        </p>
+                        <p className="text-[10px] text-teal-400/80 truncate">Terkunci Unit Kelapa Gading</p>
+                      </div>
+                    </button>
+
+                    {/* Admin Cabang Senopati */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const target = staffUsers.find((u) => u.accId === 'admin_senopati') ||
+                          staffUsers.find((u) => u.role === 'admin_cabang' && u.branchId === 'BR-002');
+                        if (target) onLogin(target, rememberMe);
+                      }}
+                      className="p-2.5 rounded-2xl bg-teal-500/10 hover:bg-teal-500/20 border border-teal-500/30 text-left transition flex items-start gap-2.5 group cursor-pointer"
+                    >
+                      <div className="w-8 h-8 rounded-xl bg-teal-500/20 text-teal-300 border border-teal-500/30 flex items-center justify-center font-black text-xs shrink-0 group-hover:scale-105 transition">
+                        🏢
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-xs font-bold text-white group-hover:text-teal-300 transition truncate">
+                          Admin Cabang Senopati
+                        </p>
+                        <p className="text-[10px] text-teal-400/80 truncate">Terkunci Unit Senopati</p>
+                      </div>
+                    </button>
+
+                    {/* Admin Cabang BSD */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const target = staffUsers.find((u) => u.accId === 'admin_bsd') ||
+                          staffUsers.find((u) => u.role === 'admin_cabang' && u.branchId === 'BR-003');
+                        if (target) onLogin(target, rememberMe);
+                      }}
+                      className="p-2.5 rounded-2xl bg-teal-500/10 hover:bg-teal-500/20 border border-teal-500/30 text-left transition flex items-start gap-2.5 group cursor-pointer"
+                    >
+                      <div className="w-8 h-8 rounded-xl bg-teal-500/20 text-teal-300 border border-teal-500/30 flex items-center justify-center font-black text-xs shrink-0 group-hover:scale-105 transition">
+                        🏢
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-xs font-bold text-white group-hover:text-teal-300 transition truncate">
+                          Admin Cabang BSD
+                        </p>
+                        <p className="text-[10px] text-teal-400/80 truncate">Terkunci Unit BSD</p>
+                      </div>
+                    </button>
+
+                    {/* Kasir KGD */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const target = staffUsers.find((u) => u.accId === 'kasir') || staffUsers.find((u) => u.role === 'kasir');
+                        if (target) onLogin(target, rememberMe);
+                      }}
+                      className="p-2.5 rounded-2xl bg-blue-500/10 hover:bg-blue-500/20 border border-blue-500/30 text-left transition flex items-start gap-2.5 group cursor-pointer"
+                    >
+                      <div className="w-8 h-8 rounded-xl bg-blue-500/20 text-blue-300 border border-blue-500/30 flex items-center justify-center font-black text-xs shrink-0 group-hover:scale-105 transition">
+                        💳
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-xs font-bold text-white group-hover:text-blue-300 transition truncate">
+                          Kasir POS & Front Desk
+                        </p>
+                        <p className="text-[10px] text-zinc-400 truncate">Operasional Kasir & Presensi</p>
+                      </div>
+                    </button>
+
+                    {/* PT Coach */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const target = staffUsers.find((u) => u.accId === 'pt') || staffUsers.find((u) => u.role === 'pt');
+                        if (target) onLogin(target, rememberMe);
+                      }}
+                      className="p-2.5 rounded-2xl bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 text-left transition flex items-start gap-2.5 group cursor-pointer"
+                    >
+                      <div className="w-8 h-8 rounded-xl bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 flex items-center justify-center font-black text-xs shrink-0 group-hover:scale-105 transition">
+                        🏋️
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-xs font-bold text-white group-hover:text-emerald-300 transition truncate">
+                          Personal Trainer (PT)
+                        </p>
+                        <p className="text-[10px] text-zinc-400 truncate">Portal Sesi Latihan Klien</p>
+                      </div>
+                    </button>
+                  </div>
+                </div>
               </form>
             </div>
 

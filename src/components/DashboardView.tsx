@@ -47,6 +47,7 @@ interface DashboardViewProps {
   schedules: Schedule[];
   members?: Member[];
   products?: Product[];
+  currentUser?: any;
   onAddStock?: (prodId: string, qtyToAdd: number) => void;
   onNavigateTab: (tab: any) => void;
   onPayPiutang?: (trxId: string) => void;
@@ -58,10 +59,14 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   schedules,
   members = [],
   products = [],
+  currentUser,
   onAddStock,
   onNavigateTab,
   onPayPiutang
 }) => {
+  const { activeBranch, isAllBranches } = useSettings();
+  const isAdminCabang = currentUser?.role === 'admin_cabang';
+  const isSuperAdmin = currentUser?.role === 'admin';
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
   // Low stock UI states (< 5 items)
@@ -447,6 +452,63 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
   return (
     <div className="space-y-6 max-w-7xl mx-auto">
+      {/* Branch Access Scope Identity Banner */}
+      {isAdminCabang ? (
+        <div className="bg-gradient-to-r from-teal-950/70 via-zinc-900 to-zinc-900 border border-teal-500/35 rounded-3xl p-5 sm:p-6 shadow-xl flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="flex items-start sm:items-center gap-3.5">
+            <div className="w-12 h-12 rounded-2xl bg-teal-500/20 text-teal-300 border border-teal-500/30 flex items-center justify-center font-black text-xl shrink-0 shadow-inner">
+              🏢
+            </div>
+            <div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <h3 className="text-base sm:text-lg font-black text-white tracking-tight">
+                  Dashboard Operasional Unit Cabang: {activeBranch.name}
+                </h3>
+                <span className="text-[10px] bg-teal-500/20 text-teal-300 border border-teal-500/40 px-2 py-0.5 rounded-full font-mono font-bold">
+                  {activeBranch.code}
+                </span>
+              </div>
+              <p className="text-xs text-zinc-400 mt-0.5 max-w-2xl">
+                Wewenang Anda dikunci khusus untuk mengetahui dan mengatur operasional di unit kerja <strong className="text-white">{activeBranch.name}</strong> ({activeBranch.city}).
+              </p>
+            </div>
+          </div>
+          <div className="self-start sm:self-auto shrink-0 flex items-center gap-2">
+            <span className="text-[11px] text-teal-300 bg-teal-950/90 border border-teal-500/40 px-3 py-1.5 rounded-xl font-bold flex items-center gap-1.5 shadow-sm">
+              <span className="w-2 h-2 rounded-full bg-teal-400 animate-pulse" />
+              <span>Akses Khusus: Admin Cabang</span>
+            </span>
+          </div>
+        </div>
+      ) : isAllBranches ? (
+        <div className="bg-gradient-to-r from-amber-950/70 via-zinc-900 to-zinc-900 border border-amber-500/35 rounded-3xl p-5 sm:p-6 shadow-xl flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="flex items-start sm:items-center gap-3.5">
+            <div className="w-12 h-12 rounded-2xl bg-amber-500/20 text-amber-300 border border-amber-500/30 flex items-center justify-center font-black text-xl shrink-0 shadow-inner">
+              👑
+            </div>
+            <div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <h3 className="text-base sm:text-lg font-black text-white tracking-tight">
+                  Dashboard Eksekutif Holding Pusat (Konsolidasi Multi-Cabang)
+                </h3>
+                <span className="text-[10px] bg-amber-500/20 text-amber-300 border border-amber-500/40 px-2 py-0.5 rounded-full font-mono font-bold">
+                  HQ PUSAT
+                </span>
+              </div>
+              <p className="text-xs text-zinc-400 mt-0.5 max-w-2xl">
+                Menampilkan performa keuangan dan keanggotaan gabungan seluruh unit outlet dalam jaringan GymPro ERP.
+              </p>
+            </div>
+          </div>
+          <div className="self-start sm:self-auto shrink-0 flex items-center gap-2">
+            <span className="text-[11px] text-amber-300 bg-amber-950/90 border border-amber-500/40 px-3 py-1.5 rounded-xl font-bold flex items-center gap-1.5 shadow-sm">
+              <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
+              <span>Akses Penuh: Super Admin</span>
+            </span>
+          </div>
+        </div>
+      ) : null}
+
       {/* ========================================================================= */}
       {/* BUSINESS HEALTH COMPONENT                                                 */}
       {/* Displays key metrics: Total Active Members, Daily Revenue,               */}

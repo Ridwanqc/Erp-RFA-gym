@@ -52,8 +52,15 @@ export const POSView: React.FC<POSViewProps> = ({
   const [selectedCat, setSelectedCat] = useState('all');
   const [showOnlyLowStock, setShowOnlyLowStock] = useState(false);
   const [isLowStockAlertExpanded, setIsLowStockAlertExpanded] = useState(false);
-  const [paymentMethod, setPaymentMethod] = useState<'Tunai' | 'QRIS' | 'Transfer' | 'EDC' | 'Kasbon'>('Tunai');
+  const [paymentMethod, setPaymentMethod] = useState<'Tunai' | 'QRIS' | 'Transfer' | 'EDC' | 'Kasbon' | 'Split Payment'>('Tunai');
   const [kasbonBorrower, setKasbonBorrower] = useState('');
+  const [selectedBankDest, setSelectedBankDest] = useState<'Artha Graha' | 'Mandiri'>('Artha Graha');
+
+  // Split Payment multi-bank state
+  const [splitCashAmount, setSplitCashAmount] = useState<string>('');
+  const [splitNonCashAmount, setSplitNonCashAmount] = useState<string>('');
+  const [splitNonCashMethod, setSplitNonCashMethod] = useState<string>('EDC Mandiri');
+  const [splitBankDest, setSplitBankDest] = useState<'Artha Graha' | 'Mandiri'>('Mandiri');
 
   // Modals
   const [isAddProdOpen, setIsAddProdOpen] = useState(false);
@@ -142,9 +149,27 @@ export const POSView: React.FC<POSViewProps> = ({
       return;
     }
 
+    if (paymentMethod === 'Split Payment') {
+      const cashVal = Number(splitCashAmount) || 0;
+      const nonCashVal = Number(splitNonCashAmount) || 0;
+      if (cashVal + nonCashVal !== totalCart) {
+        showToast(
+          'Split Payment Tidak Sesuai',
+          `Total pembayaran split (${formatRp(cashVal + nonCashVal)}) harus sama dengan total tagihan (${formatRp(totalCart)}). Selisih: ${formatRp(Math.abs(totalCart - (cashVal + nonCashVal)))}.`,
+          'error'
+        );
+        return;
+      }
+    }
+
     const isKasbon = paymentMethod === 'Kasbon';
+    const isSplit = paymentMethod === 'Split Payment';
     const status = isKasbon ? 'BELUM LUNAS' : 'Paid';
     const customerName = isKasbon ? kasbonBorrower.trim() : 'Walk-in Guest';
+
+    const cashVal = isSplit ? (Number(splitCashAmount) || 0) : paymentMethod === 'Tunai' ? totalCart : 0;
+    const nonCashVal = isSplit ? (Number(splitNonCashAmount) || 0) : paymentMethod !== 'Tunai' && !isKasbon ? totalCart : 0;
+    const finalBankDest = isSplit ? splitBankDest : (paymentMethod === 'Tunai' || paymentMethod === 'Kasbon') ? 'Artha Graha' : selectedBankDest;
 
     const newTrx: Transaction = {
       id: 'TRX-' + Math.floor(100000 + Math.random() * 900000),
@@ -160,10 +185,14 @@ export const POSView: React.FC<POSViewProps> = ({
       dueDate: isKasbon ? '2026-09-25' : '-',
       cogs: totalCogs,
       profit: totalCart - totalCogs,
-      method: paymentMethod,
+      method: isSplit ? 'Split Payment' : paymentMethod,
+      paymentScheme: isSplit ? 'SPLIT_PAYMENT' : 'LUNAS',
+      splitCashAmount: isSplit ? cashVal : undefined,
+      splitNonCashAmount: isSplit ? nonCashVal : undefined,
+      splitNonCashMethod: isSplit ? splitNonCashMethod : undefined,
       status: status,
       cashier: currentUser?.name || 'Kasir',
-      bankDest: 'Artha Graha',
+      bankDest: finalBankDest,
       itemsJSON: JSON.stringify(cart),
       initialCashPaid: isKasbon ? 0 : totalCart
     };
@@ -536,20 +565,158 @@ export const POSView: React.FC<POSViewProps> = ({
           <div className="p-4 border-t border-zinc-800 bg-zinc-950/60 shrink-0 space-y-3">
             <div>
               <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-wider mb-1.5 ml-1">
-                Metode Pembayaran (Rek. Bank Artha Graha)
+                Metode Pembayaran
               </label>
               <select
                 value={paymentMethod}
-                onChange={(e) => setPaymentMethod(e.target.value as any)}
+                onChange={(e) => {
+                  const val = e.target.value as any;
+                  setPaymentMethod(val);
+                  if (val === 'Split Payment') {
+                    // Pre-fill default 50:50 or cash 0 and non-cash total
+                    const half = Math.floor(totalCart / 2);
+                    setSplitCashAmount(String(half));
+                    setSplitNonCashAmount(String(totalCart - half));
+                  }
+                }}
                 className="w-full bg-zinc-900 border border-zinc-700 rounded-xl px-3.5 py-2.5 text-xs font-bold text-white outline-none focus:border-orange-500"
               >
                 <option value="Tunai">Tunai / Cash Laci</option>
-                <option value="QRIS">QRIS / E-Wallet</option>
+                <option value="QRIS">QRIS / E-Wallet (Artha Graha)</option>
                 <option value="Transfer">Transfer Bank</option>
                 <option value="EDC">Debit / Kartu EDC</option>
+                <option value="Split Payment">Split Payment (Multi-Metode / Multi-Bank)</option>
                 <option value="Kasbon">Bayar Nanti (Kasbon Piutang)</option>
               </select>
             </div>
+
+            {/* Pilihan Bank untuk Transfer & EDC */}
+            {(paymentMethod === 'Transfer' || paymentMethod === 'EDC') && (
+              <div className="animate-in fade-in space-y-1">
+                <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-wider ml-1">
+                  Rekening / EDC Tujuan
+                </label>
+                <select
+                  value={selectedBankDest}
+                  onChange={(e) => setSelectedBankDest(e.target.value as any)}
+                  className="w-full bg-zinc-900 border border-zinc-700 rounded-xl px-3.5 py-2 text-xs font-bold text-white outline-none focus:border-orange-500"
+                >
+                  <option value="Artha Graha">Bank Artha Graha (Utama)</option>
+                  <option value="Mandiri">Bank Mandiri</option>
+                </select>
+              </div>
+            )}
+
+            {/* SPLIT PAYMENT CONTROLS */}
+            {paymentMethod === 'Split Payment' && (
+              <div className="p-3 rounded-xl bg-orange-500/10 border border-orange-500/30 space-y-2.5 animate-in fade-in">
+                <div className="flex items-center justify-between text-[11px] font-bold text-orange-400">
+                  <span>Rincian Split Payment</span>
+                  <span className="font-mono text-white">{formatRp(totalCart)}</span>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="block text-[9.5px] font-bold text-zinc-300 uppercase mb-1">
+                      1. Kas Tunai (Rp)
+                    </label>
+                    <input
+                      type="number"
+                      value={splitCashAmount}
+                      onChange={(e) => setSplitCashAmount(e.target.value)}
+                      placeholder="0"
+                      className="w-full bg-zinc-950 border border-zinc-700 rounded-lg px-2.5 py-1.5 text-xs font-bold text-white outline-none focus:border-orange-500"
+                    />
+                  </div>
+
+                  <div>
+                    <div className="flex justify-between items-center mb-1">
+                      <label className="text-[9.5px] font-bold text-zinc-300 uppercase">
+                        2. Non-Tunai (Rp)
+                      </label>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const cash = Number(splitCashAmount) || 0;
+                          setSplitNonCashAmount(String(Math.max(0, totalCart - cash)));
+                        }}
+                        className="text-[9px] text-orange-400 hover:text-orange-300 font-bold underline"
+                      >
+                        Sisa Otomatis
+                      </button>
+                    </div>
+                    <input
+                      type="number"
+                      value={splitNonCashAmount}
+                      onChange={(e) => setSplitNonCashAmount(e.target.value)}
+                      placeholder="0"
+                      className="w-full bg-zinc-950 border border-zinc-700 rounded-lg px-2.5 py-1.5 text-xs font-bold text-white outline-none focus:border-orange-500"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="block text-[9.5px] font-bold text-zinc-400 uppercase mb-1">
+                      Metode Non-Tunai
+                    </label>
+                    <select
+                      value={splitNonCashMethod}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setSplitNonCashMethod(val);
+                        if (val.includes('Mandiri')) setSplitBankDest('Mandiri');
+                        else setSplitBankDest('Artha Graha');
+                      }}
+                      className="w-full bg-zinc-950 border border-zinc-700 rounded-lg px-2 py-1.5 text-[11px] font-bold text-white outline-none"
+                    >
+                      <option value="EDC Mandiri">EDC Mandiri</option>
+                      <option value="EDC Artha Graha">EDC Artha Graha</option>
+                      <option value="Transfer Mandiri">Transfer Mandiri</option>
+                      <option value="Transfer Artha Graha">Transfer Artha Graha</option>
+                      <option value="QRIS Artha Graha">QRIS Artha Graha</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-[9.5px] font-bold text-zinc-400 uppercase mb-1">
+                      Bank Terpilih
+                    </label>
+                    <select
+                      value={splitBankDest}
+                      onChange={(e) => setSplitBankDest(e.target.value as any)}
+                      className="w-full bg-zinc-950 border border-zinc-700 rounded-lg px-2 py-1.5 text-[11px] font-bold text-white outline-none"
+                    >
+                      <option value="Mandiri">Bank Mandiri</option>
+                      <option value="Artha Graha">Bank Artha Graha</option>
+                    </select>
+                  </div>
+                </div>
+
+                {/* Balance validation indicator */}
+                {(() => {
+                  const cash = Number(splitCashAmount) || 0;
+                  const nonCash = Number(splitNonCashAmount) || 0;
+                  const totalSplit = cash + nonCash;
+                  const diff = totalCart - totalSplit;
+
+                  if (diff === 0) {
+                    return (
+                      <div className="p-1.5 rounded-lg bg-emerald-500/20 text-emerald-300 text-[10px] font-bold flex items-center justify-between">
+                        <span>✓ Total Pas: {formatRp(totalSplit)}</span>
+                        <span>Siap Checkout</span>
+                      </div>
+                    );
+                  }
+                  return (
+                    <div className="p-1.5 rounded-lg bg-rose-500/20 text-rose-300 text-[10px] font-bold flex items-center justify-between">
+                      <span>Total: {formatRp(totalSplit)}</span>
+                      <span>{diff > 0 ? `Kurang ${formatRp(diff)}` : `Kelebihan ${formatRp(Math.abs(diff))}`}</span>
+                    </div>
+                  );
+                })()}
+              </div>
+            )}
 
             {/* Input name for Kasbon */}
             {paymentMethod === 'Kasbon' && (

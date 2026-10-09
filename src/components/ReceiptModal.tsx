@@ -432,12 +432,15 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({
       text += `--------------------------------\n`;
       text += `Total Transaksi : ${closingRecord.trxCount} Trx\n`;
       text += `Total Omset     : *${formatRp(closingRecord.revenue)}*\n`;
+      if ((closingRecord.openingFloat || closingRecord.modalAwal) !== undefined) {
+        text += `Modal Awal Laci : ${formatRp(closingRecord.openingFloat || closingRecord.modalAwal || 0)}\n`;
+      }
       text += `Penerimaan Cash : ${formatRp(closingRecord.tunai)}\n`;
       text += `Non-Tunai       : ${formatRp(closingRecord.nonTunai)}\n`;
-      text += `Petty Cash Out  : -${formatRp(closingRecord.pettyCash)}\n`;
-      text += `Saldo Teoretis  : ${formatRp(closingRecord.systemSaldo)}\n`;
-      text += `Fisik Kas Laci  : *${formatRp(closingRecord.actualCash)}*\n`;
-      text += `Selisih Kas     : *${closingRecord.difference === 0 ? 'SESUAI (Rp 0)' : formatRp(closingRecord.difference)}*\n`;
+      text += `Petty Cash Out  : -${formatRp(closingRecord.pettyCash || closingRecord.pettyExpenses || 0)}\n`;
+      text += `Kas Seharusnya  : ${formatRp(closingRecord.expectedCash || closingRecord.systemSaldo || 0)}\n`;
+      text += `Fisik Kas Laci  : *${formatRp(closingRecord.physicalCash || closingRecord.actualCash || 0)}*\n`;
+      text += `Selisih Kas     : *${(closingRecord.variance || closingRecord.difference || 0) === 0 ? 'SESUAI (Rp 0)' : formatRp(closingRecord.variance || closingRecord.difference || 0)}*\n`;
     }
 
     text += `*==============================*\n`;
@@ -844,6 +847,12 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({
                     <span className="text-zinc-600">Total Omset Penjualan</span>
                     <span className="font-black text-black">{formatRp(closingRecord.revenue)}</span>
                   </div>
+                  {((closingRecord.openingFloat || closingRecord.modalAwal) !== undefined) && (
+                    <div className="flex justify-between">
+                      <span className="text-zinc-600">• Modal Awal Laci (Float)</span>
+                      <span className="font-semibold text-black">{formatRp(closingRecord.openingFloat || closingRecord.modalAwal || 0)}</span>
+                    </div>
+                  )}
                   <div className="flex justify-between">
                     <span className="text-zinc-600">• Penerimaan Kas Tunai</span>
                     <span className="font-semibold text-black">{formatRp(closingRecord.tunai)}</span>
@@ -854,21 +863,21 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({
                   </div>
                   <div className="flex justify-between">
                     <span className="text-zinc-600">• Pengeluaran Kas Kecil</span>
-                    <span className="font-semibold text-red-700">- {formatRp(closingRecord.pettyCash)}</span>
+                    <span className="font-semibold text-red-700">- {formatRp(closingRecord.pettyCash || closingRecord.pettyExpenses || 0)}</span>
                   </div>
                   <div className="receipt-divider" />
                   <div className="flex justify-between font-bold">
-                    <span>Saldo Teoretis Laci</span>
-                    <span>{formatRp(closingRecord.systemSaldo)}</span>
+                    <span>Kas Seharusnya di Laci</span>
+                    <span>{formatRp(closingRecord.expectedCash || closingRecord.systemSaldo || 0)}</span>
                   </div>
                   <div className="flex justify-between font-bold">
                     <span>Kas Fisik Aktual di Laci</span>
-                    <span>{formatRp(closingRecord.actualCash)}</span>
+                    <span>{formatRp(closingRecord.physicalCash || closingRecord.actualCash || 0)}</span>
                   </div>
                   <div className="flex justify-between font-black text-xs pt-0.5">
                     <span>Selisih Rekonsiliasi</span>
-                    <span className={closingRecord.difference === 0 ? 'text-black' : 'text-red-700'}>
-                      {closingRecord.difference === 0 ? '✓ SESUAI (Rp 0)' : formatRp(closingRecord.difference)}
+                    <span className={(closingRecord.variance || closingRecord.difference || 0) === 0 ? 'text-black' : 'text-red-700'}>
+                      {(closingRecord.variance || closingRecord.difference || 0) === 0 ? '✓ SESUAI (Rp 0)' : formatRp(closingRecord.variance || closingRecord.difference || 0)}
                     </span>
                   </div>
                 </div>

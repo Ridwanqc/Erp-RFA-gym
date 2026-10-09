@@ -20,11 +20,25 @@ import {
   PlusCircle,
   CreditCard,
   Building2,
-  Award
+  Award,
+  Activity,
+  Scale,
+  Flame,
+  TrendingDown,
+  TrendingUp,
+  Heart,
+  Droplets,
+  Ruler,
+  Dumbbell,
+  Plus,
+  ChevronRight,
+  FileText
 } from 'lucide-react';
-import { Member } from '../../types';
+import { Member, BodyCompositionRecord, PTPurchaseRecord, PTBooking, Schedule, User as UserType, TrainerChangeRequest, PTBackofficeNotification } from '../../types';
 import { OnlineReservation } from '../../types/landingTypes';
-import { APP_TODAY } from '../../utils/formatters';
+import { APP_TODAY, formatDateIndo } from '../../utils/formatters';
+import { calculateBMI, getBMICategory, calculateEstimatedBMR } from '../../data/bodyCompositionData';
+import { MemberPTBookingSection } from './MemberPTBookingSection';
 
 interface MemberPortalModalProps {
   isOpen: boolean;
@@ -36,6 +50,24 @@ interface MemberPortalModalProps {
   reservations: OnlineReservation[];
   onCancelReservation: (resId: string) => void;
   onOpenNewReservation: () => void;
+  bodyCompositionRecords?: BodyCompositionRecord[];
+  onSaveBodyCompositionRecord?: (record: BodyCompositionRecord) => void;
+  ptPurchases?: PTPurchaseRecord[];
+  bookings?: PTBooking[];
+  schedules?: Schedule[];
+  trainers?: UserType[];
+  trainerChangeRequests?: TrainerChangeRequest[];
+  onAddBooking?: (booking: PTBooking, notification: PTBackofficeNotification) => void;
+  onRescheduleBooking?: (
+    bookingId: string,
+    newDate: string,
+    newStartTime: string,
+    newEndTime: string,
+    notes?: string
+  ) => void;
+  onCancelBooking?: (bookingId: string, reason?: string) => void;
+  onRequestChangeTrainer?: (request: TrainerChangeRequest) => void;
+  showToast?: (title: string, message: string, type: 'success' | 'error' | 'warning' | 'info') => void;
 }
 
 export const MemberPortalModal: React.FC<MemberPortalModalProps> = ({
@@ -47,20 +79,197 @@ export const MemberPortalModal: React.FC<MemberPortalModalProps> = ({
   onLogoutMember,
   reservations,
   onCancelReservation,
-  onOpenNewReservation
+  onOpenNewReservation,
+  bodyCompositionRecords = [],
+  onSaveBodyCompositionRecord,
+  ptPurchases = [],
+  bookings = [],
+  schedules = [],
+  trainers = [],
+  trainerChangeRequests = [],
+  onAddBooking,
+  onRescheduleBooking,
+  onCancelBooking,
+  onRequestChangeTrainer,
+  showToast
 }) => {
   // Login input
   const [loginInput, setLoginInput] = useState('');
   const [loginError, setLoginError] = useState<string | null>(null);
 
   // Tab in Member Area
-  const [activeTab, setActiveTab] = useState<'profile' | 'active-tickets' | 'history'>('profile');
+  const [activeTab, setActiveTab] = useState<'profile' | 'pt-schedule' | 'body-comp' | 'active-tickets' | 'history'>('profile');
   const [statusFilter, setStatusFilter] = useState<'ALL' | 'CONFIRMED' | 'COMPLETED' | 'CANCELLED'>('ALL');
 
   // Selected ticket for enlarged QR view
   const [viewTicketModal, setViewTicketModal] = useState<OnlineReservation | null>(null);
   const passQrCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const ticketQrCanvasRef = useRef<HTMLCanvasElement | null>(null);
+
+  // Body Composition state
+  const [isAddBodyCompModalOpen, setIsAddBodyCompModalOpen] = useState(false);
+  const [saveSuccessMsg, setSaveSuccessMsg] = useState<string | null>(null);
+
+  // Self-input form fields
+  const [selfDate, setSelfDate] = useState(APP_TODAY);
+  const [selfWeight, setSelfWeight] = useState('');
+  const [selfHeight, setSelfHeight] = useState('170');
+  const [selfBodyFat, setSelfBodyFat] = useState('');
+  const [selfMuscle, setSelfMuscle] = useState('');
+  const [selfVisceral, setSelfVisceral] = useState('');
+  const [selfWaist, setSelfWaist] = useState('');
+  const [selfChest, setSelfChest] = useState('');
+  const [selfHips, setSelfHips] = useState('');
+  const [selfArm, setSelfArm] = useState('');
+  const [selfThigh, setSelfThigh] = useState('');
+  const [selfBP, setSelfBP] = useState('120/80');
+  const [selfRHR, setSelfRHR] = useState('72');
+  const [selfTargetWeight, setSelfTargetWeight] = useState('');
+  const [selfFitnessGoal, setSelfFitnessGoal] = useState<'Weight Loss' | 'Muscle Gain' | 'General Fitness' | 'Endurance'>('Weight Loss');
+  const [selfNotes, setSelfNotes] = useState('');
+
+  // Records for currently logged-in member
+  const memberBodyRecords = (bodyCompositionRecords || [])
+    .filter((r) => loggedInMember && r.memberId === loggedInMember.id)
+    .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+
+  const memberBodyRecordsDesc = [...memberBodyRecords].reverse();
+  const initialBodyRecord = memberBodyRecords.length > 0 ? memberBodyRecords[0] : null;
+  const latestBodyRecord = memberBodyRecords.length > 0 ? memberBodyRecords[memberBodyRecords.length - 1] : null;
+
+  const weightDelta = initialBodyRecord && latestBodyRecord
+    ? Math.round((latestBodyRecord.weight - initialBodyRecord.weight) * 10) / 10
+    : 0;
+
+  const bodyFatDelta = initialBodyRecord?.bodyFatPercentage && latestBodyRecord?.bodyFatPercentage
+    ? Math.round((latestBodyRecord.bodyFatPercentage - initialBodyRecord.bodyFatPercentage) * 10) / 10
+    : null;
+
+  const muscleDelta = initialBodyRecord?.muscleMass && latestBodyRecord?.muscleMass
+    ? Math.round((latestBodyRecord.muscleMass - initialBodyRecord.muscleMass) * 10) / 10
+    : null;
+
+  // Live calculation for self-input modal
+  const computedSelfBMI = calculateBMI(Number(selfWeight), Number(selfHeight));
+  const computedSelfBMICategory = getBMICategory(computedSelfBMI);
+  const computedSelfBMR = calculateEstimatedBMR(
+    Number(selfWeight) || 70,
+    Number(selfHeight) || 170,
+    28,
+    (loggedInMember?.gender as 'L' | 'P') || 'L'
+  );
+
+  const handleOpenSelfInput = () => {
+    setSelfDate(APP_TODAY);
+    if (latestBodyRecord) {
+      setSelfHeight(String(latestBodyRecord.height || 170));
+      setSelfWeight(String(latestBodyRecord.weight || ''));
+      setSelfTargetWeight(latestBodyRecord.targetWeight ? String(latestBodyRecord.targetWeight) : '');
+      setSelfFitnessGoal((latestBodyRecord.fitnessGoal as any) || 'Weight Loss');
+    } else {
+      setSelfHeight('170');
+      setSelfWeight('');
+      setSelfTargetWeight('65');
+      setSelfFitnessGoal('Weight Loss');
+    }
+    setSelfBodyFat('');
+    setSelfMuscle('');
+    setSelfVisceral('');
+    setSelfWaist('');
+    setSelfChest('');
+    setSelfHips('');
+    setSelfArm('');
+    setSelfThigh('');
+    setSelfNotes('');
+    setSaveSuccessMsg(null);
+    setIsAddBodyCompModalOpen(true);
+  };
+
+  const handleSaveSelfInput = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!loggedInMember) return;
+    const w = parseFloat(selfWeight);
+    const h = parseFloat(selfHeight);
+    if (!w || w <= 0 || !h || h <= 0) {
+      alert('Berat dan tinggi badan harus diisi dengan angka valid.');
+      return;
+    }
+    const bmiVal = calculateBMI(w, h);
+    const bmrVal = calculateEstimatedBMR(
+      w,
+      h,
+      28,
+      (loggedInMember.gender as 'L' | 'P') || 'L'
+    );
+
+    const newRecord: BodyCompositionRecord = {
+      id: 'BC-' + Date.now().toString().slice(-6),
+      memberId: loggedInMember.id,
+      memberName: loggedInMember.name,
+      date: selfDate,
+      time: new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) + ' WIB',
+      trainerName: 'Input Mandiri (Member)',
+      selfReported: true,
+      weight: w,
+      height: h,
+      bmi: bmiVal,
+      bodyFatPercentage: selfBodyFat ? parseFloat(selfBodyFat) : undefined,
+      muscleMass: selfMuscle ? parseFloat(selfMuscle) : undefined,
+      visceralFat: selfVisceral ? parseInt(selfVisceral, 10) : undefined,
+      basalMetabolicRate: bmrVal,
+      chest: selfChest ? parseFloat(selfChest) : undefined,
+      waist: selfWaist ? parseFloat(selfWaist) : undefined,
+      hips: selfHips ? parseFloat(selfHips) : undefined,
+      armRight: selfArm ? parseFloat(selfArm) : undefined,
+      thighRight: selfThigh ? parseFloat(selfThigh) : undefined,
+      bloodPressure: selfBP || undefined,
+      restingHeartRate: selfRHR ? parseInt(selfRHR, 10) : undefined,
+      targetWeight: selfTargetWeight ? parseFloat(selfTargetWeight) : undefined,
+      fitnessGoal: selfFitnessGoal,
+      notes: selfNotes || undefined,
+      branchId: loggedInMember.branchId,
+      branchName: loggedInMember.branchName,
+      createdAt: new Date().toISOString()
+    };
+
+    if (onSaveBodyCompositionRecord) {
+      onSaveBodyCompositionRecord(newRecord);
+    }
+    setIsAddBodyCompModalOpen(false);
+    setSaveSuccessMsg('Pengukuran fisik berhasil disimpan! Pantau terus progres Anda.');
+    setTimeout(() => setSaveSuccessMsg(null), 5000);
+  };
+
+  const handleShareBodyCompWhatsApp = (record: BodyCompositionRecord) => {
+    if (!loggedInMember) return;
+    const cat = getBMICategory(record.bmi);
+    let msg = `*EVALUASI INBODY & PROGRES RFA GYM*%0A` +
+      `Member: *${loggedInMember.name} (${loggedInMember.id})*%0A` +
+      `Tanggal: *${formatDateIndo(record.date)}*%0A` +
+      `---------------------------------%0A` +
+      `• Berat Badan: *${record.weight} kg*%0A` +
+      `• Tinggi Badan: *${record.height} cm*%0A` +
+      `• BMI: *${record.bmi}* (${cat.label})%0A`;
+    if (record.bodyFatPercentage) msg += `• Body Fat: *${record.bodyFatPercentage}%*%0A`;
+    if (record.muscleMass) msg += `• Massa Otot: *${record.muscleMass} kg*%0A`;
+    if (record.visceralFat) msg += `• Visceral Fat: *Level ${record.visceralFat}*%0A`;
+    if (record.basalMetabolicRate) msg += `• BMR: *${record.basalMetabolicRate} kcal*%0A`;
+    if (record.waist) msg += `• Lingkar Pinggang: *${record.waist} cm*%0A`;
+    if (record.notes) msg += `• Catatan: _${record.notes}_%0A`;
+    msg += `---------------------------------%0A` +
+      `Semangat latihan & salam bugar dari RFA Gym!`;
+
+    const url = `https://wa.me/?text=${msg}`;
+    try {
+      const a = document.createElement('a');
+      a.href = url;
+      a.target = '_blank';
+      a.rel = 'noopener noreferrer';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+    } catch {}
+  };
 
   const handleLoginSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -281,16 +490,21 @@ export const MemberPortalModal: React.FC<MemberPortalModalProps> = ({
               </div>
 
               {/* Navigation Tabs */}
-              <div className="flex items-center gap-2 border-b border-zinc-800 pb-2">
+              <div className="flex items-center gap-2 border-b border-zinc-800 pb-2 overflow-x-auto scrollbar-none">
                 {[
                   { id: 'profile', label: 'Profil & Status Pass' },
+                  {
+                    id: 'pt-schedule',
+                    label: `Personal Trainer (${bookings.filter((b) => b.memberId === loggedInMember.id).length})`
+                  },
+                  { id: 'body-comp', label: `InBody & Progres (${memberBodyRecords.length})` },
                   { id: 'active-tickets', label: `Tiket Aktif (${activeTickets.length})` },
                   { id: 'history', label: `Riwayat Reservasi (${memberReservations.length})` }
                 ].map((t) => (
                   <button
                     key={t.id}
                     onClick={() => setActiveTab(t.id as any)}
-                    className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all ${
+                    className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap ${
                       activeTab === t.id
                         ? 'bg-orange-500 text-white shadow-sm'
                         : 'text-zinc-400 hover:text-white'
@@ -300,6 +514,19 @@ export const MemberPortalModal: React.FC<MemberPortalModalProps> = ({
                   </button>
                 ))}
               </div>
+
+              {/* Success Notification Alert */}
+              {saveSuccessMsg && (
+                <div className="p-3.5 rounded-2xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 text-xs flex items-center justify-between animate-in fade-in">
+                  <div className="flex items-center gap-2">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                    <span className="font-semibold">{saveSuccessMsg}</span>
+                  </div>
+                  <button onClick={() => setSaveSuccessMsg(null)} className="text-emerald-400 hover:text-white">
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              )}
 
               {/* TAB 1: Profil & Digital Member Pass */}
               {activeTab === 'profile' && (
@@ -325,6 +552,13 @@ export const MemberPortalModal: React.FC<MemberPortalModalProps> = ({
                       <span className="text-sm font-extrabold text-orange-400 mt-1 block">
                         {loggedInMember.ptQuota ?? 0} Sesi
                       </span>
+                      <button
+                        type="button"
+                        onClick={() => setActiveTab('pt-schedule')}
+                        className="text-[10px] text-orange-400 hover:text-orange-300 font-bold mt-1 underline block text-left"
+                      >
+                        Buka Jadwal PT &rarr;
+                      </button>
                     </div>
 
                     <div className="p-3.5 rounded-2xl bg-zinc-900 border border-zinc-800">
@@ -353,6 +587,24 @@ export const MemberPortalModal: React.FC<MemberPortalModalProps> = ({
                     </p>
                   </div>
                 </div>
+              )}
+
+              {/* TAB: Personal Trainer (Booking Jadwal PT Member) */}
+              {activeTab === 'pt-schedule' && loggedInMember && (
+                <MemberPTBookingSection
+                  loggedInMember={loggedInMember}
+                  ptPurchases={ptPurchases}
+                  bookings={bookings}
+                  schedules={schedules}
+                  trainers={trainers}
+                  trainerChangeRequests={trainerChangeRequests}
+                  onAddBooking={onAddBooking || (() => {})}
+                  onRescheduleBooking={onRescheduleBooking || (() => {})}
+                  onCancelBooking={onCancelBooking || (() => {})}
+                  onRequestChangeTrainer={onRequestChangeTrainer || (() => {})}
+                  showToast={showToast || (() => {})}
+                  onOpenNewReservation={onOpenNewReservation}
+                />
               )}
 
               {/* TAB 2: Tiket Reservasi Aktif */}
@@ -421,6 +673,407 @@ export const MemberPortalModal: React.FC<MemberPortalModalProps> = ({
                         </div>
                       </div>
                     ))
+                  )}
+                </div>
+              )}
+
+              {/* TAB 4: Evaluasi InBody & Komposisi Tubuh */}
+              {activeTab === 'body-comp' && (
+                <div className="space-y-6">
+                  {/* Tab Top Bar */}
+                  <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 p-4 rounded-3xl bg-zinc-900/80 border border-zinc-800">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-2xl bg-amber-500/20 text-amber-400 flex items-center justify-center shrink-0">
+                        <Activity className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <h4 className="text-sm font-black text-white">Evaluasi & Komposisi Tubuh (InBody)</h4>
+                        <p className="text-[11px] text-zinc-400">
+                          Pantau perubahan berat badan, massa otot, persentase lemak, dan target kebugaran Anda.
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2 w-full sm:w-auto">
+                      <button
+                        type="button"
+                        onClick={handleOpenSelfInput}
+                        className="flex-1 sm:flex-none px-4 py-2.5 rounded-2xl bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white font-extrabold text-xs flex items-center justify-center gap-1.5 shadow-lg shadow-orange-500/20 active:scale-95 transition-all"
+                      >
+                        <Plus className="w-4 h-4" />
+                        <span>Input Pengukuran Mandiri</span>
+                      </button>
+
+                      {latestBodyRecord && (
+                        <button
+                          type="button"
+                          onClick={() => handleShareBodyCompWhatsApp(latestBodyRecord)}
+                          className="p-2.5 rounded-2xl bg-emerald-500/15 text-emerald-400 hover:bg-emerald-500/25 border border-emerald-500/30 transition-colors"
+                          title="Kirim Ringkasan InBody ke WhatsApp"
+                        >
+                          <Share2 className="w-4 h-4" />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Empty State if No Records */}
+                  {memberBodyRecords.length === 0 ? (
+                    <div className="p-8 sm:p-10 rounded-3xl bg-zinc-900/50 border border-zinc-800 text-center space-y-4">
+                      <div className="w-16 h-16 rounded-3xl bg-amber-500/15 text-amber-400 flex items-center justify-center mx-auto">
+                        <Scale className="w-8 h-8" />
+                      </div>
+                      <div className="max-w-md mx-auto space-y-1">
+                        <h5 className="text-base font-black text-white">Belum Ada Riwayat Pengukuran Tubuh</h5>
+                        <p className="text-xs text-zinc-400 leading-relaxed">
+                          Anda dapat menginput data berat badan, tinggi badan, dan lingkar tubuh Anda secara mandiri di sini kapan saja, atau minta trainer saat sesi evaluasi.
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={handleOpenSelfInput}
+                        className="px-5 py-3 rounded-2xl bg-orange-500 hover:bg-orange-600 text-white font-black text-xs inline-flex items-center gap-2 shadow-lg shadow-orange-500/20 active:scale-95 transition-all"
+                      >
+                        <Plus className="w-4 h-4" />
+                        <span>Input Pengukuran Pertama Sekarang</span>
+                      </button>
+                    </div>
+                  ) : (
+                    <>
+                      {/* Top Metric Cards */}
+                      {latestBodyRecord && (
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                          {/* Weight */}
+                          <div className="p-4 rounded-3xl bg-zinc-900 border border-zinc-800 relative overflow-hidden">
+                            <span className="text-[10px] text-zinc-400 font-bold uppercase tracking-wider block">
+                              Berat Badan
+                            </span>
+                            <div className="flex items-baseline gap-1.5 mt-1.5">
+                              <span className="text-2xl font-black text-white">{latestBodyRecord.weight}</span>
+                              <span className="text-xs text-zinc-400 font-bold">kg</span>
+                            </div>
+                            {initialBodyRecord && memberBodyRecords.length > 1 && (
+                              <div className="flex items-center gap-1 mt-2 text-[11px] font-bold">
+                                {weightDelta < 0 ? (
+                                  <span className="text-emerald-400 flex items-center gap-0.5">
+                                    <TrendingDown className="w-3.5 h-3.5" />
+                                    {Math.abs(weightDelta)} kg turun
+                                  </span>
+                                ) : weightDelta > 0 ? (
+                                  <span className="text-amber-400 flex items-center gap-0.5">
+                                    <TrendingUp className="w-3.5 h-3.5" />
+                                    +{weightDelta} kg naik
+                                  </span>
+                                ) : (
+                                  <span className="text-zinc-400">Stabil</span>
+                                )}
+                                <span className="text-[10px] text-zinc-500">vs awal</span>
+                              </div>
+                            )}
+                          </div>
+
+                          {/* BMI */}
+                          <div className="p-4 rounded-3xl bg-zinc-900 border border-zinc-800">
+                            <span className="text-[10px] text-zinc-400 font-bold uppercase tracking-wider block">
+                              Indeks BMI
+                            </span>
+                            <div className="flex items-baseline gap-1.5 mt-1.5">
+                              <span className="text-2xl font-black text-amber-400">{latestBodyRecord.bmi}</span>
+                            </div>
+                            <div className="mt-2">
+                              <span
+                                className={`px-2 py-0.5 rounded-md text-[10px] font-black border ${
+                                  getBMICategory(latestBodyRecord.bmi).badge
+                                }`}
+                              >
+                                {getBMICategory(latestBodyRecord.bmi).label.split('(')[0].trim()}
+                              </span>
+                            </div>
+                          </div>
+
+                          {/* Body Fat % */}
+                          <div className="p-4 rounded-3xl bg-zinc-900 border border-zinc-800">
+                            <span className="text-[10px] text-zinc-400 font-bold uppercase tracking-wider block">
+                              Body Fat %
+                            </span>
+                            <div className="flex items-baseline gap-1.5 mt-1.5">
+                              <span className="text-2xl font-black text-rose-400">
+                                {latestBodyRecord.bodyFatPercentage ?? '-'}
+                              </span>
+                              {latestBodyRecord.bodyFatPercentage && (
+                                <span className="text-xs text-zinc-400 font-bold">%</span>
+                              )}
+                            </div>
+                            {bodyFatDelta !== null && memberBodyRecords.length > 1 && (
+                              <div className="flex items-center gap-1 mt-2 text-[11px] font-bold">
+                                {bodyFatDelta < 0 ? (
+                                  <span className="text-emerald-400 flex items-center gap-0.5">
+                                    <TrendingDown className="w-3.5 h-3.5" />
+                                    {Math.abs(bodyFatDelta)}% lemak turun
+                                  </span>
+                                ) : (
+                                  <span className="text-rose-400 flex items-center gap-0.5">
+                                    <TrendingUp className="w-3.5 h-3.5" />
+                                    +{bodyFatDelta}%
+                                  </span>
+                                )}
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Muscle Mass */}
+                          <div className="p-4 rounded-3xl bg-zinc-900 border border-zinc-800">
+                            <span className="text-[10px] text-zinc-400 font-bold uppercase tracking-wider block">
+                              Massa Otot
+                            </span>
+                            <div className="flex items-baseline gap-1.5 mt-1.5">
+                              <span className="text-2xl font-black text-emerald-400">
+                                {latestBodyRecord.muscleMass ?? '-'}
+                              </span>
+                              {latestBodyRecord.muscleMass && (
+                                <span className="text-xs text-zinc-400 font-bold">kg</span>
+                              )}
+                            </div>
+                            {muscleDelta !== null && memberBodyRecords.length > 1 && (
+                              <div className="flex items-center gap-1 mt-2 text-[11px] font-bold">
+                                {muscleDelta > 0 ? (
+                                  <span className="text-emerald-400 flex items-center gap-0.5">
+                                    <TrendingUp className="w-3.5 h-3.5" />
+                                    +{muscleDelta} kg otot gain
+                                  </span>
+                                ) : (
+                                  <span className="text-zinc-400">{muscleDelta} kg</span>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Secondary Vitals Grid */}
+                      {latestBodyRecord && (
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 p-4 rounded-3xl bg-zinc-900/60 border border-zinc-800">
+                          <div>
+                            <span className="text-[10px] text-zinc-500 uppercase font-bold block">Visceral Fat</span>
+                            <span className="text-xs font-black text-zinc-200 mt-1 block">
+                              {latestBodyRecord.visceralFat ? `Tingkat ${latestBodyRecord.visceralFat}` : '-'}
+                            </span>
+                          </div>
+                          <div>
+                            <span className="text-[10px] text-zinc-500 uppercase font-bold block">BMR (Metabolisme)</span>
+                            <span className="text-xs font-black text-zinc-200 mt-1 block">
+                              {latestBodyRecord.basalMetabolicRate ? `${latestBodyRecord.basalMetabolicRate} kkal/hari` : '-'}
+                            </span>
+                          </div>
+                          <div>
+                            <span className="text-[10px] text-zinc-500 uppercase font-bold block">Tekanan Darah</span>
+                            <span className="text-xs font-black text-zinc-200 mt-1 block">
+                              {latestBodyRecord.bloodPressure || '120/80 mmHg'}
+                            </span>
+                          </div>
+                          <div>
+                            <span className="text-[10px] text-zinc-500 uppercase font-bold block">Denyut Nadi Istirahat</span>
+                            <span className="text-xs font-black text-zinc-200 mt-1 block">
+                              {latestBodyRecord.restingHeartRate ? `${latestBodyRecord.restingHeartRate} bpm` : '-'}
+                            </span>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Target Weight & Goal Progress */}
+                      {latestBodyRecord?.targetWeight && (
+                        <div className="p-4 rounded-3xl bg-gradient-to-r from-zinc-900 via-zinc-900 to-amber-950/20 border border-amber-500/20 space-y-2">
+                          <div className="flex items-center justify-between text-xs">
+                            <span className="font-bold text-zinc-300">
+                              Target Berat: <strong className="text-amber-400 font-black">{latestBodyRecord.targetWeight} kg</strong> ({latestBodyRecord.fitnessGoal || 'Weight Loss'})
+                            </span>
+                            <span className="text-[11px] text-zinc-400">
+                              Sisa selisih: <strong className="text-white">{Math.abs(Math.round((latestBodyRecord.weight - latestBodyRecord.targetWeight) * 10) / 10)} kg</strong>
+                            </span>
+                          </div>
+                          <div className="w-full h-2.5 rounded-full bg-zinc-800 overflow-hidden">
+                            <div
+                              className="h-full bg-gradient-to-r from-orange-500 to-amber-400 rounded-full transition-all"
+                              style={{
+                                width: `${Math.min(
+                                  Math.max(
+                                    Math.round(
+                                      (1 - Math.abs(latestBodyRecord.weight - latestBodyRecord.targetWeight) / 15) * 100
+                                    ),
+                                    15
+                                  ),
+                                  100
+                                )}%`
+                              }}
+                            />
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Mini SVG Progress Timeline */}
+                      {memberBodyRecords.length > 1 && (
+                        <div className="p-4 rounded-3xl bg-zinc-900/70 border border-zinc-800 space-y-3">
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs font-black text-white flex items-center gap-1.5">
+                              <TrendingUp className="w-3.5 h-3.5 text-amber-400" />
+                              <span>Grafik Progres Berat Badan (kg)</span>
+                            </span>
+                            <span className="text-[10px] text-zinc-400">
+                              {memberBodyRecords.length} sesi pengukuran tercatat
+                            </span>
+                          </div>
+                          <div className="h-32 w-full pt-2">
+                            <svg className="w-full h-full overflow-visible" viewBox="0 0 500 100">
+                              {/* Grid lines */}
+                              <line x1="0" y1="20" x2="500" y2="20" stroke="#27272a" strokeDasharray="3 3" />
+                              <line x1="0" y1="50" x2="500" y2="50" stroke="#27272a" strokeDasharray="3 3" />
+                              <line x1="0" y1="80" x2="500" y2="80" stroke="#27272a" strokeDasharray="3 3" />
+
+                              {/* Compute points */}
+                              {(() => {
+                                const weights = memberBodyRecords.map((r) => r.weight);
+                                const minW = Math.min(...weights) - 2;
+                                const maxW = Math.max(...weights) + 2;
+                                const range = maxW - minW || 1;
+                                const stepX = 500 / Math.max(memberBodyRecords.length - 1, 1);
+
+                                const pts = memberBodyRecords.map((r, i) => {
+                                  const x = i * stepX;
+                                  const y = 85 - ((r.weight - minW) / range) * 70;
+                                  return { x, y, r };
+                                });
+
+                                const pathD = pts.reduce((acc, p, i) => `${acc} ${i === 0 ? 'M' : 'L'} ${p.x} ${p.y}`, '');
+
+                                return (
+                                  <>
+                                    <path
+                                      d={pathD}
+                                      fill="none"
+                                      stroke="#f97316"
+                                      strokeWidth="3"
+                                      strokeLinecap="round"
+                                      strokeLinejoin="round"
+                                    />
+                                    {pts.map((p, i) => (
+                                      <g key={i}>
+                                        <circle cx={p.x} cy={p.y} r="5" fill="#f97316" stroke="#18181b" strokeWidth="2" />
+                                        <text
+                                          x={p.x}
+                                          y={p.y - 10}
+                                          fill="#ffffff"
+                                          fontSize="10"
+                                          fontWeight="bold"
+                                          textAnchor="middle"
+                                        >
+                                          {p.r.weight}kg
+                                        </text>
+                                        <text
+                                          x={p.x}
+                                          y="96"
+                                          fill="#71717a"
+                                          fontSize="9"
+                                          textAnchor="middle"
+                                        >
+                                          {p.r.date.slice(5)}
+                                        </text>
+                                      </g>
+                                    ))}
+                                  </>
+                                );
+                              })()}
+                            </svg>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Circumferences Summary */}
+                      {latestBodyRecord && (latestBodyRecord.waist || latestBodyRecord.chest || latestBodyRecord.armRight) && (
+                        <div className="p-4 rounded-3xl bg-zinc-900/60 border border-zinc-800 space-y-2">
+                          <span className="text-xs font-black text-zinc-300 block">
+                            Ukuran Lingkar Tubuh Terkini (cm)
+                          </span>
+                          <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 text-center">
+                            <div className="p-2.5 rounded-xl bg-zinc-900 border border-zinc-800">
+                              <span className="text-[9px] text-zinc-500 uppercase font-bold block">Dada</span>
+                              <span className="text-xs font-black text-white">{latestBodyRecord.chest ?? '-'} cm</span>
+                            </div>
+                            <div className="p-2.5 rounded-xl bg-zinc-900 border border-zinc-800">
+                              <span className="text-[9px] text-zinc-500 uppercase font-bold block">Pinggang</span>
+                              <span className="text-xs font-black text-amber-400">{latestBodyRecord.waist ?? '-'} cm</span>
+                            </div>
+                            <div className="p-2.5 rounded-xl bg-zinc-900 border border-zinc-800">
+                              <span className="text-[9px] text-zinc-500 uppercase font-bold block">Pinggul</span>
+                              <span className="text-xs font-black text-white">{latestBodyRecord.hips ?? '-'} cm</span>
+                            </div>
+                            <div className="p-2.5 rounded-xl bg-zinc-900 border border-zinc-800">
+                              <span className="text-[9px] text-zinc-500 uppercase font-bold block">Lengan</span>
+                              <span className="text-xs font-black text-white">{latestBodyRecord.armRight ?? '-'} cm</span>
+                            </div>
+                            <div className="p-2.5 rounded-xl bg-zinc-900 border border-zinc-800">
+                              <span className="text-[9px] text-zinc-500 uppercase font-bold block">Paha</span>
+                              <span className="text-xs font-black text-white">{latestBodyRecord.thighRight ?? '-'} cm</span>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* History Log Table */}
+                      <div className="space-y-3">
+                        <div className="flex items-center justify-between">
+                          <h5 className="text-xs font-black text-white uppercase tracking-wider">
+                            Riwayat Pengukuran ({memberBodyRecords.length})
+                          </h5>
+                          <span className="text-[10px] text-zinc-500">Urut terbaru</span>
+                        </div>
+
+                        <div className="space-y-2">
+                          {memberBodyRecordsDesc.map((rec) => (
+                            <div
+                              key={rec.id}
+                              className="p-3.5 rounded-2xl bg-zinc-900/80 border border-zinc-800 hover:border-zinc-700 transition flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs"
+                            >
+                              <div className="space-y-1">
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  <span className="font-bold text-white">{formatDateIndo(rec.date)}</span>
+                                  {rec.time && <span className="text-zinc-500 font-mono text-[10px]">{rec.time}</span>}
+                                  {rec.selfReported ? (
+                                    <span className="px-2 py-0.5 rounded bg-blue-500/15 text-blue-400 border border-blue-500/30 text-[9px] font-black">
+                                      INPUT MANDIRI
+                                    </span>
+                                  ) : (
+                                    <span className="px-2 py-0.5 rounded bg-amber-500/15 text-amber-400 border border-amber-500/30 text-[9px] font-black">
+                                      EVALUASI TRAINER
+                                    </span>
+                                  )}
+                                </div>
+                                <div className="flex items-center gap-3 text-[11px] text-zinc-300 flex-wrap">
+                                  <span>BB: <strong className="text-white">{rec.weight} kg</strong></span>
+                                  <span>BMI: <strong className="text-amber-400">{rec.bmi}</strong></span>
+                                  {rec.bodyFatPercentage && <span>Fat: <strong className="text-rose-400">{rec.bodyFatPercentage}%</strong></span>}
+                                  {rec.muscleMass && <span>Otot: <strong className="text-emerald-400">{rec.muscleMass} kg</strong></span>}
+                                  {rec.waist && <span>Pinggang: <strong>{rec.waist} cm</strong></span>}
+                                </div>
+                                {rec.notes && (
+                                  <p className="text-[11px] text-zinc-400 italic">"{rec.notes}"</p>
+                                )}
+                              </div>
+
+                              <div className="flex items-center gap-2 shrink-0 self-end sm:self-center">
+                                <button
+                                  type="button"
+                                  onClick={() => handleShareBodyCompWhatsApp(rec)}
+                                  className="px-3 py-1.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 font-bold text-[10px] flex items-center gap-1"
+                                >
+                                  <Share2 className="w-3 h-3 text-emerald-400" />
+                                  <span>Share WA</span>
+                                </button>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </>
                   )}
                 </div>
               )}
@@ -526,6 +1179,279 @@ export const MemberPortalModal: React.FC<MemberPortalModalProps> = ({
               >
                 Tutup Tampilan QR
               </button>
+            </div>
+          </div>
+        )}
+
+        {/* Self-Input Modal for Members */}
+        {isAddBodyCompModalOpen && (
+          <div className="fixed inset-0 z-70 bg-black/85 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 overflow-y-auto animate-in fade-in">
+            <div className="bg-zinc-950 border border-zinc-800 rounded-3xl max-w-lg w-full overflow-hidden shadow-2xl flex flex-col my-auto max-h-[92vh]">
+              {/* Header */}
+              <div className="p-5 bg-zinc-900 border-b border-zinc-800 flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-2xl bg-orange-500/20 text-orange-400 flex items-center justify-center shrink-0">
+                    <Scale className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h4 className="text-base font-black text-white">Input Pengukuran Mandiri</h4>
+                    <p className="text-xs text-zinc-400">
+                      Catat metrik tubuh & komposisi fisik Anda secara berkala
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setIsAddBodyCompModalOpen(false)}
+                  className="p-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-white"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              {/* Form Body */}
+              <form onSubmit={handleSaveSelfInput} className="p-5 sm:p-6 space-y-4 overflow-y-auto flex-1 text-xs">
+                {/* Live BMI & Status Indicator Banner */}
+                {Number(selfWeight) > 0 && Number(selfHeight) > 0 && (
+                  <div className="p-3.5 rounded-2xl bg-zinc-900 border border-zinc-800 flex items-center justify-between">
+                    <div>
+                      <span className="text-[10px] text-zinc-400 uppercase font-bold block">Kalkulasi Otomatis</span>
+                      <div className="flex items-center gap-2 mt-0.5">
+                        <span className="text-lg font-black text-white">BMI: {computedSelfBMI}</span>
+                        <span className={`px-2 py-0.5 rounded text-[10px] font-bold border ${computedSelfBMICategory.badge}`}>
+                          {computedSelfBMICategory.label.split('(')[0].trim()}
+                        </span>
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <span className="text-[10px] text-zinc-500 block">Estimasi BMR</span>
+                      <span className="text-xs font-black text-amber-400">{computedSelfBMR} kkal/hari</span>
+                    </div>
+                  </div>
+                )}
+
+                {/* Primary Vitals: Date, Weight, Height */}
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div>
+                    <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-wider mb-1">
+                      Tanggal Ukur *
+                    </label>
+                    <input
+                      type="date"
+                      required
+                      value={selfDate}
+                      onChange={(e) => setSelfDate(e.target.value)}
+                      className="w-full px-3 py-2.5 rounded-xl bg-zinc-900 border border-zinc-800 text-white font-mono focus:border-orange-500 outline-none"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-wider mb-1">
+                      Berat Badan (kg) *
+                    </label>
+                    <input
+                      type="number"
+                      step="0.1"
+                      min="20"
+                      max="300"
+                      required
+                      placeholder="cth: 72.5"
+                      value={selfWeight}
+                      onChange={(e) => setSelfWeight(e.target.value)}
+                      className="w-full px-3 py-2.5 rounded-xl bg-zinc-900 border border-zinc-800 text-white font-mono font-bold focus:border-orange-500 outline-none"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-wider mb-1">
+                      Tinggi Badan (cm) *
+                    </label>
+                    <input
+                      type="number"
+                      step="0.5"
+                      min="80"
+                      max="250"
+                      required
+                      placeholder="cth: 172"
+                      value={selfHeight}
+                      onChange={(e) => setSelfHeight(e.target.value)}
+                      className="w-full px-3 py-2.5 rounded-xl bg-zinc-900 border border-zinc-800 text-white font-mono font-bold focus:border-orange-500 outline-none"
+                    />
+                  </div>
+                </div>
+
+                {/* InBody Specifics: Fat %, Muscle Mass, Visceral Fat */}
+                <div className="p-3.5 rounded-2xl bg-zinc-900/60 border border-zinc-800/80 space-y-3">
+                  <span className="text-[10px] font-black uppercase tracking-wider text-orange-400 block">
+                    Metrik InBody / Smart Scale (Opsional)
+                  </span>
+                  <div className="grid grid-cols-3 gap-3">
+                    <div>
+                      <label className="block text-[10px] text-zinc-400 mb-1">Body Fat (%)</label>
+                      <input
+                        type="number"
+                        step="0.1"
+                        placeholder="cth: 22.5"
+                        value={selfBodyFat}
+                        onChange={(e) => setSelfBodyFat(e.target.value)}
+                        className="w-full px-3 py-2 rounded-xl bg-zinc-900 border border-zinc-800 text-white font-mono focus:border-orange-500 outline-none"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] text-zinc-400 mb-1">Massa Otot (kg)</label>
+                      <input
+                        type="number"
+                        step="0.1"
+                        placeholder="cth: 33.0"
+                        value={selfMuscle}
+                        onChange={(e) => setSelfMuscle(e.target.value)}
+                        className="w-full px-3 py-2 rounded-xl bg-zinc-900 border border-zinc-800 text-white font-mono focus:border-orange-500 outline-none"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] text-zinc-400 mb-1">Visceral Fat (1-20)</label>
+                      <input
+                        type="number"
+                        min="1"
+                        max="20"
+                        placeholder="cth: 6"
+                        value={selfVisceral}
+                        onChange={(e) => setSelfVisceral(e.target.value)}
+                        className="w-full px-3 py-2 rounded-xl bg-zinc-900 border border-zinc-800 text-white font-mono focus:border-orange-500 outline-none"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Circumference Measurements (cm) */}
+                <div className="p-3.5 rounded-2xl bg-zinc-900/60 border border-zinc-800/80 space-y-3">
+                  <span className="text-[10px] font-black uppercase tracking-wider text-amber-400 block">
+                    Ukuran Lingkar Pita Ukur (cm) - Opsional
+                  </span>
+                  <div className="grid grid-cols-3 sm:grid-cols-5 gap-2">
+                    <div>
+                      <label className="block text-[9px] text-zinc-400 mb-1">Pinggang</label>
+                      <input
+                        type="number"
+                        step="0.5"
+                        placeholder="85"
+                        value={selfWaist}
+                        onChange={(e) => setSelfWaist(e.target.value)}
+                        className="w-full px-2 py-2 rounded-xl bg-zinc-900 border border-zinc-800 text-white text-center font-mono focus:border-orange-500 outline-none"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[9px] text-zinc-400 mb-1">Dada</label>
+                      <input
+                        type="number"
+                        step="0.5"
+                        placeholder="98"
+                        value={selfChest}
+                        onChange={(e) => setSelfChest(e.target.value)}
+                        className="w-full px-2 py-2 rounded-xl bg-zinc-900 border border-zinc-800 text-white text-center font-mono focus:border-orange-500 outline-none"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[9px] text-zinc-400 mb-1">Pinggul</label>
+                      <input
+                        type="number"
+                        step="0.5"
+                        placeholder="100"
+                        value={selfHips}
+                        onChange={(e) => setSelfHips(e.target.value)}
+                        className="w-full px-2 py-2 rounded-xl bg-zinc-900 border border-zinc-800 text-white text-center font-mono focus:border-orange-500 outline-none"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[9px] text-zinc-400 mb-1">Lengan</label>
+                      <input
+                        type="number"
+                        step="0.5"
+                        placeholder="34"
+                        value={selfArm}
+                        onChange={(e) => setSelfArm(e.target.value)}
+                        className="w-full px-2 py-2 rounded-xl bg-zinc-900 border border-zinc-800 text-white text-center font-mono focus:border-orange-500 outline-none"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[9px] text-zinc-400 mb-1">Paha</label>
+                      <input
+                        type="number"
+                        step="0.5"
+                        placeholder="56"
+                        value={selfThigh}
+                        onChange={(e) => setSelfThigh(e.target.value)}
+                        className="w-full px-2 py-2 rounded-xl bg-zinc-900 border border-zinc-800 text-white text-center font-mono focus:border-orange-500 outline-none"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Target Weight & Focus */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-wider mb-1">
+                      Target Berat Badan (kg)
+                    </label>
+                    <input
+                      type="number"
+                      step="0.5"
+                      placeholder="cth: 68"
+                      value={selfTargetWeight}
+                      onChange={(e) => setSelfTargetWeight(e.target.value)}
+                      className="w-full px-3 py-2.5 rounded-xl bg-zinc-900 border border-zinc-800 text-white font-mono focus:border-orange-500 outline-none"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-wider mb-1">
+                      Fokus Kebugaran
+                    </label>
+                    <select
+                      value={selfFitnessGoal}
+                      onChange={(e) => setSelfFitnessGoal(e.target.value as any)}
+                      className="w-full px-3 py-2.5 rounded-xl bg-zinc-900 border border-zinc-800 text-white focus:border-orange-500 outline-none"
+                    >
+                      <option value="Weight Loss">Weight Loss (Defisit Lemak)</option>
+                      <option value="Muscle Gain">Muscle Gain (Pembentukan Otot)</option>
+                      <option value="General Fitness">General Fitness & Kebugaran</option>
+                      <option value="Endurance">Stamina & Daya Tahan</option>
+                    </select>
+                  </div>
+                </div>
+
+                {/* Member Notes */}
+                <div>
+                  <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-wider mb-1">
+                    Catatan Pribadi Member
+                  </label>
+                  <textarea
+                    rows={2}
+                    placeholder="Contoh: Pengukuran pagi hari sebelum makan, merasa lebih bertenaga setelah konsisten latihan 3 minggu..."
+                    value={selfNotes}
+                    onChange={(e) => setSelfNotes(e.target.value)}
+                    className="w-full px-3 py-2 rounded-xl bg-zinc-900 border border-zinc-800 text-white text-xs focus:border-orange-500 outline-none resize-none"
+                  />
+                </div>
+
+                {/* Modal Footer Buttons */}
+                <div className="pt-2 flex items-center justify-end gap-2 border-t border-zinc-800">
+                  <button
+                    type="button"
+                    onClick={() => setIsAddBodyCompModalOpen(false)}
+                    className="px-4 py-2.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 font-bold text-xs"
+                  >
+                    Batal
+                  </button>
+                  <button
+                    type="submit"
+                    className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white font-extrabold text-xs flex items-center gap-2 shadow-lg shadow-orange-500/20 active:scale-95 transition-all"
+                  >
+                    <CheckCircle2 className="w-4 h-4" />
+                    <span>Simpan Pengukuran Saya</span>
+                  </button>
+                </div>
+              </form>
             </div>
           </div>
         )}

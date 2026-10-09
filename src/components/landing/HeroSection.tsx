@@ -95,7 +95,7 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
 
             {/* Subheadline */}
             <p className="text-base sm:text-lg text-zinc-300 max-w-2xl mx-auto lg:mx-0 font-normal leading-relaxed">
-              Fasilitas fitness premium standar internasional, bimbingan Personal Trainer bersertifikasi, dan studio class terlengkap di Jakarta & sekitarnya. Wujudkan versi terbaik fisik dan mental Anda bersama komunitas juara.
+              Fasilitas fitness premium standar internasional, bimbingan Personal Trainer bersertifikasi, dan studio class terlengkap di Cibubur & sekitarnya. Wujudkan versi terbaik fisik dan mental Anda bersama komunitas juara.
             </p>
 
             {/* CTA Ganda: Jika member sudah login, sembunyikan Join Now dan sediakan akses langsung ke Portal Member */}
