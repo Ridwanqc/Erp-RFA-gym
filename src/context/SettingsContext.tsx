@@ -9,6 +9,7 @@ import {
   RoleDefinition,
   RoleActionPermissions,
   PicProtectionConfig,
+  LandingPageConfig,
   UserRole,
   User,
   StockTransferRecord,
@@ -22,6 +23,7 @@ import {
   DEFAULT_PAYMENT_AND_TAX,
   DEFAULT_WHATSAPP_TEMPLATES,
   DEFAULT_PIC_PROTECTION,
+  DEFAULT_LANDING_CONFIG,
   DEFAULT_ROLE_DEFINITIONS,
   SYSTEM_MODULES
 } from '../data/settingsData';
@@ -50,6 +52,8 @@ interface SettingsContextType {
   updatePaymentAndTaxConfig: (newConfig: Partial<PaymentAndTaxConfig>) => void;
   updateTemplatesConfig: (newTemplates: Partial<WhatsAppTemplateConfig>) => void;
   updatePicProtectionConfig: (newConfig: Partial<PicProtectionConfig>) => void;
+  updateLandingConfig: (newConfig: Partial<LandingPageConfig>) => void;
+  resetLandingConfigToDefault: () => void;
   verifyPicPassword: (inputPassword: string) => boolean;
   updateRolePermission: (
     role: UserRole,
@@ -57,6 +61,7 @@ interface SettingsContextType {
     action: keyof RoleActionPermissions,
     value: boolean
   ) => void;
+  saveRolePermissions: (role?: UserRole) => void;
   resetRolePermissionsToDefault: (role?: UserRole) => void;
   resetSettingsToDefault: () => void;
   hasPermission: (
@@ -83,20 +88,25 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   // Load System Settings
   const [settings, setSettings] = useState<SystemSettings>(() => {
     try {
-      const saved = localStorage.getItem(SETTINGS_STORAGE_KEY);
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        const isLegacyProfile = !parsed.profile?.gymName || parsed.profile?.gymName === 'GymPro Fitness & Wellness Center';
-        const isLegacyPrinter = !parsed.printer?.storeName || parsed.printer?.storeName === 'GYMPRO FITNESS & WELLNESS';
+      if (typeof window !== 'undefined' && window.localStorage) {
+        const saved = localStorage.getItem(SETTINGS_STORAGE_KEY);
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          if (parsed && typeof parsed === 'object') {
+            const isLegacyProfile = !parsed.profile?.gymName || parsed.profile?.gymName === 'GymPro Fitness & Wellness Center';
+            const isLegacyPrinter = !parsed.printer?.storeName || parsed.printer?.storeName === 'GYMPRO FITNESS & WELLNESS';
 
-        return {
-          printer: isLegacyPrinter ? DEFAULT_PRINTER_CONFIG : { ...DEFAULT_PRINTER_CONFIG, ...parsed.printer },
-          profile: isLegacyProfile ? DEFAULT_GYM_PROFILE : { ...DEFAULT_GYM_PROFILE, ...parsed.profile },
-          paymentAndTax: { ...DEFAULT_PAYMENT_AND_TAX, ...parsed.paymentAndTax },
-          templates: { ...DEFAULT_WHATSAPP_TEMPLATES, ...parsed.templates },
-          picProtection: { ...DEFAULT_PIC_PROTECTION, ...parsed.picProtection },
-          updatedAt: parsed.updatedAt || new Date().toISOString()
-        };
+            return {
+              printer: isLegacyPrinter ? DEFAULT_PRINTER_CONFIG : { ...DEFAULT_PRINTER_CONFIG, ...(parsed.printer || {}) },
+              profile: isLegacyProfile ? DEFAULT_GYM_PROFILE : { ...DEFAULT_GYM_PROFILE, ...(parsed.profile || {}) },
+              paymentAndTax: { ...DEFAULT_PAYMENT_AND_TAX, ...(parsed.paymentAndTax || {}) },
+              templates: { ...DEFAULT_WHATSAPP_TEMPLATES, ...(parsed.templates || {}) },
+              picProtection: { ...DEFAULT_PIC_PROTECTION, ...(parsed.picProtection || {}) },
+              landing: parsed.landing ? { ...DEFAULT_LANDING_CONFIG, ...parsed.landing } : DEFAULT_LANDING_CONFIG,
+              updatedAt: parsed.updatedAt || new Date().toISOString()
+            };
+          }
+        }
       }
     } catch (e) {
       console.warn('Gagal memuat system settings dari storage:', e);
@@ -107,26 +117,29 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   // Load Branches
   const [branches, setBranches] = useState<GymBranch[]>(() => {
     try {
-      const saved = localStorage.getItem(BRANCHES_STORAGE_KEY);
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          return parsed.map((b: GymBranch) => {
-            if (b.id === 'BR-001' && (b.name?.includes('Sudirman') || b.address?.includes('Sudirman') || b.address?.includes('Boulevard'))) {
-              return {
-                ...b,
-                name: DEFAULT_BRANCHES[0].name,
-                code: DEFAULT_BRANCHES[0].code,
-                address: DEFAULT_BRANCHES[0].address,
-                city: DEFAULT_BRANCHES[0].city,
-                phone: DEFAULT_BRANCHES[0].phone,
-                whatsapp: DEFAULT_BRANCHES[0].whatsapp,
-                email: DEFAULT_BRANCHES[0].email,
-                notes: DEFAULT_BRANCHES[0].notes
-              };
-            }
-            return b;
-          });
+      if (typeof window !== 'undefined' && window.localStorage) {
+        const saved = localStorage.getItem(BRANCHES_STORAGE_KEY);
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            return parsed.map((b: GymBranch) => {
+              if (!b || typeof b !== 'object') return DEFAULT_BRANCHES[0];
+              if (b.id === 'BR-001' && (b.name?.includes('Sudirman') || b.address?.includes('Sudirman') || b.address?.includes('Boulevard'))) {
+                return {
+                  ...b,
+                  name: DEFAULT_BRANCHES[0].name,
+                  code: DEFAULT_BRANCHES[0].code,
+                  address: DEFAULT_BRANCHES[0].address,
+                  city: DEFAULT_BRANCHES[0].city,
+                  phone: DEFAULT_BRANCHES[0].phone,
+                  whatsapp: DEFAULT_BRANCHES[0].whatsapp,
+                  email: DEFAULT_BRANCHES[0].email,
+                  notes: DEFAULT_BRANCHES[0].notes
+                };
+              }
+              return b;
+            });
+          }
         }
       }
     } catch (e) {
@@ -138,9 +151,11 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   // Load Active Branch ID
   const [activeBranchId, setActiveBranchIdState] = useState<string>(() => {
     try {
-      const saved = localStorage.getItem(ACTIVE_BRANCH_STORAGE_KEY);
-      if (saved) {
-        return saved;
+      if (typeof window !== 'undefined' && window.localStorage) {
+        const saved = localStorage.getItem(ACTIVE_BRANCH_STORAGE_KEY);
+        if (saved && typeof saved === 'string') {
+          return saved;
+        }
       }
     } catch (e) {}
     return 'BR-001';
@@ -149,10 +164,28 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   // Load Role Definitions
   const [roles, setRoles] = useState<Record<UserRole, RoleDefinition>>(() => {
     try {
-      const saved = localStorage.getItem(ROLES_STORAGE_KEY);
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        return { ...DEFAULT_ROLE_DEFINITIONS, ...parsed };
+      if (typeof window !== 'undefined' && window.localStorage) {
+        const saved = localStorage.getItem(ROLES_STORAGE_KEY);
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          if (parsed && typeof parsed === 'object') {
+            // Merge with DEFAULT_ROLE_DEFINITIONS to ensure all system modules are defined
+            const merged: Record<UserRole, RoleDefinition> = { ...DEFAULT_ROLE_DEFINITIONS };
+            (Object.keys(DEFAULT_ROLE_DEFINITIONS) as UserRole[]).forEach((rKey) => {
+              if (parsed[rKey] && typeof parsed[rKey] === 'object') {
+                merged[rKey] = {
+                  ...DEFAULT_ROLE_DEFINITIONS[rKey],
+                  ...parsed[rKey],
+                  permissions: {
+                    ...DEFAULT_ROLE_DEFINITIONS[rKey].permissions,
+                    ...(parsed[rKey].permissions || {})
+                  }
+                };
+              }
+            });
+            return merged;
+          }
+        }
       }
     } catch (e) {
       console.warn('Gagal memuat roles dari storage:', e);
@@ -163,10 +196,12 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   // Load Stock Transfers
   const [stockTransfers, setStockTransfers] = useState<StockTransferRecord[]>(() => {
     try {
-      const saved = localStorage.getItem(STOCK_TRANSFERS_STORAGE_KEY);
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed)) return parsed;
+      if (typeof window !== 'undefined' && window.localStorage) {
+        const saved = localStorage.getItem(STOCK_TRANSFERS_STORAGE_KEY);
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          if (Array.isArray(parsed)) return parsed;
+        }
       }
     } catch (e) {}
     return [
@@ -187,6 +222,11 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       }
     ];
   });
+
+  // Mount lifecycle tracker
+  useEffect(() => {
+    console.log(`[GymPro Lifecycle] 3. SettingsProvider mounted successfully. Active Branch: ${activeBranchId} (${branches.length} branches registered)`);
+  }, []);
 
   // Persist Stock Transfers
   useEffect(() => {
@@ -535,6 +575,45 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     }));
   };
 
+  const updateLandingConfig = (newConfig: Partial<LandingPageConfig>) => {
+    setSettings((prev) => {
+      const currentLanding = prev.landing || DEFAULT_LANDING_CONFIG;
+      return {
+        ...prev,
+        landing: {
+          ...currentLanding,
+          ...newConfig,
+          hero: {
+            ...currentLanding.hero,
+            ...(newConfig.hero || {})
+          },
+          announcement: {
+            ...currentLanding.announcement,
+            ...(newConfig.announcement || {})
+          },
+          about: {
+            ...currentLanding.about,
+            ...(newConfig.about || {})
+          },
+          social: {
+            ...currentLanding.social,
+            ...(newConfig.social || {})
+          },
+          galleryItems: newConfig.galleryItems !== undefined ? newConfig.galleryItems : currentLanding.galleryItems
+        },
+        updatedAt: new Date().toISOString()
+      };
+    });
+  };
+
+  const resetLandingConfigToDefault = () => {
+    setSettings((prev) => ({
+      ...prev,
+      landing: DEFAULT_LANDING_CONFIG,
+      updatedAt: new Date().toISOString()
+    }));
+  };
+
   const verifyPicPassword = (inputPassword: string): boolean => {
     const activePass = settings.picProtection?.picChangePassword ?? DEFAULT_PIC_PROTECTION.picChangePassword;
     return inputPassword.trim() === activePass.trim();
@@ -571,6 +650,14 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         }
       };
     });
+  };
+
+  const saveRolePermissions = (role?: UserRole) => {
+    try {
+      localStorage.setItem(ROLES_STORAGE_KEY, JSON.stringify(roles));
+    } catch (e) {
+      console.warn('Gagal menyimpan roles ke storage:', e);
+    }
   };
 
   const resetRolePermissionsToDefault = (role?: UserRole) => {
@@ -806,8 +893,11 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         updatePaymentAndTaxConfig,
         updateTemplatesConfig,
         updatePicProtectionConfig,
+        updateLandingConfig,
+        resetLandingConfigToDefault,
         verifyPicPassword,
         updateRolePermission,
+        saveRolePermissions,
         resetRolePermissionsToDefault,
         resetSettingsToDefault,
         hasPermission,

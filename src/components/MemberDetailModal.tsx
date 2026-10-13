@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, Calendar, CreditCard, Dumbbell, History, Phone, ShieldCheck, AlertCircle, Clock, UserCheck, IdCard, Crown, Sparkles, CheckCircle2, Snowflake, PlayCircle, ArrowRight, Camera, QrCode, Printer, Activity } from 'lucide-react';
+import { X, Calendar, CreditCard, Dumbbell, History, Phone, ShieldCheck, AlertCircle, Clock, UserCheck, IdCard, Crown, Sparkles, CheckCircle2, Snowflake, PlayCircle, ArrowRight, Camera, QrCode, Printer, Activity, ZoomIn } from 'lucide-react';
 import { Member, Attendance, Transaction, Schedule, FollowUpLog, MemberMembershipRecord, PTPurchaseRecord, MemberFreezeRecord, BodyCompositionRecord } from '../types';
 import { formatRp, APP_TODAY, formatDateIndo } from '../utils/formatters';
 import { getMemberStatus } from '../utils/memberStatus';
@@ -8,6 +8,7 @@ import { getBMICategory } from '../data/bodyCompositionData';
 import { MemberCameraCaptureModal } from './MemberCameraCaptureModal';
 import { MemberQRCodeModal } from './MemberQRCodeModal';
 import { TransactionActions } from './transaction/TransactionActions';
+import { PhotoEnlargeModal } from './common/PhotoEnlargeModal';
 
 interface MemberDetailModalProps {
   isOpen: boolean;
@@ -57,6 +58,7 @@ export const MemberDetailModal: React.FC<MemberDetailModalProps> = ({
   const [activeSubTab, setActiveSubTab] = useState<'info' | 'inbody' | 'absen' | 'trx' | 'pt' | 'fu' | 'freeze'>('info');
   const [isCameraModalOpen, setIsCameraModalOpen] = useState(false);
   const [isQRCodeModalOpen, setIsQRCodeModalOpen] = useState(false);
+  const [isPhotoEnlarged, setIsPhotoEnlarged] = useState(false);
   const [localPhoto, setLocalPhoto] = useState(member?.photo || '');
 
   useEffect(() => {
@@ -135,15 +137,28 @@ export const MemberDetailModal: React.FC<MemberDetailModalProps> = ({
         <div className="p-4 sm:p-6 border-b border-zinc-800 bg-zinc-950 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 shrink-0">
           <div className="flex items-center gap-3 sm:gap-4 min-w-0">
             <div className="relative group shrink-0">
-              <img
-                src={localPhoto || member.photo}
-                alt={member.name}
-                className="w-14 h-14 sm:w-20 sm:h-20 rounded-2xl object-cover border-2 border-zinc-700 group-hover:border-orange-500 shadow-md shrink-0 transition-colors"
-              />
+              <div
+                onClick={() => setIsPhotoEnlarged(true)}
+                className="w-14 h-14 sm:w-20 sm:h-20 rounded-2xl overflow-hidden border-2 border-zinc-700 group-hover:border-orange-500 shadow-md shrink-0 transition-all cursor-pointer relative"
+                title="Klik untuk memperbesar foto profil member"
+              >
+                <img
+                  src={localPhoto || member.photo}
+                  alt={member.name}
+                  className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300"
+                />
+                {/* Hover Zoom Overlay */}
+                <div className="absolute inset-0 bg-black/45 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center gap-0.5 text-white backdrop-blur-[1px]">
+                  <div className="w-7 h-7 rounded-full bg-orange-500/80 flex items-center justify-center shadow-lg">
+                    <ZoomIn className="w-3.5 h-3.5 text-white" />
+                  </div>
+                  <span className="text-[9px] font-bold tracking-wide drop-shadow hidden sm:inline">Perbesar</span>
+                </div>
+              </div>
               <button
                 type="button"
                 onClick={() => setIsCameraModalOpen(true)}
-                className="absolute -bottom-1 -right-1 w-6 h-6 sm:w-7 sm:h-7 rounded-xl bg-orange-500 hover:bg-orange-400 text-white flex items-center justify-center shadow-lg transition-transform hover:scale-110 cursor-pointer border-2 border-zinc-950"
+                className="absolute -bottom-1 -right-1 w-6 h-6 sm:w-7 sm:h-7 rounded-xl bg-orange-500 hover:bg-orange-400 text-white flex items-center justify-center shadow-lg transition-transform hover:scale-110 cursor-pointer border-2 border-zinc-950 z-10"
                 title="Ambil foto profil langsung dari kamera"
               >
                 <Camera className="w-3.5 h-3.5" />
@@ -1111,6 +1126,18 @@ export const MemberDetailModal: React.FC<MemberDetailModalProps> = ({
           onOpenDigitalPass={onOpenIDCard}
         />
       )}
+
+      {/* Enlarged Photo Lightbox Modal */}
+      <PhotoEnlargeModal
+        isOpen={isPhotoEnlarged}
+        onClose={() => setIsPhotoEnlarged(false)}
+        imageUrl={localPhoto || member.photo}
+        name={member.name}
+        id={member.id}
+        roleOrType={member.membershipType || 'MEMBER'}
+        subInfo={`Cabang: ${member.branchName || 'Cabang Utama'}`}
+        badgeType="member"
+      />
     </div>
   );
 };

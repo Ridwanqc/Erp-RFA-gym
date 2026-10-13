@@ -8,6 +8,7 @@ import {
   WhatsAppTemplateConfig,
   SystemSettings,
   PicProtectionConfig,
+  LandingPageConfig,
   UserRole
 } from '../types';
 
@@ -140,25 +141,50 @@ export const DEFAULT_BRANCHES: GymBranch[] = [
 ];
 
 export const SYSTEM_MODULES: { id: string; name: string; category: string; desc: string }[] = [
+  // 1. Overview & Operasional Harian
   { id: 'dashboard', name: 'Dashboard Eksekutif', category: 'Overview', desc: 'Melihat ringkasan omset, grafik kehadiran, dan statistik penting' },
   { id: 'absen', name: 'Absensi Staf & Member', category: 'Overview', desc: 'Pencatatan check-in gate member dan presensi kehadiran staf' },
+
+  // 2. Keanggotaan & Member
   { id: 'front-desk-portal', name: 'Portal Kasir & Front Desk', category: 'Membership', desc: 'Pusat operasional member terpadu, check-in gate, renewal cepat, dan saran asisten pintar' },
+  { id: 'guest-pass', name: 'Tiket Visit (Guest Pass)', category: 'Membership', desc: 'Penjualan dan validasi tiket kunjungan harian member tamu' },
   { id: 'membership', name: 'Keanggotaan & Paket', category: 'Membership', desc: 'Pendaftaran member baru, upgrade paket, dan perpanjangan langganan' },
   { id: 'freeze', name: 'Freeze / Cuti Member', category: 'Membership', desc: 'Pengajuan freeze, unfreeze, dan perpanjangan masa berlaku kartu' },
   { id: 'master-data', name: 'Direktori Member 360', category: 'Membership', desc: 'Akses riwayat 360, detail profil, dan kartu digital member' },
   { id: 'bundling', name: 'Bundling & Komisi', category: 'Membership', desc: 'Pengelolaan paket bundling membership + PT serta hitung komisi' },
+  { id: 'body-composition', name: 'Komposisi Tubuh & InBody', category: 'Membership', desc: 'Pencatatan & analisis komposisi tubuh, lemak, otot, dan evaluasi fisik member' },
   { id: 'crm', name: 'CRM & Pipeline Leads', category: 'Membership', desc: 'Follow-up prospek calon member, status closing, dan pesan WA' },
+
+  // 3. Personal Trainer & Kelas Studio
+  { id: 'leader-pt', name: 'Dashboard Leader PT & Antrian', category: 'Personal Trainer', desc: 'Radar jadwal, antrian penugasan PT, deteksi bentrok, dan evaluasi kinerja pelatih' },
   { id: 'pt-sessions', name: 'Jadwal & Sesi PT', category: 'Personal Trainer', desc: 'Penjadwalan sesi latihan, booking trainer, dan checklist sesi' },
+  { id: 'studio-class', name: 'Jadwal & Booking Kelas Studio', category: 'Personal Trainer', desc: 'Manajemen jadwal kelas senam, yoga, spinning, dan kapasitas studio' },
   { id: 'trainer-portal', name: 'Portal Khusus Trainer', category: 'Personal Trainer', desc: 'Area kerja pelatih untuk memantau klien binaan dan sesi' },
-  { id: 'leader-pt', name: 'Dashboard Leader PT', category: 'Personal Trainer', desc: 'Monitoring omset paket PT dan evaluasi kinerja pelatih' },
+  { id: 'pt-package-performance', name: 'Performa Trainer × Paket', category: 'Personal Trainer', desc: 'Analisis produktivitas pelatih dan penjualan paket sesi personal training' },
+
+  // 4. Retail POS & Merchandise
   { id: 'pos', name: 'Kasir POS & Minuman', category: 'Retail / POS', desc: 'Penjualan minuman berenergi, suplemen, merchandise & sewa loker' },
   { id: 'products', name: 'Katalog & Stok Retail', category: 'Retail / POS', desc: 'Input data barang, harga jual, barcode, dan penyesuaian stok' },
+
+  // 5. Fasilitas, Aset & Loker
   { id: 'inventaris', name: 'Inventaris & Servis Alat', category: 'Fasilitas & Aset', desc: 'Pencatatan mesin fitness, jadwal servis berkala & perbaikan' },
+  { id: 'lockers', name: 'Manajemen & Sewa Loker', category: 'Fasilitas & Aset', desc: 'Penomoran kunci loker, status sewa member, dan batas waktu peminjaman' },
+
+  // 6. Keuangan & Kas
+  { id: 'dashboard-keuangan', name: 'Dashboard Keuangan', category: 'Keuangan', desc: 'Ringkasan performa finansial, arus kas harian, dan ringkasan laba kotor' },
+  { id: 'laba-rugi', name: 'Laba Perusahaan (P&L)', category: 'Keuangan', desc: 'Laporan laba rugi komprehensif, pendapatan operasional, dan beban usaha' },
+  { id: 'pengeluaran', name: 'Manajemen Biaya & Pengeluaran', category: 'Keuangan', desc: 'Input beban operasional, riwayat pengeluaran, kategori & persetujuan' },
   { id: 'piutang', name: 'Buku Piutang & Cicilan', category: 'Keuangan', desc: 'Pemantauan cicilan member, jatuh tempo, dan pembayaran bertahap' },
   { id: 'laporan', name: 'Buku Besar & Void Transaksi', category: 'Keuangan', desc: 'Riwayat transaksi keluar-masuk kas, cetak ulang, dan pembatalan void' },
+  { id: 'laporan-penjualan', name: 'Laporan Penjualan Harian & Bulanan', category: 'Keuangan', desc: 'Rekapitulasi penjualan shift harian, mingguan, dan laporan bulanan' },
   { id: 'tutup-toko', name: 'Daily Closing Kasir', category: 'Keuangan', desc: 'Rekonsiliasi fisik laci kasir vs sistem dan cetak rekap shift' },
-  { id: 'hr-payroll', name: 'HR, Jadwal & Penggajian', category: 'SDM', desc: 'Manajemen karyawan, jadwal shift kerja, dan slip gaji' },
-  { id: 'settings', name: 'Pengaturan Sistem & Printer', category: 'Konfigurasi', desc: 'Konfigurasi printer thermal, hak akses role, dan profil cabang' }
+
+  // 7. SDM & Eksternal
+  { id: 'hr-payroll', name: 'HR, Jadwal & Penggajian', category: 'SDM', desc: 'Manajemen karyawan, jadwal shift kerja, slip gaji, dan potongan BPJS' },
+  { id: 'google-sheets', name: 'Google Sheets & Drive Sync', category: 'Integrasi', desc: 'Sinkronisasi cloud data member & transaksi ke spreadsheet Google Drive' },
+
+  // 8. Konfigurasi Sistem
+  { id: 'settings', name: 'Pengaturan Sistem & Printer', category: 'Konfigurasi', desc: 'Konfigurasi printer thermal, matriks hak akses role, outlet cabang, dan profil HQ' }
 ];
 
 export const DEFAULT_ROLE_DEFINITIONS: Record<UserRole, RoleDefinition> = {
@@ -214,14 +240,34 @@ export const DEFAULT_ROLE_DEFINITIONS: Record<UserRole, RoleDefinition> = {
   kasir: {
     role: 'kasir',
     roleName: 'Front Desk & Kasir POS',
-    description: 'Layanan kasir POS, transaksi membership, presensi gate, freeze, dan daily closing kas.',
+    description: 'Layanan kasir POS, transaksi membership, presensi gate, guest pass, freeze, dan daily closing kas.',
     badgeColor: 'bg-blue-500/20 text-blue-400 border-blue-500/30',
     isSystemRole: true,
     permissions: SYSTEM_MODULES.reduce((acc, m) => {
-      const allowed = ['absen', 'front-desk-portal', 'membership', 'freeze', 'master-data', 'bundling', 'crm', 'pos', 'products', 'piutang', 'laporan', 'tutup-toko'];
+      const allowed = [
+        'absen',
+        'front-desk-portal',
+        'guest-pass',
+        'membership',
+        'freeze',
+        'master-data',
+        'bundling',
+        'body-composition',
+        'crm',
+        'pos',
+        'products',
+        'lockers',
+        'dashboard-keuangan',
+        'laba-rugi',
+        'pengeluaran',
+        'piutang',
+        'laporan',
+        'laporan-penjualan',
+        'tutup-toko'
+      ];
       const canAccess = allowed.includes(m.id);
       acc[m.id] = {
-        view: canAccess || m.id === 'inventaris',
+        view: canAccess || m.id === 'inventaris' || m.id === 'studio-class',
         create: canAccess,
         edit: canAccess && m.id !== 'laporan',
         delete: false,
@@ -234,11 +280,28 @@ export const DEFAULT_ROLE_DEFINITIONS: Record<UserRole, RoleDefinition> = {
   leader_pt: {
     role: 'leader_pt',
     roleName: 'Head Coach / Leader PT',
-    description: 'Manajemen pelatih fitness, pengawasan paket PT, jadwal sesi, dan evaluasi performa pelatih.',
+    description: 'Manajemen pelatih fitness, antrian penugasan PT, radar jadwal bentrok, evaluasi kelas dan performa.',
     badgeColor: 'bg-amber-500/20 text-amber-400 border-amber-500/30',
     isSystemRole: true,
     permissions: SYSTEM_MODULES.reduce((acc, m) => {
-      const allowed = ['absen', 'master-data', 'bundling', 'crm', 'pt-sessions', 'trainer-portal', 'leader-pt', 'inventaris'];
+      const allowed = [
+        'absen',
+        'front-desk-portal',
+        'guest-pass',
+        'master-data',
+        'bundling',
+        'body-composition',
+        'crm',
+        'leader-pt',
+        'pt-sessions',
+        'studio-class',
+        'trainer-portal',
+        'pt-package-performance',
+        'inventaris',
+        'lockers',
+        'laporan-penjualan',
+        'hr-payroll'
+      ];
       const canAccess = allowed.includes(m.id);
       acc[m.id] = {
         view: canAccess || m.id === 'dashboard',
@@ -254,11 +317,17 @@ export const DEFAULT_ROLE_DEFINITIONS: Record<UserRole, RoleDefinition> = {
   pt: {
     role: 'pt',
     roleName: 'Personal Trainer',
-    description: 'Fokus melatih klien, pencatatan log latihan, penyelesaian sesi PT, dan presensi kerja.',
+    description: 'Fokus melatih klien, pencatatan log latihan, penyelesaian sesi PT, inbody & evaluasi, dan presensi kerja.',
     badgeColor: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30',
     isSystemRole: true,
     permissions: SYSTEM_MODULES.reduce((acc, m) => {
-      const allowed = ['absen', 'pt-sessions', 'trainer-portal'];
+      const allowed = [
+        'absen',
+        'body-composition',
+        'pt-sessions',
+        'studio-class',
+        'trainer-portal'
+      ];
       const canAccess = allowed.includes(m.id);
       acc[m.id] = {
         view: canAccess,
@@ -274,11 +343,11 @@ export const DEFAULT_ROLE_DEFINITIONS: Record<UserRole, RoleDefinition> = {
   teknisi: {
     role: 'teknisi',
     roleName: 'Teknisi & Maintenance Alat',
-    description: 'Pemeriksaan kondisi mesin fitness, servis berkala, checklist alat, dan log perawatan.',
+    description: 'Pemeriksaan kondisi mesin fitness, servis berkala, checklist alat, perbaikan loker, dan log perawatan.',
     badgeColor: 'bg-cyan-500/20 text-cyan-400 border-cyan-500/30',
     isSystemRole: true,
     permissions: SYSTEM_MODULES.reduce((acc, m) => {
-      const canAccess = m.id === 'inventaris' || m.id === 'absen';
+      const canAccess = m.id === 'inventaris' || m.id === 'lockers' || m.id === 'absen';
       acc[m.id] = {
         view: canAccess,
         create: canAccess,
@@ -375,11 +444,112 @@ export const DEFAULT_PIC_PROTECTION: PicProtectionConfig = {
   requirePasswordOnLeadHandover: true
 };
 
+export const DEFAULT_LANDING_CONFIG: LandingPageConfig = {
+  hero: {
+    headlineStart: 'TRANSFORMASI TUBUH & ENERGI',
+    headlineGradient: 'TANPA BATAS',
+    headlineEnd: 'DI RFA GYM',
+    subheadline: 'Fasilitas fitness premium standar internasional, bimbingan Personal Trainer bersertifikasi, dan studio class terlengkap di Cibubur & sekitarnya. Wujudkan versi terbaik fisik dan mental Anda bersama komunitas juara.',
+    badgeText: 'Pusat Kebugaran Premium & Komunitas Atlet',
+    heroImageUrl: 'https://images.unsplash.com/photo-1534438327276-14e5300c3a48?q=80&w=1000&auto=format&fit=crop',
+    heroImageAlt: 'RFA Gym Premium Training Arena',
+    hubTag: 'Flagship Hub',
+    hubTitle: 'Menara Sudirman Lantai 2',
+    hubDesc: 'Peralatan Eleiko, Hammer Strength & LifeFitness',
+    hubStatus: 'Open Now',
+    primaryCtaText: 'Join Now • Mulai Latihan',
+    secondaryCtaText: 'Lihat Program & Jadwal',
+    ratingScore: '4.9 / 5.0',
+    ratingReviews: '(850+ Ulasan)',
+    ratingTagline: 'Gym Favorit Urban Jakarta',
+    communityCount: '1,500+ Member',
+    communityTagline: 'Komunitas Aktif & Berprestasi',
+    highlights: [
+      'Free Trial & Konsultasi InBody',
+      'Akses 3 Cabang Strategis',
+      'Tanpa Kontrak Terikat Panjang'
+    ]
+  },
+  announcement: {
+    enabled: true,
+    text: 'Promo Spesial Bulan Ini: Dapatkan diskon 25% untuk membership tahunan + Free 2 sesi konsultasi Personal Trainer!',
+    highlightText: 'FLASH SALE',
+    badgeText: 'HOT PROMO',
+    ctaText: 'Daftar Sekarang'
+  },
+  about: {
+    badge: 'Tentang RFA Gym',
+    title: 'DEDIKASI KAMI UNTUK PERFORMA TERBAIK ANDA',
+    description: 'Berawal dari sebuah studio latihan intensif pada 2018, RFA Gym kini berkembang menjadi ekosistem kebugaran urban terpadu dengan standar fasilitas internasional dan pelatih profesional.',
+    storyTitle: 'Mengubah Cara Masyarakat Urban Memandang Kebugaran',
+    storyP1: 'Di RFA Gym, kami percaya bahwa kebugaran bukan sekadar mengangkat beban atau membakar kalori. Kebugaran adalah fondasi kepercayaan diri, ketahanan mental menghadapi tekanan hidup, dan energi berkelanjutan untuk meraih impian Anda setiap hari.',
+    storyP2: 'Dengan memadukan sains biomekanik, bimbingan nutrisi praktis, dan teknologi manajemen modern berbasis cloud, kami memastikan setiap menit yang Anda investasikan di gym berbuah hasil nyata yang tahan lama.',
+    stat1Value: '8+ Tahun',
+    stat1Label: 'Eksistensi & Pengalaman',
+    stat2Value: '98.4%',
+    stat2Label: 'Kepuasan Member & Klien'
+  },
+  social: {
+    whatsapp: '0857-7218-5973',
+    instagram: '@rfagym',
+    tiktok: '@rfagym_official',
+    youtube: 'RFA Gym Indonesia',
+    email: 'info@rfagym.com',
+    operationalWeekday: '06:00 - 22:00 WIB',
+    operationalWeekend: '07:00 - 21:00 WIB'
+  },
+  galleryItems: [
+    {
+      id: 'fg-1',
+      title: 'Free Weight Zone & Power Racks',
+      category: 'gym',
+      image: 'https://images.unsplash.com/photo-1534438327276-14e5300c3a48?q=80&w=800&auto=format&fit=crop',
+      description: 'Dumbbell set lengkap 2.5kg hingga 50kg, Olympic Barbell, dan 4 Olympic Squat Racks.'
+    },
+    {
+      id: 'fg-2',
+      title: 'Cardio Theater & Curved Treadmill',
+      category: 'gym',
+      image: 'https://images.unsplash.com/photo-1576678927484-cc907957088c?q=80&w=800&auto=format&fit=crop',
+      description: 'Treadmill layar sentuh interaktif, stair climber, rowing machine, dan assault air-bike.'
+    },
+    {
+      id: 'fg-3',
+      title: 'Mirror Studio Aerobik & Yoga',
+      category: 'studio',
+      image: 'https://images.unsplash.com/photo-1518611012118-696072aa579a?q=80&w=800&auto=format&fit=crop',
+      description: 'Studio berlantai vinyl cushion anti-slip dengan acoustic audio surround dan pencahayaan dinamis.'
+    },
+    {
+      id: 'fg-4',
+      title: 'Smart Digital Locker & Warm Shower',
+      category: 'recovery',
+      image: 'https://images.unsplash.com/photo-1584622650111-993a426fbf0a?q=80&w=800&auto=format&fit=crop',
+      description: 'Locker RFID otomatis berkeamanan tinggi, shower air hangat, hairdryer, dan sabun mandi premium.'
+    },
+    {
+      id: 'fg-5',
+      title: 'Recovery Finnish Sauna & Steam Bath',
+      category: 'recovery',
+      image: 'https://images.unsplash.com/photo-1540555700478-4be289fbecef?q=80&w=800&auto=format&fit=crop',
+      description: 'Ruang sauna kayu pinus asli untuk relaksasi otot setelah latihan keras dan detoksifikasi tubuh.'
+    },
+    {
+      id: 'fg-6',
+      title: 'Protein Bar & Member Lounge Cafe',
+      category: 'lounge',
+      image: 'https://images.unsplash.com/photo-1554118811-1e0d58224f24?q=80&w=800&auto=format&fit=crop',
+      description: 'Whey protein smoothies segar, kopi cold brew, kursi santai, dan colokan Wi-Fi cepat untuk bekerja.'
+    }
+  ]
+};
+
 export const DEFAULT_SYSTEM_SETTINGS: SystemSettings = {
   printer: DEFAULT_PRINTER_CONFIG,
   profile: DEFAULT_GYM_PROFILE,
   paymentAndTax: DEFAULT_PAYMENT_AND_TAX,
   templates: DEFAULT_WHATSAPP_TEMPLATES,
   picProtection: DEFAULT_PIC_PROTECTION,
+  landing: DEFAULT_LANDING_CONFIG,
   updatedAt: new Date().toISOString()
 };

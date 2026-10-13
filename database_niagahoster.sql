@@ -287,5 +287,87 @@ VALUES
 ('MEM-002', 'GP-M002', 'Dimas Anggara', '081344556677', 'dimas.anggara@gmail.com', 'L', 'Aktif', 'BR-001', 'Cabang Utama', 'Paket Member 1 Bulan Reguler', DATE_ADD(CURRENT_DATE, INTERVAL 15 DAY), 0, 0)
 ON DUPLICATE KEY UPDATE `name` = VALUES(`name`);
 
+-- --------------------------------------------------------
+-- 12. TABEL: expense_categories (Master Kategori Pengeluaran)
+-- --------------------------------------------------------
+CREATE TABLE IF NOT EXISTS `expense_categories` (
+  `id` VARCHAR(50) NOT NULL,
+  `name` VARCHAR(100) NOT NULL,
+  `group` ENUM('OPERASIONAL', 'SDM', 'FASILITAS', 'KEUANGAN_LAIN', 'ASET_PERSEDIAAN') NOT NULL DEFAULT 'OPERASIONAL',
+  `accountingType` ENUM('BEBAN_OPERASIONAL', 'BEBAN_SDM', 'BEBAN_FASILITAS', 'BEBAN_FINANSIAL', 'ASET_TETAP', 'PERSEDIAAN', 'PEMBAYARAN_UTANG') NOT NULL DEFAULT 'BEBAN_OPERASIONAL',
+  `description` TEXT DEFAULT NULL,
+  `subcategories` TEXT DEFAULT NULL, -- JSON array string
+  `defaultPaymentAccount` VARCHAR(100) DEFAULT NULL,
+  `isActive` TINYINT(1) NOT NULL DEFAULT 1,
+  `createdAt` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+-- 13. TABEL: company_expenses (Biaya Operasional & Pengeluaran)
+-- --------------------------------------------------------
+CREATE TABLE IF NOT EXISTS `company_expenses` (
+  `id` VARCHAR(50) NOT NULL,
+  `expenseNumber` VARCHAR(50) NOT NULL,
+  `date` DATE NOT NULL,
+  `branchId` VARCHAR(50) NOT NULL DEFAULT 'BR-001',
+  `branchName` VARCHAR(100) NOT NULL DEFAULT 'Cabang Utama',
+  `categoryId` VARCHAR(50) NOT NULL,
+  `categoryName` VARCHAR(100) NOT NULL,
+  `subcategory` VARCHAR(100) NOT NULL,
+  `name` VARCHAR(255) NOT NULL,
+  `description` TEXT DEFAULT NULL,
+  `amount` DECIMAL(14, 2) NOT NULL,
+  `accountingType` ENUM('BEBAN_OPERASIONAL', 'BEBAN_SDM', 'BEBAN_FASILITAS', 'BEBAN_FINANSIAL', 'ASET_TETAP', 'PERSEDIAAN', 'PEMBAYARAN_UTANG') NOT NULL DEFAULT 'BEBAN_OPERASIONAL',
+  `paymentMethod` ENUM('Kas', 'Transfer Bank', 'QRIS', 'Kartu Debit/EDC', 'Lainnya') NOT NULL DEFAULT 'Kas',
+  `sourceAccount` VARCHAR(100) NOT NULL,
+  `vendorOrBeneficiary` VARCHAR(150) NOT NULL,
+  `picStaffId` VARCHAR(50) NOT NULL,
+  `picStaffName` VARCHAR(100) NOT NULL,
+  `invoiceRefNumber` VARCHAR(100) DEFAULT NULL,
+  `attachmentUrl` LONGTEXT DEFAULT NULL,
+  `attachmentFileName` VARCHAR(255) DEFAULT NULL,
+  `approvalStatus` ENUM('Draft', 'Menunggu Persetujuan', 'Disetujui', 'Ditolak', 'Dibatalkan') NOT NULL DEFAULT 'Menunggu Persetujuan',
+  `paymentStatus` ENUM('Belum Dibayar', 'Dibayar Sebagian', 'Lunas') NOT NULL DEFAULT 'Belum Dibayar',
+  `paidAmount` DECIMAL(14, 2) NOT NULL DEFAULT 0.00,
+  `balanceRemaining` DECIMAL(14, 2) NOT NULL DEFAULT 0.00,
+  `paidAt` DATETIME DEFAULT NULL,
+  `paidByUserId` VARCHAR(50) DEFAULT NULL,
+  `paidByUserName` VARCHAR(100) DEFAULT NULL,
+  `paidAccount` VARCHAR(100) DEFAULT NULL,
+  `approvedByUserId` VARCHAR(50) DEFAULT NULL,
+  `approvedByUserName` VARCHAR(100) DEFAULT NULL,
+  `approvedAt` DATETIME DEFAULT NULL,
+  `rejectionReason` TEXT DEFAULT NULL,
+  `notes` TEXT DEFAULT NULL,
+  `isAssetCapitalized` TINYINT(1) NOT NULL DEFAULT 0,
+  `linkedAssetId` VARCHAR(50) DEFAULT NULL,
+  `createdAt` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updatedAt` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `company_expenses_expenseNumber_unique` (`expenseNumber`),
+  KEY `company_expenses_date_idx` (`date`),
+  KEY `company_expenses_branchId_idx` (`branchId`),
+  KEY `company_expenses_approvalStatus_idx` (`approvalStatus`),
+  KEY `company_expenses_paymentStatus_idx` (`paymentStatus`),
+  KEY `company_expenses_accountingType_idx` (`accountingType`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+-- 14. TABEL: expense_audit_logs (Jejak Audit Pengeluaran)
+-- --------------------------------------------------------
+CREATE TABLE IF NOT EXISTS `expense_audit_logs` (
+  `id` VARCHAR(50) NOT NULL,
+  `expenseId` VARCHAR(50) NOT NULL,
+  `userId` VARCHAR(50) NOT NULL,
+  `userName` VARCHAR(100) NOT NULL,
+  `action` VARCHAR(100) NOT NULL,
+  `notes` TEXT DEFAULT NULL,
+  `createdAt` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  KEY `expense_audit_logs_expenseId_idx` (`expenseId`),
+  CONSTRAINT `fk_expense_audit_logs_expense` FOREIGN KEY (`expenseId`) REFERENCES `company_expenses` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 SET FOREIGN_KEY_CHECKS = 1;
 COMMIT;

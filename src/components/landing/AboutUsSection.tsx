@@ -18,6 +18,8 @@ import {
   RFA_MILESTONES
 } from '../../data/landingData';
 import { FacilityGalleryItem, TrainerProfile } from '../../types/landingTypes';
+import { useSettings } from '../../context/SettingsContext';
+import { DEFAULT_LANDING_CONFIG } from '../../data/settingsData';
 
 interface AboutUsSectionProps {
   onSelectTrainerForBooking: (trainerName: string) => void;
@@ -26,12 +28,18 @@ interface AboutUsSectionProps {
 export const AboutUsSection: React.FC<AboutUsSectionProps> = ({
   onSelectTrainerForBooking
 }) => {
+  const { settings } = useSettings();
+  const aboutConfig = settings?.landing?.about || DEFAULT_LANDING_CONFIG.about;
+  const galleryItems = settings?.landing?.galleryItems && settings.landing.galleryItems.length > 0
+    ? settings.landing.galleryItems
+    : FACILITY_GALLERY;
+
   const [activeGalleryTab, setActiveGalleryTab] = useState<'all' | 'gym' | 'studio' | 'recovery' | 'lounge'>('all');
   const [selectedTrainer, setSelectedTrainer] = useState<TrainerProfile | null>(null);
 
   const filteredGallery = activeGalleryTab === 'all'
-    ? FACILITY_GALLERY
-    : FACILITY_GALLERY.filter((item) => item.category === activeGalleryTab);
+    ? galleryItems
+    : galleryItems.filter((item) => item.category === activeGalleryTab);
 
   return (
     <section id="about-us" className="py-24 bg-zinc-950 border-t border-zinc-900 relative">
@@ -40,13 +48,13 @@ export const AboutUsSection: React.FC<AboutUsSectionProps> = ({
         <div className="text-center max-w-3xl mx-auto mb-16">
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-orange-500/10 border border-orange-500/20 text-orange-400 text-xs font-bold uppercase tracking-wider mb-4">
             <Building2 className="w-3.5 h-3.5" />
-            <span>Tentang RFA Gym</span>
+            <span>{aboutConfig.badge || 'Tentang RFA Gym'}</span>
           </div>
           <h2 className="text-3xl sm:text-4xl font-black text-white tracking-tight">
-            DEDIKASI KAMI UNTUK PERFORMA TERBAIK ANDA
+            {aboutConfig.title || 'DEDIKASI KAMI UNTUK PERFORMA TERBAIK ANDA'}
           </h2>
           <p className="mt-4 text-zinc-400 text-base leading-relaxed">
-            Berawal dari sebuah studio latihan intensif pada 2018, RFA Gym kini berkembang menjadi ekosistem kebugaran urban terpadu dengan standar fasilitas internasional dan pelatih profesional.
+            {aboutConfig.description || 'Berawal dari sebuah studio latihan intensif pada 2018, RFA Gym kini berkembang menjadi ekosistem kebugaran urban terpadu dengan standar fasilitas internasional dan pelatih profesional.'}
           </p>
         </div>
 
@@ -54,23 +62,23 @@ export const AboutUsSection: React.FC<AboutUsSectionProps> = ({
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 items-center mb-20">
           <div className="lg:col-span-6 space-y-6">
             <h3 className="text-2xl font-black text-white">
-              Mengubah Cara Masyarakat Urban Memandang Kebugaran
+              {aboutConfig.storyTitle || 'Mengubah Cara Masyarakat Urban Memandang Kebugaran'}
             </h3>
             <p className="text-zinc-300 text-sm leading-relaxed">
-              Di RFA Gym, kami percaya bahwa kebugaran bukan sekadar mengangkat beban atau membakar kalori. Kebugaran adalah fondasi kepercayaan diri, ketahanan mental menghadapi tekanan hidup, dan energi berkelanjutan untuk meraih impian Anda setiap hari.
+              {aboutConfig.storyP1 || 'Di RFA Gym, kami percaya bahwa kebugaran bukan sekadar mengangkat beban atau membakar kalori. Kebugaran adalah fondasi kepercayaan diri, ketahanan mental menghadapi tekanan hidup, dan energi berkelanjutan untuk meraih impian Anda setiap hari.'}
             </p>
             <p className="text-zinc-400 text-sm leading-relaxed">
-              Dengan memadukan sains biomekanik, bimbingan nutrisi praktis, dan teknologi manajemen modern berbasis cloud, kami memastikan setiap menit yang Anda investasikan di gym berbuah hasil nyata yang tahan lama.
+              {aboutConfig.storyP2 || 'Dengan memadukan sains biomekanik, bimbingan nutrisi praktis, dan teknologi manajemen modern berbasis cloud, kami memastikan setiap menit yang Anda investasikan di gym berbuah hasil nyata yang tahan lama.'}
             </p>
 
             <div className="grid grid-cols-2 gap-4 pt-2">
               <div className="p-4 rounded-2xl bg-zinc-900 border border-zinc-800">
-                <span className="text-2xl font-black text-orange-400">8+ Tahun</span>
-                <p className="text-xs text-zinc-400 mt-1">Eksistensi & Pengalaman</p>
+                <span className="text-2xl font-black text-orange-400">{aboutConfig.stat1Value || '8+ Tahun'}</span>
+                <p className="text-xs text-zinc-400 mt-1">{aboutConfig.stat1Label || 'Eksistensi & Pengalaman'}</p>
               </div>
               <div className="p-4 rounded-2xl bg-zinc-900 border border-zinc-800">
-                <span className="text-2xl font-black text-amber-400">98.4%</span>
-                <p className="text-xs text-zinc-400 mt-1">Kepuasan Member & Klien</p>
+                <span className="text-2xl font-black text-amber-400">{aboutConfig.stat2Value || '98.4%'}</span>
+                <p className="text-xs text-zinc-400 mt-1">{aboutConfig.stat2Label || 'Kepuasan Member & Klien'}</p>
               </div>
             </div>
           </div>

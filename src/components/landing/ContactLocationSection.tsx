@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   MapPin,
   Phone,
@@ -15,6 +15,8 @@ import {
   Youtube
 } from 'lucide-react';
 import { BRANCH_CONTACTS, getDynamicBranchContacts } from '../../data/landingData';
+import { useSettings } from '../../context/SettingsContext';
+import { DEFAULT_LANDING_CONFIG } from '../../data/settingsData';
 
 interface ContactLocationSectionProps {
   onOpenStaffLogin: () => void;
@@ -35,8 +37,41 @@ export const ContactLocationSection: React.FC<ContactLocationSectionProps> = ({
   const [contactMessage, setContactMessage] = useState('');
   const [messageSent, setMessageSent] = useState(false);
 
+  const { settings } = useSettings();
+  const social = settings?.landing?.social || DEFAULT_LANDING_CONFIG.social;
+
   const branchContacts = getDynamicBranchContacts();
   const activeBranch = branchContacts.find((b) => b.id === selectedBranchId) || branchContacts[0];
+
+  // Akses Tersembunyi: Klik logo RFA Gym 5x berturut-turut (jeda maks 3 detik) untuk membuka Login Staf & Kasir
+  const footerClickCountRef = useRef(0);
+  const footerClickTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+  const handleFooterLogoClick = () => {
+    if (footerClickTimerRef.current) {
+      clearTimeout(footerClickTimerRef.current);
+      footerClickTimerRef.current = null;
+    }
+
+    footerClickCountRef.current += 1;
+
+    if (footerClickCountRef.current >= 5) {
+      footerClickCountRef.current = 0;
+      onOpenStaffLogin();
+    } else {
+      footerClickTimerRef.current = setTimeout(() => {
+        footerClickCountRef.current = 0;
+      }, 3000);
+    }
+  };
+
+  useEffect(() => {
+    return () => {
+      if (footerClickTimerRef.current) {
+        clearTimeout(footerClickTimerRef.current);
+      }
+    };
+  }, []);
 
   const handleSendMessage = (e: React.FormEvent) => {
     e.preventDefault();
@@ -276,8 +311,12 @@ export const ContactLocationSection: React.FC<ContactLocationSectionProps> = ({
         {/* Global Footer */}
         <footer className="pt-12 border-t border-zinc-900 grid grid-cols-1 md:grid-cols-4 gap-8 text-xs text-zinc-400">
           <div className="space-y-3 md:col-span-1">
-            <div className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-xl bg-orange-500 flex items-center justify-center text-white">
+            <div
+              onClick={handleFooterLogoClick}
+              className="flex items-center gap-2 cursor-pointer select-none group"
+              title="RFA GYM PLATFORM"
+            >
+              <div className="w-8 h-8 rounded-xl bg-orange-500 flex items-center justify-center text-white group-hover:scale-105 transition-transform">
                 <Flame className="w-4 h-4" />
               </div>
               <span className="text-base font-extrabold text-white">
@@ -333,14 +372,6 @@ export const ContactLocationSection: React.FC<ContactLocationSectionProps> = ({
                   Reservasi Single Day Pass
                 </button>
               </li>
-              <li>
-                <button
-                  onClick={onOpenStaffLogin}
-                  className="text-zinc-500 hover:text-zinc-300 transition-colors text-left font-medium"
-                >
-                  Portal Login Staf & ERP Kasir
-                </button>
-              </li>
             </ul>
           </div>
 
@@ -352,13 +383,31 @@ export const ContactLocationSection: React.FC<ContactLocationSectionProps> = ({
               Ikuti konten harian latihan, workout challenge, dan tips nutrisi dari coach RFA.
             </p>
             <div className="flex items-center gap-3 text-zinc-400">
-              <a href="#" className="p-2 rounded-xl bg-zinc-900 hover:text-orange-400 hover:bg-zinc-800 transition-colors">
+              <a
+                href={`https://instagram.com/${(social.instagram || 'rfagym').replace('@', '')}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="p-2 rounded-xl bg-zinc-900 hover:text-pink-400 hover:bg-zinc-800 transition-colors"
+                title={`Instagram: ${social.instagram}`}
+              >
                 <Instagram className="w-4 h-4" />
               </a>
-              <a href="#" className="p-2 rounded-xl bg-zinc-900 hover:text-orange-400 hover:bg-zinc-800 transition-colors">
-                <Facebook className="w-4 h-4" />
+              <a
+                href={`https://wa.me/${(social.whatsapp || '0857-7218-5973').replace(/[^0-9]/g, '')}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="p-2 rounded-xl bg-zinc-900 hover:text-emerald-400 hover:bg-zinc-800 transition-colors"
+                title={`WhatsApp: ${social.whatsapp}`}
+              >
+                <MessageCircle className="w-4 h-4" />
               </a>
-              <a href="#" className="p-2 rounded-xl bg-zinc-900 hover:text-orange-400 hover:bg-zinc-800 transition-colors">
+              <a
+                href={`https://youtube.com/results?search_query=${encodeURIComponent(social.youtube || 'RFA Gym Indonesia')}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="p-2 rounded-xl bg-zinc-900 hover:text-rose-500 hover:bg-zinc-800 transition-colors"
+                title={`YouTube: ${social.youtube}`}
+              >
                 <Youtube className="w-4 h-4" />
               </a>
             </div>

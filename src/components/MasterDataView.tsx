@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { Users, Plus, IdCard, Eye, PenTool, Trash2, Camera, ShieldCheck, FileText, CheckCircle2, Upload, Download, X, Search, Filter, ArrowUpDown, RotateCcw, FileSpreadsheet, Lock, Unlock, Building2 } from 'lucide-react';
+import { Users, Plus, IdCard, Eye, PenTool, Trash2, Camera, ShieldCheck, FileText, CheckCircle2, Upload, Download, X, Search, Filter, ArrowUpDown, RotateCcw, FileSpreadsheet, Lock, Unlock, Building2, ZoomIn } from 'lucide-react';
 import { Member, User, UserRole, ALL_BRANCHES_ID } from '../types';
 import { APP_TODAY } from '../utils/formatters';
 import { IdentityCardModal } from './IdentityCardModal';
@@ -9,6 +9,7 @@ import { PicPasswordModal } from './PicPasswordModal';
 import { useSettings } from '../context/SettingsContext';
 import { DEFAULT_PIC_PROTECTION } from '../data/settingsData';
 import { OfficialIdCardSection } from './OfficialIdCardSection';
+import { PhotoEnlargeModal } from './common/PhotoEnlargeModal';
 
 interface MasterDataViewProps {
   members: Member[];
@@ -83,6 +84,16 @@ export const MasterDataView: React.FC<MasterDataViewProps> = ({
   const [selectedIdPerson, setSelectedIdPerson] = useState<(Member | User) | null>(null);
   const [idPersonType, setIdPersonType] = useState<'member' | 'staff'>('member');
   const [isIdCardViewerOpen, setIsIdCardViewerOpen] = useState(false);
+
+  // Photo enlargement lightbox state
+  const [enlargePhotoData, setEnlargePhotoData] = useState<{
+    imageUrl: string;
+    name: string;
+    id?: string;
+    roleOrType?: string;
+    subInfo?: string;
+    badgeType?: 'member' | 'staff' | 'document';
+  } | null>(null);
 
   // Staff specific
   const [accId, setAccId] = useState('');
@@ -591,11 +602,30 @@ export const MasterDataView: React.FC<MasterDataViewProps> = ({
                   </div>
 
                   <div className="px-5 pb-4 -mt-8 relative">
-                    <img
-                      src={m.photo}
-                      alt={m.name}
-                      className="w-16 h-16 rounded-2xl object-cover border-4 border-zinc-900 shadow-md mb-3"
-                    />
+                    <div
+                      onClick={() =>
+                        setEnlargePhotoData({
+                          imageUrl: m.photo || '',
+                          name: m.name,
+                          id: m.id,
+                          roleOrType: m.membershipType || 'MEMBER',
+                          subInfo: `Cabang: ${m.branchName || 'Cabang Utama'}`,
+                          badgeType: 'member'
+                        })
+                      }
+                      className="w-16 h-16 rounded-2xl overflow-hidden border-4 border-zinc-900 shadow-md mb-3 cursor-pointer group/photo relative hover:border-orange-500 transition-all duration-200"
+                      title="Klik untuk memperbesar foto profil member"
+                    >
+                      <img
+                        src={m.photo}
+                        alt={m.name}
+                        className="w-full h-full object-cover group-hover/photo:scale-110 transition-transform duration-300"
+                      />
+                      {/* Hover Zoom Overlay */}
+                      <div className="absolute inset-0 bg-black/40 opacity-0 group-hover/photo:opacity-100 transition-opacity flex items-center justify-center text-white backdrop-blur-[1px]">
+                        <ZoomIn className="w-5 h-5 text-white drop-shadow" />
+                      </div>
+                    </div>
 
                     <h4 className="text-sm font-bold text-white group-hover:text-orange-400 transition truncate">
                       {m.name}
@@ -838,11 +868,30 @@ export const MasterDataView: React.FC<MasterDataViewProps> = ({
                   filteredStaff.map((s) => (
                   <tr key={s.id} className="hover:bg-zinc-800/30">
                     <td className="py-3 px-4 text-center">
-                      <img
-                        src={s.photo}
-                        alt={s.name}
-                        className="w-10 h-10 rounded-xl object-cover mx-auto border border-zinc-700 shadow-sm"
-                      />
+                      <div
+                        onClick={() =>
+                          setEnlargePhotoData({
+                            imageUrl: s.photo || '',
+                            name: s.name,
+                            id: s.id,
+                            roleOrType: s.roleName,
+                            subInfo: `Cabang: ${s.branchName || 'Cabang Utama'} • Shift ${s.shift}`,
+                            badgeType: 'staff'
+                          })
+                        }
+                        className="w-10 h-10 rounded-xl overflow-hidden mx-auto border border-zinc-700 hover:border-orange-500 shadow-sm cursor-pointer group/photo relative transition-all duration-200"
+                        title="Klik untuk memperbesar foto karyawan"
+                      >
+                        <img
+                          src={s.photo}
+                          alt={s.name}
+                          className="w-full h-full object-cover group-hover/photo:scale-110 transition-transform duration-300"
+                        />
+                        {/* Hover Zoom Overlay */}
+                        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover/photo:opacity-100 transition-opacity flex items-center justify-center text-white backdrop-blur-[1px]">
+                          <ZoomIn className="w-3.5 h-3.5 text-white drop-shadow" />
+                        </div>
+                      </div>
                     </td>
                     <td className="py-3 px-4">
                       <p className="font-bold text-white text-sm">{s.name}</p>
@@ -1370,6 +1419,20 @@ export const MasterDataView: React.FC<MasterDataViewProps> = ({
         currentUser={currentUser}
         showToast={showToast}
       />
+
+      {/* MODAL: PHOTO ENLARGE LIGHTBOX */}
+      {enlargePhotoData && (
+        <PhotoEnlargeModal
+          isOpen={Boolean(enlargePhotoData)}
+          onClose={() => setEnlargePhotoData(null)}
+          imageUrl={enlargePhotoData.imageUrl}
+          name={enlargePhotoData.name}
+          id={enlargePhotoData.id}
+          roleOrType={enlargePhotoData.roleOrType}
+          subInfo={enlargePhotoData.subInfo}
+          badgeType={enlargePhotoData.badgeType}
+        />
+      )}
     </div>
   );
 };

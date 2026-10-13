@@ -84,12 +84,68 @@ export const MemberPTBookingSection: React.FC<MemberPTBookingSectionProps> = ({
     return calculateMemberPTSummary(loggedInMember, ptPurchases, bookings);
   }, [loggedInMember, ptPurchases, bookings]);
 
-  // Member's bookings history
+  // Member's bookings history (merges PTBookings and ERP Schedules so no session is missed)
   const memberBookings = useMemo(() => {
-    return bookings
-      .filter((b) => b.memberId === loggedInMember.id)
-      .sort((a, b) => new Date(`${b.bookingDate}T${b.startTime}`).getTime() - new Date(`${a.bookingDate}T${a.startTime}`).getTime());
-  }, [bookings, loggedInMember.id]);
+    const directBookings = bookings.filter(
+      (b) =>
+        b.memberId === loggedInMember.id ||
+        (b.memberName && b.memberName.toLowerCase().trim() === loggedInMember.name.toLowerCase().trim())
+    );
+    const bookingIds = new Set(directBookings.map((b) => b.id));
+    const bookingScheduleIds = new Set(directBookings.map((b) => b.scheduleId).filter(Boolean));
+
+    // Also include any PT schedules directly created by staff/coach in ERP calendar
+    const erpPTSchedules: PTBooking[] = schedules
+      .filter(
+        (s) =>
+          (s.memberId === loggedInMember.id ||
+            (s.memberName && s.memberName.toLowerCase().trim() === loggedInMember.name.toLowerCase().trim())) &&
+          !bookingIds.has(s.id) &&
+          (!s.bookingId || !bookingIds.has(s.bookingId)) &&
+          !bookingScheduleIds.has(s.id)
+      )
+      .map((s, idx) => ({
+        id: s.bookingId || s.id,
+        bookingCode: s.bookingCode || `BK-${s.id}`,
+        scheduleId: s.id,
+        ptPackageId: s.purchaseId || ptSummary.activePurchase?.id || 'ERP-SCH',
+        packageName: ptSummary.activePurchase?.packageName || 'Sesi Personal Trainer (ERP)',
+        totalSessions: ptSummary.totalSessions || 10,
+        sessionNumber: s.sessionNumber || idx + 1,
+        memberId: s.memberId,
+        memberName: s.memberName,
+        memberPhone: loggedInMember.phone,
+        trainerId: s.trainerId || 'S04',
+        trainerName: s.trainer || 'Coach RFA',
+        bookingDate: s.date,
+        startTime: s.time,
+        endTime:
+          s.endTime ||
+          (s.time.includes(':')
+            ? `${(parseInt(s.time.split(':')[0]) + 1).toString().padStart(2, '0')}:${s.time.split(':')[1]}`
+            : '19:00'),
+        workoutFocus: s.workoutFocus || 'Personal Training (ERP)',
+        status:
+          s.status === 'Selesai'
+            ? ('COMPLETED' as const)
+            : s.status === 'Batal' || s.status === 'Hangus'
+            ? ('CANCELLED' as const)
+            : s.status === 'Reschedule'
+            ? ('RESCHEDULED' as const)
+            : ('CONFIRMED' as const),
+        source: (s.source as any) || 'ERP_ADMIN',
+        notes: s.note || 'Dijadwalkan via Ruang Kerja ERP',
+        createdAt: s.date,
+        updatedAt: s.date,
+        createdBy: 'Admin / Coach ERP'
+      }));
+
+    return [...directBookings, ...erpPTSchedules].sort(
+      (a, b) =>
+        new Date(`${b.bookingDate}T${b.startTime}`).getTime() -
+        new Date(`${a.bookingDate}T${a.startTime}`).getTime()
+    );
+  }, [bookings, schedules, loggedInMember, ptSummary.activePurchase?.id]);
 
   // Previous patterns for "Gunakan Jadwal Sebelumnya" & "Booking Ulang"
   const patterns = useMemo(() => {

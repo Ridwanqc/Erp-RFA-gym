@@ -399,16 +399,43 @@ export function calculateMemberPTSummary(
   bookings: PTBooking[]
 ) {
   // Cari paket PT aktif yang dimiliki member
-  const memberPurchases = ptPurchases.filter(
-    (p) =>
-      (p.memberId === member.id || p.memberIds?.includes(member.id) || p.memberName.toLowerCase().includes(member.name.toLowerCase())) &&
-      p.status !== 'CANCELLED' &&
-      p.status !== 'REFUND' &&
-      p.status !== 'EXPIRED'
-  );
+  const memberPurchases = ptPurchases.filter((p) => {
+    const isInactive = p.status === 'CANCELLED' || p.status === 'REFUND' || p.status === 'EXPIRED';
+    if (isInactive) return false;
 
-  // Ambil paket yang paling relevan (prioritas paket aktif / in_progress / assigned)
-  const activePurchase = memberPurchases.find((p) => p.status === 'IN_PROGRESS' || p.status === 'ASSIGNED' || p.status === 'SCHEDULED' || p.status === 'Active') || memberPurchases[0];
+    // Direct ID match with name verification to prevent cross-contamination
+    if (p.memberId === member.id) {
+      if (
+        p.memberName &&
+        !p.memberName.toLowerCase().includes(member.name.toLowerCase()) &&
+        !member.name.toLowerCase().includes(p.memberName.toLowerCase())
+      ) {
+        return false;
+      }
+      return true;
+    }
+    // Name match
+    if (p.memberName && p.memberName.toLowerCase().trim() === member.name.toLowerCase().trim()) {
+      return true;
+    }
+    // Group / couple memberIds
+    if (p.memberIds && p.memberIds.includes(member.id)) {
+      return true;
+    }
+    return false;
+  });
+
+  // Ambil paket yang paling relevan (prioritas paket aktif / in_progress / assigned yang masih punya sisa sesi)
+  const activePurchase =
+    memberPurchases.find(
+      (p) =>
+        (p.status === 'IN_PROGRESS' || p.status === 'ASSIGNED' || p.status === 'SCHEDULED' || p.status === 'Active') &&
+        ((p.remainingSessions ?? (p.totalSessions - p.completedSessions)) > 0)
+    ) ||
+    memberPurchases.find(
+      (p) => p.status === 'IN_PROGRESS' || p.status === 'ASSIGNED' || p.status === 'SCHEDULED' || p.status === 'Active'
+    ) ||
+    memberPurchases[0];
 
   // Bookings member ini
   const memberBookings = bookings.filter((b) => b.memberId === member.id);
@@ -417,29 +444,53 @@ export function calculateMemberPTSummary(
     (b) => b.status === 'CONFIRMED' || b.status === 'PENDING' || b.status === 'RESCHEDULED'
   );
 
-  const totalSessions = activePurchase?.totalSessions || Math.max(member.ptQuota || 0, 10);
-  const completedSessions = activePurchase ? activePurchase.completedSessions : completedBookings.length;
+  const totalSessions = activePurchase
+    ? activePurchase.totalSessions
+    : (member.ptQuota || 0);
+
+  const completedSessions = activePurchase
+    ? activePurchase.completedSessions
+    : completedBookings.length;
+
   const scheduledCount = activeScheduledBookings.length;
-  // Sisa sesi tersedia untuk di-booking = Total - Completed - Scheduled
-  const remainingAvailable = Math.max(0, totalSessions - completedSessions - scheduledCount);
+
+  // Sisa sesi tersedia untuk di-booking = Sisa kuota paket - Booking aktif terjadwal
+  const baseRemaining = activePurchase
+    ? (activePurchase.remainingSessions !== undefined
+        ? activePurchase.remainingSessions
+        : Math.max(0, totalSessions - completedSessions))
+    : Math.max(0, (member.ptQuota || 0));
+
+  const remainingAvailable = Math.max(0, baseRemaining - scheduledCount);
 
   // Trainer yang ditugaskan
-  const assignedTrainer = activePurchase?.trainerId && activePurchase.trainerId !== '-'
-    ? { id: activePurchase.trainerId, name: activePurchase.trainerName }
-    : member.picId
-    ? { id: member.picId, name: member.picName || 'Coach GymPro' }
-    : null;
+  const assignedTrainer =
+    activePurchase?.trainerId && activePurchase.trainerId !== '-' && activePurchase.trainerId !== ''
+      ? { id: activePurchase.trainerId, name: activePurchase.trainerName }
+      : member.picId && member.picName
+      ? { id: member.picId, name: member.picName }
+      : null;
+
+  const hasActivePackage = Boolean(
+    (activePurchase &&
+      (activePurchase.status === 'Active' ||
+        activePurchase.status === 'IN_PROGRESS' ||
+        activePurchase.status === 'ASSIGNED' ||
+        activePurchase.status === 'SCHEDULED' ||
+        activePurchase.status === 'WAITING_ASSIGNMENT')) ||
+      (member.ptQuota && member.ptQuota > 0)
+  );
 
   return {
-    hasActivePackage: Boolean(activePurchase || (member.ptQuota && member.ptQuota > 0)),
+    hasActivePackage,
     activePurchase,
-    packageName: activePurchase?.packageName || 'PT Personal Transformation',
+    packageName: activePurchase?.packageName || (member.ptQuota && member.ptQuota > 0 ? `Paket PT Mandiri (${member.ptQuota} Sesi)` : 'Belum Ada Paket PT Aktif'),
     totalSessions,
     completedSessions,
     scheduledSessions: scheduledCount,
     remainingAvailable,
     assignedTrainer,
-    expiryDate: activePurchase?.expiryDate || member.expired || '2026-12-31'
+    expiryDate: activePurchase?.expiryDate || member.expired || APP_TODAY
   };
 }
 

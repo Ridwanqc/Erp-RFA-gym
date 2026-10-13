@@ -17,12 +17,14 @@ import {
   Mail,
   MapPin,
   Download,
-  Upload
+  Upload,
+  ZoomIn
 } from 'lucide-react';
 import { User, ShiftType, getStaffDivision } from '../../types';
 import { formatRp, APP_TODAY } from '../../utils/formatters';
 import { DataImportModal } from '../DataImportModal';
 import { DataExportModal } from '../DataExportModal';
+import { PhotoEnlargeModal } from '../common/PhotoEnlargeModal';
 
 interface StaffDirectoryTabProps {
   staffUsers: User[];
@@ -50,6 +52,7 @@ export const StaffDirectoryTab: React.FC<StaffDirectoryTabProps> = ({
   const [editingStaff, setEditingStaff] = useState<User | null>(null);
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   const [isExportModalOpen, setIsExportModalOpen] = useState(false);
+  const [enlargedStaffPhoto, setEnlargedStaffPhoto] = useState<User | null>(null);
 
   // Form states
   const [formId, setFormId] = useState('');
@@ -336,12 +339,19 @@ export const StaffDirectoryTab: React.FC<StaffDirectoryTabProps> = ({
               <div>
                 {/* Header: Photo & Role Badge */}
                 <div className="flex items-start justify-between gap-3">
-                  <div className="relative">
+                  <div
+                    onClick={() => setEnlargedStaffPhoto(staff)}
+                    className="relative cursor-pointer group/photo"
+                    title="Klik untuk memperbesar foto staf"
+                  >
                     <img
                       src={staff.photo}
                       alt={staff.name}
-                      className="w-14 h-14 rounded-2xl object-cover border-2 border-zinc-800 shadow"
+                      className="w-14 h-14 rounded-2xl object-cover border-2 border-zinc-800 group-hover/photo:border-orange-500 shadow transition-all duration-200"
                     />
+                    <div className="absolute inset-0 bg-black/40 opacity-0 group-hover/photo:opacity-100 transition-opacity rounded-2xl flex items-center justify-center text-white backdrop-blur-[1px]">
+                      <ZoomIn className="w-4 h-4 text-white drop-shadow" />
+                    </div>
                     <span className="absolute -bottom-1 -right-1 bg-zinc-950 text-orange-400 border border-zinc-800 rounded-full px-1.5 py-0.2 text-[9px] font-mono font-bold">
                       {staff.id}
                     </span>
@@ -459,11 +469,20 @@ export const StaffDirectoryTab: React.FC<StaffDirectoryTabProps> = ({
                   <tr key={staff.id} className="hover:bg-zinc-800/30 transition">
                     <td className="py-3 px-4">
                       <div className="flex items-center gap-2.5">
-                        <img
-                          src={staff.photo}
-                          alt={staff.name}
-                          className="w-8 h-8 rounded-full object-cover border border-zinc-700"
-                        />
+                        <div
+                          onClick={() => setEnlargedStaffPhoto(staff)}
+                          className="relative cursor-pointer group/photo shrink-0"
+                          title="Klik untuk memperbesar foto staf"
+                        >
+                          <img
+                            src={staff.photo}
+                            alt={staff.name}
+                            className="w-8 h-8 rounded-full object-cover border border-zinc-700 group-hover/photo:border-orange-500 transition-all duration-200"
+                          />
+                          <div className="absolute inset-0 bg-black/40 opacity-0 group-hover/photo:opacity-100 transition-opacity rounded-full flex items-center justify-center text-white">
+                            <ZoomIn className="w-3 h-3 text-white drop-shadow" />
+                          </div>
+                        </div>
                         <div>
                           <p className="font-bold text-white text-xs">{staff.name}</p>
                           <p className="text-[10px] text-zinc-500 font-mono">ID: {staff.id}</p>
@@ -851,6 +870,20 @@ export const StaffDirectoryTab: React.FC<StaffDirectoryTabProps> = ({
         filterLabel={`${filterRole !== 'all' ? `Role: ${filterRole} ` : ''}${searchQuery ? `Pencarian: "${searchQuery}"` : ''}`}
         showToast={showToast}
       />
+
+      {/* ENLARGED PHOTO LIGHTBOX */}
+      {enlargedStaffPhoto && (
+        <PhotoEnlargeModal
+          isOpen={Boolean(enlargedStaffPhoto)}
+          onClose={() => setEnlargedStaffPhoto(null)}
+          imageUrl={enlargedStaffPhoto.photo || ''}
+          name={enlargedStaffPhoto.name}
+          id={enlargedStaffPhoto.id}
+          roleOrType={enlargedStaffPhoto.roleName}
+          subInfo={`Divisi: ${getStaffDivision(enlargedStaffPhoto)} • Shift ${enlargedStaffPhoto.shift}`}
+          badgeType="staff"
+        />
+      )}
     </div>
   );
 };

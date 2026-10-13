@@ -18,9 +18,13 @@ import {
   Clock,
   Sparkles,
   LogOut,
-  Info
+  Info,
+  Briefcase,
+  Receipt,
+  CalendarCheck,
+  Crown
 } from 'lucide-react';
-import { Member, Transaction, Product, Schedule, User as AppUser } from '../types';
+import { Member, Transaction, Product, Schedule, User as AppUser, CompanyExpense, Attendance, PackageItem } from '../types';
 import {
   auth,
   signInWithGoogle,
@@ -34,6 +38,7 @@ import {
   readSpreadsheetRange,
   appendSpreadsheetRows,
   syncOverwriteSheet,
+  syncAllGymDataToSpreadsheet,
   GoogleSpreadsheetItem
 } from '../lib/googleSheetsService';
 import { formatRp, formatDateIndo, APP_TODAY } from '../utils/formatters';
@@ -44,8 +49,19 @@ interface GoogleSheetsSyncViewProps {
   transactions: Transaction[];
   products: Product[];
   schedules: Schedule[];
+  staffUsers?: AppUser[];
+  expenses?: CompanyExpense[];
+  attendances?: Attendance[];
+  packages?: PackageItem[];
   onImportMembers?: (newMembers: Member[]) => void;
   showToast: (title: string, message: string, type: 'success' | 'error' | 'warning' | 'info') => void;
+  activeSpreadsheetId?: string;
+  onSetActiveSpreadsheetId?: (id: string) => void;
+  autoSyncEnabled?: boolean;
+  onToggleAutoSync?: (enabled: boolean) => void;
+  lastSyncTime?: string | null;
+  isAutoSyncing?: boolean;
+  onTriggerInstantSync?: () => Promise<void>;
 }
 
 export const GoogleSheetsSyncView: React.FC<GoogleSheetsSyncViewProps> = ({
@@ -54,8 +70,19 @@ export const GoogleSheetsSyncView: React.FC<GoogleSheetsSyncViewProps> = ({
   transactions,
   products,
   schedules,
+  staffUsers = [],
+  expenses = [],
+  attendances = [],
+  packages = [],
   onImportMembers,
-  showToast
+  showToast,
+  activeSpreadsheetId,
+  onSetActiveSpreadsheetId,
+  autoSyncEnabled = true,
+  onToggleAutoSync,
+  lastSyncTime,
+  isAutoSyncing = false,
+  onTriggerInstantSync
 }) => {
   const [googleUser, setGoogleUser] = useState<any>(auth.currentUser);
   const [token, setToken] = useState<string | null>(null);
@@ -74,8 +101,12 @@ export const GoogleSheetsSyncView: React.FC<GoogleSheetsSyncViewProps> = ({
   );
   const [includeTransactions, setIncludeTransactions] = useState(true);
   const [includeMembers, setIncludeMembers] = useState(true);
+  const [includeStaff, setIncludeStaff] = useState(true);
   const [includeSchedules, setIncludeSchedules] = useState(true);
+  const [includeExpenses, setIncludeExpenses] = useState(true);
   const [includeProducts, setIncludeProducts] = useState(true);
+  const [includeAttendances, setIncludeAttendances] = useState(true);
+  const [includePackages, setIncludePackages] = useState(true);
   const [isExporting, setIsExporting] = useState(false);
   const [lastCreatedSheet, setLastCreatedSheet] = useState<{ id: string; url: string } | null>(
     null
@@ -179,14 +210,25 @@ export const GoogleSheetsSyncView: React.FC<GoogleSheetsSyncViewProps> = ({
         title: spreadsheetTitle,
         transactions: includeTransactions ? transactions : [],
         members: includeMembers ? members : [],
+        staffUsers: includeStaff ? staffUsers : [],
         schedules: includeSchedules ? schedules : [],
-        products: includeProducts ? products : []
+        expenses: includeExpenses ? expenses : [],
+        products: includeProducts ? products : [],
+        attendances: includeAttendances ? attendances : [],
+        packages: includePackages ? packages : []
       });
 
       setLastCreatedSheet({ id: result.spreadsheetId, url: result.spreadsheetUrl });
+      onSetActiveSpreadsheetId?.(result.spreadsheetId);
+      onToggleAutoSync?.(true);
+      try {
+        localStorage.setItem('gympro_active_spreadsheet_id', result.spreadsheetId);
+        localStorage.setItem('gympro_sheets_autosync', 'true');
+      } catch {}
+
       showToast(
-        'Spreadsheet Berhasil Dibuat!',
-        `Data berhasil diekspor ke Google Sheets di akun Google Drive Anda.`,
+        'Spreadsheet Berhasil Dibuat & Auto-Sync Aktif!',
+        `Data berhasil diekspor. Setiap data baru atau dihapus kini otomatis tersinkron ke spreadsheet ini.`,
         'success'
       );
       // Reload drive file list
@@ -218,59 +260,20 @@ export const GoogleSheetsSyncView: React.FC<GoogleSheetsSyncViewProps> = ({
     try {
       setIsSyncingExisting(true);
       if (pendingSyncAction === 'overwrite') {
-        // Overwrite Member Sheet
-        const memberHeader = [
-          'ID Member',
-          'Nama Lengkap',
-          'No Telepon / WhatsApp',
-          'Tipe Membership',
-          'Tanggal Mulai',
-          'Tanggal Habis',
-          'Status',
-          'Sisa Sesi PT',
-          'No KTP/SIM'
-        ];
-        const memberRows = members.map((m) => [
-          m.id,
-          m.name,
-          m.phone,
-          m.membershipType || 'MEMBER',
-          m.joinDate || '-',
-          m.expired,
-          m.status || 'AKTIF',
-          m.ptQuota || 0,
-          m.idNumber || '-'
-        ]);
-        await syncOverwriteSheet(token, targetId, 'Database Member', memberHeader, memberRows);
-
-        // Overwrite Trx Sheet
-        const trxHeader = [
-          'ID Transaksi',
-          'Tanggal',
-          'Waktu',
-          'Pelanggan',
-          'Tipe',
-          'Deskripsi',
-          'Total (Rp)',
-          'Metode',
-          'Status'
-        ];
-        const trxRows = transactions.map((t) => [
-          t.id,
-          t.date,
-          t.time,
-          t.customer,
-          t.type,
-          t.desc,
-          t.amount,
-          t.method,
-          t.status
-        ]);
-        await syncOverwriteSheet(token, targetId, 'Ringkasan & Transaksi', trxHeader, trxRows);
+        const res = await syncAllGymDataToSpreadsheet(token, targetId, {
+          members,
+          transactions,
+          schedules,
+          products,
+          staffUsers,
+          expenses,
+          attendances,
+          packages
+        });
 
         showToast(
-          'Sinkronisasi Berhasil (Overwrite)',
-          'Seluruh tab Database Member & Transaksi telah diperbarui di Google Sheets.',
+          'Sinkronisasi 8 Modul Berhasil (Overwrite)',
+          `Seluruh data sistem (${res.counts.members} Member, ${res.counts.transactions} Transaksi, ${res.counts.staff} Staf, ${res.counts.expenses} Beban, ${res.counts.attendances} Presensi, dll.) telah diperbarui di Google Sheets.`,
           'success'
         );
       } else {
@@ -454,6 +457,133 @@ export const GoogleSheetsSyncView: React.FC<GoogleSheetsSyncViewProps> = ({
         </div>
       </div>
 
+      {/* Real-time Google Sheets Auto-Sync Status Card */}
+      <div className="bg-zinc-900/90 border border-emerald-500/30 rounded-3xl p-5 shadow-lg relative overflow-hidden">
+        <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4">
+          <div className="flex items-start gap-3.5">
+            <div
+              className={`w-11 h-11 rounded-2xl flex items-center justify-center font-bold text-xl shrink-0 ${
+                autoSyncEnabled && activeSpreadsheetId
+                  ? 'bg-emerald-500/20 border border-emerald-500/40 text-emerald-400'
+                  : 'bg-zinc-800 border border-zinc-700 text-zinc-400'
+              }`}
+            >
+              <RefreshCw className={`w-5 h-5 ${isAutoSyncing ? 'animate-spin text-emerald-400' : ''}`} />
+            </div>
+            <div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <h3 className="text-sm sm:text-base font-bold text-white">
+                  Sinkronisasi Otomatis Google Sheets (Real-Time Auto-Sync)
+                </h3>
+                {autoSyncEnabled && activeSpreadsheetId ? (
+                  <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                    Aktif & Otomatis Terupdate
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-zinc-800 text-zinc-400 border border-zinc-700">
+                    Auto-Sync Nonaktif
+                  </span>
+                )}
+              </div>
+              <p className="text-xs text-zinc-400 mt-1 leading-relaxed max-w-3xl">
+                Setiap penambahan data baru, perubahan, maupun penghapusan (Database Member, Ringkasan Transaksi POS, Jadwal Sesi PT, dan Katalog Produk) akan otomatis diekspor dan tersinkronisasi langsung ke Google Spreadsheet Anda.
+              </p>
+
+              {activeSpreadsheetId ? (
+                <div className="mt-2.5 flex items-center gap-3 text-xs flex-wrap">
+                  <span className="text-zinc-400 font-mono text-[11px] bg-zinc-950 px-2.5 py-1 rounded-lg border border-zinc-800">
+                    ID Target: {activeSpreadsheetId}
+                  </span>
+                  <a
+                    href={`https://docs.google.com/spreadsheets/d/${activeSpreadsheetId}/edit`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-emerald-400 hover:text-emerald-300 font-bold flex items-center gap-1 text-[11px] underline"
+                  >
+                    Buka Spreadsheet di Google Sheets <ExternalLink className="w-3 h-3" />
+                  </a>
+                  {lastSyncTime && (
+                    <span className="text-[11px] text-zinc-400">
+                      • Terakhir sinkron: <strong className="text-white">{lastSyncTime}</strong>
+                    </span>
+                  )}
+                </div>
+              ) : (
+                <p className="text-[11px] text-amber-400 mt-2 font-medium">
+                  ℹ️ Buat spreadsheet baru di bawah atau pilih spreadsheet dari Google Drive Anda untuk menetapkan target sinkronisasi otomatis.
+                </p>
+              )}
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2.5 shrink-0 self-stretch sm:self-auto justify-end">
+            {onTriggerInstantSync && activeSpreadsheetId && (
+              <button
+                type="button"
+                onClick={onTriggerInstantSync}
+                disabled={isAutoSyncing || !token}
+                className="px-3.5 py-2 rounded-xl bg-emerald-600/20 hover:bg-emerald-600/30 border border-emerald-500/40 text-emerald-300 hover:text-white text-xs font-bold transition flex items-center gap-2 cursor-pointer disabled:opacity-50"
+                title="Kirim seluruh data terkini ke Google Sheets sekarang"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 ${isAutoSyncing ? 'animate-spin' : ''}`} />
+                <span>{isAutoSyncing ? 'Menyinkronkan...' : '⚡ Sinkronkan Sekarang'}</span>
+              </button>
+            )}
+
+            {onToggleAutoSync && (
+              <button
+                type="button"
+                onClick={() => onToggleAutoSync(!autoSyncEnabled)}
+                className={`px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 cursor-pointer border ${
+                  autoSyncEnabled
+                    ? 'bg-emerald-600 text-white border-emerald-500 shadow-md'
+                    : 'bg-zinc-800 text-zinc-300 border-zinc-700 hover:text-white'
+                }`}
+              >
+                <span>Auto-Sync: {autoSyncEnabled ? 'AKTIF' : 'NONAKTIF'}</span>
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* Live Data Summary Pills */}
+        <div className="mt-4 pt-3 border-t border-zinc-800/80 grid grid-cols-2 sm:grid-cols-4 gap-2 text-[11px]">
+          <div className="bg-zinc-950/70 p-2 rounded-xl border border-zinc-800/80 flex items-center justify-between">
+            <span className="text-zinc-400">Database Member:</span>
+            <strong className="text-white font-mono">{members.length} data</strong>
+          </div>
+          <div className="bg-zinc-950/70 p-2 rounded-xl border border-zinc-800/80 flex items-center justify-between">
+            <span className="text-zinc-400">Ringkasan Transaksi:</span>
+            <strong className="text-white font-mono">{transactions.length} data</strong>
+          </div>
+          <div className="bg-zinc-950/70 p-2 rounded-xl border border-zinc-800/80 flex items-center justify-between">
+            <span className="text-zinc-400">Staf & Karyawan:</span>
+            <strong className="text-white font-mono">{staffUsers.length} data</strong>
+          </div>
+          <div className="bg-zinc-950/70 p-2 rounded-xl border border-zinc-800/80 flex items-center justify-between">
+            <span className="text-zinc-400">Jadwal Sesi PT:</span>
+            <strong className="text-white font-mono">{schedules.length} data</strong>
+          </div>
+          <div className="bg-zinc-950/70 p-2 rounded-xl border border-zinc-800/80 flex items-center justify-between">
+            <span className="text-zinc-400">Pengeluaran & Beban:</span>
+            <strong className="text-white font-mono">{expenses.length} data</strong>
+          </div>
+          <div className="bg-zinc-950/70 p-2 rounded-xl border border-zinc-800/80 flex items-center justify-between">
+            <span className="text-zinc-400">Katalog Produk:</span>
+            <strong className="text-white font-mono">{products.length} data</strong>
+          </div>
+          <div className="bg-zinc-950/70 p-2 rounded-xl border border-zinc-800/80 flex items-center justify-between">
+            <span className="text-zinc-400">Presensi Masuk:</span>
+            <strong className="text-white font-mono">{attendances.length} data</strong>
+          </div>
+          <div className="bg-zinc-950/70 p-2 rounded-xl border border-zinc-800/80 flex items-center justify-between">
+            <span className="text-zinc-400">Master Paket:</span>
+            <strong className="text-white font-mono">{packages.length} data</strong>
+          </div>
+        </div>
+      </div>
+
       {/* Navigation Sub-Tabs */}
       <div className="flex bg-zinc-900/90 p-1.5 rounded-2xl border border-zinc-800 w-fit flex-wrap gap-1">
         <button
@@ -561,7 +691,24 @@ export const GoogleSheetsSyncView: React.FC<GoogleSheetsSyncViewProps> = ({
                   </div>
                 </label>
 
-                {/* 3. Jadwal PT */}
+                {/* 3. Staf & Karyawan */}
+                <label className="flex items-center gap-3 p-3.5 bg-zinc-950 border border-zinc-800 rounded-2xl cursor-pointer hover:border-zinc-700 transition">
+                  <input
+                    type="checkbox"
+                    checked={includeStaff}
+                    onChange={(e) => setIncludeStaff(e.target.checked)}
+                    className="w-4 h-4 text-emerald-500 rounded focus:ring-0 bg-zinc-900 border-zinc-700"
+                  />
+                  <div>
+                    <p className="text-xs font-bold text-white flex items-center gap-1.5">
+                      <Briefcase className="w-3.5 h-3.5 text-indigo-400" />
+                      <span>Staf & Karyawan</span>
+                    </p>
+                    <p className="text-[10px] text-zinc-500 mt-0.5">{staffUsers.length} karyawan</p>
+                  </div>
+                </label>
+
+                {/* 4. Jadwal PT */}
                 <label className="flex items-center gap-3 p-3.5 bg-zinc-950 border border-zinc-800 rounded-2xl cursor-pointer hover:border-zinc-700 transition">
                   <input
                     type="checkbox"
@@ -578,7 +725,24 @@ export const GoogleSheetsSyncView: React.FC<GoogleSheetsSyncViewProps> = ({
                   </div>
                 </label>
 
-                {/* 4. Produk */}
+                {/* 5. Pengeluaran & Beban */}
+                <label className="flex items-center gap-3 p-3.5 bg-zinc-950 border border-zinc-800 rounded-2xl cursor-pointer hover:border-zinc-700 transition">
+                  <input
+                    type="checkbox"
+                    checked={includeExpenses}
+                    onChange={(e) => setIncludeExpenses(e.target.checked)}
+                    className="w-4 h-4 text-emerald-500 rounded focus:ring-0 bg-zinc-900 border-zinc-700"
+                  />
+                  <div>
+                    <p className="text-xs font-bold text-white flex items-center gap-1.5">
+                      <Receipt className="w-3.5 h-3.5 text-rose-400" />
+                      <span>Pengeluaran & Beban</span>
+                    </p>
+                    <p className="text-[10px] text-zinc-500 mt-0.5">{expenses.length} beban operasional</p>
+                  </div>
+                </label>
+
+                {/* 6. Produk */}
                 <label className="flex items-center gap-3 p-3.5 bg-zinc-950 border border-zinc-800 rounded-2xl cursor-pointer hover:border-zinc-700 transition">
                   <input
                     type="checkbox"
@@ -592,6 +756,40 @@ export const GoogleSheetsSyncView: React.FC<GoogleSheetsSyncViewProps> = ({
                       <span>Katalog & Stok Produk</span>
                     </p>
                     <p className="text-[10px] text-zinc-500 mt-0.5">{products.length} produk</p>
+                  </div>
+                </label>
+
+                {/* 7. Presensi Kunjungan */}
+                <label className="flex items-center gap-3 p-3.5 bg-zinc-950 border border-zinc-800 rounded-2xl cursor-pointer hover:border-zinc-700 transition">
+                  <input
+                    type="checkbox"
+                    checked={includeAttendances}
+                    onChange={(e) => setIncludeAttendances(e.target.checked)}
+                    className="w-4 h-4 text-emerald-500 rounded focus:ring-0 bg-zinc-900 border-zinc-700"
+                  />
+                  <div>
+                    <p className="text-xs font-bold text-white flex items-center gap-1.5">
+                      <CalendarCheck className="w-3.5 h-3.5 text-teal-400" />
+                      <span>Presensi Masuk Gerbang</span>
+                    </p>
+                    <p className="text-[10px] text-zinc-500 mt-0.5">{attendances.length} kunjungan</p>
+                  </div>
+                </label>
+
+                {/* 8. Master Paket */}
+                <label className="flex items-center gap-3 p-3.5 bg-zinc-950 border border-zinc-800 rounded-2xl cursor-pointer hover:border-zinc-700 transition">
+                  <input
+                    type="checkbox"
+                    checked={includePackages}
+                    onChange={(e) => setIncludePackages(e.target.checked)}
+                    className="w-4 h-4 text-emerald-500 rounded focus:ring-0 bg-zinc-900 border-zinc-700"
+                  />
+                  <div>
+                    <p className="text-xs font-bold text-white flex items-center gap-1.5">
+                      <Crown className="w-3.5 h-3.5 text-amber-400" />
+                      <span>Katalog Master Paket</span>
+                    </p>
+                    <p className="text-[10px] text-zinc-500 mt-0.5">{packages.length} paket</p>
                   </div>
                 </label>
               </div>
@@ -812,6 +1010,31 @@ export const GoogleSheetsSyncView: React.FC<GoogleSheetsSyncViewProps> = ({
             >
               <RefreshCw className="w-3.5 h-3.5" />
               <span>Perbarui Seluruh Data (Overwrite Tabs)</span>
+            </button>
+
+            {/* Action 3: Set as Auto-Sync Target */}
+            <button
+              type="button"
+              disabled={!token || (!selectedExistingId && !customExistingUrl)}
+              onClick={() => {
+                const targetId = extractSpreadsheetId(customExistingUrl) || selectedExistingId;
+                if (!targetId) return;
+                onSetActiveSpreadsheetId?.(targetId);
+                onToggleAutoSync?.(true);
+                try {
+                  localStorage.setItem('gympro_active_spreadsheet_id', targetId);
+                  localStorage.setItem('gympro_sheets_autosync', 'true');
+                } catch {}
+                showToast(
+                  'Target Auto-Sync Ditetapkan',
+                  `Spreadsheet ID ${targetId} telah dijadikan target sinkronisasi otomatis. Setiap data yang diinput dan dihapus kini otomatis terupdate ke spreadsheet ini!`,
+                  'success'
+                );
+              }}
+              className="px-4 py-2.5 bg-orange-600 hover:bg-orange-500 text-white font-bold text-xs rounded-xl transition flex items-center gap-2 shadow-md shadow-orange-600/20 disabled:opacity-50 cursor-pointer"
+            >
+              <Sparkles className="w-3.5 h-3.5" />
+              <span>Jadikan Target Auto-Sync Otomatis</span>
             </button>
           </div>
         </div>

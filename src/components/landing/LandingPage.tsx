@@ -9,11 +9,11 @@ import {
   PTBooking,
   Schedule,
   TrainerChangeRequest,
-  PTBackofficeNotification
+  PTBackofficeNotification,
+  TrainerWorkoutLog
 } from '../../types';
 import { LandingProgram, OnlineReservation } from '../../types/landingTypes';
 import { INITIAL_ONLINE_RESERVATIONS } from '../../data/landingData';
-import { APP_TODAY } from '../../utils/formatters';
 import { LandingHeader } from './LandingHeader';
 import { HeroSection } from './HeroSection';
 import { WhyChooseUsSection } from './WhyChooseUsSection';
@@ -57,6 +57,8 @@ interface LandingPageProps {
   ) => void;
   onCancelBooking?: (bookingId: string, reason?: string) => void;
   onRequestChangeTrainer?: (request: TrainerChangeRequest) => void;
+  workoutLogs?: TrainerWorkoutLog[];
+  onSaveWorkoutLog?: (log: TrainerWorkoutLog) => void;
   showToast?: (title: string, message: string, type: 'success' | 'error' | 'warning' | 'info') => void;
 }
 
@@ -82,14 +84,11 @@ export const LandingPage: React.FC<LandingPageProps> = ({
   onRescheduleBooking,
   onCancelBooking,
   onRequestChangeTrainer,
+  workoutLogs = [],
+  onSaveWorkoutLog,
   showToast
 }) => {
   const [activeSection, setActiveSection] = useState<string>('hero');
-
-  // Compute live active members in gym
-  const todayAttendances = attendances.filter((a) => a.date === APP_TODAY);
-  const activeInGymMembers = todayAttendances.filter((a) => !a.timeOut || a.timeOut.trim() === '');
-  const activeInGymCount = activeInGymMembers.length;
 
   // Reservation & Flow Modal State
   const [isReservationModalOpen, setIsReservationModalOpen] = useState(false);
@@ -219,6 +218,11 @@ export const LandingPage: React.FC<LandingPageProps> = ({
     } catch {}
   };
 
+  // Ensure loggedInMember is synced with latest real data from members array
+  const effectiveLoggedInMember = loggedInMember
+    ? members.find((m) => m.id === loggedInMember.id) || loggedInMember
+    : null;
+
   const trainerCount = staffUsers.filter((u) => u.role === 'pt').length || 4;
 
   return (
@@ -230,11 +234,10 @@ export const LandingPage: React.FC<LandingPageProps> = ({
         onOpenReservation={() => handleOpenJoinNow()}
         onOpenMemberArea={() => setIsMemberModalOpen(true)}
         onOpenStaffLogin={onOpenStaffLogin}
-        loggedInMember={loggedInMember}
+        loggedInMember={effectiveLoggedInMember}
         onLogoutMember={handleLogoutMember}
         isStaffLoggedIn={isStaffLoggedIn}
         onReturnToERP={onReturnToERP}
-        activeInGymCount={activeInGymCount}
       />
 
       <main>
@@ -244,8 +247,9 @@ export const LandingPage: React.FC<LandingPageProps> = ({
           onStartBooking={() => handleOpenJoinNow()}
           onExplorePrograms={() => handleNavigateSection('programs')}
           memberCount={members.length}
-          activeInGymCount={activeInGymCount}
-          loggedInMember={loggedInMember}
+          attendances={attendances}
+          members={members}
+          loggedInMember={effectiveLoggedInMember}
           onOpenMemberArea={() => setIsMemberModalOpen(true)}
         />
 
@@ -259,10 +263,11 @@ export const LandingPage: React.FC<LandingPageProps> = ({
           trainerCount={trainerCount}
           branchCount={3}
           attendances={attendances}
+          members={members}
           onCtaClick={() => handleOpenJoinNow()}
           onOpenJoinNow={(plan, branchId) => handleOpenJoinNow(plan, branchId)}
           onOpenInquiry={(topic, branchId) => handleOpenInquiry(topic, branchId)}
-          loggedInMember={loggedInMember}
+          loggedInMember={effectiveLoggedInMember}
           onOpenMemberArea={() => setIsMemberModalOpen(true)}
         />
 
@@ -331,7 +336,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
         isOpen={isMemberModalOpen}
         onClose={() => setIsMemberModalOpen(false)}
         members={members}
-        loggedInMember={loggedInMember}
+        loggedInMember={effectiveLoggedInMember}
         onLoginMember={handleLoginMember}
         onLogoutMember={handleLogoutMember}
         reservations={reservations}
@@ -351,6 +356,9 @@ export const LandingPage: React.FC<LandingPageProps> = ({
         onRescheduleBooking={onRescheduleBooking}
         onCancelBooking={onCancelBooking}
         onRequestChangeTrainer={onRequestChangeTrainer}
+        attendances={attendances}
+        workoutLogs={workoutLogs}
+        onSaveWorkoutLog={onSaveWorkoutLog}
         showToast={showToast}
       />
     </div>

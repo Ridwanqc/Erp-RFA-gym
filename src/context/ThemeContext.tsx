@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 
-export type ThemeMode = 'dark' | 'midnight' | 'slate' | 'light' | 'claymorphism';
+export type ThemeMode = 'claymorphism-light' | 'claymorphism' | 'dark' | 'midnight' | 'slate' | 'light';
 export type AccentColor = 'orange' | 'emerald' | 'cyan' | 'violet' | 'red' | 'amber';
 export type ContentDensity = 'comfortable' | 'compact';
 export type BackgroundPattern = 'none' | 'grid' | 'dots';
@@ -35,6 +35,22 @@ export interface ThemeModeOption {
 
 export const THEME_MODE_OPTIONS: ThemeModeOption[] = [
   {
+    id: 'claymorphism-light',
+    name: 'Claymorphism 3D Terang',
+    desc: 'Desain 3D clay taktil & empuk dengan latar terang bersih, bayangan timbul lembut, dan teks hitam pekat kontras tinggi agar sangat jelas terbaca.',
+    iconType: 'layers',
+    bgPreview: 'bg-[#e8edf5]',
+    cardPreview: 'bg-[#ffffff]'
+  },
+  {
+    id: 'claymorphism',
+    name: 'Claymorphism 3D Gelap',
+    desc: 'Desain 3D clay taktil & empuk dengan bayangan timbul ganda dan permukaan halus pada latar gelap modern.',
+    iconType: 'layers',
+    bgPreview: 'bg-[#1e202e]',
+    cardPreview: 'bg-[#292c3d]'
+  },
+  {
     id: 'dark',
     name: 'Obsidian Dark',
     desc: 'Tema gelap zinc standar dengan atmosfer gym modern & elegan.',
@@ -57,14 +73,6 @@ export const THEME_MODE_OPTIONS: ThemeModeOption[] = [
     iconType: 'monitor',
     bgPreview: 'bg-[#0b1120]',
     cardPreview: 'bg-[#111827]'
-  },
-  {
-    id: 'claymorphism',
-    name: 'Claymorphism 3D',
-    desc: 'Desain 3D clay taktil & empuk dengan bayangan timbul ganda dan permukaan halus modern.',
-    iconType: 'layers',
-    bgPreview: 'bg-[#1e202e]',
-    cardPreview: 'bg-[#292c3d]'
   },
   {
     id: 'light',
@@ -170,17 +178,21 @@ interface ThemeContextType {
 const ThemeContext = createContext<ThemeContextType | null>(null);
 
 function applyThemeToDOM(config: ThemeConfig) {
+  if (typeof document === 'undefined') return;
   const root = document.documentElement;
   const body = document.body;
+  if (!root || !body) return;
+
+  const safeConfig = config || DEFAULT_THEME_CONFIG;
 
   // Set data attributes
-  root.setAttribute('data-theme', config.mode);
-  root.setAttribute('data-accent', config.accent);
-  root.setAttribute('data-density', config.density);
-  root.setAttribute('data-pattern', config.pattern);
+  root.setAttribute('data-theme', safeConfig.mode || DEFAULT_THEME_CONFIG.mode);
+  root.setAttribute('data-accent', safeConfig.accent || DEFAULT_THEME_CONFIG.accent);
+  root.setAttribute('data-density', safeConfig.density || DEFAULT_THEME_CONFIG.density);
+  root.setAttribute('data-pattern', safeConfig.pattern || DEFAULT_THEME_CONFIG.pattern);
 
   // Set dark class for Tailwind if needed
-  if (config.mode === 'light') {
+  if (safeConfig.mode === 'light' || safeConfig.mode === 'claymorphism-light') {
     root.classList.remove('dark');
     body.classList.remove('dark');
   } else {
@@ -189,7 +201,7 @@ function applyThemeToDOM(config: ThemeConfig) {
   }
 
   // Set CSS variables for accent
-  const accentOpt = ACCENT_OPTIONS.find((a) => a.id === config.accent) || ACCENT_OPTIONS[0];
+  const accentOpt = ACCENT_OPTIONS.find((a) => a.id === safeConfig.accent) || ACCENT_OPTIONS[0];
   root.style.setProperty('--primary-accent', accentOpt.hex);
   root.style.setProperty('--primary-accent-hover', accentOpt.hoverHex);
   root.style.setProperty('--primary-accent-rgb', accentOpt.rgb);
@@ -199,15 +211,19 @@ function applyThemeToDOM(config: ThemeConfig) {
 export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [theme, setTheme] = useState<ThemeConfig>(() => {
     try {
-      const saved = localStorage.getItem(STORAGE_KEY);
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        return {
-          mode: parsed.mode || DEFAULT_THEME_CONFIG.mode,
-          accent: parsed.accent || DEFAULT_THEME_CONFIG.accent,
-          density: parsed.density || DEFAULT_THEME_CONFIG.density,
-          pattern: parsed.pattern || DEFAULT_THEME_CONFIG.pattern
-        };
+      if (typeof window !== 'undefined' && window.localStorage) {
+        const saved = localStorage.getItem(STORAGE_KEY);
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          if (parsed && typeof parsed === 'object') {
+            return {
+              mode: parsed.mode || DEFAULT_THEME_CONFIG.mode,
+              accent: parsed.accent || DEFAULT_THEME_CONFIG.accent,
+              density: parsed.density || DEFAULT_THEME_CONFIG.density,
+              pattern: parsed.pattern || DEFAULT_THEME_CONFIG.pattern
+            };
+          }
+        }
       }
     } catch (e) {
       console.warn('Gagal memuat pengaturan tema:', e);
@@ -220,6 +236,7 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   // Apply on mount and state change
   useEffect(() => {
     applyThemeToDOM(theme);
+    console.log(`[GymPro Lifecycle] 2. ThemeProvider active (mode: ${theme.mode}, accent: ${theme.accent})`);
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(theme));
     } catch (e) {

@@ -145,7 +145,7 @@ body, #root, header, aside, main, div, button, input, select {
 }
 
 /* --------------------------------------------------------------------------
-   Mode: Claymorphism 3D (Tactile Pillowy Clay & Soft Double Shadows)
+   Mode: Claymorphism 3D Gelap (Tactile Pillowy Dark Clay & Double Shadows)
    -------------------------------------------------------------------------- */
 [data-theme="claymorphism"] body,
 [data-theme="claymorphism"] #root,
@@ -188,6 +188,17 @@ body, #root, header, aside, main, div, button, input, select {
 [data-theme="claymorphism"] .border-zinc-700,
 [data-theme="claymorphism"] .border-zinc-700\/80 {
   border-color: rgba(255, 255, 255, 0.08) !important;
+}
+
+/* Text readability in dark clay */
+[data-theme="claymorphism"] .text-white {
+  color: #ffffff !important;
+}
+[data-theme="claymorphism"] .text-zinc-400 {
+  color: #cbd5e1 !important;
+}
+[data-theme="claymorphism"] .text-zinc-500 {
+  color: #94a3b8 !important;
 }
 
 /* Clay Interactive Inputs & Form Controls */
@@ -250,6 +261,255 @@ body, #root, header, aside, main, div, button, input, select {
 
 [data-theme="claymorphism"][data-pattern="dots"] {
   background-image: radial-gradient(rgba(255, 255, 255, 0.12) 2px, transparent 2px);
+  background-size: 18px 18px;
+}
+
+/* --------------------------------------------------------------------------
+   Mode: Claymorphism 3D Terang (Light Clay 3D with High-Contrast Clear Text)
+   -------------------------------------------------------------------------- */
+[data-theme="claymorphism-light"] body,
+[data-theme="claymorphism-light"] #root,
+[data-theme="claymorphism-light"] .bg-zinc-950,
+[data-theme="claymorphism-light"] .bg-\[\#09090b\] {
+  background-color: #e9eef5 !important;
+  color: #0f172a !important;
+}
+
+/* Elevated Light Clay Cards & Panels */
+[data-theme="claymorphism-light"] .bg-zinc-900,
+[data-theme="claymorphism-light"] .bg-zinc-900\/90,
+[data-theme="claymorphism-light"] .bg-zinc-900\/95,
+[data-theme="claymorphism-light"] .bg-zinc-900\/80,
+[data-theme="claymorphism-light"] .bg-zinc-900\/60,
+[data-theme="claymorphism-light"] .bg-zinc-900\/40 {
+  background-color: #ffffff !important;
+  border-color: rgba(219, 228, 240, 0.9) !important;
+  box-shadow: 10px 10px 24px rgba(166, 178, 198, 0.45),
+              -8px -8px 20px rgba(255, 255, 255, 0.95),
+              inset 2px 2px 3px rgba(255, 255, 255, 0.9),
+              inset -2px -2px 3px rgba(166, 178, 198, 0.15) !important;
+  border-radius: 1.25rem;
+}
+
+/* Recessed Clay Wells & Deep Sections (Tables, Wells, Filter Boxes) */
+[data-theme="claymorphism-light"] .bg-zinc-950\/80,
+[data-theme="claymorphism-light"] .bg-zinc-950\/60,
+[data-theme="claymorphism-light"] .bg-zinc-950\/40,
+[data-theme="claymorphism-light"] .bg-zinc-950\/30,
+[data-theme="claymorphism-light"] .bg-zinc-950\/20,
+[data-theme="claymorphism-light"] .bg-zinc-950\/10 {
+  background-color: #dfe6f1 !important;
+  box-shadow: inset 4px 4px 8px rgba(166, 178, 198, 0.55),
+              inset -3px -3px 6px rgba(255, 255, 255, 0.9) !important;
+  border-color: rgba(255, 255, 255, 0.6) !important;
+  border-radius: 1rem;
+}
+
+/* Light Clay Borders */
+[data-theme="claymorphism-light"] .border-zinc-800,
+[data-theme="claymorphism-light"] .border-zinc-800\/80,
+[data-theme="claymorphism-light"] .border-zinc-800\/90,
+[data-theme="claymorphism-light"] .border-zinc-700,
+[data-theme="claymorphism-light"] .border-zinc-700\/80 {
+  border-color: #cbd5e1 !important;
+}
+
+/* CRITICAL TEXT CONTRAST FOR LIGHT CLAY: CRYSTAL CLEAR READABILITY */
+[data-theme="claymorphism-light"] .text-white {
+  color: #090d16 !important;
+  font-weight: 700;
+}
+
+[data-theme="claymorphism-light"] .text-zinc-100,
+[data-theme="claymorphism-light"] .text-zinc-200 {
+  color: #0f172a !important;
+}
+
+[data-theme="claymorphism-light"] .text-zinc-300 {
+  color: #1e293b !important;
+  font-weight: 600;
+}
+
+[data-theme="claymorphism-light"] .text-zinc-400 {
+  color: #334155 !important;
+}
+
+[data-theme="claymorphism-light"] .text-zinc-500 {
+  color: #475569 !important;
+}
+
+[data-theme="claymorphism-light"] h1,
+[data-theme="claymorphism-light"] h2,
+[data-theme="claymorphism-light"] h3,
+[data-theme="claymorphism-light"] h4,
+[data-theme="claymorphism-light"] h5,
+[data-theme="claymorphism-light"] h6 {
+  color: #090d16 !important;
+}
+
+/* Deep, Vibrant & Readable Accent Badges in Light Clay */
+[data-theme="claymorphism-light"] .text-orange-400,
+[data-theme="claymorphism-light"] .text-orange-300 {
+  color: #c2410c !important;
+  font-weight: 700;
+}
+[data-theme="claymorphism-light"] .bg-orange-500\/20,
+[data-theme="claymorphism-light"] .bg-orange-500\/15,
+[data-theme="claymorphism-light"] .bg-orange-500\/10,
+[data-theme="claymorphism-light"] .bg-orange-500\/5 {
+  background-color: #ffedd5 !important;
+  border-color: #fed7aa !important;
+}
+
+[data-theme="claymorphism-light"] .text-emerald-400,
+[data-theme="claymorphism-light"] .text-emerald-300 {
+  color: #047857 !important;
+  font-weight: 700;
+}
+[data-theme="claymorphism-light"] .bg-emerald-500\/20,
+[data-theme="claymorphism-light"] .bg-emerald-500\/10 {
+  background-color: #d1fae5 !important;
+  border-color: #a7f3d0 !important;
+}
+
+[data-theme="claymorphism-light"] .text-cyan-400,
+[data-theme="claymorphism-light"] .text-cyan-300 {
+  color: #0369a1 !important;
+  font-weight: 700;
+}
+[data-theme="claymorphism-light"] .bg-cyan-500\/20,
+[data-theme="claymorphism-light"] .bg-cyan-500\/10 {
+  background-color: #e0f2fe !important;
+  border-color: #bae6fd !important;
+}
+
+[data-theme="claymorphism-light"] .text-amber-400,
+[data-theme="claymorphism-light"] .text-amber-300 {
+  color: #b45309 !important;
+  font-weight: 700;
+}
+[data-theme="claymorphism-light"] .bg-amber-500\/20,
+[data-theme="claymorphism-light"] .bg-amber-500\/10 {
+  background-color: #fef3c7 !important;
+  border-color: #fde68a !important;
+}
+
+[data-theme="claymorphism-light"] .text-rose-400,
+[data-theme="claymorphism-light"] .text-rose-300,
+[data-theme="claymorphism-light"] .text-red-400 {
+  color: #be123c !important;
+  font-weight: 700;
+}
+[data-theme="claymorphism-light"] .bg-rose-500\/20,
+[data-theme="claymorphism-light"] .bg-rose-500\/10 {
+  background-color: #ffe4e6 !important;
+  border-color: #fecdd3 !important;
+}
+
+[data-theme="claymorphism-light"] .text-purple-400,
+[data-theme="claymorphism-light"] .text-violet-400 {
+  color: #6d28d9 !important;
+  font-weight: 700;
+}
+[data-theme="claymorphism-light"] .bg-purple-500\/20,
+[data-theme="claymorphism-light"] .bg-violet-500\/20 {
+  background-color: #ede9fe !important;
+  border-color: #ddd6fe !important;
+}
+
+[data-theme="claymorphism-light"] .text-teal-400 {
+  color: #0f766e !important;
+  font-weight: 700;
+}
+
+/* Light Clay Form Inputs */
+[data-theme="claymorphism-light"] input,
+[data-theme="claymorphism-light"] select,
+[data-theme="claymorphism-light"] textarea {
+  background-color: #ffffff !important;
+  color: #0f172a !important;
+  border-color: #cbd5e1 !important;
+  border-radius: 0.85rem !important;
+  box-shadow: inset 3px 3px 6px rgba(166, 178, 198, 0.4),
+              inset -2px -2px 4px rgba(255, 255, 255, 0.9) !important;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+[data-theme="claymorphism-light"] input::placeholder,
+[data-theme="claymorphism-light"] textarea::placeholder {
+  color: #64748b !important;
+}
+
+[data-theme="claymorphism-light"] input:focus,
+[data-theme="claymorphism-light"] select:focus,
+[data-theme="claymorphism-light"] textarea:focus {
+  border-color: var(--primary-accent, #f97316) !important;
+  box-shadow: inset 2px 2px 5px rgba(166, 178, 198, 0.3),
+              0 0 0 3px rgba(var(--primary-accent-rgb, 249, 115, 22), 0.2) !important;
+}
+
+/* Light Clay Hover States */
+[data-theme="claymorphism-light"] .hover\:bg-zinc-800:hover,
+[data-theme="claymorphism-light"] .hover\:bg-zinc-800\/30:hover,
+[data-theme="claymorphism-light"] .hover\:bg-zinc-800\/40:hover,
+[data-theme="claymorphism-light"] .hover\:bg-zinc-800\/50:hover,
+[data-theme="claymorphism-light"] .hover\:bg-zinc-800\/70:hover {
+  background-color: #e6edf7 !important;
+  box-shadow: 4px 4px 10px rgba(166, 178, 198, 0.35),
+              inset 1px 1px 2px rgba(255, 255, 255, 0.9) !important;
+}
+
+/* 3D Tactile Cushion Buttons in Light Clay */
+[data-theme="claymorphism-light"] button:not(.no-clay):not(.p-1):not(.p-0) {
+  transition: transform 0.15s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+  border-radius: 0.85rem;
+}
+
+[data-theme="claymorphism-light"] button:not(.no-clay):hover {
+  transform: translateY(-1px);
+}
+
+[data-theme="claymorphism-light"] button:not(.no-clay):active {
+  transform: translateY(2px) scale(0.985);
+  box-shadow: inset 2px 2px 5px rgba(166, 178, 198, 0.55),
+              inset -2px -2px 4px rgba(255, 255, 255, 0.8) !important;
+}
+
+/* Light Clay Dialogs & Modals */
+[data-theme="claymorphism-light"] [role="dialog"] > div,
+[data-theme="claymorphism-light"] .modal-content {
+  background-color: #ffffff !important;
+  box-shadow: 18px 18px 38px rgba(148, 163, 184, 0.45),
+              -10px -10px 24px rgba(255, 255, 255, 0.95),
+              inset 2px 2px 4px rgba(255, 255, 255, 0.9),
+              inset -2px -2px 4px rgba(148, 163, 184, 0.15) !important;
+  border-radius: 1.5rem !important;
+}
+
+/* Tables & Rows in Light Clay */
+[data-theme="claymorphism-light"] table thead th {
+  background-color: #dfe6f1 !important;
+  color: #0f172a !important;
+  font-weight: 800 !important;
+  border-bottom: 2px solid #cbd5e1 !important;
+}
+
+[data-theme="claymorphism-light"] table tbody tr {
+  border-bottom: 1px solid #e2e8f0 !important;
+}
+
+[data-theme="claymorphism-light"] table tbody td {
+  color: #1e293b !important;
+}
+
+/* Light Clay Patterns */
+[data-theme="claymorphism-light"][data-pattern="grid"] {
+  background-image: radial-gradient(rgba(148, 163, 184, 0.25) 1.5px, transparent 1.5px);
+  background-size: 24px 24px;
+}
+
+[data-theme="claymorphism-light"][data-pattern="dots"] {
+  background-image: radial-gradient(rgba(148, 163, 184, 0.3) 2px, transparent 2px);
   background-size: 18px 18px;
 }
 

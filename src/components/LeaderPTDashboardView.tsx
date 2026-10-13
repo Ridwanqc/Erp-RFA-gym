@@ -33,6 +33,7 @@ import {
   UserPlus,
   Phone,
   ExternalLink,
+  FileCheck,
   FileText,
   History,
   Lock,
@@ -132,7 +133,16 @@ export const LeaderPTDashboardView: React.FC<LeaderPTDashboardViewProps> = ({
   const isTrainer = currentUser?.role === 'pt';
   const canAssign = isAdmin || isLeaderPT;
 
-  // Active Main View / Tab state
+  // Unified Master Tab state
+  const [mainTab, setMainTab] = useState<'penugasan' | 'jadwal' | 'pelatih' | 'retensi' | 'analitik'>('penugasan');
+
+  // Sub-filter states for each master tab
+  const [scheduleSubFilter, setScheduleSubFilter] = useState<'today' | 'tomorrow' | 'week' | 'clash' | 'unconfirmed' | 'bookings' | 'all'>('today');
+  const [trainerSubFilter, setTrainerSubFilter] = useState<'workload' | 'change_requests' | 'commission'>('workload');
+  const [retentionSubFilter, setRetentionSubFilter] = useState<'at_risk_7' | 'at_risk_14' | 'no_schedule' | 'nearly_finished' | 'expired' | 'chart'>('at_risk_7');
+  const [scheduleTrainerFilter, setScheduleTrainerFilter] = useState<string>('ALL');
+
+  // Active Queue tab state (Penugasan)
   const [activeQueueTab, setActiveQueueTab] = useState<
     | 'waiting'
     | 'assigned'
@@ -935,6 +945,64 @@ export const LeaderPTDashboardView: React.FC<LeaderPTDashboardViewProps> = ({
     searchQuery
   ]);
 
+  // Filtered schedules for Tab 2 (Jadwal & Sesi)
+  const displayedSchedules = useMemo(() => {
+    let list = schedules;
+    if (scheduleSubFilter === 'today') {
+      list = scheduleMetrics.lists.hariIni;
+    } else if (scheduleSubFilter === 'tomorrow') {
+      list = scheduleMetrics.lists.besok;
+    } else if (scheduleSubFilter === 'week') {
+      list = scheduleMetrics.lists.mingguIni;
+    } else if (scheduleSubFilter === 'clash') {
+      list = scheduleMetrics.lists.bentrok;
+    } else if (scheduleSubFilter === 'unconfirmed') {
+      list = scheduleMetrics.lists.belumDikonfirmasi;
+    }
+
+    if (scheduleTrainerFilter !== 'ALL') {
+      list = list.filter((s) => s.trainer === scheduleTrainerFilter);
+    }
+
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase();
+      list = list.filter(
+        (s) =>
+          s.memberName.toLowerCase().includes(q) ||
+          s.trainer.toLowerCase().includes(q) ||
+          (s.note || '').toLowerCase().includes(q)
+      );
+    }
+    return list;
+  }, [schedules, scheduleSubFilter, scheduleTrainerFilter, scheduleMetrics, searchQuery]);
+
+  // Filtered retention members for Tab 4 (Retensi & Analitik)
+  const displayedRetentionMembers = useMemo(() => {
+    let list = memberPTList;
+    if (retentionSubFilter === 'at_risk_7') {
+      list = memberMetrics.lists.tidakLatihan7H;
+    } else if (retentionSubFilter === 'at_risk_14') {
+      list = memberMetrics.lists.tidakLatihan14H;
+    } else if (retentionSubFilter === 'no_schedule') {
+      list = memberMetrics.lists.belumPunyaJadwal;
+    } else if (retentionSubFilter === 'nearly_finished') {
+      list = memberMetrics.lists.sesiHampirHabis;
+    } else if (retentionSubFilter === 'expired') {
+      list = memberMetrics.lists.expired;
+    }
+
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase();
+      list = list.filter(
+        (m) =>
+          m.name.toLowerCase().includes(q) ||
+          (m.phone || '').includes(q) ||
+          (m.picName || '').toLowerCase().includes(q)
+      );
+    }
+    return list;
+  }, [memberPTList, retentionSubFilter, memberMetrics, searchQuery]);
+
   // --------------------------------------------------------------------------
   // ACTIONS & HANDLERS
   // --------------------------------------------------------------------------
@@ -1255,8 +1323,8 @@ export const LeaderPTDashboardView: React.FC<LeaderPTDashboardViewProps> = ({
           <button
             type="button"
             onClick={() => {
-              setActiveTableTab('new_packages');
-              setSelectedCohortFilter('unassigned');
+              setMainTab('penugasan');
+              setActiveQueueTab('waiting');
             }}
             className="px-4 py-2.5 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white font-bold text-xs rounded-xl transition flex items-center gap-2 shadow-md shadow-amber-500/20 whitespace-nowrap self-start md:self-auto cursor-pointer active:scale-95"
           >
@@ -1300,6 +1368,8 @@ export const LeaderPTDashboardView: React.FC<LeaderPTDashboardViewProps> = ({
           </div>
           <button
             onClick={() => {
+              setMainTab('jadwal');
+              setScheduleSubFilter('clash');
               if (scheduleMetrics.bentrokDetails[0]) {
                 setResolvingClash(scheduleMetrics.bentrokDetails[0]);
                 setRescheduleTarget(scheduleMetrics.bentrokDetails[0].schedules[1]);
@@ -1312,9 +1382,233 @@ export const LeaderPTDashboardView: React.FC<LeaderPTDashboardViewProps> = ({
         </div>
       )}
 
+      {/* 3. EXECUTIVE SNAPSHOT BAR (Top KPI Quick-Switch) */}
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+        {/* Card 1: Waiting */}
+        <div
+          onClick={() => {
+            setMainTab('penugasan');
+            setActiveQueueTab('waiting');
+          }}
+          className={`p-3.5 rounded-xl border cursor-pointer transition-all hover:scale-[1.02] ${
+            mainTab === 'penugasan' && activeQueueTab === 'waiting'
+              ? 'bg-amber-500/20 border-amber-500 shadow-lg shadow-amber-500/10'
+              : 'bg-zinc-900/80 border-zinc-800/80 hover:border-amber-500/50'
+          }`}
+        >
+          <div className="flex items-center justify-between">
+            <span className="text-[10px] font-bold text-amber-400 uppercase tracking-wider">Menunggu Trainer</span>
+            <Clock className="w-3.5 h-3.5 text-amber-400" />
+          </div>
+          <div className="text-2xl font-black text-white mt-1.5">{waitingQueue.length}</div>
+          <div className="text-[10px] text-zinc-400 mt-0.5">Perlu Assignment</div>
+        </div>
+
+        {/* Card 2: Bentrok Radar */}
+        <div
+          onClick={() => {
+            setMainTab('jadwal');
+            setScheduleSubFilter('clash');
+          }}
+          className={`p-3.5 rounded-xl border cursor-pointer transition-all hover:scale-[1.02] ${
+            scheduleMetrics.bentrok > 0
+              ? 'bg-rose-950/40 border-rose-500 text-rose-300 shadow-lg shadow-rose-950/20'
+              : mainTab === 'jadwal' && scheduleSubFilter === 'clash'
+              ? 'bg-orange-500/20 border-orange-500 shadow-lg'
+              : 'bg-zinc-900/80 border-zinc-800/80 hover:border-rose-500/50'
+          }`}
+        >
+          <div className="flex items-center justify-between">
+            <span className="text-[10px] font-bold text-rose-400 uppercase tracking-wider">Radar Bentrok</span>
+            <ShieldAlert className="w-3.5 h-3.5 text-rose-400" />
+          </div>
+          <div className="text-2xl font-black text-white mt-1.5">{scheduleMetrics.bentrok}</div>
+          <div className="text-[10px] text-zinc-400 mt-0.5">
+            {scheduleMetrics.bentrok > 0 ? '⚠️ Butuh Tindakan' : '✓ Bebas Konflik'}
+          </div>
+        </div>
+
+        {/* Card 3: Sesi Hari Ini */}
+        <div
+          onClick={() => {
+            setMainTab('jadwal');
+            setScheduleSubFilter('today');
+          }}
+          className={`p-3.5 rounded-xl border cursor-pointer transition-all hover:scale-[1.02] ${
+            mainTab === 'jadwal' && scheduleSubFilter === 'today'
+              ? 'bg-sky-500/20 border-sky-500 shadow-lg shadow-sky-500/10'
+              : 'bg-zinc-900/80 border-zinc-800/80 hover:border-sky-500/50'
+          }`}
+        >
+          <div className="flex items-center justify-between">
+            <span className="text-[10px] font-bold text-sky-400 uppercase tracking-wider">Sesi Hari Ini</span>
+            <Calendar className="w-3.5 h-3.5 text-sky-400" />
+          </div>
+          <div className="text-2xl font-black text-white mt-1.5">{scheduleMetrics.hariIni}</div>
+          <div className="text-[10px] text-zinc-400 mt-0.5">Jadwal Roster Hari Ini</div>
+        </div>
+
+        {/* Card 4: Pelatih Aktif */}
+        <div
+          onClick={() => {
+            setMainTab('pelatih');
+            setActiveTableTab('trainers');
+          }}
+          className={`p-3.5 rounded-xl border cursor-pointer transition-all hover:scale-[1.02] ${
+            mainTab === 'pelatih'
+              ? 'bg-emerald-500/20 border-emerald-500 shadow-lg shadow-emerald-500/10'
+              : 'bg-zinc-900/80 border-zinc-800/80 hover:border-emerald-500/50'
+          }`}
+        >
+          <div className="flex items-center justify-between">
+            <span className="text-[10px] font-bold text-emerald-400 uppercase tracking-wider">Tim Pelatih</span>
+            <UserCheck className="w-3.5 h-3.5 text-emerald-400" />
+          </div>
+          <div className="text-2xl font-black text-white mt-1.5">{trainers.length}</div>
+          <div className="text-[10px] text-zinc-400 mt-0.5">Coach Roster Aktif</div>
+        </div>
+
+        {/* Card 5: Rawan Churn */}
+        <div
+          onClick={() => {
+            setMainTab('retensi');
+            setRetentionSubFilter('at_risk_7');
+            setActiveTableTab('members');
+          }}
+          className={`p-3.5 rounded-xl border cursor-pointer transition-all hover:scale-[1.02] ${
+            mainTab === 'retensi'
+              ? 'bg-purple-500/20 border-purple-500 shadow-lg shadow-purple-500/10'
+              : 'bg-zinc-900/80 border-zinc-800/80 hover:border-purple-500/50'
+          }`}
+        >
+          <div className="flex items-center justify-between">
+            <span className="text-[10px] font-bold text-purple-400 uppercase tracking-wider">Perlu Perhatian</span>
+            <Users className="w-3.5 h-3.5 text-purple-400" />
+          </div>
+          <div className="text-2xl font-black text-white mt-1.5">
+            {memberMetrics.tidakLatihan7H + memberMetrics.sesiHampirHabis}
+          </div>
+          <div className="text-[10px] text-zinc-400 mt-0.5">Pasif & Hampir Habis</div>
+        </div>
+
+        {/* Card 6: Total Omzet PT */}
+        <div
+          onClick={() => setMainTab('analitik')}
+          className={`p-3.5 rounded-xl border cursor-pointer transition-all hover:scale-[1.02] ${
+            mainTab === 'analitik'
+              ? 'bg-orange-500/20 border-orange-500 shadow-lg shadow-orange-500/10'
+              : 'bg-zinc-900/80 border-zinc-800/80 hover:border-orange-500/50'
+          }`}
+        >
+          <div className="flex items-center justify-between">
+            <span className="text-[10px] font-bold text-orange-400 uppercase tracking-wider">Omzet Paket PT</span>
+            <Award className="w-3.5 h-3.5 text-orange-400" />
+          </div>
+          <div className="text-base font-black text-white mt-2 truncate">{formatRp(totalPTSales)}</div>
+          <div className="text-[10px] text-zinc-400 mt-0.5">Performa Finansial</div>
+        </div>
+      </div>
+
+      {/* 4. MASTER NAVIGATION TAB BAR (SIMPEL, RAPI, EFISIEN) */}
+      <div className="bg-zinc-900/90 backdrop-blur-md p-1.5 rounded-2xl border border-zinc-800 shadow-lg flex flex-wrap gap-1.5 sticky top-2 z-20">
+        <button
+          type="button"
+          onClick={() => setMainTab('penugasan')}
+          className={`flex-1 min-w-[150px] py-3 px-4 rounded-xl text-xs font-bold transition flex items-center justify-center gap-2 cursor-pointer ${
+            mainTab === 'penugasan'
+              ? 'bg-gradient-to-r from-orange-500 to-amber-600 text-white shadow-lg shadow-orange-500/20 font-black'
+              : 'text-zinc-400 hover:text-white hover:bg-zinc-800/60'
+          }`}
+        >
+          <Dumbbell className="w-4 h-4 shrink-0" />
+          <span>Antrian & Penugasan PT</span>
+          {waitingQueue.length > 0 && (
+            <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-white text-zinc-950 animate-pulse">
+              {waitingQueue.length}
+            </span>
+          )}
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setMainTab('jadwal')}
+          className={`flex-1 min-w-[150px] py-3 px-4 rounded-xl text-xs font-bold transition flex items-center justify-center gap-2 cursor-pointer ${
+            mainTab === 'jadwal'
+              ? 'bg-gradient-to-r from-orange-500 to-amber-600 text-white shadow-lg shadow-orange-500/20 font-black'
+              : 'text-zinc-400 hover:text-white hover:bg-zinc-800/60'
+          }`}
+        >
+          <CalendarDays className="w-4 h-4 shrink-0" />
+          <span>Radar Jadwal & Bentrok</span>
+          {scheduleMetrics.bentrok > 0 ? (
+            <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-rose-500 text-white animate-bounce">
+              {scheduleMetrics.bentrok} Bentrok!
+            </span>
+          ) : (
+            <span className="px-2 py-0.5 rounded-full text-[10px] font-medium bg-zinc-800 text-zinc-300">
+              {scheduleMetrics.hariIni} Sesi
+            </span>
+          )}
+        </button>
+
+        <button
+          type="button"
+          onClick={() => {
+            setMainTab('pelatih');
+            setActiveTableTab('trainers');
+          }}
+          className={`flex-1 min-w-[150px] py-3 px-4 rounded-xl text-xs font-bold transition flex items-center justify-center gap-2 cursor-pointer ${
+            mainTab === 'pelatih'
+              ? 'bg-gradient-to-r from-orange-500 to-amber-600 text-white shadow-lg shadow-orange-500/20 font-black'
+              : 'text-zinc-400 hover:text-white hover:bg-zinc-800/60'
+          }`}
+        >
+          <UserCheck className="w-4 h-4 shrink-0" />
+          <span>Kapasitas & Tim Pelatih</span>
+          <span className="px-2 py-0.5 rounded-full text-[10px] font-medium bg-zinc-800 text-zinc-300">
+            {trainers.length} Coach
+          </span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => {
+            setMainTab('retensi');
+            setActiveTableTab('members');
+          }}
+          className={`flex-1 min-w-[150px] py-3 px-4 rounded-xl text-xs font-bold transition flex items-center justify-center gap-2 cursor-pointer ${
+            mainTab === 'retensi'
+              ? 'bg-gradient-to-r from-orange-500 to-amber-600 text-white shadow-lg shadow-orange-500/20 font-black'
+              : 'text-zinc-400 hover:text-white hover:bg-zinc-800/60'
+          }`}
+        >
+          <Users className="w-4 h-4 shrink-0" />
+          <span>Retensi & Health Member</span>
+          {memberMetrics.tidakLatihan7H + memberMetrics.sesiHampirHabis > 0 && (
+            <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/30 text-amber-300 border border-amber-500/40">
+              {memberMetrics.tidakLatihan7H + memberMetrics.sesiHampirHabis}
+            </span>
+          )}
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setMainTab('analitik')}
+          className={`flex-1 min-w-[150px] py-3 px-4 rounded-xl text-xs font-bold transition flex items-center justify-center gap-2 cursor-pointer ${
+            mainTab === 'analitik'
+              ? 'bg-gradient-to-r from-orange-500 to-amber-600 text-white shadow-lg shadow-orange-500/20 font-black'
+              : 'text-zinc-400 hover:text-white hover:bg-zinc-800/60'
+          }`}
+        >
+          <Activity className="w-4 h-4 shrink-0" />
+          <span>Analitik & Laporan</span>
+        </button>
+      </div>
+
       {/* ========================================================================= */}
-      {/* 3. PERSONAL TRAINER MANAGEMENT DEDICATED DASHBOARD (User Spec #3) */}
+      {/* 5. TAB VIEW: ANTRIAN & PENUGASAN PT */}
       {/* ========================================================================= */}
+      {mainTab === 'penugasan' && (
       <div className="bg-gradient-to-br from-zinc-900 via-zinc-900 to-zinc-950 rounded-2xl border-2 border-orange-500/30 p-6 shadow-2xl space-y-6">
         {/* Dashboard Header */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-zinc-800">
@@ -2205,8 +2499,630 @@ export const LeaderPTDashboardView: React.FC<LeaderPTDashboardViewProps> = ({
           )}
         </div>
       </div>
+      )}
 
-      {/* 4. FOUR KPI HUBS WITH MATHEMATICAL HIERARCHY */}
+      {/* ========================================================================= */}
+      {/* TAB VIEW: RADAR JADWAL & BENTROK (SEPERTI ANTRIAN PENUGASAN PT) */}
+      {/* ========================================================================= */}
+      {mainTab === 'jadwal' && (
+      <div className="bg-gradient-to-br from-zinc-900 via-zinc-900 to-zinc-950 rounded-2xl border-2 border-orange-500/30 p-6 shadow-2xl space-y-6">
+        {/* Dashboard Header */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-zinc-800">
+          <div>
+            <div className="flex items-center gap-2.5">
+              <span className="p-2 rounded-xl bg-orange-500/20 text-orange-400 border border-orange-500/30">
+                <CalendarDays className="w-5 h-5" />
+              </span>
+              <h3 className="text-lg font-black text-white tracking-tight uppercase">
+                Radar Jadwal & Deteksi Bentrok PT
+              </h3>
+              <span className="text-[10px] font-extrabold uppercase px-2 py-0.5 rounded-full bg-orange-500/10 text-orange-400 border border-orange-500/30">
+                Leader PT Schedule Command
+              </span>
+            </div>
+            <p className="text-xs text-zinc-400 mt-1">
+              Pemantauan jadwal sesi real-time, deteksi otomatis bentrok pelatih, validasi paraf 3-pihak (Staf, Trainer, Member), dan alokasi sesi latihan terstruktur.
+            </p>
+          </div>
+
+          <div className="flex items-center gap-2">
+            {scheduleMetrics.bentrok > 0 ? (
+              <span className="text-xs font-bold px-3 py-1.5 rounded-xl bg-rose-500/20 text-rose-300 border border-rose-500/40 flex items-center gap-1.5 animate-pulse">
+                <ShieldAlert className="w-4 h-4 text-rose-400" />
+                {scheduleMetrics.bentrok} Sesi Bentrok Butuh Tindakan!
+              </span>
+            ) : (
+              <span className="text-xs font-bold px-3 py-1.5 rounded-xl bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 flex items-center gap-1.5">
+                <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                Jadwal Bebas Bentrok
+              </span>
+            )}
+
+            <button
+              type="button"
+              onClick={() => {
+                setQuickMemberId('');
+                setQuickTrainer(trainers[0]?.name || '');
+                setQuickDate(APP_TODAY);
+                setQuickTime('09:00');
+                setQuickNote('');
+                setIsQuickAddOpen(true);
+              }}
+              className="px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-orange-500 to-amber-600 hover:from-orange-600 hover:to-amber-700 text-white text-xs font-bold transition flex items-center gap-1.5 shadow-md shadow-orange-500/20 cursor-pointer"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              <span>+ Buat Jadwal Baru</span>
+            </button>
+          </div>
+        </div>
+
+        {/* 6 Key Metrics Grid (Persis seperti 6 Key Metrics di Antrian PT) */}
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+          {/* 1. Bentrok */}
+          <div
+            onClick={() => setScheduleSubFilter('clash')}
+            className={`p-4 rounded-xl border cursor-pointer transition-all hover:scale-[1.02] ${
+              scheduleSubFilter === 'clash'
+                ? 'bg-rose-500/20 border-rose-500 shadow-lg shadow-rose-500/20'
+                : scheduleMetrics.bentrok > 0
+                ? 'bg-rose-950/40 border-rose-500/60 hover:border-rose-500'
+                : 'bg-zinc-950/70 border-zinc-800/80 hover:border-rose-500/50'
+            }`}
+          >
+            <div className="flex items-center justify-between">
+              <span className="text-[11px] font-bold text-rose-400 uppercase tracking-wider">Bentrok</span>
+              <ShieldAlert className="w-4 h-4 text-rose-400" />
+            </div>
+            <div className="text-3xl font-black text-white mt-2 flex items-center gap-2">
+              <span>{scheduleMetrics.bentrok}</span>
+              {scheduleMetrics.bentrok > 0 && (
+                <span className="text-[10px] font-extrabold uppercase px-1.5 py-0.5 rounded bg-rose-500 text-white animate-pulse">
+                  Alert
+                </span>
+              )}
+            </div>
+            <div className="text-[10px] text-zinc-400 mt-1">
+              {scheduleMetrics.bentrok > 0 ? 'Perlu Diselesaikan' : 'Bebas Tabrakan'}
+            </div>
+          </div>
+
+          {/* 2. Hari Ini */}
+          <div
+            onClick={() => setScheduleSubFilter('today')}
+            className={`p-4 rounded-xl border cursor-pointer transition-all hover:scale-[1.02] ${
+              scheduleSubFilter === 'today'
+                ? 'bg-sky-500/20 border-sky-500 shadow-lg shadow-sky-500/10'
+                : 'bg-zinc-950/70 border-zinc-800/80 hover:border-sky-500/50'
+            }`}
+          >
+            <div className="flex items-center justify-between">
+              <span className="text-[11px] font-bold text-sky-400 uppercase tracking-wider">Hari Ini</span>
+              <Calendar className="w-4 h-4 text-sky-400" />
+            </div>
+            <div className="text-3xl font-black text-white mt-2">{scheduleMetrics.hariIni}</div>
+            <div className="text-[10px] text-zinc-400 mt-1">{formatDateIndo(APP_TODAY)}</div>
+          </div>
+
+          {/* 3. Besok */}
+          <div
+            onClick={() => setScheduleSubFilter('tomorrow')}
+            className={`p-4 rounded-xl border cursor-pointer transition-all hover:scale-[1.02] ${
+              scheduleSubFilter === 'tomorrow'
+                ? 'bg-blue-500/20 border-blue-500 shadow-lg shadow-blue-500/10'
+                : 'bg-zinc-950/70 border-zinc-800/80 hover:border-blue-500/50'
+            }`}
+          >
+            <div className="flex items-center justify-between">
+              <span className="text-[11px] font-bold text-blue-400 uppercase tracking-wider">Besok</span>
+              <CalendarDays className="w-4 h-4 text-blue-400" />
+            </div>
+            <div className="text-3xl font-black text-white mt-2">{scheduleMetrics.besok}</div>
+            <div className="text-[10px] text-zinc-400 mt-1">{formatDateIndo(tomorrowDate)}</div>
+          </div>
+
+          {/* 4. Minggu Ini */}
+          <div
+            onClick={() => setScheduleSubFilter('week')}
+            className={`p-4 rounded-xl border cursor-pointer transition-all hover:scale-[1.02] ${
+              scheduleSubFilter === 'week'
+                ? 'bg-purple-500/20 border-purple-500 shadow-lg shadow-purple-500/10'
+                : 'bg-zinc-950/70 border-zinc-800/80 hover:border-purple-500/50'
+            }`}
+          >
+            <div className="flex items-center justify-between">
+              <span className="text-[11px] font-bold text-purple-400 uppercase tracking-wider">Minggu Ini</span>
+              <Calendar className="w-4 h-4 text-purple-400" />
+            </div>
+            <div className="text-3xl font-black text-white mt-2">{scheduleMetrics.mingguIni}</div>
+            <div className="text-[10px] text-zinc-400 mt-1">7 Hari Berjalan</div>
+          </div>
+
+          {/* 5. Perlu Paraf / Belum Dikonfirmasi */}
+          <div
+            onClick={() => setScheduleSubFilter('unconfirmed')}
+            className={`p-4 rounded-xl border cursor-pointer transition-all hover:scale-[1.02] ${
+              scheduleSubFilter === 'unconfirmed'
+                ? 'bg-amber-500/20 border-amber-500 shadow-lg shadow-amber-500/10'
+                : 'bg-zinc-950/70 border-zinc-800/80 hover:border-amber-500/50'
+            }`}
+          >
+            <div className="flex items-center justify-between">
+              <span className="text-[11px] font-bold text-amber-400 uppercase tracking-wider">Belum Paraf</span>
+              <FileCheck className="w-4 h-4 text-amber-400" />
+            </div>
+            <div className="text-3xl font-black text-white mt-2">{scheduleMetrics.belumDikonfirmasi}</div>
+            <div className="text-[10px] text-zinc-400 mt-1">Paraf 3-Pihak Pending</div>
+          </div>
+
+          {/* 6. Total Sesi Selesai */}
+          <div
+            onClick={() => setScheduleSubFilter('all')}
+            className={`p-4 rounded-xl border cursor-pointer transition-all hover:scale-[1.02] ${
+              scheduleSubFilter === 'all'
+                ? 'bg-emerald-500/20 border-emerald-500 shadow-lg shadow-emerald-500/10'
+                : 'bg-zinc-950/70 border-zinc-800/80 hover:border-emerald-500/50'
+            }`}
+          >
+            <div className="flex items-center justify-between">
+              <span className="text-[11px] font-bold text-emerald-400 uppercase tracking-wider">Selesai / Total</span>
+              <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+            </div>
+            <div className="text-3xl font-black text-white mt-2">{scheduleMetrics.selesai}</div>
+            <div className="text-[10px] text-zinc-400 mt-1">Dari {schedules.length} Sesi Terjadwal</div>
+          </div>
+        </div>
+
+        {/* Radar Jadwal Sub-Selector Tabs (PERSIS SEPERTI ALUR ANTRIAN PT) */}
+        <div className="border-t border-zinc-800 pt-4 space-y-4">
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <div className="flex items-center gap-1.5 text-xs font-bold text-zinc-300">
+              <Filter className="w-3.5 h-3.5 text-orange-400" />
+              <span>Alur Radar Jadwal (Schedule Pipeline):</span>
+            </div>
+            <div className="text-xs text-zinc-500">
+              Pilih tab jadwal di bawah untuk menyaring sesi dan menyelesaikan konflik jadwal pelatih
+            </div>
+          </div>
+
+          {/* Sub-Pills (styled identically to PT Queue Selector Tabs) */}
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() => setScheduleSubFilter('clash')}
+              className={`px-3 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 cursor-pointer ${
+                scheduleSubFilter === 'clash'
+                  ? 'bg-rose-600 text-white shadow-md shadow-rose-600/30 font-black'
+                  : scheduleMetrics.bentrok > 0
+                  ? 'bg-rose-950/60 text-rose-300 hover:bg-rose-900/60 border border-rose-500/50 animate-pulse'
+                  : 'bg-zinc-800/80 text-rose-300 hover:bg-zinc-800 border border-rose-500/20'
+              }`}
+            >
+              <span className={`w-2 h-2 rounded-full ${scheduleMetrics.bentrok > 0 ? 'bg-rose-400 animate-ping' : 'bg-rose-400'}`}></span>
+              🚨 Terdeteksi Bentrok ({scheduleMetrics.bentrok})
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setScheduleSubFilter('today')}
+              className={`px-3 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 cursor-pointer ${
+                scheduleSubFilter === 'today'
+                  ? 'bg-sky-500 text-zinc-950 shadow-md shadow-sky-500/20 font-black'
+                  : 'bg-zinc-800/80 text-sky-300 hover:bg-zinc-800 border border-sky-500/30'
+              }`}
+            >
+              <span className="w-2 h-2 rounded-full bg-sky-400"></span>
+              📅 Sesi Hari Ini ({scheduleMetrics.hariIni})
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setScheduleSubFilter('tomorrow')}
+              className={`px-3 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 cursor-pointer ${
+                scheduleSubFilter === 'tomorrow'
+                  ? 'bg-blue-500 text-white shadow-md shadow-blue-500/20 font-black'
+                  : 'bg-zinc-800/80 text-blue-300 hover:bg-zinc-800 border border-blue-500/30'
+              }`}
+            >
+              <span className="w-2 h-2 rounded-full bg-blue-400"></span>
+              🗓️ Besok ({scheduleMetrics.besok})
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setScheduleSubFilter('week')}
+              className={`px-3 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 cursor-pointer ${
+                scheduleSubFilter === 'week'
+                  ? 'bg-purple-500 text-white shadow-md shadow-purple-500/20 font-black'
+                  : 'bg-zinc-800/80 text-purple-300 hover:bg-zinc-800 border border-purple-500/30'
+              }`}
+            >
+              <span className="w-2 h-2 rounded-full bg-purple-400"></span>
+              📆 Minggu Ini ({scheduleMetrics.mingguIni})
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setScheduleSubFilter('unconfirmed')}
+              className={`px-3 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 cursor-pointer ${
+                scheduleSubFilter === 'unconfirmed'
+                  ? 'bg-amber-500 text-zinc-950 shadow-md shadow-amber-500/20 font-black'
+                  : 'bg-zinc-800/80 text-amber-300 hover:bg-zinc-800 border border-amber-500/30'
+              }`}
+            >
+              <span className="w-2 h-2 rounded-full bg-amber-400"></span>
+              ✍️ Belum Validasi Paraf ({scheduleMetrics.belumDikonfirmasi})
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setScheduleSubFilter('all')}
+              className={`px-3 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 cursor-pointer ${
+                scheduleSubFilter === 'all'
+                  ? 'bg-zinc-200 text-zinc-950 shadow-md font-black'
+                  : 'bg-zinc-800/80 text-zinc-300 hover:bg-zinc-800 border border-zinc-700'
+              }`}
+            >
+              <span className="w-2 h-2 rounded-full bg-zinc-400"></span>
+              📋 Semua Jadwal ({schedules.length})
+            </button>
+          </div>
+
+          {/* Quick Filter & Search Bar */}
+          <div className="bg-zinc-950/80 p-3 rounded-xl border border-zinc-800 flex flex-col md:flex-row md:items-center justify-between gap-3">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider flex items-center gap-1">
+                <Dumbbell className="w-3.5 h-3.5 text-orange-400" /> Filter Pelatih:
+              </span>
+              <select
+                value={scheduleTrainerFilter}
+                onChange={(e) => setScheduleTrainerFilter(e.target.value)}
+                className="bg-zinc-900 border border-zinc-700 text-xs text-zinc-200 rounded-lg px-2.5 py-1.5 focus:outline-none focus:border-orange-500"
+              >
+                <option value="ALL">Semua Coach ({trainers.length})</option>
+                {trainers.map((t) => (
+                  <option key={t.id} value={t.name}>
+                    Coach {t.name}
+                  </option>
+                ))}
+              </select>
+
+              {(scheduleTrainerFilter !== 'ALL' || searchQuery) && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setScheduleTrainerFilter('ALL');
+                    setSearchQuery('');
+                  }}
+                  className="text-[11px] text-zinc-400 hover:text-white bg-zinc-800 px-2.5 py-1 rounded-lg border border-zinc-700 flex items-center gap-1 transition cursor-pointer"
+                >
+                  Reset Filter &times;
+                </button>
+              )}
+            </div>
+
+            <div className="relative w-full md:w-72">
+              <Search className="w-4 h-4 text-zinc-400 absolute left-3 top-1/2 -translate-y-1/2" />
+              <input
+                type="text"
+                placeholder="Cari member, coach, jam, catatan..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full pl-9 pr-3 py-1.5 rounded-xl bg-zinc-900 border border-zinc-800 text-xs text-zinc-200 placeholder-zinc-500 focus:outline-none focus:border-orange-500 transition"
+              />
+            </div>
+          </div>
+
+          {/* BENTROK RESOLUTION ALERT BOX (If clash detected) */}
+          {scheduleMetrics.bentrok > 0 && (
+            <div className="p-4 rounded-xl bg-rose-950/40 border-2 border-rose-500/60 shadow-lg space-y-3 animate-in fade-in">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 rounded-xl bg-rose-500/20 text-rose-400 border border-rose-500/30">
+                    <ShieldAlert className="w-6 h-6 animate-pulse" />
+                  </div>
+                  <div>
+                    <h4 className="text-sm font-black text-white flex items-center gap-2">
+                      <span>PERINGATAN: Terdeteksi {scheduleMetrics.bentrok} Sesi Bertabrakan!</span>
+                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-rose-500 text-white font-extrabold uppercase">
+                        Konflik Aktif
+                      </span>
+                    </h4>
+                    <p className="text-xs text-rose-200/90 mt-0.5">
+                      Pelatih tidak dapat melatih lebih dari 1 member pada slot jam yang sama. Segera alihkan salah satu jadwal untuk mencegah komplain member.
+                    </p>
+                  </div>
+                </div>
+
+                {scheduleMetrics.bentrokDetails[0] && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const group = scheduleMetrics.bentrokDetails[0];
+                      setResolvingClash(group);
+                      setRescheduleTarget(group.schedules[0]);
+                    }}
+                    className="px-4 py-2 rounded-xl bg-gradient-to-r from-rose-600 to-red-600 hover:from-rose-500 hover:to-red-500 text-white text-xs font-black shadow-lg shadow-rose-600/30 transition flex items-center gap-1.5 shrink-0 cursor-pointer"
+                  >
+                    <AlertTriangle className="w-4 h-4" />
+                    <span>Selesaikan Bentrok Sekarang</span>
+                  </button>
+                )}
+              </div>
+
+              {/* List of clashing groups */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-2 pt-2 border-t border-rose-900/50">
+                {scheduleMetrics.bentrokDetails.map((group, gIdx) => (
+                  <div
+                    key={gIdx}
+                    className="p-3 rounded-lg bg-zinc-950/80 border border-rose-800/40 flex items-center justify-between gap-3"
+                  >
+                    <div className="space-y-0.5">
+                      <div className="text-xs font-bold text-white flex items-center gap-2">
+                        <span className="text-orange-400">Coach {group.trainer}</span>
+                        <span className="text-zinc-400">•</span>
+                        <span className="text-rose-300 font-mono">{group.time} WIB</span>
+                        <span className="text-zinc-400">•</span>
+                        <span className="text-zinc-300">{formatDateIndo(group.date)}</span>
+                      </div>
+                      <div className="text-[11px] text-zinc-400">
+                        Tabrakan antara: <strong className="text-white">{group.schedules.map((s) => s.memberName).join(' & ')}</strong>
+                      </div>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setResolvingClash(group);
+                        setRescheduleTarget(group.schedules[0]);
+                      }}
+                      className="px-2.5 py-1 rounded-lg bg-rose-600/80 hover:bg-rose-600 text-white text-[11px] font-bold shrink-0 transition cursor-pointer"
+                    >
+                      Pindah Jam
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* DEDICATED SCHEDULE TABLE (Rapi, Simpel, Sesuai Gaya Antrian PT) */}
+          <div className="overflow-x-auto rounded-xl border border-zinc-800">
+            <table className="w-full text-left text-xs text-zinc-300">
+              <thead className="bg-zinc-950/80 text-zinc-400 uppercase text-[10px] font-bold border-b border-zinc-800">
+                <tr>
+                  <th className="px-5 py-3.5">Waktu & Tanggal</th>
+                  <th className="px-4 py-3.5">Member & Kontak</th>
+                  <th className="px-4 py-3.5">Personal Trainer</th>
+                  <th className="px-4 py-3.5">Status Sesi</th>
+                  <th className="px-4 py-3.5">Validasi 3 Pihak</th>
+                  <th className="px-4 py-3.5">Catatan Latihan</th>
+                  <th className="px-4 py-3.5 text-right">Tindakan Leader</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-zinc-800/60 bg-zinc-950/40">
+                {displayedSchedules.length === 0 ? (
+                  <tr>
+                    <td colSpan={7} className="px-5 py-12 text-center text-zinc-500">
+                      <div className="max-w-sm mx-auto space-y-3">
+                        <CalendarDays className="w-10 h-10 text-zinc-600 mx-auto" />
+                        <p className="font-bold text-sm text-zinc-300">
+                          {scheduleSubFilter === 'clash'
+                            ? 'Luar biasa! Tidak ada jadwal yang bentrok saat ini.'
+                            : 'Tidak ada jadwal yang cocok dengan filter yang dipilih.'}
+                        </p>
+                        <p className="text-xs text-zinc-500">
+                          {scheduleSubFilter === 'clash'
+                            ? 'Seluruh jadwal sesi Personal Trainer berjalan harmonis tanpa tabrakan waktu.'
+                            : 'Coba ubah filter pelatih atau buat jadwal baru untuk member.'}
+                        </p>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setQuickMemberId('');
+                            setQuickTrainer(trainers[0]?.name || '');
+                            setQuickDate(APP_TODAY);
+                            setQuickTime('09:00');
+                            setIsQuickAddOpen(true);
+                          }}
+                          className="px-4 py-2 rounded-xl bg-orange-500/20 text-orange-400 border border-orange-500/30 text-xs font-bold hover:bg-orange-500/30 transition cursor-pointer"
+                        >
+                          + Tambah Jadwal Baru
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ) : (
+                  displayedSchedules.map((sch) => {
+                    const isClashing = scheduleMetrics.bentrokSchedules.some((x) => x.id === sch.id);
+                    const matchedMem = members.find((m) => m.id === sch.memberId);
+                    const memberPhone = matchedMem?.phone || '';
+                    const cleanPhone = memberPhone.replace(/^0/, '62').replace(/\D/g, '');
+
+                    return (
+                      <tr
+                        key={sch.id}
+                        className={`hover:bg-zinc-800/30 transition ${
+                          isClashing ? 'bg-rose-950/30 border-l-4 border-l-rose-500' : ''
+                        }`}
+                      >
+                        <td className="px-5 py-3.5">
+                          <div className="flex items-center gap-2">
+                            <span className="px-2 py-0.5 rounded bg-zinc-800 text-orange-400 font-mono font-bold text-xs">
+                              {sch.time}
+                            </span>
+                            <div>
+                              <div className="font-semibold text-white">{formatDateIndo(sch.date)}</div>
+                              <div className="text-[10px] text-zinc-500">
+                                {sch.date === APP_TODAY ? 'Hari Ini' : sch.date === tomorrowDate ? 'Besok' : ''}
+                              </div>
+                            </div>
+                          </div>
+                        </td>
+
+                        <td className="px-4 py-3.5">
+                          <div className="flex items-center gap-2.5">
+                            <img
+                              src={matchedMem?.photo || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=200&auto=format&fit=crop'}
+                              alt={sch.memberName}
+                              className="w-8 h-8 rounded-full object-cover border border-zinc-700 shrink-0"
+                            />
+                            <div>
+                              <div className="font-bold text-white flex items-center gap-1.5">
+                                {sch.memberName}
+                              </div>
+                              {memberPhone && (
+                                <div className="text-[11px] text-zinc-400 flex items-center gap-1 mt-0.5">
+                                  <Phone className="w-3 h-3 text-zinc-500" />
+                                  <span>{memberPhone}</span>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        </td>
+
+                        <td className="px-4 py-3.5">
+                          <div className="flex items-center gap-1.5">
+                            <span className="font-semibold text-zinc-200">Coach {sch.trainer}</span>
+                            {isClashing && (
+                              <span className="text-[9px] bg-rose-500 text-white px-1.5 py-0.5 rounded font-black animate-pulse">
+                                BENTROK!
+                              </span>
+                            )}
+                          </div>
+                        </td>
+
+                        <td className="px-4 py-3.5">
+                          <span
+                            className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-extrabold ${
+                              sch.status === 'Selesai'
+                                ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+                                : sch.status === 'Menunggu'
+                                ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
+                                : sch.status === 'Reschedule'
+                                ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30'
+                                : sch.status === 'No-Show'
+                                ? 'bg-pink-500/20 text-pink-400 border border-pink-500/30'
+                                : 'bg-rose-500/20 text-rose-400 border border-rose-500/30'
+                            }`}
+                          >
+                            {sch.status}
+                          </span>
+                        </td>
+
+                        <td className="px-4 py-3.5">
+                          <div className="flex items-center gap-1.5">
+                            <button
+                              type="button"
+                              onClick={() => handleQuickValidateSignature(sch, 'valStaf')}
+                              className={`px-2 py-0.5 rounded text-[10px] font-bold border transition cursor-pointer ${
+                                sch.valStaf
+                                  ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30'
+                                  : 'bg-zinc-800 text-zinc-500 border-zinc-700 hover:text-white'
+                              }`}
+                              title="Paraf Staf (Klik untuk validasi)"
+                            >
+                              Staf {sch.valStaf ? '✓' : '○'}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleQuickValidateSignature(sch, 'valTrainer')}
+                              className={`px-2 py-0.5 rounded text-[10px] font-bold border transition cursor-pointer ${
+                                sch.valTrainer
+                                  ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30'
+                                  : 'bg-zinc-800 text-zinc-500 border-zinc-700 hover:text-white'
+                              }`}
+                              title="Paraf Trainer (Klik untuk validasi)"
+                            >
+                              Trainer {sch.valTrainer ? '✓' : '○'}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleQuickValidateSignature(sch, 'valMember')}
+                              className={`px-2 py-0.5 rounded text-[10px] font-bold border transition cursor-pointer ${
+                                sch.valMember
+                                  ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30'
+                                  : 'bg-zinc-800 text-zinc-500 border-zinc-700 hover:text-white'
+                              }`}
+                              title="Paraf Member (Klik untuk validasi)"
+                            >
+                              Member {sch.valMember ? '✓' : '○'}
+                            </button>
+                          </div>
+                        </td>
+
+                        <td className="px-4 py-3.5 text-zinc-400 italic text-[11px] max-w-xs truncate">
+                          {sch.note || '-'}
+                        </td>
+
+                        <td className="px-4 py-3.5 text-right">
+                          <div className="flex items-center justify-end gap-1.5">
+                            {isClashing && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const group = scheduleMetrics.bentrokDetails.find(
+                                    (b) => b.trainer === sch.trainer && b.date === sch.date && b.time === sch.time
+                                  );
+                                  if (group) {
+                                    setResolvingClash(group);
+                                    setRescheduleTarget(sch);
+                                  }
+                                }}
+                                className="px-2.5 py-1 rounded-lg bg-rose-600 hover:bg-rose-500 text-white text-[10px] font-black shadow-md shadow-rose-600/20 transition cursor-pointer"
+                              >
+                                Atasi Bentrok
+                              </button>
+                            )}
+
+                            {sch.status === 'Menunggu' && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  onUpdateSchedule({
+                                    ...sch,
+                                    status: 'Selesai',
+                                    valStaf: true,
+                                    valTrainer: true,
+                                    valMember: true
+                                  });
+                                  showToast('Selesai', `Sesi ${sch.memberName} berhasil diverifikasi selesai.`, 'success');
+                                }}
+                                className="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-[10px] font-bold transition shadow-sm cursor-pointer"
+                              >
+                                Selesaikan
+                              </button>
+                            )}
+
+                            {cleanPhone && (
+                              <a
+                                href={`https://wa.me/${cleanPhone}?text=${encodeURIComponent(
+                                  `Halo ${sch.memberName}, salam sehat dari GymPro. Mengingatkan sesi Personal Training Anda bersama Coach ${sch.trainer} pada ${formatDateIndo(sch.date)} pk ${sch.time} WIB. Sampai jumpa di gym!`
+                                )}`}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="px-2.5 py-1 rounded-lg bg-emerald-600/80 hover:bg-emerald-600 text-white text-[10px] font-bold flex items-center gap-1 transition shadow-sm"
+                                title="Kirim Pengingat Jadwal via WhatsApp"
+                              >
+                                <MessageCircle className="w-3 h-3" /> WA
+                              </a>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+      )}
+
+      {/* 4. TAB VIEW: ANALITIK & RINGKASAN PERFORMA */}
+      {mainTab === 'analitik' && (
+      <div className="space-y-6">
+      {/* FOUR KPI HUBS WITH MATHEMATICAL HIERARCHY */}
 
       {/* HUB 1: MEMBER PT (9 METRICS) */}
       <div className="space-y-3">
@@ -2772,8 +3688,11 @@ export const LeaderPTDashboardView: React.FC<LeaderPTDashboardViewProps> = ({
         </div>
       </div>
     </div>
+    </div>
+    )}
 
-      {/* 5. INTERACTIVE OPERATIONAL TABLE WITH TABS */}
+      {/* 5. INTERACTIVE OPERATIONAL TABLE WITH TABS (Kapasitas Pelatih & Retensi Member) */}
+      {(mainTab === 'pelatih' || mainTab === 'retensi') && (
       <div className="bg-zinc-900/60 rounded-2xl border border-zinc-800 shadow-sm overflow-hidden">
         {/* Table Header Controls */}
         <div className="p-5 border-b border-zinc-800 flex flex-col lg:flex-row lg:items-center justify-between gap-4">
@@ -3493,6 +4412,7 @@ export const LeaderPTDashboardView: React.FC<LeaderPTDashboardViewProps> = ({
           </div>
         )}
       </div>
+      )}
 
       {/* 6. MODAL: RESOLVE CLASH / BENTROK */}
       {resolvingClash && (

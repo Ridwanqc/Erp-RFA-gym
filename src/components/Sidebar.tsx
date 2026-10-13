@@ -36,6 +36,7 @@ import {
 import { User, UserRole } from '../types';
 import { PWAInstallButton } from './PWAInstallButton';
 import { useTheme } from '../context/ThemeContext';
+import { useSettings } from '../context/SettingsContext';
 
 export type ActiveTab =
   | 'dashboard'
@@ -58,6 +59,13 @@ export type ActiveTab =
   | 'inventaris'
   | 'lockers'
   | 'hr-payroll'
+  | 'dashboard-keuangan'
+  | 'laba-rugi'
+  | 'input-pengeluaran'
+  | 'riwayat-pengeluaran'
+  | 'kategori-pengeluaran'
+  | 'persetujuan-pengeluaran'
+  | 'laporan-pengeluaran'
   | 'piutang'
   | 'laporan'
   | 'laporan-harian'
@@ -71,7 +79,8 @@ export type ActiveTab =
   | 'settings-branches'
   | 'settings-profile'
   | 'settings-finance'
-  | 'settings-backup';
+  | 'settings-backup'
+  | 'settings-landing';
 
 interface SubItem {
   id: ActiveTab;
@@ -106,6 +115,7 @@ interface SidebarProps {
   piutangCount?: number;
   freezeCount?: number;
   ptWaitingCount?: number;
+  pendingExpensesCount?: number;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
@@ -119,12 +129,74 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onLogout,
   piutangCount = 0,
   freezeCount = 0,
-  ptWaitingCount = 0
+  ptWaitingCount = 0,
+  pendingExpensesCount = 0
 }) => {
   const role: UserRole = currentUser?.role || 'admin';
   const { openThemeModal, currentAccent, theme } = useTheme();
+  const { hasPermission } = useSettings();
 
-  const canAccess = (requiredRoles: UserRole[]) => {
+  // Mapping from tab/subtab ID to SYSTEM_MODULES ID for dynamic RBAC permissions
+  const TAB_TO_MODULE_MAP: Record<string, string> = {
+    'dashboard': 'dashboard',
+    'absen': 'absen',
+    'front-desk-portal': 'front-desk-portal',
+    'guest-pass': 'guest-pass',
+    'membership': 'membership',
+    'freeze': 'freeze',
+    'master-data': 'master-data',
+    'bundling-reports': 'bundling',
+    'body-composition': 'body-composition',
+    'crm': 'crm',
+    'leader-pt': 'leader-pt',
+    'jadwal-pt': 'pt-sessions',
+    'studio-class': 'studio-class',
+    'trainer-portal': 'trainer-portal',
+    'pt-package-performance': 'pt-package-performance',
+    'pos': 'pos',
+    'products': 'products',
+    'inventaris': 'inventaris',
+    'lockers': 'lockers',
+    'dashboard-keuangan': 'dashboard-keuangan',
+    'laba-rugi': 'laba-rugi',
+    'input-pengeluaran': 'pengeluaran',
+    'riwayat-pengeluaran': 'pengeluaran',
+    'kategori-pengeluaran': 'pengeluaran',
+    'persetujuan-pengeluaran': 'pengeluaran',
+    'laporan-pengeluaran': 'pengeluaran',
+    'piutang': 'piutang',
+    'laporan': 'laporan',
+    'laporan-harian': 'laporan-penjualan',
+    'laporan-bulanan': 'laporan-penjualan',
+    'tutup-toko': 'tutup-toko',
+    'hr-payroll': 'hr-payroll',
+    'google-sheets': 'google-sheets',
+    'settings': 'settings',
+    'settings-printer': 'settings',
+    'settings-theme': 'settings',
+    'settings-roles': 'settings',
+    'settings-branches': 'settings',
+    'settings-profile': 'settings',
+    'settings-landing': 'settings',
+    'settings-finance': 'settings',
+    'settings-backup': 'settings'
+  };
+
+  const canAccess = (requiredRoles: UserRole[], itemId?: string) => {
+    // Super administrator always has unrestricted access
+    if (role === 'admin') return true;
+
+    // Special protection: only Super Admin can access RBAC role management and backup
+    if (itemId === 'settings-roles' || itemId === 'settings-backup' || itemId === 'settings-profile') {
+      return false;
+    }
+
+    // Check dynamic RBAC module permission if an itemId or tab mapping exists
+    if (itemId && TAB_TO_MODULE_MAP[itemId]) {
+      const moduleId = TAB_TO_MODULE_MAP[itemId];
+      return hasPermission(role, moduleId, 'view');
+    }
+
     return requiredRoles.includes(role);
   };
 
@@ -322,6 +394,42 @@ export const Sidebar: React.FC<SidebarProps> = ({
           badge: piutangCount > 0 ? piutangCount : undefined,
           subItems: [
             {
+              id: 'dashboard-keuangan',
+              label: 'Dashboard Keuangan',
+              roles: ['admin', 'admin_cabang', 'kasir', 'manager']
+            },
+            {
+              id: 'laba-rugi',
+              label: 'Laba Perusahaan (P&L)',
+              roles: ['admin', 'admin_cabang', 'kasir', 'manager']
+            },
+            {
+              id: 'input-pengeluaran',
+              label: 'Input Pengeluaran',
+              roles: ['admin', 'admin_cabang', 'kasir', 'manager']
+            },
+            {
+              id: 'riwayat-pengeluaran',
+              label: 'Riwayat Pengeluaran',
+              roles: ['admin', 'admin_cabang', 'kasir', 'manager']
+            },
+            {
+              id: 'kategori-pengeluaran',
+              label: 'Kategori Pengeluaran',
+              roles: ['admin', 'admin_cabang', 'manager']
+            },
+            {
+              id: 'persetujuan-pengeluaran',
+              label: 'Persetujuan Pengeluaran',
+              badge: pendingExpensesCount > 0 ? pendingExpensesCount : undefined,
+              roles: ['admin', 'admin_cabang', 'manager']
+            },
+            {
+              id: 'laporan-pengeluaran',
+              label: 'Laporan Pengeluaran',
+              roles: ['admin', 'admin_cabang', 'kasir', 'manager']
+            },
+            {
               id: 'piutang',
               label: 'Buku Piutang & Cicilan',
               badge: piutangCount > 0 ? piutangCount : undefined,
@@ -406,6 +514,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
               id: 'settings-profile',
               label: 'Profil Usaha',
               roles: ['admin']
+            },
+            {
+              id: 'settings-landing',
+              label: 'Landing Page (CMS)',
+              roles: ['admin', 'manager']
             },
             {
               id: 'settings-finance',
@@ -533,9 +646,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
           {navItems.map((group, idx) => {
             const visibleItems = group.items.filter((item) => {
               if (item.subItems) {
-                return item.subItems.some((s) => canAccess(s.roles));
+                return item.subItems.some((s) => canAccess(s.roles, s.id));
               }
-              return canAccess(item.roles);
+              return canAccess(item.roles, item.id);
             });
 
             if (visibleItems.length === 0) return null;
@@ -643,7 +756,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                           } ${isSubOpen ? 'block animate-in fade-in duration-150' : 'hidden'}`}
                         >
                           {item.subItems
-                            ?.filter((s) => canAccess(s.roles))
+                            ?.filter((s) => canAccess(s.roles, s.id))
                             .map((sub) => {
                               const isSubActive = activeTab === sub.id;
                               return (
@@ -688,7 +801,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                           {hasSubItems ? (
                             <div className="space-y-1">
                               {item.subItems
-                                ?.filter((s) => canAccess(s.roles))
+                                ?.filter((s) => canAccess(s.roles, s.id))
                                 .map((sub) => {
                                   const isSubActive = activeTab === sub.id;
                                   return (

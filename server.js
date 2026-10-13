@@ -13,20 +13,27 @@ var helmetMiddleware = helmet({
   contentSecurityPolicy: {
     directives: {
       defaultSrc: ["'self'"],
-      scriptSrc: ["'self'", "'unsafe-inline'", "https://cdnjs.cloudflare.com"],
+      scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'", "https://cdnjs.cloudflare.com"],
       styleSrc: ["'self'", "'unsafe-inline'", "https://cdnjs.cloudflare.com", "https://fonts.googleapis.com"],
       fontSrc: ["'self'", "https://cdnjs.cloudflare.com", "https://fonts.gstatic.com", "data:"],
       imgSrc: ["'self'", "data:", "blob:", "https:"],
       connectSrc: ["'self'", "https:", "wss:"],
-      frameAncestors: ["'self'", "https://*.google.com", "https://localhost.corp.google.com:26001"],
+      frameAncestors: [
+        "'self'",
+        "https://*.google.com",
+        "https://*.googleusercontent.com",
+        "https://*.run.app",
+        "https://aistudio.google.com",
+        "https://localhost.corp.google.com:*"
+      ],
       objectSrc: ["'none'"],
-      upgradeInsecureRequests: process.env.NODE_ENV === "production" ? [] : null
+      upgradeInsecureRequests: null
     }
   },
   crossOriginEmbedderPolicy: false,
   crossOriginResourcePolicy: { policy: "cross-origin" },
   dnsPrefetchControl: { allow: false },
-  frameguard: { action: "sameorigin" },
+  frameguard: false,
   hidePoweredBy: true,
   hsts: {
     maxAge: 31536e3,
@@ -150,6 +157,8 @@ var DatabaseStore = class {
     this.members = /* @__PURE__ */ new Map();
     this.transactions = /* @__PURE__ */ new Map();
     this.backups = [];
+    this.expenseCategories = /* @__PURE__ */ new Map();
+    this.companyExpenses = /* @__PURE__ */ new Map();
     this.seed();
   }
   seed() {
@@ -1661,6 +1670,237 @@ uploadRouter.post("/", authMiddleware, (req, res) => {
   }
 });
 
+// server/routes/expenseRoutes.ts
+import { Router as Router6 } from "express";
+import { z as z4 } from "zod";
+var expenseRouter = Router6();
+var createExpenseSchema = z4.object({
+  expenseNumber: z4.string().optional(),
+  date: z4.string().min(8, "Tanggal wajib diisi."),
+  branchId: z4.string().min(1, "Cabang wajib dipilih."),
+  branchName: z4.string().min(1, "Nama cabang wajib ada."),
+  categoryId: z4.string().min(1, "Kategori pengeluaran wajib dipilih."),
+  categoryName: z4.string().min(1, "Nama kategori wajib ada."),
+  subcategory: z4.string().min(1, "Subkategori wajib dipilih."),
+  name: z4.string().min(3, "Nama pengeluaran minimal 3 karakter."),
+  description: z4.string().optional(),
+  amount: z4.number().positive("Nominal pengeluaran harus lebih besar dari 0."),
+  accountingType: z4.enum([
+    "BEBAN_OPERASIONAL",
+    "BEBAN_SDM",
+    "BEBAN_FASILITAS",
+    "BEBAN_FINANSIAL",
+    "ASET_TETAP",
+    "PERSEDIAAN",
+    "PEMBAYARAN_UTANG"
+  ]),
+  paymentMethod: z4.enum(["Kas", "Transfer Bank", "QRIS", "Kartu Debit/EDC", "Lainnya"]),
+  sourceAccount: z4.string().min(1, "Sumber dana / rekening wajib dipilih."),
+  vendorOrBeneficiary: z4.string().min(2, "Nama penerima atau vendor wajib diisi."),
+  picStaffId: z4.string().min(1, "PIC / Pengaju wajib ada."),
+  picStaffName: z4.string().min(1, "Nama PIC wajib ada."),
+  invoiceRefNumber: z4.string().optional(),
+  attachmentUrl: z4.string().optional(),
+  attachmentFileName: z4.string().optional(),
+  approvalStatus: z4.enum(["Draft", "Menunggu Persetujuan", "Disetujui", "Ditolak", "Dibatalkan"]).default("Menunggu Persetujuan"),
+  notes: z4.string().optional()
+});
+expenseRouter.get("/", authMiddleware, (req, res) => {
+  try {
+    const { branchId, status, dateFrom, dateTo } = req.query;
+    let list = Array.from(db.companyExpenses.values());
+    if (branchId && branchId !== "ALL" && branchId !== "BR-ALL") {
+      list = list.filter((e) => e.branchId === branchId);
+    }
+    if (status && status !== "ALL") {
+      list = list.filter((e) => e.approvalStatus === status);
+    }
+    if (dateFrom) {
+      list = list.filter((e) => e.date >= String(dateFrom));
+    }
+    if (dateTo) {
+      list = list.filter((e) => e.date <= String(dateTo));
+    }
+    list.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    return res.status(200).json({
+      success: true,
+      data: list
+    });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
+});
+expenseRouter.post("/", authMiddleware, (req, res) => {
+  try {
+    const validated = createExpenseSchema.parse(req.body);
+    const now = /* @__PURE__ */ new Date();
+    const dateStr = now.toISOString().slice(2, 10).replace(/-/g, "");
+    const randomSuffix = Math.floor(1e3 + Math.random() * 9e3);
+    const generatedNumber = validated.expenseNumber || `EXP-${dateStr}-${randomSuffix}`;
+    const id = `EXP-${Date.now()}-${randomSuffix}`;
+    const newExpense = {
+      id,
+      expenseNumber: generatedNumber,
+      date: validated.date,
+      branchId: validated.branchId,
+      branchName: validated.branchName,
+      categoryId: validated.categoryId,
+      categoryName: validated.categoryName,
+      subcategory: validated.subcategory,
+      name: validated.name,
+      description: validated.description || "",
+      amount: validated.amount,
+      accountingType: validated.accountingType,
+      paymentMethod: validated.paymentMethod,
+      sourceAccount: validated.sourceAccount,
+      vendorOrBeneficiary: validated.vendorOrBeneficiary,
+      picStaffId: validated.picStaffId,
+      picStaffName: validated.picStaffName,
+      invoiceRefNumber: validated.invoiceRefNumber,
+      attachmentUrl: validated.attachmentUrl,
+      attachmentFileName: validated.attachmentFileName,
+      approvalStatus: validated.approvalStatus,
+      paymentStatus: "Belum Dibayar",
+      paidAmount: 0,
+      balanceRemaining: validated.amount,
+      notes: validated.notes,
+      auditLogs: [
+        {
+          id: `LOG-${Date.now()}`,
+          timestamp: (/* @__PURE__ */ new Date()).toLocaleString("id-ID"),
+          userId: req.user?.userId || "SYSTEM",
+          userName: req.user?.username || "User",
+          action: validated.approvalStatus === "Draft" ? "Dibuat (Draft)" : "Diajukan Persetujuan",
+          notes: validated.notes || "Pengajuan pengeluaran dibuat"
+        }
+      ],
+      createdAt: (/* @__PURE__ */ new Date()).toISOString(),
+      updatedAt: (/* @__PURE__ */ new Date()).toISOString()
+    };
+    db.companyExpenses.set(id, newExpense);
+    AuditService.log({
+      userId: req.user?.userId || null,
+      action: "CREATE_EXPENSE",
+      module: "FINANCE_EXPENSES",
+      recordId: id,
+      newValue: { expenseNumber: generatedNumber, amount: validated.amount }
+    });
+    return res.status(201).json({
+      success: true,
+      data: newExpense
+    });
+  } catch (err) {
+    return res.status(400).json({ success: false, message: err.message });
+  }
+});
+expenseRouter.post("/:id/approve", authMiddleware, requireRoles(["ADMIN", "LEADER"]), (req, res) => {
+  try {
+    const { id } = req.params;
+    const expense = db.companyExpenses.get(id);
+    if (!expense) {
+      return res.status(404).json({ success: false, message: "Transaksi pengeluaran tidak ditemukan." });
+    }
+    if (expense.approvalStatus === "Disetujui") {
+      return res.status(400).json({ success: false, message: "Transaksi ini sudah disetujui sebelumnya." });
+    }
+    expense.approvalStatus = "Disetujui";
+    expense.approvedByUserId = req.user?.userId;
+    expense.approvedByUserName = req.user?.username;
+    expense.approvedAt = (/* @__PURE__ */ new Date()).toISOString();
+    expense.updatedAt = (/* @__PURE__ */ new Date()).toISOString();
+    expense.auditLogs.push({
+      id: `LOG-${Date.now()}`,
+      timestamp: (/* @__PURE__ */ new Date()).toLocaleString("id-ID"),
+      userId: req.user?.userId || "SYSTEM",
+      userName: req.user?.username || "Approver",
+      action: "Disetujui",
+      notes: req.body.notes || "Pengeluaran disetujui"
+    });
+    db.companyExpenses.set(id, expense);
+    AuditService.log({
+      userId: req.user?.userId || null,
+      action: "APPROVE_EXPENSE",
+      module: "FINANCE_EXPENSES",
+      recordId: id,
+      newValue: { status: "Disetujui", approver: req.user?.username }
+    });
+    return res.status(200).json({ success: true, data: expense });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
+});
+expenseRouter.post("/:id/reject", authMiddleware, requireRoles(["ADMIN", "LEADER"]), (req, res) => {
+  try {
+    const { id } = req.params;
+    const { reason } = req.body;
+    if (!reason || reason.trim().length < 3) {
+      return res.status(400).json({ success: false, message: "Alasan penolakan wajib diisi minimal 3 karakter." });
+    }
+    const expense = db.companyExpenses.get(id);
+    if (!expense) {
+      return res.status(404).json({ success: false, message: "Transaksi pengeluaran tidak ditemukan." });
+    }
+    expense.approvalStatus = "Ditolak";
+    expense.rejectionReason = reason;
+    expense.updatedAt = (/* @__PURE__ */ new Date()).toISOString();
+    expense.auditLogs.push({
+      id: `LOG-${Date.now()}`,
+      timestamp: (/* @__PURE__ */ new Date()).toLocaleString("id-ID"),
+      userId: req.user?.userId || "SYSTEM",
+      userName: req.user?.username || "Approver",
+      action: "Ditolak",
+      notes: `Alasan: ${reason}`
+    });
+    db.companyExpenses.set(id, expense);
+    return res.status(200).json({ success: true, data: expense });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
+});
+expenseRouter.post("/:id/pay", authMiddleware, (req, res) => {
+  try {
+    const { id } = req.params;
+    const { paidAmount, paidAccount, notes } = req.body;
+    const expense = db.companyExpenses.get(id);
+    if (!expense) {
+      return res.status(404).json({ success: false, message: "Transaksi tidak ditemukan." });
+    }
+    if (expense.approvalStatus !== "Disetujui") {
+      return res.status(400).json({ success: false, message: "Hanya transaksi yang disetujui yang dapat dibayar." });
+    }
+    const payVal = Number(paidAmount);
+    if (!payVal || payVal <= 0) {
+      return res.status(400).json({ success: false, message: "Nominal pembayaran harus lebih besar dari 0." });
+    }
+    const newPaidTotal = expense.paidAmount + payVal;
+    const newRemaining = Math.max(0, expense.amount - newPaidTotal);
+    expense.paidAmount = newPaidTotal;
+    expense.balanceRemaining = newRemaining;
+    expense.paymentStatus = newRemaining === 0 ? "Lunas" : "Dibayar Sebagian";
+    expense.paidAt = (/* @__PURE__ */ new Date()).toISOString();
+    expense.paidByUserId = req.user?.userId;
+    expense.paidByUserName = req.user?.username;
+    expense.paidAccount = paidAccount || expense.sourceAccount;
+    expense.updatedAt = (/* @__PURE__ */ new Date()).toISOString();
+    expense.auditLogs.push({
+      id: `LOG-${Date.now()}`,
+      timestamp: (/* @__PURE__ */ new Date()).toLocaleString("id-ID"),
+      userId: req.user?.userId || "SYSTEM",
+      userName: req.user?.username || "Cashier",
+      action: newRemaining === 0 ? "Pembayaran Lunas Dicatat" : "Pembayaran Sebagian Dicatat",
+      notes: `Dibayar: Rp ${payVal.toLocaleString("id-ID")} via ${expense.paidAccount}. Sisa: Rp ${newRemaining.toLocaleString("id-ID")}`
+    });
+    db.companyExpenses.set(id, expense);
+    return res.status(200).json({ success: true, data: expense });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
+});
+expenseRouter.get("/categories", authMiddleware, (_req, res) => {
+  const categories = Array.from(db.expenseCategories.values());
+  return res.status(200).json({ success: true, data: categories });
+});
+
 // server/app.ts
 dotenv.config();
 var __filename = fileURLToPath(import.meta.url);
@@ -1691,6 +1931,7 @@ app.use("/api/members", memberRouter);
 app.use("/api/transactions", transactionRouter);
 app.use("/api/admin/security", securityRouter);
 app.use("/api/upload", uploadRouter);
+app.use("/api/expenses", expenseRouter);
 if (isProduction || fs.existsSync(distPath)) {
   app.use(
     express.static(distPath, {
@@ -1739,24 +1980,10 @@ app.use((err, req, res, _next) => {
   });
 });
 var host = "0.0.0.0";
-var primaryPort = parseInt(process.env.PORT || "8080", 10);
-var portsToListen = Array.from(/* @__PURE__ */ new Set([primaryPort, 3e3, 8080]));
-for (const port of portsToListen) {
-  try {
-    const srv = app.listen(port, host, () => {
-      console.log(`[GymPro Enterprise] Security Shield successfully active on http://${host}:${port}`);
-    });
-    srv.on("error", (err) => {
-      if (err && err.code === "EADDRINUSE") {
-        console.warn(`[GymPro Enterprise] Port ${port} is occupied by reverse-proxy / container process.`);
-      } else {
-        console.error(`[GymPro Enterprise] Listener error on port ${port}:`, err);
-      }
-    });
-  } catch (err) {
-    console.warn(`[GymPro Enterprise] Could not initialize listener on port ${port}:`, err);
-  }
-}
+var port = parseInt(process.env.PORT || "3000", 10);
+app.listen(port, host, () => {
+  console.log(`[GymPro Enterprise] Security Shield successfully active on http://${host}:${port}`);
+});
 var app_default = app;
 export {
   app_default as default

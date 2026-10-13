@@ -1,4 +1,4 @@
-import { User, Member, Product, PackageItem, Transaction, Schedule, StudioClass, Attendance, StaffAttendance, Lead, FollowUpLog, LeaveRequest, PettyCash, DailyClosingRecord, PTPurchaseRecord, PTTrainerAssignment, TrainingSessionDetail, WorkSchedule, ShiftDefinition, GuestPassVisitor, GuestPassVisitRecord } from '../types';
+import { User, Member, Product, PackageItem, Transaction, Schedule, StudioClass, Attendance, StaffAttendance, Lead, FollowUpLog, LeaveRequest, PettyCash, DailyClosingRecord, PTPurchaseRecord, PTTrainerAssignment, TrainingSessionDetail, WorkSchedule, ShiftDefinition, GuestPassVisitor, GuestPassVisitRecord, ExpenseCategory, CompanyExpense, ExpenseApprovalPolicy } from '../types';
 import { APP_TODAY } from '../utils/formatters';
 
 export const INITIAL_USERS: User[] = [
@@ -16,7 +16,7 @@ export const INITIAL_USERS: User[] = [
     gender: 'L',
     phone: '081298765432',
     branchId: 'BR-001',
-    branchName: 'GymPro Flagship Kelapa Gading',
+    branchName: 'RFA GYM Cibubur, Bekasi (Flagship HQ)',
     allowedBranchIds: ['BR-001', 'BR-002', 'BR-003'],
     idType: 'KTP',
     idNumber: '3171011504880001',
@@ -39,7 +39,7 @@ export const INITIAL_USERS: User[] = [
     gender: 'P',
     phone: '081345678901',
     branchId: 'BR-001',
-    branchName: 'GymPro Flagship Kelapa Gading',
+    branchName: 'RFA GYM Cibubur, Bekasi (Flagship HQ)',
     allowedBranchIds: ['BR-001'],
     idType: 'KTP',
     idNumber: '3275026207940003',
@@ -62,7 +62,7 @@ export const INITIAL_USERS: User[] = [
     gender: 'P',
     phone: '081512345678',
     branchId: 'BR-001',
-    branchName: 'GymPro Flagship Kelapa Gading',
+    branchName: 'RFA GYM Cibubur, Bekasi (Flagship HQ)',
     allowedBranchIds: ['BR-001', 'BR-002'],
     idType: 'KTP',
     idNumber: '3174035108920002',
@@ -85,7 +85,7 @@ export const INITIAL_USERS: User[] = [
     gender: 'L',
     phone: '081799887766',
     branchId: 'BR-001',
-    branchName: 'GymPro Flagship Kelapa Gading',
+    branchName: 'RFA GYM Cibubur, Bekasi (Flagship HQ)',
     allowedBranchIds: ['BR-001'],
     idType: 'KTP',
     idNumber: '3201081903960005',
@@ -108,7 +108,7 @@ export const INITIAL_USERS: User[] = [
     gender: 'L',
     phone: '081822334455',
     branchId: 'BR-002',
-    branchName: 'GymPro Hub Senopati Lifestyle',
+    branchName: 'RFA Gym Senopati Lifestyle Hub',
     allowedBranchIds: ['BR-002'],
     idType: 'KTP',
     idNumber: '3171092512900004',
@@ -130,7 +130,7 @@ export const INITIAL_USERS: User[] = [
     gender: 'P',
     phone: '081911223344',
     branchId: 'BR-002',
-    branchName: 'GymPro Hub Senopati Lifestyle',
+    branchName: 'RFA Gym Senopati Lifestyle Hub',
     allowedBranchIds: ['BR-002'],
     idType: 'KTP',
     idNumber: '3175054706950007',
@@ -152,7 +152,7 @@ export const INITIAL_USERS: User[] = [
     gender: 'L',
     phone: '081233445566',
     branchId: 'BR-003',
-    branchName: 'GymPro Express BSD City',
+    branchName: 'RFA Gym Express BSD Green Office',
     allowedBranchIds: ['BR-003'],
     idType: 'KTP',
     idNumber: '3173041001890002',
@@ -174,7 +174,7 @@ export const INITIAL_USERS: User[] = [
     gender: 'P',
     phone: '081288990011',
     branchId: 'BR-002',
-    branchName: 'GymPro Hub Senopati Lifestyle',
+    branchName: 'RFA Gym Senopati Lifestyle Hub',
     allowedBranchIds: ['BR-002'],
     idType: 'KTP',
     idNumber: '3174026605960008',
@@ -196,7 +196,7 @@ export const INITIAL_USERS: User[] = [
     gender: 'L',
     phone: '081377889900',
     branchId: 'BR-003',
-    branchName: 'GymPro Express BSD City',
+    branchName: 'RFA Gym Express BSD Green Office',
     allowedBranchIds: ['BR-003'],
     idType: 'KTP',
     idNumber: '3674011208950002',
@@ -218,7 +218,7 @@ export const INITIAL_USERS: User[] = [
     gender: 'L',
     phone: '081211223344',
     branchId: 'BR-001',
-    branchName: 'GymPro Flagship Kelapa Gading',
+    branchName: 'RFA GYM Cibubur, Bekasi (Flagship HQ)',
     allowedBranchIds: ['BR-001'],
     idType: 'KTP',
     idNumber: '3172021508930005',
@@ -240,7 +240,7 @@ export const INITIAL_USERS: User[] = [
     gender: 'P',
     phone: '081322334455',
     branchId: 'BR-002',
-    branchName: 'GymPro Hub Senopati Lifestyle',
+    branchName: 'RFA Gym Senopati Lifestyle Hub',
     allowedBranchIds: ['BR-002'],
     idType: 'KTP',
     idNumber: '3174066205940008',
@@ -262,7 +262,7 @@ export const INITIAL_USERS: User[] = [
     gender: 'L',
     phone: '081733445566',
     branchId: 'BR-003',
-    branchName: 'GymPro Express BSD City',
+    branchName: 'RFA Gym Express BSD Green Office',
     allowedBranchIds: ['BR-003'],
     idType: 'KTP',
     idNumber: '3674031909920004',
@@ -282,7 +282,7 @@ export const INITIAL_MEMBERS: Member[] = [
     picId: 'S01',
     picName: 'Budi Santoso',
     branchId: 'BR-001',
-    branchName: 'GymPro Flagship Kelapa Gading',
+    branchName: 'RFA GYM Cibubur, Bekasi (Flagship HQ)',
     followUpStatus: 'BELUM DIHUBUNGI',
     photo: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?q=80&w=200&auto=format&fit=crop',
     gender: 'L',
@@ -304,7 +304,7 @@ export const INITIAL_MEMBERS: Member[] = [
     picId: 'S01',
     picName: 'Budi Santoso',
     branchId: 'BR-001',
-    branchName: 'GymPro Flagship Kelapa Gading',
+    branchName: 'RFA GYM Cibubur, Bekasi (Flagship HQ)',
     followUpStatus: 'TERTARIK RENEWAL',
     photo: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?q=80&w=200&auto=format&fit=crop',
     gender: 'P',
@@ -326,7 +326,7 @@ export const INITIAL_MEMBERS: Member[] = [
     picId: 'S02',
     picName: 'Siti Kasir',
     branchId: 'BR-001',
-    branchName: 'GymPro Flagship Kelapa Gading',
+    branchName: 'RFA GYM Cibubur, Bekasi (Flagship HQ)',
     followUpStatus: 'SUDAH DIHUBUNGI',
     photo: 'https://images.unsplash.com/photo-1522075469751-3a6694fb2f61?q=80&w=200&auto=format&fit=crop',
     gender: 'L',
@@ -348,7 +348,7 @@ export const INITIAL_MEMBERS: Member[] = [
     picId: 'S03',
     picName: 'Citra Lestari',
     branchId: 'BR-001',
-    branchName: 'GymPro Flagship Kelapa Gading',
+    branchName: 'RFA GYM Cibubur, Bekasi (Flagship HQ)',
     followUpStatus: 'AKAN RENEWAL',
     photo: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=200&auto=format&fit=crop',
     gender: 'P',
@@ -370,7 +370,7 @@ export const INITIAL_MEMBERS: Member[] = [
     picId: 'S04',
     picName: 'Reza Pratama',
     branchId: 'BR-001',
-    branchName: 'GymPro Flagship Kelapa Gading',
+    branchName: 'RFA GYM Cibubur, Bekasi (Flagship HQ)',
     followUpStatus: 'PERLU FOLLOW UP',
     photo: 'https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?q=80&w=200&auto=format&fit=crop',
     gender: 'L',
@@ -391,7 +391,7 @@ export const INITIAL_MEMBERS: Member[] = [
     picId: 'S03',
     picName: 'Citra Lestari',
     branchId: 'BR-001',
-    branchName: 'GymPro Flagship Kelapa Gading',
+    branchName: 'RFA GYM Cibubur, Bekasi (Flagship HQ)',
     followUpStatus: 'AKTIF LATIHAN',
     photo: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?q=80&w=200&auto=format&fit=crop',
     gender: 'P',
@@ -412,7 +412,7 @@ export const INITIAL_MEMBERS: Member[] = [
     picId: 'S05',
     picName: 'David Chen',
     branchId: 'BR-002',
-    branchName: 'GymPro Hub Senopati Lifestyle',
+    branchName: 'RFA Gym Senopati Lifestyle Hub',
     followUpStatus: 'PENAWARAN RENEWAL',
     photo: 'https://images.unsplash.com/photo-1519085360753-af0119f7cbe7?q=80&w=200&auto=format&fit=crop',
     gender: 'L',
@@ -433,7 +433,7 @@ export const INITIAL_MEMBERS: Member[] = [
     picId: 'S05',
     picName: 'David Chen',
     branchId: 'BR-002',
-    branchName: 'GymPro Hub Senopati Lifestyle',
+    branchName: 'RFA Gym Senopati Lifestyle Hub',
     followUpStatus: 'BELUM DIHUBUNGI',
     photo: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?q=80&w=200&auto=format&fit=crop',
     gender: 'L',
@@ -454,7 +454,7 @@ export const INITIAL_MEMBERS: Member[] = [
     picId: 'S04',
     picName: 'Reza Pratama',
     branchId: 'BR-002',
-    branchName: 'GymPro Hub Senopati Lifestyle',
+    branchName: 'RFA Gym Senopati Lifestyle Hub',
     followUpStatus: 'DROPOUT WARNING',
     photo: 'https://images.unsplash.com/photo-1522075469751-3a6694fb2f61?q=80&w=200&auto=format&fit=crop',
     gender: 'L',
@@ -475,7 +475,7 @@ export const INITIAL_MEMBERS: Member[] = [
     picId: 'S03',
     picName: 'Citra Lestari',
     branchId: 'BR-003',
-    branchName: 'GymPro Express BSD City',
+    branchName: 'RFA Gym Express BSD Green Office',
     followUpStatus: 'AKAN RENEWAL',
     photo: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=200&auto=format&fit=crop',
     gender: 'P',
@@ -489,14 +489,14 @@ export const INITIAL_MEMBERS: Member[] = [
   },
   {
     id: 'M011',
-    name: 'Aditya Pratama (Member A)',
+    name: 'Aditya Pratama',
     phone: '081299112233',
     expired: '2026-11-20',
     ptQuota: 2,
     picId: 'S07',
     picName: 'Andi Saputra',
     branchId: 'BR-003',
-    branchName: 'GymPro Express BSD City',
+    branchName: 'RFA Gym Express BSD Green Office',
     followUpStatus: 'AKTIF LATIHAN',
     photo: 'https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?q=80&w=200&auto=format&fit=crop',
     gender: 'L',
@@ -509,14 +509,14 @@ export const INITIAL_MEMBERS: Member[] = [
   },
   {
     id: 'M012',
-    name: 'Bambang Sudiro (Member B)',
+    name: 'Bambang Sudiro',
     phone: '081388223344',
     expired: '2026-11-25',
     ptQuota: 3,
     picId: 'S07',
     picName: 'Andi Saputra',
     branchId: 'BR-003',
-    branchName: 'GymPro Express BSD City',
+    branchName: 'RFA Gym Express BSD Green Office',
     followUpStatus: 'AKTIF LATIHAN',
     photo: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?q=80&w=200&auto=format&fit=crop',
     gender: 'L',
@@ -529,14 +529,14 @@ export const INITIAL_MEMBERS: Member[] = [
   },
   {
     id: 'M013',
-    name: 'Clara Shinta (Member C)',
+    name: 'Clara Shinta',
     phone: '081277334455',
     expired: '2026-11-30',
     ptQuota: 4,
     picId: 'S07',
     picName: 'Andi Saputra',
     branchId: 'BR-003',
-    branchName: 'GymPro Express BSD City',
+    branchName: 'RFA Gym Express BSD Green Office',
     followUpStatus: 'AKTIF LATIHAN',
     photo: 'https://images.unsplash.com/photo-1517841905240-472988babdf9?q=80&w=200&auto=format&fit=crop',
     gender: 'P',
@@ -549,12 +549,14 @@ export const INITIAL_MEMBERS: Member[] = [
   },
   {
     id: 'M014',
-    name: 'Deni Kurniawan (Member D)',
+    name: 'Deni Kurniawan',
     phone: '081366445566',
     expired: '2026-12-05',
     ptQuota: 5,
     picId: 'S07',
     picName: 'Andi Saputra',
+    branchId: 'BR-001',
+    branchName: 'RFA GYM Cibubur, Bekasi (Flagship HQ)',
     followUpStatus: 'AKTIF LATIHAN',
     photo: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?q=80&w=200&auto=format&fit=crop',
     gender: 'L',
@@ -567,12 +569,14 @@ export const INITIAL_MEMBERS: Member[] = [
   },
   {
     id: 'M015',
-    name: 'Eka Wijaya (Member E)',
+    name: 'Eka Wijaya',
     phone: '081255667788',
     expired: '2026-12-10',
     ptQuota: 4,
     picId: 'S07',
     picName: 'Andi Saputra',
+    branchId: 'BR-001',
+    branchName: 'RFA GYM Cibubur, Bekasi (Flagship HQ)',
     followUpStatus: 'AKTIF LATIHAN',
     photo: 'https://images.unsplash.com/photo-1492562080023-ab3db95bfbce?q=80&w=200&auto=format&fit=crop',
     gender: 'L',
@@ -591,6 +595,8 @@ export const INITIAL_MEMBERS: Member[] = [
     ptQuota: 5,
     picId: 'S07',
     picName: 'Andi Saputra',
+    branchId: 'BR-002',
+    branchName: 'RFA Gym Senopati Lifestyle Hub',
     followUpStatus: 'AKTIF LATIHAN',
     photo: 'https://images.unsplash.com/photo-1501196354995-cbb51c65aaea?q=80&w=200&auto=format&fit=crop',
     gender: 'L',
@@ -609,6 +615,8 @@ export const INITIAL_MEMBERS: Member[] = [
     ptQuota: 6,
     picId: 'S07',
     picName: 'Andi Saputra',
+    branchId: 'BR-002',
+    branchName: 'RFA Gym Senopati Lifestyle Hub',
     followUpStatus: 'AKTIF LATIHAN',
     photo: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=200&auto=format&fit=crop',
     gender: 'P',
@@ -627,6 +635,8 @@ export const INITIAL_MEMBERS: Member[] = [
     ptQuota: 8,
     picId: 'S07',
     picName: 'Andi Saputra',
+    branchId: 'BR-003',
+    branchName: 'RFA Gym Express BSD Green Office',
     followUpStatus: 'AKTIF LATIHAN',
     photo: 'https://images.unsplash.com/photo-1519085360753-af0119f7cbe7?q=80&w=200&auto=format&fit=crop',
     gender: 'L',
@@ -861,7 +871,7 @@ export const INITIAL_PRODUCTS: Product[] = [
     price: 4000,
     stock: 48,
     branchId: 'BR-001',
-    branchName: 'GymPro Flagship Kelapa Gading',
+    branchName: 'RFA GYM Cibubur, Bekasi (Flagship HQ)',
     branchStocks: { 'BR-001': 28, 'BR-002': 14, 'BR-003': 6 },
     img: 'https://images.unsplash.com/photo-1548839140-29a749e1bc4e?q=80&w=200&auto=format&fit=crop'
   },
@@ -873,7 +883,7 @@ export const INITIAL_PRODUCTS: Product[] = [
     price: 9000,
     stock: 32,
     branchId: 'BR-001',
-    branchName: 'GymPro Flagship Kelapa Gading',
+    branchName: 'RFA GYM Cibubur, Bekasi (Flagship HQ)',
     branchStocks: { 'BR-001': 18, 'BR-002': 10, 'BR-003': 4 },
     img: 'https://images.unsplash.com/photo-1622483767028-3f66f32aef97?q=80&w=200&auto=format&fit=crop'
   },
@@ -885,7 +895,7 @@ export const INITIAL_PRODUCTS: Product[] = [
     price: 30000,
     stock: 24,
     branchId: 'BR-001',
-    branchName: 'GymPro Flagship Kelapa Gading',
+    branchName: 'RFA GYM Cibubur, Bekasi (Flagship HQ)',
     branchStocks: { 'BR-001': 14, 'BR-002': 7, 'BR-003': 3 },
     img: 'https://images.unsplash.com/photo-1579722821273-0f6c7d44362f?q=80&w=200&auto=format&fit=crop'
   },
@@ -897,7 +907,7 @@ export const INITIAL_PRODUCTS: Product[] = [
     price: 25000,
     stock: 19,
     branchId: 'BR-001',
-    branchName: 'GymPro Flagship Kelapa Gading',
+    branchName: 'RFA GYM Cibubur, Bekasi (Flagship HQ)',
     branchStocks: { 'BR-001': 10, 'BR-002': 6, 'BR-003': 3 },
     img: 'https://images.unsplash.com/photo-1551024709-8f23befc6f87?q=80&w=200&auto=format&fit=crop'
   },
@@ -909,7 +919,7 @@ export const INITIAL_PRODUCTS: Product[] = [
     price: 20000,
     stock: 15,
     branchId: 'BR-001',
-    branchName: 'GymPro Flagship Kelapa Gading',
+    branchName: 'RFA GYM Cibubur, Bekasi (Flagship HQ)',
     branchStocks: { 'BR-001': 8, 'BR-002': 5, 'BR-003': 2 },
     img: 'https://images.unsplash.com/photo-1622484212850-cab596d66e74?q=80&w=200&auto=format&fit=crop'
   },
@@ -921,7 +931,7 @@ export const INITIAL_PRODUCTS: Product[] = [
     price: 15000,
     stock: 3,
     branchId: 'BR-001',
-    branchName: 'GymPro Flagship Kelapa Gading',
+    branchName: 'RFA GYM Cibubur, Bekasi (Flagship HQ)',
     branchStocks: { 'BR-001': 2, 'BR-002': 1, 'BR-003': 0 },
     img: 'https://images.unsplash.com/photo-1558961363-fa8fdf82db35?q=80&w=200&auto=format&fit=crop'
   },
@@ -933,7 +943,7 @@ export const INITIAL_PRODUCTS: Product[] = [
     price: 12000,
     stock: 0,
     branchId: 'BR-001',
-    branchName: 'GymPro Flagship Kelapa Gading',
+    branchName: 'RFA GYM Cibubur, Bekasi (Flagship HQ)',
     branchStocks: { 'BR-001': 0, 'BR-002': 0, 'BR-003': 0 },
     img: 'https://images.unsplash.com/photo-1527661591475-527312dd65f5?q=80&w=200&auto=format&fit=crop'
   }
@@ -959,7 +969,7 @@ export const INITIAL_TRANSACTIONS: Transaction[] = [
     bankDest: 'Artha Graha',
     initialCashPaid: 28000,
     branchId: 'BR-001',
-    branchName: 'GymPro Flagship Kelapa Gading'
+    branchName: 'RFA GYM Cibubur, Bekasi (Flagship HQ)'
   },
   {
     id: 'TRX-1002',
@@ -981,7 +991,7 @@ export const INITIAL_TRANSACTIONS: Transaction[] = [
     initialCashPaid: 450000, // DP received on day 1
     picId: 'S01',
     branchId: 'BR-001',
-    branchName: 'GymPro Flagship Kelapa Gading'
+    branchName: 'RFA GYM Cibubur, Bekasi (Flagship HQ)'
   },
   {
     id: 'TRX-1003',
@@ -1003,7 +1013,7 @@ export const INITIAL_TRANSACTIONS: Transaction[] = [
     bankDest: 'Artha Graha',
     initialCashPaid: 0,
     branchId: 'BR-001',
-    branchName: 'GymPro Flagship Kelapa Gading'
+    branchName: 'RFA GYM Cibubur, Bekasi (Flagship HQ)'
   },
   {
     id: 'TRX-1004',
@@ -1025,7 +1035,7 @@ export const INITIAL_TRANSACTIONS: Transaction[] = [
     initialCashPaid: 750000,
     picId: 'S03',
     branchId: 'BR-001',
-    branchName: 'GymPro Flagship Kelapa Gading'
+    branchName: 'RFA GYM Cibubur, Bekasi (Flagship HQ)'
   },
   {
     id: 'TRX-2001',
@@ -1047,7 +1057,7 @@ export const INITIAL_TRANSACTIONS: Transaction[] = [
     initialCashPaid: 1600000,
     picId: 'S05',
     branchId: 'BR-002',
-    branchName: 'GymPro Hub Senopati Lifestyle'
+    branchName: 'RFA Gym Senopati Lifestyle Hub'
   },
   {
     id: 'TRX-2002',
@@ -1068,7 +1078,7 @@ export const INITIAL_TRANSACTIONS: Transaction[] = [
     bankDest: 'Artha Graha',
     initialCashPaid: 43000,
     branchId: 'BR-002',
-    branchName: 'GymPro Hub Senopati Lifestyle'
+    branchName: 'RFA Gym Senopati Lifestyle Hub'
   },
   {
     id: 'TRX-3001',
@@ -1090,7 +1100,7 @@ export const INITIAL_TRANSACTIONS: Transaction[] = [
     initialCashPaid: 200000,
     picId: 'S07',
     branchId: 'BR-003',
-    branchName: 'GymPro Express BSD City'
+    branchName: 'RFA Gym Express BSD Green Office'
   },
   {
     id: 'TRX-3002',
@@ -1112,7 +1122,7 @@ export const INITIAL_TRANSACTIONS: Transaction[] = [
     initialCashPaid: 400000,
     picId: 'S07',
     branchId: 'BR-003',
-    branchName: 'GymPro Express BSD City'
+    branchName: 'RFA Gym Express BSD Green Office'
   },
   {
     id: 'TRX-1005',
@@ -1768,7 +1778,7 @@ export const INITIAL_ATTENDANCE: Attendance[] = [
     lockerNumber: 12,
     lockerGender: 'Pria',
     branchId: 'BR-001',
-    branchName: 'RFA Gym Central Sudirman'
+    branchName: 'RFA GYM Cibubur, Bekasi (Flagship HQ)'
   },
   {
     id: 'ATT-2',
@@ -1782,7 +1792,7 @@ export const INITIAL_ATTENDANCE: Attendance[] = [
     lockerNumber: 5,
     lockerGender: 'Pria',
     branchId: 'BR-001',
-    branchName: 'RFA Gym Central Sudirman'
+    branchName: 'RFA GYM Cibubur, Bekasi (Flagship HQ)'
   },
   {
     id: 'ATT-3',
@@ -1790,13 +1800,13 @@ export const INITIAL_ATTENDANCE: Attendance[] = [
     timeIn: '07:15 WIB',
     timeOut: '',
     memberId: 'M002',
-    memberName: 'Siti Nurhaliza',
+    memberName: 'Sari Rahayu',
     type: 'Studio Class',
     badge: 'Yoga Flow',
     lockerNumber: 8,
     lockerGender: 'Wanita',
-    branchId: 'BR-002',
-    branchName: 'RFA Gym Senopati Lifestyle'
+    branchId: 'BR-001',
+    branchName: 'RFA GYM Cibubur, Bekasi (Flagship HQ)'
   },
   {
     id: 'ATT-4',
@@ -1804,13 +1814,13 @@ export const INITIAL_ATTENDANCE: Attendance[] = [
     timeIn: '07:30 WIB',
     timeOut: '',
     memberId: 'M004',
-    memberName: 'Rizky Pratama',
+    memberName: 'Maya Indah',
     type: 'Reguler',
     badge: 'Weight Training',
     lockerNumber: 14,
-    lockerGender: 'Pria',
+    lockerGender: 'Wanita',
     branchId: 'BR-001',
-    branchName: 'RFA Gym Central Sudirman'
+    branchName: 'RFA GYM Cibubur, Bekasi (Flagship HQ)'
   },
   {
     id: 'ATT-5',
@@ -1818,13 +1828,13 @@ export const INITIAL_ATTENDANCE: Attendance[] = [
     timeIn: '07:45 WIB',
     timeOut: '',
     memberId: 'M005',
-    memberName: 'Jessica Tan',
+    memberName: 'Hendro Prasetyo',
     type: 'PT',
     badge: 'VIP PT 1-on-1',
     lockerNumber: 3,
-    lockerGender: 'Wanita',
-    branchId: 'BR-002',
-    branchName: 'RFA Gym Senopati Lifestyle'
+    lockerGender: 'Pria',
+    branchId: 'BR-001',
+    branchName: 'RFA GYM Cibubur, Bekasi (Flagship HQ)'
   },
   {
     id: 'ATT-6',
@@ -1832,13 +1842,13 @@ export const INITIAL_ATTENDANCE: Attendance[] = [
     timeIn: '08:00 WIB',
     timeOut: '',
     memberId: 'M006',
-    memberName: 'Amanda Putri',
+    memberName: 'Bella Safira',
     type: 'Studio Class',
     badge: 'Mat Pilates',
     lockerNumber: 11,
     lockerGender: 'Wanita',
-    branchId: 'BR-002',
-    branchName: 'RFA Gym Senopati Lifestyle'
+    branchId: 'BR-001',
+    branchName: 'RFA GYM Cibubur, Bekasi (Flagship HQ)'
   },
   {
     id: 'ATT-7',
@@ -1846,13 +1856,13 @@ export const INITIAL_ATTENDANCE: Attendance[] = [
     timeIn: '08:10 WIB',
     timeOut: '',
     memberId: 'M007',
-    memberName: 'Kevin Sanjaya',
+    memberName: 'Kevin Wijaya',
     type: 'Reguler',
     badge: 'Functional Track',
     lockerNumber: 22,
     lockerGender: 'Pria',
-    branchId: 'BR-003',
-    branchName: 'RFA Gym Express BSD City'
+    branchId: 'BR-002',
+    branchName: 'RFA Gym Senopati Lifestyle Hub'
   },
   {
     id: 'ATT-8',
@@ -1860,13 +1870,13 @@ export const INITIAL_ATTENDANCE: Attendance[] = [
     timeIn: '08:15 WIB',
     timeOut: '',
     memberId: 'M008',
-    memberName: 'Farah Quinn',
+    memberName: 'Aris Setiawan',
     type: 'Studio Class',
     badge: 'Zumba Party',
-    lockerNumber: 7,
-    lockerGender: 'Wanita',
-    branchId: 'BR-003',
-    branchName: 'RFA Gym Express BSD City'
+    lockerNumber: 15,
+    lockerGender: 'Pria',
+    branchId: 'BR-002',
+    branchName: 'RFA Gym Senopati Lifestyle Hub'
   },
   {
     id: 'ATT-9',
@@ -1874,13 +1884,13 @@ export const INITIAL_ATTENDANCE: Attendance[] = [
     timeIn: '08:20 WIB',
     timeOut: '',
     memberId: 'M009',
-    memberName: 'Budi Santoso',
+    memberName: 'Rudi Hartono',
     type: 'Reguler',
     badge: 'Cardio Blitz',
     lockerNumber: 19,
     lockerGender: 'Pria',
-    branchId: 'BR-001',
-    branchName: 'RFA Gym Central Sudirman'
+    branchId: 'BR-002',
+    branchName: 'RFA Gym Senopati Lifestyle Hub'
   },
   {
     id: 'ATT-10',
@@ -1888,13 +1898,13 @@ export const INITIAL_ATTENDANCE: Attendance[] = [
     timeIn: '08:30 WIB',
     timeOut: '',
     memberId: 'M010',
-    memberName: 'Nadia Saphira',
+    memberName: 'Cindy Claudia',
     type: 'PT',
     badge: 'Sesi PT',
     lockerNumber: 4,
     lockerGender: 'Wanita',
-    branchId: 'BR-001',
-    branchName: 'RFA Gym Central Sudirman'
+    branchId: 'BR-003',
+    branchName: 'RFA Gym Express BSD Green Office'
   },
   {
     id: 'ATT-11',
@@ -1902,13 +1912,13 @@ export const INITIAL_ATTENDANCE: Attendance[] = [
     timeIn: '08:35 WIB',
     timeOut: '',
     memberId: 'M011',
-    memberName: 'Rendy Pangalila',
+    memberName: 'Aditya Pratama',
     type: 'Reguler',
     badge: 'Hypertrophy Bench',
     lockerNumber: 16,
     lockerGender: 'Pria',
     branchId: 'BR-003',
-    branchName: 'RFA Gym Express BSD City'
+    branchName: 'RFA Gym Express BSD Green Office'
   },
   {
     id: 'ATT-12',
@@ -1916,13 +1926,13 @@ export const INITIAL_ATTENDANCE: Attendance[] = [
     timeIn: '08:40 WIB',
     timeOut: '',
     memberId: 'M012',
-    memberName: 'Citra Kirana',
+    memberName: 'Bambang Sudiro',
     type: 'Reguler',
     badge: 'Gym Reguler',
     lockerNumber: 9,
-    lockerGender: 'Wanita',
-    branchId: 'BR-002',
-    branchName: 'RFA Gym Senopati Lifestyle'
+    lockerGender: 'Pria',
+    branchId: 'BR-003',
+    branchName: 'RFA Gym Express BSD Green Office'
   },
   {
     id: 'ATT-13',
@@ -1930,13 +1940,13 @@ export const INITIAL_ATTENDANCE: Attendance[] = [
     timeIn: '08:45 WIB',
     timeOut: '',
     memberId: 'M013',
-    memberName: 'Rio Dewanto',
+    memberName: 'Clara Shinta',
     type: 'Reguler',
     badge: 'Squat & Deadlift',
     lockerNumber: 27,
-    lockerGender: 'Pria',
-    branchId: 'BR-001',
-    branchName: 'RFA Gym Central Sudirman'
+    lockerGender: 'Wanita',
+    branchId: 'BR-003',
+    branchName: 'RFA Gym Express BSD Green Office'
   },
   {
     id: 'ATT-14',
@@ -1944,13 +1954,13 @@ export const INITIAL_ATTENDANCE: Attendance[] = [
     timeIn: '08:50 WIB',
     timeOut: '',
     memberId: 'M014',
-    memberName: 'Daniel Mananta',
+    memberName: 'Deni Kurniawan',
     type: 'Reguler',
     badge: 'Cardio Treadmill',
     lockerNumber: 18,
     lockerGender: 'Pria',
-    branchId: 'BR-003',
-    branchName: 'RFA Gym Express BSD City'
+    branchId: 'BR-001',
+    branchName: 'RFA GYM Cibubur, Bekasi (Flagship HQ)'
   },
   {
     id: 'ATT-15',
@@ -1958,13 +1968,13 @@ export const INITIAL_ATTENDANCE: Attendance[] = [
     timeIn: '08:55 WIB',
     timeOut: '',
     memberId: 'M015',
-    memberName: 'Gisella Anastasia',
+    memberName: 'Eka Wijaya',
     type: 'Studio Class',
     badge: 'Body Combat',
     lockerNumber: 6,
-    lockerGender: 'Wanita',
+    lockerGender: 'Pria',
     branchId: 'BR-001',
-    branchName: 'RFA Gym Central Sudirman'
+    branchName: 'RFA GYM Cibubur, Bekasi (Flagship HQ)'
   },
   {
     id: 'ATT-16',
@@ -1972,13 +1982,13 @@ export const INITIAL_ATTENDANCE: Attendance[] = [
     timeIn: '09:00 WIB',
     timeOut: '',
     memberId: 'M016',
-    memberName: 'Chicco Jerikho',
+    memberName: 'Fajar Nugraha',
     type: 'Reguler',
     badge: 'Strength Conditioning',
     lockerNumber: 21,
     lockerGender: 'Pria',
     branchId: 'BR-002',
-    branchName: 'RFA Gym Senopati Lifestyle'
+    branchName: 'RFA Gym Senopati Lifestyle Hub'
   },
   {
     id: 'ATT-17',
@@ -1986,13 +1996,13 @@ export const INITIAL_ATTENDANCE: Attendance[] = [
     timeIn: '09:05 WIB',
     timeOut: '',
     memberId: 'M017',
-    memberName: 'Nicholas Saputra',
+    memberName: 'Gita Gutawa',
     type: 'Reguler',
     badge: 'Functional Movement',
     lockerNumber: 15,
-    lockerGender: 'Pria',
-    branchId: 'BR-003',
-    branchName: 'RFA Gym Express BSD City'
+    lockerGender: 'Wanita',
+    branchId: 'BR-002',
+    branchName: 'RFA Gym Senopati Lifestyle Hub'
   },
   {
     id: 'ATT-18',
@@ -2000,13 +2010,13 @@ export const INITIAL_ATTENDANCE: Attendance[] = [
     timeIn: '09:10 WIB',
     timeOut: '',
     memberId: 'M018',
-    memberName: 'Tara Basro',
+    memberName: 'Hadi Pranoto',
     type: 'PT',
     badge: 'Sesi PT',
     lockerNumber: 2,
-    lockerGender: 'Wanita',
-    branchId: 'BR-002',
-    branchName: 'RFA Gym Senopati Lifestyle'
+    lockerGender: 'Pria',
+    branchId: 'BR-003',
+    branchName: 'RFA Gym Express BSD Green Office'
   }
 ];
 
@@ -2883,7 +2893,7 @@ export const INITIAL_PETTY_CASH: PettyCash[] = [
     amount: 3360000,
     desc: 'Pengadaan Susu Protein 280 pcs',
     branchId: 'BR-001',
-    branchName: 'GymPro Flagship Kelapa Gading',
+    branchName: 'RFA GYM Cibubur, Bekasi (Flagship HQ)',
     expenses: [
       {
         id: 'EXP-101',
@@ -2937,7 +2947,7 @@ export const INITIAL_PETTY_CASH: PettyCash[] = [
     amount: 450000,
     desc: 'Operasional Galon & Kebersihan',
     branchId: 'BR-001',
-    branchName: 'GymPro Flagship Kelapa Gading',
+    branchName: 'RFA GYM Cibubur, Bekasi (Flagship HQ)',
     expenses: [
       {
         id: 'EXP-201',
@@ -2991,7 +3001,7 @@ export const INITIAL_PETTY_CASH: PettyCash[] = [
     amount: 520000,
     desc: 'Operasional Lounge & Fresh Towel',
     branchId: 'BR-002',
-    branchName: 'GymPro Hub Senopati Lifestyle',
+    branchName: 'RFA Gym Senopati Lifestyle Hub',
     expenses: [
       {
         id: 'EXP-301',
@@ -3034,7 +3044,7 @@ export const INITIAL_PETTY_CASH: PettyCash[] = [
     amount: 310000,
     desc: 'Chalk Grip & Perlengkapan Latihan',
     branchId: 'BR-003',
-    branchName: 'GymPro Express BSD City',
+    branchName: 'RFA Gym Express BSD Green Office',
     expenses: [
       {
         id: 'EXP-401',
@@ -3075,7 +3085,7 @@ export const INITIAL_PETTY_CASH: PettyCash[] = [
     amount: 0,
     desc: 'Kas Kecil Weekend Event',
     branchId: 'BR-001',
-    branchName: 'GymPro Flagship Kelapa Gading',
+    branchName: 'RFA GYM Cibubur, Bekasi (Flagship HQ)',
     expenses: []
   }
 ];
@@ -3107,7 +3117,7 @@ export const INITIAL_CLOSING: DailyClosingRecord[] = [
     modalAwal: 500000,
     notes: 'Closing shift malam Kelapa Gading lancar, kas fisik balance.',
     branchId: 'BR-001',
-    branchName: 'GymPro Flagship Kelapa Gading'
+    branchName: 'RFA GYM Cibubur, Bekasi (Flagship HQ)'
   },
   {
     id: 'CLS-SNP-20260924',
@@ -3135,7 +3145,7 @@ export const INITIAL_CLOSING: DailyClosingRecord[] = [
     modalAwal: 500000,
     notes: 'Closing Senopati Hub, EDC & QRIS settle.',
     branchId: 'BR-002',
-    branchName: 'GymPro Hub Senopati Lifestyle'
+    branchName: 'RFA Gym Senopati Lifestyle Hub'
   },
   {
     id: 'CLS-BSD-20260924',
@@ -3163,7 +3173,7 @@ export const INITIAL_CLOSING: DailyClosingRecord[] = [
     modalAwal: 500000,
     notes: 'Closing BSD Express, fisik tunai klop.',
     branchId: 'BR-003',
-    branchName: 'GymPro Express BSD City'
+    branchName: 'RFA Gym Express BSD Green Office'
   }
 ];
 
@@ -3225,8 +3235,8 @@ export const INITIAL_PT_PURCHASES: PTPurchaseRecord[] = [
     id: 'PT-2026-00045',
     ptNo: 'PT-2026-00045',
     date: '2026-09-30',
-    memberId: 'M001',
-    memberName: 'Budi Santoso',
+    memberId: 'M-WAIT-01',
+    memberName: 'Budi Santoso (Member Baru)',
     memberPhone: '081298765432',
     packageId: 'PK09',
     packageName: 'PT Personal 10 Sessions',
@@ -3252,7 +3262,7 @@ export const INITIAL_PT_PURCHASES: PTPurchaseRecord[] = [
     id: 'PT-2026-00046',
     ptNo: 'PT-2026-00046',
     date: '2026-09-30',
-    memberId: 'M002',
+    memberId: 'M-WAIT-02',
     memberName: 'Andi Pratama',
     memberPhone: '081345678902',
     packageId: 'PK08',
@@ -4117,3 +4127,726 @@ export const INITIAL_GUEST_VISITORS: GuestPassVisitor[] = [
     ]
   }
 ];
+
+// ========================================================
+// MASTER DATA AWAL: KATEGORI PENGELUARAN & BIAYA OPERASIONAL
+// ========================================================
+
+export const INITIAL_EXPENSE_CATEGORIES: ExpenseCategory[] = [
+  // 1. Biaya operasional rutin
+  {
+    id: 'CAT-OPR-01',
+    name: 'Listrik (PLN)',
+    group: 'OPERASIONAL',
+    accountingType: 'BEBAN_OPERASIONAL',
+    description: 'Beban tagihan listrik bulanan, token listrik operasional gedung & alat fitness.',
+    subcategories: ['PLN Pascabayar', 'Token Listrik Prabayar', 'Genset & Bahan Bakar Cadangan'],
+    defaultPaymentAccount: 'Bank Mandiri (Operasional)',
+    isActive: true,
+    createdAt: '2026-09-01'
+  },
+  {
+    id: 'CAT-OPR-02',
+    name: 'Air (PDAM & Air Mineral)',
+    group: 'OPERASIONAL',
+    accountingType: 'BEBAN_OPERASIONAL',
+    description: 'Tagihan air PDAM shower/toilet, pengisian air galon minum member, filter air.',
+    subcategories: ['PDAM Bulanan', 'Air Galon Minum Member', 'Air Tangki Cadangan', 'Perawatan Filter Water Dispenser'],
+    defaultPaymentAccount: 'Kas Laci (Petty Cash)',
+    isActive: true,
+    createdAt: '2026-09-01'
+  },
+  {
+    id: 'CAT-OPR-03',
+    name: 'Internet & Telepon',
+    group: 'OPERASIONAL',
+    accountingType: 'BEBAN_OPERASIONAL',
+    description: 'Langganan WiFi gym member & front desk, kuota seluler CS/WhatsApp resmi, telepon.',
+    subcategories: ['IndiHome / Biznet Fiber Gym', 'Paket Data WhatsApp Admin', 'Telepon Kantor & Trunk'],
+    defaultPaymentAccount: 'Bank Mandiri (Operasional)',
+    isActive: true,
+    createdAt: '2026-09-01'
+  },
+  {
+    id: 'CAT-OPR-04',
+    name: 'Kebersihan & Sanitasi',
+    group: 'OPERASIONAL',
+    accountingType: 'BEBAN_OPERASIONAL',
+    description: 'Disinfektan alat gym, sabun cuci tangan, pembersih lantai, kantong sampah, tisu.',
+    subcategories: ['Disinfektan & Sanitizer Alat Gym', 'Pembersih Lantai & Toilet', 'Kantong Sampah & Tisu', 'Jasa Pest Control'],
+    defaultPaymentAccount: 'Kas Laci (Petty Cash)',
+    isActive: true,
+    createdAt: '2026-09-01'
+  },
+  {
+    id: 'CAT-OPR-05',
+    name: 'Perlengkapan Kantor & ATK',
+    group: 'OPERASIONAL',
+    accountingType: 'BEBAN_OPERASIONAL',
+    description: 'Kertas struk thermal POS, tinta printer, map member, kartu akses RFID, alat tulis.',
+    subcategories: ['Kertas Kasir Thermal 80mm/58mm', 'Kartu RFID & Gantungan Loker', 'Tinta Printer Formulir', 'ATK Front Desk'],
+    defaultPaymentAccount: 'Kas Laci (Petty Cash)',
+    isActive: true,
+    createdAt: '2026-09-01'
+  },
+  {
+    id: 'CAT-OPR-06',
+    name: 'Perlengkapan Gym & Handuk',
+    group: 'OPERASIONAL',
+    accountingType: 'BEBAN_OPERASIONAL',
+    description: 'Handuk gym sewa member, sabun mandi dispenser shower, kapur barbel (chalk), strap.',
+    subcategories: ['Laundry Handuk Harian Member', 'Sabun & Shampoo Shower Room', 'Chalk / Magnesium Gym', 'Pengharum Ruangan Gym'],
+    defaultPaymentAccount: 'Kas Laci (Petty Cash)',
+    isActive: true,
+    createdAt: '2026-09-01'
+  },
+  {
+    id: 'CAT-OPR-07',
+    name: 'Software, Hosting & Domain',
+    group: 'OPERASIONAL',
+    accountingType: 'BEBAN_OPERASIONAL',
+    description: 'Langganan hosting server, domain, database Niagahoster, integrasi WhatsApp Gateway.',
+    subcategories: ['Hosting & Domain Website RFA', 'WhatsApp Gateway API Kuota', 'Cloud Backup & Storage', 'Software Musik Gym (Spotify for Business)'],
+    defaultPaymentAccount: 'Bank Mandiri (Operasional)',
+    isActive: true,
+    createdAt: '2026-09-01'
+  },
+  {
+    id: 'CAT-OPR-08',
+    name: 'Pemasaran & Promosi',
+    group: 'OPERASIONAL',
+    accountingType: 'BEBAN_OPERASIONAL',
+    description: 'Iklan Meta Ads (Instagram/FB), brosur, banner promo cabang, event expo, merchandise.',
+    subcategories: ['Meta Ads (Instagram & Facebook)', 'Brosur & Banner Cetak', 'Sponsor & Komunitas Fitness', 'Merchandise Promosi Gratis'],
+    defaultPaymentAccount: 'Bank Mandiri (Operasional)',
+    isActive: true,
+    createdAt: '2026-09-01'
+  },
+  {
+    id: 'CAT-OPR-09',
+    name: 'Transportasi & Operasional Lapangan',
+    group: 'OPERASIONAL',
+    accountingType: 'BEBAN_OPERASIONAL',
+    description: 'Bensin kendaraan operasional, uang parkir, kurir dokumen, ekspedisi kirim stok cabang.',
+    subcategories: ['BBM Operasional Staff', 'Ekspedisi & Kurir Kirim Barang', 'Biaya Parkir & Tol Operasional'],
+    defaultPaymentAccount: 'Kas Laci (Petty Cash)',
+    isActive: true,
+    createdAt: '2026-09-01'
+  },
+  {
+    id: 'CAT-OPR-10',
+    name: 'Administrasi Bank & MDR',
+    group: 'OPERASIONAL',
+    accountingType: 'BEBAN_FINANSIAL',
+    description: 'Biaya admin bulanan rekening bank, potongan fee MDR QRIS, biaya sewa mesin EDC.',
+    subcategories: ['Biaya Admin Rekening Bank', 'MDR Fee QRIS & Kartu Debit', 'Sewa Mesin EDC Bank'],
+    defaultPaymentAccount: 'Bank Mandiri (Operasional)',
+    isActive: true,
+    createdAt: '2026-09-01'
+  },
+
+  // 2. Biaya SDM
+  {
+    id: 'CAT-SDM-01',
+    name: 'Gaji Pokok Karyawan',
+    group: 'SDM',
+    accountingType: 'BEBAN_SDM',
+    description: 'Beban gaji pokok bulanan staf admin, kasir, cleaning service, teknisi, front desk.',
+    subcategories: ['Gaji Pokok Kasir & Front Desk', 'Gaji Pokok Cleaning Service', 'Gaji Pokok Teknisi & Maintenance', 'Gaji Pokok Manajemen Cabang'],
+    defaultPaymentAccount: 'Bank Mandiri (Payroll)',
+    isActive: true,
+    createdAt: '2026-09-01'
+  },
+  {
+    id: 'CAT-SDM-02',
+    name: 'Komisi Personal Trainer & Instruktur',
+    group: 'SDM',
+    accountingType: 'BEBAN_SDM',
+    description: 'Beban komisi bagi hasil sesi PT terselesaikan dan komisi instruktur studio class.',
+    subcategories: ['Komisi Sesi Personal Trainer', 'Fee Instruktur Studio Class (Zumba/Yoga/Pilates)', 'Bonus Closing Paket Membership'],
+    defaultPaymentAccount: 'Bank Mandiri (Payroll)',
+    isActive: true,
+    createdAt: '2026-09-01'
+  },
+  {
+    id: 'CAT-SDM-03',
+    name: 'Lembur & Insentif Kehadiran',
+    group: 'SDM',
+    accountingType: 'BEBAN_SDM',
+    description: 'Upah jam kerja lembur staf operasional, insentif shift malam / akhir pekan.',
+    subcategories: ['Uang Lembur Operasional', 'Insentif Shift Weekend', 'Uang Makan Lembur'],
+    defaultPaymentAccount: 'Bank Mandiri (Payroll)',
+    isActive: true,
+    createdAt: '2026-09-01'
+  },
+  {
+    id: 'CAT-SDM-04',
+    name: 'Tunjangan & Kesejahteraan Karyawan',
+    group: 'SDM',
+    accountingType: 'BEBAN_SDM',
+    description: 'Tunjangan BPJS Ketenagakerjaan/Kesehatan, tunjangan hari raya (THR), seragam karyawan.',
+    subcategories: ['Iuran BPJS Karyawan', 'Tunjangan Hari Raya (THR)', 'Pengadaan Seragam Kerja Staff', 'P3K & Obat Staff'],
+    defaultPaymentAccount: 'Bank Mandiri (Payroll)',
+    isActive: true,
+    createdAt: '2026-09-01'
+  },
+  {
+    id: 'CAT-SDM-05',
+    name: 'Pelatihan & Sertifikasi Karyawan',
+    group: 'SDM',
+    accountingType: 'BEBAN_SDM',
+    description: 'Workshop kebugaran, sertifikasi trainer APKI/NASM, pelatihan customer service & CPR.',
+    subcategories: ['Sertifikasi Personal Trainer', 'Pelatihan First Aid & CPR Front Desk', 'Workshop Pelayanan & Hospitality'],
+    defaultPaymentAccount: 'Bank Mandiri (Operasional)',
+    isActive: true,
+    createdAt: '2026-09-01'
+  },
+
+  // 3. Biaya fasilitas
+  {
+    id: 'CAT-FAS-01',
+    name: 'Perawatan Alat Gym Rutin',
+    group: 'FASILITAS',
+    accountingType: 'BEBAN_FASILITAS',
+    description: 'Preventive maintenance, pelumasan silikon treadmill, penggantian kabel sling katrol.',
+    subcategories: ['Pelumas & Silikon Belt Treadmill', 'Ganti Kabel Sling & Katrol Cable Crossover', 'Baut, Mur & Bumper Plate Rubber Washer', 'Service Berkala Vendor Alat'],
+    defaultPaymentAccount: 'Bank Mandiri (Operasional)',
+    isActive: true,
+    createdAt: '2026-09-01'
+  },
+  {
+    id: 'CAT-FAS-02',
+    name: 'Perbaikan Alat Gym Rusak',
+    group: 'FASILITAS',
+    accountingType: 'BEBAN_FASILITAS',
+    description: 'Perbaikan motor treadmill, penggantian bantalan/jok sobek bench press, sparepart rusak.',
+    subcategories: ['Ganti Sparepart Motor & Inverter Treadmill', 'Bekleed Ulang / Jahit Jok Bench & Machine', 'Las & Pengelasan Frame Besi'],
+    defaultPaymentAccount: 'Bank Mandiri (Operasional)',
+    isActive: true,
+    createdAt: '2026-09-01'
+  },
+  {
+    id: 'CAT-FAS-03',
+    name: 'Perbaikan Bangunan & Interior',
+    group: 'FASILITAS',
+    accountingType: 'BEBAN_FASILITAS',
+    description: 'Perbaikan lantai rubber mat, cat dinding, plafon bocor, lampu LED gym, pintu loker.',
+    subcategories: ['Perbaikan Rubber Floor Gym', 'Pengecatan & Perbaikan Dinding', 'Penggantian Lampu LED & Kelistrikan', 'Perbaikan Pintu & Kunci Loker'],
+    defaultPaymentAccount: 'Bank Mandiri (Operasional)',
+    isActive: true,
+    createdAt: '2026-09-01'
+  },
+  {
+    id: 'CAT-FAS-04',
+    name: 'Perawatan & Cuci AC',
+    group: 'FASILITAS',
+    accountingType: 'BEBAN_FASILITAS',
+    description: 'Cuci berkala unit AC gym & studio, isi freon, servis kipas blower & exhaust fan toilet.',
+    subcategories: ['Cuci AC Berkala Rutin', 'Pengisian Freon AC', 'Servis Exhaust Fan & Kipas Blower'],
+    defaultPaymentAccount: 'Kas Laci (Petty Cash)',
+    isActive: true,
+    createdAt: '2026-09-01'
+  },
+  {
+    id: 'CAT-FAS-05',
+    name: 'Perawatan CCTV, Sound & Jaringan',
+    group: 'FASILITAS',
+    accountingType: 'BEBAN_FASILITAS',
+    description: 'Pemeliharaan kamera keamanan CCTV, harddisk NVR, kabel LAN, amplifier & speaker gym.',
+    subcategories: ['Servis Kamera & DVR/NVR CCTV', 'Servis Amplifier & Speaker Gym', 'Kabel LAN & Access Point WiFi'],
+    defaultPaymentAccount: 'Bank Mandiri (Operasional)',
+    isActive: true,
+    createdAt: '2026-09-01'
+  },
+
+  // 4. Keuangan dan biaya lainnya
+  {
+    id: 'CAT-FIN-01',
+    name: 'Sewa Gedung & Properti',
+    group: 'KEUANGAN_LAIN',
+    accountingType: 'BEBAN_FINANSIAL',
+    description: 'Beban sewa tempat ruko / gedung gym cabang per bulan atau amortisasi tahunan.',
+    subcategories: ['Sewa Gedung / Ruko Cabang', 'Service Charge Pengelola Ruko', 'Iuran Keamanan & Lingkungan RT/RW'],
+    defaultPaymentAccount: 'Bank Mandiri (Investasi)',
+    isActive: true,
+    createdAt: '2026-09-01'
+  },
+  {
+    id: 'CAT-FIN-02',
+    name: 'Beban Bunga & Pinjaman Usaha',
+    group: 'KEUANGAN_LAIN',
+    accountingType: 'BEBAN_FINANSIAL',
+    description: 'Pembayaran bunga kredit modal kerja, bunga leasing mesin gym.',
+    subcategories: ['Bunga Pinjaman Bank', 'Bunga Leasing Alat Gym'],
+    defaultPaymentAccount: 'Bank Mandiri (Investasi)',
+    isActive: true,
+    createdAt: '2026-09-01'
+  },
+  {
+    id: 'CAT-FIN-03',
+    name: 'Pajak & Legalitas Perizinan',
+    group: 'KEUANGAN_LAIN',
+    accountingType: 'BEBAN_FINANSIAL',
+    description: 'Pajak daerah PB1, retribusi reklame plang gym, PPh 21 karyawan, PPh final sewa gedung.',
+    subcategories: ['Pajak Reklame & Papan Nama Gym', 'PPh 21 Karyawan', 'PPh 4(2) Final Sewa Bangunan', 'Perpanjangan Izin Usaha & NIB'],
+    defaultPaymentAccount: 'Bank Mandiri (Operasional)',
+    isActive: true,
+    createdAt: '2026-09-01'
+  },
+  {
+    id: 'CAT-FIN-04',
+    name: 'Pengeluaran Kas Kecil Kasir',
+    group: 'KEUANGAN_LAIN',
+    accountingType: 'BEBAN_OPERASIONAL',
+    description: 'Pembelian mendesak harian oleh front desk melalui kas kasir (air, galon, tisu, kurir).',
+    subcategories: ['Konsumsi Rapat / Tamu Front Desk', 'Pembelian Darurat Operasional', 'Uang Parkir Vendor'],
+    defaultPaymentAccount: 'Kas Laci (Petty Cash)',
+    isActive: true,
+    createdAt: '2026-09-01'
+  },
+  {
+    id: 'CAT-FIN-05',
+    name: 'Biaya Lain-Lain & Tak Terduga',
+    group: 'KEUANGAN_LAIN',
+    accountingType: 'BEBAN_FINANSIAL',
+    description: 'Biaya operasional tak terduga yang tidak masuk kategori spesifik lainnya.',
+    subcategories: ['Beban Tak Terduga Lapangan', 'Kerugian Selisih Kurs / Pembulatan', 'Beban Operasional Lainnya'],
+    defaultPaymentAccount: 'Kas Laci (Petty Cash)',
+    isActive: true,
+    createdAt: '2026-09-01'
+  },
+
+  // 5. Pembelian aset dan persediaan
+  {
+    id: 'CAT-AST-01',
+    name: 'Pembelian Alat Gym Baru (Kapitalisasi Aset)',
+    group: 'ASET_PERSEDIAAN',
+    accountingType: 'ASET_TETAP',
+    description: 'Pengadaan mesin fitness baru (Treadmill, Smith Machine, Dumbbell Set). Dicatat ke Neraca / Inventaris, BUKAN beban laba rugi langsung.',
+    subcategories: ['Mesin Kardio Baru (Treadmill, Bike, Elliptical)', 'Mesin Strength Baru (Smith Machine, Lat Pulldown)', 'Free Weights Baru (Dumbbell, Barbell, Bumper Plate)', 'Aksesoris Tambahan (Bench, Power Rack)'],
+    defaultPaymentAccount: 'Bank Mandiri (Investasi)',
+    isActive: true,
+    createdAt: '2026-09-01'
+  },
+  {
+    id: 'CAT-AST-02',
+    name: 'Pembelian Komputer, Printer & Elektronik',
+    group: 'ASET_PERSEDIAAN',
+    accountingType: 'ASET_TETAP',
+    description: 'Pengadaan PC POS kasir, monitor, printer kasir thermal, tablet check-in, TV gym.',
+    subcategories: ['Komputer & PC Front Desk Kasir', 'Printer Struk & Printer Laser', 'Tablet Check-In Member & Scanner', 'Smart TV Display Informasi Gym', 'Unit AC Baru Ruangan Gym'],
+    defaultPaymentAccount: 'Bank Mandiri (Investasi)',
+    isActive: true,
+    createdAt: '2026-09-01'
+  },
+  {
+    id: 'CAT-AST-03',
+    name: 'Pembelian Barang Dagang / Suplemen (Persediaan)',
+    group: 'ASET_PERSEDIAAN',
+    accountingType: 'PERSEDIAAN',
+    description: 'Pembelian stok suplemen, susu whey protein, air mineral dingin untuk dijual kembali di POS kasir. HPP diakui saat terjual.',
+    subcategories: ['Stok Suplemen Whey & BCAA', 'Stok Minuman Isotonik & Air Mineral POS', 'Stok Baju Jersey & Shaker RFA Gym', 'Stok Snack Protein Bar'],
+    defaultPaymentAccount: 'Bank Mandiri (Operasional)',
+    isActive: true,
+    createdAt: '2026-09-01'
+  },
+  {
+    id: 'CAT-AST-04',
+    name: 'Pembelian Perlengkapan Operasional (Habis Pakai)',
+    group: 'ASET_PERSEDIAAN',
+    accountingType: 'BEBAN_OPERASIONAL',
+    description: 'Perlengkapan kecil yang langsung habis dipakai atau nilai ekonomis di bawah batas kapitalisasi.',
+    subcategories: ['Resistance Band & Matras Yoga', 'Foam Roller & Tali Skipping', 'Kabel Extension & Colokan Listrik'],
+    defaultPaymentAccount: 'Kas Laci (Petty Cash)',
+    isActive: true,
+    createdAt: '2026-09-01'
+  },
+  {
+    id: 'CAT-AST-05',
+    name: 'Pembayaran Utang Vendor & Pokok Pinjaman',
+    group: 'ASET_PERSEDIAAN',
+    accountingType: 'PEMBAYARAN_UTANG',
+    description: 'Pelunasan tagihan tempo supplier alat / pembayaran cicilan pokok pinjaman. Mengurangi utang di neraca, BUKAN beban laba rugi.',
+    subcategories: ['Pelunasan Utang Vendor Alat Fitness', 'Pelunasan Utang Supplier Suplemen', 'Pembayaran Pokok Pinjaman Bank / Investor'],
+    defaultPaymentAccount: 'Bank Mandiri (Investasi)',
+    isActive: true,
+    createdAt: '2026-09-01'
+  }
+];
+
+export const INITIAL_EXPENSE_POLICY: ExpenseApprovalPolicy = {
+  requireApprovalAbove: 500000, // Transaksi > Rp 500.000 wajib persetujuan Manager/Admin
+  preventSelfApproval: true     // Pengaju dilarang menyetujui transaksinya sendiri
+};
+
+export const INITIAL_COMPANY_EXPENSES: CompanyExpense[] = [
+  {
+    id: 'EXP-20261008-0001',
+    expenseNumber: 'EXP-261008-0001',
+    date: '2026-10-08',
+    branchId: 'BR-001',
+    branchName: 'RFA GYM Cibubur, Bekasi (Flagship HQ)',
+    categoryId: 'CAT-OPR-01',
+    categoryName: 'Listrik (PLN)',
+    subcategory: 'PLN Pascabayar',
+    name: 'Pembayaran Tagihan Listrik PLN Pascabayar Bulan Oktober 2026',
+    description: 'Tagihan resmi IDPEL 532100889912 daya 33.000 VA operasional gedung gym dan seluruh unit mesin kardio.',
+    amount: 3850000,
+    accountingType: 'BEBAN_OPERASIONAL',
+    paymentMethod: 'Transfer Bank',
+    sourceAccount: 'Bank Mandiri (Operasional)',
+    vendorOrBeneficiary: 'PT PLN (Persero) Rayon Cibubur',
+    picStaffId: 'S01',
+    picStaffName: 'Budi Santoso',
+    invoiceRefNumber: 'PLN-OKT-2026-8812',
+    approvalStatus: 'Disetujui',
+    paymentStatus: 'Lunas',
+    paidAmount: 3850000,
+    balanceRemaining: 0,
+    paidAt: '2026-10-08 10:15 WIB',
+    paidByUserId: 'S01',
+    paidByUserName: 'Budi Santoso',
+    paidAccount: 'Bank Mandiri (Operasional)',
+    approvedByUserId: 'S01',
+    approvedByUserName: 'Budi Santoso',
+    approvedAt: '2026-10-08 10:10 WIB',
+    notes: 'Pembayaran lunas via transfer m-banking Mandiri resmi perusahaan.',
+    auditLogs: [
+      {
+        id: 'LOG-001',
+        timestamp: '2026-10-08 09:30 WIB',
+        userId: 'S01',
+        userName: 'Budi Santoso',
+        action: 'Dibuat & Diajukan Persetujuan',
+        notes: 'Input tagihan PLN bulanan'
+      },
+      {
+        id: 'LOG-002',
+        timestamp: '2026-10-08 10:10 WIB',
+        userId: 'S01',
+        userName: 'Budi Santoso',
+        action: 'Disetujui',
+        notes: 'Disetujui oleh Super Admin'
+      },
+      {
+        id: 'LOG-003',
+        timestamp: '2026-10-08 10:15 WIB',
+        userId: 'S01',
+        userName: 'Budi Santoso',
+        action: 'Pembayaran Lunas Dicatat',
+        notes: 'Transfer Mandiri sukses'
+      }
+    ],
+    createdAt: '2026-10-08 09:30:00',
+    updatedAt: '2026-10-08 10:15:00'
+  },
+  {
+    id: 'EXP-20261008-0002',
+    expenseNumber: 'EXP-261008-0002',
+    date: '2026-10-08',
+    branchId: 'BR-001',
+    branchName: 'RFA GYM Cibubur, Bekasi (Flagship HQ)',
+    categoryId: 'CAT-FAS-01',
+    categoryName: 'Perawatan Alat Gym Rutin',
+    subcategory: 'Pelumas & Silikon Belt Treadmill',
+    name: 'Service Berkala & Pelumasan Running Belt 6 Unit Treadmill Technogym',
+    description: 'Maintenance preventif berkala silikon grade industrial 100% serta pengecekan alignment roller belt.',
+    amount: 1200000,
+    accountingType: 'BEBAN_FASILITAS',
+    paymentMethod: 'Transfer Bank',
+    sourceAccount: 'Bank BCA / Artha Graha',
+    vendorOrBeneficiary: 'CV Prima Fit Service Teknisi',
+    picStaffId: 'S02',
+    picStaffName: 'Siti Kasir',
+    invoiceRefNumber: 'INV-PFS-2026-109',
+    approvalStatus: 'Disetujui',
+    paymentStatus: 'Lunas',
+    paidAmount: 1200000,
+    balanceRemaining: 0,
+    paidAt: '2026-10-08 14:45 WIB',
+    paidByUserId: 'S01',
+    paidByUserName: 'Budi Santoso',
+    paidAccount: 'Bank BCA / Artha Graha',
+    approvedByUserId: 'S01',
+    approvedByUserName: 'Budi Santoso',
+    approvedAt: '2026-10-08 14:20 WIB',
+    notes: 'Kondisi mesin normal dan telah diuji beban member.',
+    auditLogs: [
+      {
+        id: 'LOG-004',
+        timestamp: '2026-10-08 13:00 WIB',
+        userId: 'S02',
+        userName: 'Siti Kasir',
+        action: 'Diajukan Persetujuan',
+        notes: 'Invoice teknisi treadmill telah selesai kerja'
+      },
+      {
+        id: 'LOG-005',
+        timestamp: '2026-10-08 14:20 WIB',
+        userId: 'S01',
+        userName: 'Budi Santoso',
+        action: 'Disetujui',
+        notes: 'Pekerjaan teknisi diverifikasi'
+      },
+      {
+        id: 'LOG-006',
+        timestamp: '2026-10-08 14:45 WIB',
+        userId: 'S01',
+        userName: 'Budi Santoso',
+        action: 'Pembayaran Lunas Dicatat',
+        notes: 'Transfer via BCA'
+      }
+    ],
+    createdAt: '2026-10-08 13:00:00',
+    updatedAt: '2026-10-08 14:45:00'
+  },
+  {
+    id: 'EXP-20261009-0001',
+    expenseNumber: 'EXP-261009-0001',
+    date: '2026-10-09',
+    branchId: 'BR-001',
+    branchName: 'RFA GYM Cibubur, Bekasi (Flagship HQ)',
+    categoryId: 'CAT-AST-01',
+    categoryName: 'Pembelian Alat Gym Baru (Kapitalisasi Aset)',
+    subcategory: 'Free Weights Baru (Dumbbell, Barbell, Bumper Plate)',
+    name: 'Pengadaan Set Dumbbell Rubber Hexagon Baru (12kg - 24kg)',
+    description: 'Penambahan alat angkat beban area free weight 7 pasang dumbbell baru beserta rak dumbbell tier dua. Kapitalisasi ke aset tetap inventaris.',
+    amount: 6500000,
+    accountingType: 'ASET_TETAP',
+    paymentMethod: 'Transfer Bank',
+    sourceAccount: 'Bank Mandiri (Investasi)',
+    vendorOrBeneficiary: 'PT Strength Equipment Indonesia',
+    picStaffId: 'S01',
+    picStaffName: 'Budi Santoso',
+    invoiceRefNumber: 'SEI-INV-9921',
+    approvalStatus: 'Disetujui',
+    paymentStatus: 'Lunas',
+    paidAmount: 6500000,
+    balanceRemaining: 0,
+    paidAt: '2026-10-09 11:30 WIB',
+    paidByUserId: 'S01',
+    paidByUserName: 'Budi Santoso',
+    paidAccount: 'Bank Mandiri (Investasi)',
+    approvedByUserId: 'S01',
+    approvedByUserName: 'Budi Santoso',
+    approvedAt: '2026-10-09 11:00 WIB',
+    isAssetCapitalized: true,
+    linkedAssetId: 'AST-DB-HEX-2026',
+    notes: 'Barang diterima lengkap dan ditambahkan ke daftar inventaris cabang.',
+    auditLogs: [
+      {
+        id: 'LOG-007',
+        timestamp: '2026-10-09 10:15 WIB',
+        userId: 'S01',
+        userName: 'Budi Santoso',
+        action: 'Dibuat & Disetujui',
+        notes: 'Pengadaan aset perlengkapan fitness baru'
+      },
+      {
+        id: 'LOG-008',
+        timestamp: '2026-10-09 11:30 WIB',
+        userId: 'S01',
+        userName: 'Budi Santoso',
+        action: 'Pembayaran Lunas Dicatat',
+        notes: 'Transfer Mandiri Investasi'
+      }
+    ],
+    createdAt: '2026-10-09 10:15:00',
+    updatedAt: '2026-10-09 11:30:00'
+  },
+  {
+    id: 'EXP-20261009-0002',
+    expenseNumber: 'EXP-261009-0002',
+    date: '2026-10-09',
+    branchId: 'BR-001',
+    branchName: 'RFA GYM Cibubur, Bekasi (Flagship HQ)',
+    categoryId: 'CAT-AST-03',
+    categoryName: 'Pembelian Barang Dagang / Suplemen (Persediaan)',
+    subcategory: 'Stok Suplemen Whey & BCAA',
+    name: 'Restock Suplemen Whey Protein Sachet & Isotonik POS Kasir',
+    description: 'Pembelian stok 150 sachet Whey Protein Isolate & 120 botol minuman isotonik dingin untuk dijual kembali di POS Kasir. Dicatat ke Persediaan barang dagang.',
+    amount: 2400000,
+    accountingType: 'PERSEDIAAN',
+    paymentMethod: 'Transfer Bank',
+    sourceAccount: 'Bank Mandiri (Operasional)',
+    vendorOrBeneficiary: 'Distributor Suplemen Prima',
+    picStaffId: 'S02',
+    picStaffName: 'Siti Kasir',
+    invoiceRefNumber: 'SUP-RESTOCK-8871',
+    approvalStatus: 'Disetujui',
+    paymentStatus: 'Lunas',
+    paidAmount: 2400000,
+    balanceRemaining: 0,
+    paidAt: '2026-10-09 16:00 WIB',
+    paidByUserId: 'S01',
+    paidByUserName: 'Budi Santoso',
+    paidAccount: 'Bank Mandiri (Operasional)',
+    approvedByUserId: 'S01',
+    approvedByUserName: 'Budi Santoso',
+    approvedAt: '2026-10-09 15:45 WIB',
+    notes: 'Stok telah dihitung fisik dan masuk rak display depan kasir.',
+    auditLogs: [
+      {
+        id: 'LOG-009',
+        timestamp: '2026-10-09 15:00 WIB',
+        userId: 'S02',
+        userName: 'Siti Kasir',
+        action: 'Diajukan Persetujuan',
+        notes: 'Restock minuman dan suplemen yang menipis'
+      },
+      {
+        id: 'LOG-010',
+        timestamp: '2026-10-09 15:45 WIB',
+        userId: 'S01',
+        userName: 'Budi Santoso',
+        action: 'Disetujui',
+        notes: 'Disetujui oleh Manager'
+      },
+      {
+        id: 'LOG-011',
+        timestamp: '2026-10-09 16:00 WIB',
+        userId: 'S01',
+        userName: 'Budi Santoso',
+        action: 'Pembayaran Lunas Dicatat',
+        notes: 'Transfer lunas'
+      }
+    ],
+    createdAt: '2026-10-09 15:00:00',
+    updatedAt: '2026-10-09 16:00:00'
+  },
+  {
+    id: 'EXP-20261010-0001',
+    expenseNumber: 'EXP-261010-0001',
+    date: '2026-10-10',
+    branchId: 'BR-001',
+    branchName: 'RFA GYM Cibubur, Bekasi (Flagship HQ)',
+    categoryId: 'CAT-OPR-04',
+    categoryName: 'Kebersihan & Sanitasi',
+    subcategory: 'Disinfektan & Sanitizer Alat Gym',
+    name: 'Pembelian Cairan Disinfektan Alat Gym & Tisu Gulung Kasir',
+    description: 'Pengadaan 4 jerigen cairan pembersih antibakteri khusus alat gym & 10 pack tisu roll untuk dispenser lap member.',
+    amount: 350000,
+    accountingType: 'BEBAN_OPERASIONAL',
+    paymentMethod: 'Kas',
+    sourceAccount: 'Kas Laci (Petty Cash)',
+    vendorOrBeneficiary: 'Toko Kimia Bersih Jaya Cibubur',
+    picStaffId: 'S02',
+    picStaffName: 'Siti Kasir',
+    invoiceRefNumber: 'NOTA-KBJ-1022',
+    approvalStatus: 'Disetujui',
+    paymentStatus: 'Lunas',
+    paidAmount: 350000,
+    balanceRemaining: 0,
+    paidAt: '2026-10-10 09:30 WIB',
+    paidByUserId: 'S02',
+    paidByUserName: 'Siti Kasir',
+    paidAccount: 'Kas Laci (Petty Cash)',
+    approvedByUserId: 'S01',
+    approvedByUserName: 'Budi Santoso',
+    approvedAt: '2026-10-10 09:25 WIB',
+    notes: 'Pengeluaran tunai langsung dari laci kas kasir hari ini. Terintegrasi ke Tutup Kasir Harian.',
+    auditLogs: [
+      {
+        id: 'LOG-012',
+        timestamp: '2026-10-10 09:15 WIB',
+        userId: 'S02',
+        userName: 'Siti Kasir',
+        action: 'Diajukan Persetujuan',
+        notes: 'Kebutuhan mendesak sanitizer habis di lantai gym'
+      },
+      {
+        id: 'LOG-013',
+        timestamp: '2026-10-10 09:25 WIB',
+        userId: 'S01',
+        userName: 'Budi Santoso',
+        action: 'Disetujui',
+        notes: 'Disetujui via ERP'
+      },
+      {
+        id: 'LOG-014',
+        timestamp: '2026-10-10 09:30 WIB',
+        userId: 'S02',
+        userName: 'Siti Kasir',
+        action: 'Pembayaran Lunas Dicatat',
+        notes: 'Uang diambil dari kas laci kasir'
+      }
+    ],
+    createdAt: '2026-10-10 09:15:00',
+    updatedAt: '2026-10-10 09:30:00'
+  },
+  {
+    id: 'EXP-20261010-0002',
+    expenseNumber: 'EXP-261010-0002',
+    date: '2026-10-10',
+    branchId: 'BR-001',
+    branchName: 'RFA GYM Cibubur, Bekasi (Flagship HQ)',
+    categoryId: 'CAT-FAS-04',
+    categoryName: 'Perawatan & Cuci AC',
+    subcategory: 'Pengisian Freon AC',
+    name: 'Service Berkala & Tambah Freon R32 Unit AC Standing 5 PK Studio Aerobik',
+    description: 'Unit AC studio utama kurang dingin saat jam kelas malam. Perlu cuci evaporator, filter debu, dan penambahan freon.',
+    amount: 850000,
+    accountingType: 'BEBAN_FASILITAS',
+    paymentMethod: 'Kas',
+    sourceAccount: 'Kas Laci (Petty Cash)',
+    vendorOrBeneficiary: 'Bengkel AC Sejuk Mandiri Teknik',
+    picStaffId: 'S02',
+    picStaffName: 'Siti Kasir',
+    invoiceRefNumber: 'SPK-AC-20261010',
+    approvalStatus: 'Menunggu Persetujuan',
+    paymentStatus: 'Belum Dibayar',
+    paidAmount: 0,
+    balanceRemaining: 850000,
+    notes: 'Teknisi sudah di lokasi, menunggu persetujuan manager untuk pencairan dana kas laci.',
+    auditLogs: [
+      {
+        id: 'LOG-015',
+        timestamp: '2026-10-10 11:20 WIB',
+        userId: 'S02',
+        userName: 'Siti Kasir',
+        action: 'Diajukan Persetujuan',
+        notes: 'Pengajuan biaya service AC studio'
+      }
+    ],
+    createdAt: '2026-10-10 11:20:00',
+    updatedAt: '2026-10-10 11:20:00'
+  },
+  {
+    id: 'EXP-20261010-0003',
+    expenseNumber: 'EXP-261010-0003',
+    date: '2026-10-10',
+    branchId: 'BR-001',
+    branchName: 'RFA GYM Cibubur, Bekasi (Flagship HQ)',
+    categoryId: 'CAT-OPR-08',
+    categoryName: 'Pemasaran & Promosi',
+    subcategory: 'Meta Ads (Instagram & Facebook)',
+    name: 'Top-Up Saldo Iklan Meta Ads Promo Membership Akhir Tahun (Q4)',
+    description: 'Alokasi anggaran promosi berbayar target demografi radius 7 km sekitar cabang Cibubur dan Bekasi.',
+    amount: 1500000,
+    accountingType: 'BEBAN_OPERASIONAL',
+    paymentMethod: 'Transfer Bank',
+    sourceAccount: 'Bank Mandiri (Operasional)',
+    vendorOrBeneficiary: 'Meta Platforms Ireland Ltd / Facebook Ads',
+    picStaffId: 'S01',
+    picStaffName: 'Budi Santoso',
+    invoiceRefNumber: 'META-ADS-Q4-01',
+    approvalStatus: 'Draft',
+    paymentStatus: 'Belum Dibayar',
+    paidAmount: 0,
+    balanceRemaining: 1500000,
+    notes: 'Draft pengajuan rencana promosi mingguan marketing tim.',
+    auditLogs: [
+      {
+        id: 'LOG-016',
+        timestamp: '2026-10-10 13:00 WIB',
+        userId: 'S01',
+        userName: 'Budi Santoso',
+        action: 'Dibuat (Draft)',
+        notes: 'Disimpan sebagai rancangan draft'
+      }
+    ],
+    createdAt: '2026-10-10 13:00:00',
+    updatedAt: '2026-10-10 13:00:00'
+  }
+];
+

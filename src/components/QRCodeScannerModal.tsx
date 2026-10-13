@@ -485,7 +485,7 @@ export const QRCodeScannerModal: React.FC<QRCodeScannerModalProps> = ({
       } else if (err.name === 'NotFoundError' || err.name === 'DevicesNotFoundError') {
         message = 'Tidak ditemukan perangkat kamera pada perangkat ini.';
       } else {
-        message = err.message || 'Kamera tidak dapat diaktifkan. Gunakan opsi unggah gambar QR atau simulasi.';
+        message = err.message || 'Kamera tidak dapat diaktifkan. Gunakan opsi unggah gambar QR atau input manual ID member.';
       }
       setCameraError(message);
       setCameraActive(false);
@@ -925,31 +925,13 @@ export const QRCodeScannerModal: React.FC<QRCodeScannerModalProps> = ({
           </button>
         </form>
 
-        {/* BOTTOM HELPER / TEST SIMULATION PANEL */}
+        {/* BOTTOM HELPER PANEL */}
         <div className="p-4 bg-zinc-950 border-t border-zinc-800/80">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-            <div className="flex items-center gap-2">
-              <Smartphone className="w-4 h-4 text-orange-400 shrink-0" />
-              <p className="text-[11px] text-zinc-400">
-                Kartu member fisik atau tampilan kartu dari layar ponsel dapat diarahkan langsung ke scanner.
-              </p>
-            </div>
-
-            {/* Desktop Test Shortcuts (Simulasi 1-klik untuk testing tanpa kamera fisik) */}
-            <div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0">
-              <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider shrink-0 mr-1">
-                Uji Cepat:
-              </span>
-              {members.slice(0, 3).map((m) => (
-                <button
-                  key={m.id}
-                  onClick={() => simulateScanMember(m)}
-                  className="bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-zinc-300 hover:text-white px-2.5 py-1 rounded-lg text-[10px] font-bold transition shrink-0"
-                >
-                  {m.name.split(' ')[0]} ({m.id})
-                </button>
-              ))}
-            </div>
+          <div className="flex items-center gap-2">
+            <Smartphone className="w-4 h-4 text-orange-400 shrink-0" />
+            <p className="text-[11px] text-zinc-400">
+              Arahkan kartu member fisik atau QR Code dari layar ponsel member langsung ke sensor kamera scanner.
+            </p>
           </div>
 
           {/* Recent Scans in this session */}

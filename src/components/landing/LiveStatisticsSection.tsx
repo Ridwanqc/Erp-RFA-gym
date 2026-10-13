@@ -25,7 +25,6 @@ import {
 } from 'lucide-react';
 import { Attendance, Member } from '../../types';
 import { BRANCH_CONTACTS, getDynamicBranchContacts } from '../../data/landingData';
-import { APP_TODAY } from '../../utils/formatters';
 
 interface LiveStatisticsSectionProps {
   memberCount: number;
@@ -33,6 +32,7 @@ interface LiveStatisticsSectionProps {
   trainerCount: number;
   branchCount: number;
   attendances?: Attendance[];
+  members?: Member[];
   onCtaClick?: () => void;
   onOpenJoinNow?: (plan?: string, branchId?: string) => void;
   onOpenInquiry?: (topic?: string, branchId?: string) => void;
@@ -46,6 +46,7 @@ export const LiveStatisticsSection: React.FC<LiveStatisticsSectionProps> = ({
   trainerCount,
   branchCount,
   attendances = [],
+  members = [],
   onCtaClick,
   onOpenJoinNow,
   onOpenInquiry,
@@ -72,11 +73,6 @@ export const LiveStatisticsSection: React.FC<LiveStatisticsSectionProps> = ({
       );
     }, 500);
   };
-
-  // Calculations for real-time gym attendance / members currently in gym
-  const todayAttendances = attendances.filter((a) => a.date === APP_TODAY);
-  const activeInGymMembers = todayAttendances.filter((a) => !a.timeOut || a.timeOut.trim() === '');
-  const activeCount = activeInGymMembers.length;
 
   const handleJoinClick = (planName?: string, branchId?: string) => {
     if (onOpenJoinNow) {
@@ -201,7 +197,6 @@ export const LiveStatisticsSection: React.FC<LiveStatisticsSectionProps> = ({
         {/* Sembunyikan fitur Join Now jika member sudah login                       */}
         {/* ========================================================================= */}
         <div id="join-now" className="scroll-mt-28 mb-16 relative">
-          <span id="live-occupancy" className="absolute -top-28 left-0 pointer-events-none" />
 
           {loggedInMember ? (
             /* MEMBER SUDAH LOGIN: TAMPILKAN HUB STATUS MEMBER RESMI (SEMBUYIKAN JOIN NOW) */
@@ -277,21 +272,14 @@ export const LiveStatisticsSection: React.FC<LiveStatisticsSectionProps> = ({
             <div className="absolute top-0 right-1/4 w-96 h-96 bg-orange-500/15 rounded-full blur-3xl pointer-events-none animate-pulse" />
             <div className="absolute bottom-0 left-10 w-80 h-80 bg-amber-500/10 rounded-full blur-3xl pointer-events-none" />
 
-            {/* Top Bar: Social Proof Live Member Badge & Fast Activation Pill */}
+            {/* Top Bar: Standard & Fast Activation Pill */}
             <div className="relative z-10 flex flex-wrap items-center justify-between gap-4 pb-6 border-b border-zinc-800/80">
               <div className="flex flex-wrap items-center gap-2.5">
                 <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 text-xs font-bold">
-                  <span className="relative flex h-2 w-2">
-                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
-                    <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
-                  </span>
-                  <span>
-                    Live di Gym:{' '}
-                    <strong className="text-white font-mono tabular-nums">{activeCount} Member</strong> Sedang Latihan
-                    Saat Ini
-                  </span>
+                  <ShieldCheck className="w-4 h-4 text-emerald-400" />
+                  <span>Fasilitas Standar Internasional & Higienis</span>
                 </div>
-                <span className="text-xs text-zinc-400 hidden sm:inline">• Suasana Sangat Nyaman & Bebas Antre</span>
+                <span className="text-xs text-zinc-400 hidden sm:inline">• Suasana Nyaman & Bebas Antre</span>
               </div>
 
               <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-orange-500/10 border border-orange-500/30 text-orange-400 text-xs font-black tracking-wider uppercase">

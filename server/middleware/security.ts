@@ -7,20 +7,27 @@ export const helmetMiddleware = helmet({
   contentSecurityPolicy: {
     directives: {
       defaultSrc: ["'self'"],
-      scriptSrc: ["'self'", "'unsafe-inline'", 'https://cdnjs.cloudflare.com'],
+      scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'", 'https://cdnjs.cloudflare.com'],
       styleSrc: ["'self'", "'unsafe-inline'", 'https://cdnjs.cloudflare.com', 'https://fonts.googleapis.com'],
       fontSrc: ["'self'", 'https://cdnjs.cloudflare.com', 'https://fonts.gstatic.com', 'data:'],
       imgSrc: ["'self'", 'data:', 'blob:', 'https:'],
       connectSrc: ["'self'", 'https:', 'wss:'],
-      frameAncestors: ["'self'", 'https://*.google.com', 'https://localhost.corp.google.com:26001'],
+      frameAncestors: [
+        "'self'",
+        'https://*.google.com',
+        'https://*.googleusercontent.com',
+        'https://*.run.app',
+        'https://aistudio.google.com',
+        'https://localhost.corp.google.com:*'
+      ],
       objectSrc: ["'none'"],
-      upgradeInsecureRequests: process.env.NODE_ENV === 'production' ? [] : null
+      upgradeInsecureRequests: null
     }
   },
   crossOriginEmbedderPolicy: false,
   crossOriginResourcePolicy: { policy: 'cross-origin' },
   dnsPrefetchControl: { allow: false },
-  frameguard: { action: 'sameorigin' },
+  frameguard: false,
   hidePoweredBy: true,
   hsts: {
     maxAge: 31536000,

@@ -48,9 +48,11 @@ import {
   ArrowUpDown,
   Eye,
   ExternalLink,
-  Filter
+  Filter,
+  CircleDollarSign,
+  Tag
 } from 'lucide-react';
-import { Transaction, PettyCashItem, DailyClosingRecord, User, ALL_BRANCHES_ID } from '../types';
+import { Transaction, PettyCashItem, DailyClosingRecord, User, ALL_BRANCHES_ID, CompanyExpense, ExpenseCategory, ExpenseApprovalPolicy } from '../types';
 import { formatRp, getTimestamp, APP_TODAY, getDayDiff, formatDateIndo } from '../utils/formatters';
 import { ReceiptModal } from './ReceiptModal';
 import { FinanceRevenueChart } from './FinanceRevenueChart';
@@ -60,6 +62,28 @@ import { MonthlySalesReportView } from './MonthlySalesReportView';
 import { DailySalesReportView } from './DailySalesReportView';
 import { TransactionActions } from './transaction/TransactionActions';
 import { useSettings } from '../context/SettingsContext';
+import { FinancialDashboardView } from './finance/FinancialDashboardView';
+import { ProfitAndLossView } from './finance/ProfitAndLossView';
+import { ExpenseInputForm } from './finance/ExpenseInputForm';
+import { ExpenseHistoryTable } from './finance/ExpenseHistoryTable';
+import { ExpenseCategoryManager } from './finance/ExpenseCategoryManager';
+import { ExpenseApprovalView } from './finance/ExpenseApprovalView';
+import { ExpenseReportView } from './finance/ExpenseReportView';
+
+export type FinanceTab =
+  | 'dashboard-keuangan'
+  | 'laba-rugi'
+  | 'input-pengeluaran'
+  | 'riwayat-pengeluaran'
+  | 'kategori-pengeluaran'
+  | 'persetujuan-pengeluaran'
+  | 'laporan-pengeluaran'
+  | 'piutang'
+  | 'bukubesar'
+  | 'petty'
+  | 'closing'
+  | 'bulanan'
+  | 'harian';
 
 interface FinanceViewProps {
   transactions: Transaction[];
@@ -67,8 +91,26 @@ interface FinanceViewProps {
   closingRecords: DailyClosingRecord[];
   currentUser: User | null;
   isStoreClosed: boolean;
-  initialSubTab?: 'piutang' | 'bukubesar' | 'petty' | 'closing' | 'bulanan' | 'harian';
+  initialSubTab?: FinanceTab;
   initialSelectedPiutangId?: string;
+  companyExpenses?: CompanyExpense[];
+  expenseCategories?: ExpenseCategory[];
+  expensePolicy?: ExpenseApprovalPolicy;
+  onSaveExpense?: (expense: CompanyExpense, autoCapitalizeAsset?: boolean) => void;
+  onSaveExpensePayment?: (
+    expenseId: string,
+    paidAmount: number,
+    paidAccount: string,
+    paymentMethod: CompanyExpense['paymentMethod'],
+    refNumber?: string,
+    notes?: string
+  ) => void;
+  onApproveExpense?: (expense: CompanyExpense) => void;
+  onRejectExpense?: (expense: CompanyExpense, reason: string) => void;
+  onCancelExpense?: (expenseId: string, reason: string) => void;
+  onSaveExpenseCategory?: (category: ExpenseCategory, isNew: boolean) => void;
+  onToggleExpenseCategoryStatus?: (categoryId: string) => void;
+  onUpdateExpensePolicy?: (newPolicy: ExpenseApprovalPolicy) => void;
   onPayInstallment: (payTrx: Transaction, originalTrxId: string, paidAmount: number) => void;
   onBatchPayInstallment?: (payments: { payTrx: Transaction; originalTrxId: string; paidAmount: number }[]) => void;
   onAddPettyCash: (pc: PettyCashItem) => void;
@@ -93,6 +135,17 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
   isStoreClosed,
   initialSubTab = 'piutang',
   initialSelectedPiutangId,
+  companyExpenses = [],
+  expenseCategories = [],
+  expensePolicy = { requireApprovalAbove: 500000, preventSelfApproval: true },
+  onSaveExpense,
+  onSaveExpensePayment,
+  onApproveExpense,
+  onRejectExpense,
+  onCancelExpense,
+  onSaveExpenseCategory,
+  onToggleExpenseCategoryStatus,
+  onUpdateExpensePolicy,
   onPayInstallment,
   onBatchPayInstallment,
   onAddPettyCash,
@@ -104,10 +157,12 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
   showToast
 }) => {
   const { branches, activeBranchId, activeBranch, isAllBranches } = useSettings();
+  const handleToast = (title: string, message: string, type?: 'success' | 'error' | 'warning' | 'info') =>
+    showToast(title, message, type || 'info');
   const isSuperAdmin = currentUser?.role === 'admin';
   const userBranchId = currentUser?.branchId || activeBranchId;
   const [bukuBesarBranchFilter, setBukuBesarBranchFilter] = useState<string>(isSuperAdmin ? 'ALL' : userBranchId);
-  const [activeTab, setActiveTab] = useState<'piutang' | 'bukubesar' | 'petty' | 'closing' | 'bulanan' | 'harian'>(initialSubTab);
+  const [activeTab, setActiveTab] = useState<FinanceTab>(initialSubTab);
 
   const handleUpdatePettyCash = (newList: PettyCashItem[]) => {
     if (onUpdatePettyCashList) {
@@ -668,18 +723,30 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
     mandiriEDC
   };
 
-  // Selected Date Petty Cash Expense
-  const selectedDatePettyExpenses = pettyCashList
+  // Selected Date Company Cash Expenses (Approved Cash Outflows from Drawer)
+  const selectedDateCompanyCashExpenses = (companyExpenses || [])
     .filter(
-      (p) =>
-        p.date === closingDate ||
-        p.date.includes(closingDate) ||
-        (p.created_at && p.created_at.startsWith(closingDate))
+      (e) =>
+        e.approvalStatus === 'Disetujui' &&
+        (e.date === closingDate || e.date.includes(closingDate)) &&
+        (e.paymentMethod === 'Kas' || (e.sourceAccount || '').includes('Kas Laci')) &&
+        (isAllBranches || e.branchId === (activeBranchId === ALL_BRANCHES_ID ? branches[0]?.id : activeBranchId))
     )
-    .reduce(
-      (sum, p) => sum + (p.total_expense !== undefined ? p.total_expense : p.amount || 0),
-      0
-    );
+    .reduce((sum, e) => sum + (e.paidAmount > 0 ? e.paidAmount : e.amount), 0);
+
+  // Selected Date Petty Cash Expense & Approved Company Cash Expenses
+  const selectedDatePettyExpenses =
+    pettyCashList
+      .filter(
+        (p) =>
+          p.date === closingDate ||
+          p.date.includes(closingDate) ||
+          (p.created_at && p.created_at.startsWith(closingDate))
+      )
+      .reduce(
+        (sum, p) => sum + (p.total_expense !== undefined ? p.total_expense : p.amount || 0),
+        0
+      ) + selectedDateCompanyCashExpenses;
 
   // Initial Drawer Cash (Input Modal Kas Laci / Cash Float)
   const openingDrawerCash = Math.max(0, Number(openingDrawerCashInput) || 0);
@@ -2285,10 +2352,78 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
           </p>
         </div>
 
-        <div className="flex bg-zinc-900 p-1.5 rounded-2xl border border-zinc-800 overflow-x-auto max-w-full">
+        <div className="flex bg-zinc-900 p-1.5 rounded-2xl border border-zinc-800 overflow-x-auto max-w-full gap-1">
+          <button
+            onClick={() => setActiveTab('dashboard-keuangan')}
+            className={`px-3.5 py-2 rounded-xl text-xs font-bold transition whitespace-nowrap flex items-center gap-1.5 ${
+              activeTab === 'dashboard-keuangan' ? 'bg-orange-500 text-white shadow-md' : 'text-zinc-400 hover:text-white'
+            }`}
+          >
+            <CircleDollarSign className="w-3.5 h-3.5" />
+            <span>Dashboard Keuangan</span>
+          </button>
+          <button
+            onClick={() => setActiveTab('laba-rugi')}
+            className={`px-3.5 py-2 rounded-xl text-xs font-bold transition whitespace-nowrap flex items-center gap-1.5 ${
+              activeTab === 'laba-rugi' ? 'bg-orange-500 text-white shadow-md' : 'text-zinc-400 hover:text-white'
+            }`}
+          >
+            <TrendingUp className="w-3.5 h-3.5" />
+            <span>Laba Perusahaan</span>
+          </button>
+          <button
+            onClick={() => setActiveTab('input-pengeluaran')}
+            className={`px-3.5 py-2 rounded-xl text-xs font-bold transition whitespace-nowrap flex items-center gap-1.5 ${
+              activeTab === 'input-pengeluaran' ? 'bg-orange-500 text-white shadow-md' : 'text-zinc-400 hover:text-white'
+            }`}
+          >
+            <Plus className="w-3.5 h-3.5" />
+            <span>Input Pengeluaran</span>
+          </button>
+          <button
+            onClick={() => setActiveTab('riwayat-pengeluaran')}
+            className={`px-3.5 py-2 rounded-xl text-xs font-bold transition whitespace-nowrap flex items-center gap-1.5 ${
+              activeTab === 'riwayat-pengeluaran' ? 'bg-orange-500 text-white shadow-md' : 'text-zinc-400 hover:text-white'
+            }`}
+          >
+            <BookOpen className="w-3.5 h-3.5" />
+            <span>Riwayat Pengeluaran</span>
+          </button>
+          <button
+            onClick={() => setActiveTab('kategori-pengeluaran')}
+            className={`px-3.5 py-2 rounded-xl text-xs font-bold transition whitespace-nowrap flex items-center gap-1.5 ${
+              activeTab === 'kategori-pengeluaran' ? 'bg-orange-500 text-white shadow-md' : 'text-zinc-400 hover:text-white'
+            }`}
+          >
+            <Tag className="w-3.5 h-3.5" />
+            <span>Kategori Pengeluaran</span>
+          </button>
+          <button
+            onClick={() => setActiveTab('persetujuan-pengeluaran')}
+            className={`px-3.5 py-2 rounded-xl text-xs font-bold transition whitespace-nowrap flex items-center gap-1.5 ${
+              activeTab === 'persetujuan-pengeluaran' ? 'bg-orange-500 text-white shadow-md' : 'text-zinc-400 hover:text-white'
+            }`}
+          >
+            <ShieldCheck className="w-3.5 h-3.5" />
+            <span>Persetujuan</span>
+            {companyExpenses.filter((e) => e.approvalStatus === 'Menunggu Persetujuan').length > 0 && (
+              <span className="px-1.5 py-0.2 bg-amber-500 text-zinc-950 rounded-full text-[10px] font-black">
+                {companyExpenses.filter((e) => e.approvalStatus === 'Menunggu Persetujuan').length}
+              </span>
+            )}
+          </button>
+          <button
+            onClick={() => setActiveTab('laporan-pengeluaran')}
+            className={`px-3.5 py-2 rounded-xl text-xs font-bold transition whitespace-nowrap flex items-center gap-1.5 ${
+              activeTab === 'laporan-pengeluaran' ? 'bg-orange-500 text-white shadow-md' : 'text-zinc-400 hover:text-white'
+            }`}
+          >
+            <BarChart3 className="w-3.5 h-3.5" />
+            <span>Laporan Pengeluaran</span>
+          </button>
           <button
             onClick={() => setActiveTab('piutang')}
-            className={`px-4 py-2 rounded-xl text-xs font-bold transition whitespace-nowrap ${
+            className={`px-3.5 py-2 rounded-xl text-xs font-bold transition whitespace-nowrap ${
               activeTab === 'piutang' ? 'bg-orange-500 text-white shadow-md' : 'text-zinc-400 hover:text-white'
             }`}
           >
@@ -2296,7 +2431,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
           </button>
           <button
             onClick={() => setActiveTab('bukubesar')}
-            className={`px-4 py-2 rounded-xl text-xs font-bold transition whitespace-nowrap ${
+            className={`px-3.5 py-2 rounded-xl text-xs font-bold transition whitespace-nowrap ${
               activeTab === 'bukubesar' ? 'bg-orange-500 text-white shadow-md' : 'text-zinc-400 hover:text-white'
             }`}
           >
@@ -2304,7 +2439,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
           </button>
           <button
             onClick={() => setActiveTab('petty')}
-            className={`px-4 py-2 rounded-xl text-xs font-bold transition whitespace-nowrap ${
+            className={`px-3.5 py-2 rounded-xl text-xs font-bold transition whitespace-nowrap ${
               activeTab === 'petty' ? 'bg-orange-500 text-white shadow-md' : 'text-zinc-400 hover:text-white'
             }`}
           >
@@ -2312,7 +2447,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
           </button>
           <button
             onClick={() => setActiveTab('closing')}
-            className={`px-4 py-2 rounded-xl text-xs font-bold transition whitespace-nowrap ${
+            className={`px-3.5 py-2 rounded-xl text-xs font-bold transition whitespace-nowrap ${
               activeTab === 'closing' ? 'bg-orange-500 text-white shadow-md' : 'text-zinc-400 hover:text-white'
             }`}
           >
@@ -2320,7 +2455,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
           </button>
           <button
             onClick={() => setActiveTab('harian')}
-            className={`px-4 py-2 rounded-xl text-xs font-bold transition whitespace-nowrap flex items-center gap-1.5 ${
+            className={`px-3.5 py-2 rounded-xl text-xs font-bold transition whitespace-nowrap flex items-center gap-1.5 ${
               activeTab === 'harian' ? 'bg-orange-500 text-white shadow-md' : 'text-zinc-400 hover:text-white'
             }`}
           >
@@ -2329,7 +2464,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
           </button>
           <button
             onClick={() => setActiveTab('bulanan')}
-            className={`px-4 py-2 rounded-xl text-xs font-bold transition whitespace-nowrap flex items-center gap-1.5 ${
+            className={`px-3.5 py-2 rounded-xl text-xs font-bold transition whitespace-nowrap flex items-center gap-1.5 ${
               activeTab === 'bulanan' ? 'bg-orange-500 text-white shadow-md' : 'text-zinc-400 hover:text-white'
             }`}
           >
@@ -2342,6 +2477,119 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
       {/* 7-Day Revenue Trends Chart: Total Payments vs New Installment Income (Disembunyikan pada Petty Cash dan Daily Closing) */}
       {(activeTab === 'piutang' || activeTab === 'bukubesar') && (
         <FinanceRevenueChart transactions={transactions} />
+      )}
+
+      {/* 0.01 DASHBOARD KEUANGAN */}
+      {activeTab === 'dashboard-keuangan' && (
+        <FinancialDashboardView
+          expenses={companyExpenses}
+          transactions={transactions}
+          closingRecords={closingRecords}
+          branches={branches}
+          activeBranchId={activeBranchId}
+          currentUser={currentUser}
+          onNavigateTab={(tab) => setActiveTab(tab as FinanceTab)}
+          showToast={handleToast}
+        />
+      )}
+
+      {/* 0.02 LABA PERUSAHAAN (P&L) */}
+      {activeTab === 'laba-rugi' && (
+        <ProfitAndLossView
+          expenses={companyExpenses}
+          transactions={transactions}
+          branches={branches}
+          activeBranchId={activeBranchId}
+          currentUser={currentUser}
+          showToast={handleToast}
+        />
+      )}
+
+      {/* 0.03 INPUT PENGELUARAN */}
+      {activeTab === 'input-pengeluaran' && (
+        <ExpenseInputForm
+          categories={expenseCategories}
+          branches={branches}
+          currentUser={currentUser}
+          activeBranchId={activeBranchId}
+          onSaveExpense={(exp, autoCap) => {
+            if (onSaveExpense) onSaveExpense(exp, autoCap);
+            setActiveTab('riwayat-pengeluaran');
+          }}
+          onCancel={() => setActiveTab('riwayat-pengeluaran')}
+          showToast={handleToast}
+        />
+      )}
+
+      {/* 0.04 RIWAYAT PENGELUARAN */}
+      {activeTab === 'riwayat-pengeluaran' && (
+        <ExpenseHistoryTable
+          expenses={companyExpenses}
+          categories={expenseCategories}
+          branches={branches}
+          currentUser={currentUser}
+          activeBranchId={activeBranchId}
+          onSavePayment={(id, amt, acc, meth, ref, notes) => {
+            if (onSaveExpensePayment) onSaveExpensePayment(id, amt, acc, meth, ref, notes);
+          }}
+          onApproveExpense={(exp) => {
+            if (onApproveExpense) onApproveExpense(exp);
+          }}
+          onRejectExpense={(exp) => {
+            if (onRejectExpense) onRejectExpense(exp, 'Ditolak via tabel riwayat');
+          }}
+          onCancelExpense={(id, reason) => {
+            if (onCancelExpense) onCancelExpense(id, reason);
+          }}
+          onNavigateToInput={() => setActiveTab('input-pengeluaran')}
+          showToast={handleToast}
+        />
+      )}
+
+      {/* 0.05 KATEGORI PENGELUARAN */}
+      {activeTab === 'kategori-pengeluaran' && (
+        <ExpenseCategoryManager
+          categories={expenseCategories}
+          currentUser={currentUser}
+          onSaveCategory={(cat, isNew) => {
+            if (onSaveExpenseCategory) onSaveExpenseCategory(cat, isNew);
+          }}
+          onToggleCategoryStatus={(id) => {
+            if (onToggleExpenseCategoryStatus) onToggleExpenseCategoryStatus(id);
+          }}
+          showToast={handleToast}
+        />
+      )}
+
+      {/* 0.06 PERSETUJUAN PENGELUARAN */}
+      {activeTab === 'persetujuan-pengeluaran' && (
+        <ExpenseApprovalView
+          expenses={companyExpenses}
+          currentUser={currentUser}
+          policy={expensePolicy}
+          onUpdatePolicy={(pol) => {
+            if (onUpdateExpensePolicy) onUpdateExpensePolicy(pol);
+          }}
+          onApproveExpense={(exp) => {
+            if (onApproveExpense) onApproveExpense(exp);
+          }}
+          onRejectExpense={(exp, reason) => {
+            if (onRejectExpense) onRejectExpense(exp, reason);
+          }}
+          showToast={handleToast}
+        />
+      )}
+
+      {/* 0.07 LAPORAN PENGELUARAN */}
+      {activeTab === 'laporan-pengeluaran' && (
+        <ExpenseReportView
+          expenses={companyExpenses}
+          categories={expenseCategories}
+          branches={branches}
+          activeBranchId={activeBranchId}
+          currentUser={currentUser}
+          showToast={handleToast}
+        />
       )}
 
       {/* 0.0 LAPORAN PENJUALAN HARIAN */}

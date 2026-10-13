@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   CalendarDays,
   Clock,
@@ -34,12 +34,26 @@ import {
   ArrowUpRight,
   ClipboardCheck,
   Lock,
-  Shield
+  Shield,
+  Play,
+  Pause,
+  RotateCcw,
+  Trash2,
+  Share2,
+  Scale,
+  Timer,
+  Zap,
+  BarChart3,
+  ChevronDown,
+  CheckCheck,
+  Save,
+  Smartphone
 } from 'lucide-react';
 import { Schedule, Member, User as UserType, PTPurchaseRecord, TrainerWorkoutLog, TrainerAttendanceLog } from '../types';
 import { formatDateIndo, APP_TODAY } from '../utils/formatters';
 import { INITIAL_TRAINER_ATTENDANCE_LOGS } from '../data/trainerAttendanceData';
 import { TrainerAttendanceLogView } from './TrainerAttendanceLogView';
+import { TrainerMobileFocusPortal } from './TrainerMobileFocusPortal';
 
 interface TrainerPortalViewProps {
   currentUser: UserType | null;
@@ -57,54 +71,11 @@ interface TrainerPortalViewProps {
   initialSubTab?: 'jadwal' | 'klien' | 'log' | 'attendance' | 'performa' | 'rekomendasi';
 }
 
-// Initial Mock Workout Logs for Demo
-const INITIAL_WORKOUT_LOGS: TrainerWorkoutLog[] = [
-  {
-    id: 'LOG-001',
-    scheduleId: 'SCH-01',
-    trainerId: 'S04',
-    trainerName: 'Reza Pratama',
-    memberId: 'M001',
-    memberName: 'Akbar Hanif',
-    date: APP_TODAY,
-    focusArea: 'Chest & Triceps Hypertrophy',
-    exercisesSummary: '1. Barbell Bench Press 4x10 @ 65kg (PR!)\n2. Incline DB Press 3x12 @ 22kg\n3. Dips Bodyweight 3x10\n4. Rope Triceps Pushdown 4x15 @ 25kg',
-    rpeRate: 8,
-    condition: 'Prima & Bertenaga',
-    coachNotes: 'Teknik leg drive pada bench press sudah mantap. Istirahat 90 detik antar set. Member sangat termotivasi.',
-    nextSessionGoal: 'Coba tes 70kg di Bench Press 3x8, lalu lanjut fokus Upper Chest flyes.'
-  },
-  {
-    id: 'LOG-002',
-    scheduleId: 'SCH-05',
-    trainerId: 'S04',
-    trainerName: 'Reza Pratama',
-    memberId: 'M005',
-    memberName: 'Hendro Prasetyo',
-    date: '2026-09-17',
-    focusArea: 'Back & Core Strength',
-    exercisesSummary: '1. Lat Pulldown Wide Grip 4x12 @ 55kg\n2. Seated Cable Row 4x12 @ 50kg\n3. Face Pulls 3x15 @ 20kg\n4. Hanging Knee Raises 3x12',
-    rpeRate: 7,
-    condition: 'Normal',
-    coachNotes: 'Mind-muscle connection latissimus dorsi meningkat. Postur bahu tidak membungkuk.',
-    nextSessionGoal: 'Sesi terakhir kuota paket. Ajak diskusi perpanjangan paket 10 sesi berikutnya.'
-  },
-  {
-    id: 'LOG-003',
-    scheduleId: 'SCH-07',
-    trainerId: 'S05',
-    trainerName: 'David Chen',
-    memberId: 'M007',
-    memberName: 'Kevin Wijaya',
-    date: '2026-09-18',
-    focusArea: 'Leg Day & Squat Mechanics',
-    exercisesSummary: '1. Barbell Back Squat 5x5 @ 90kg\n2. Romanian Deadlift 4x10 @ 70kg\n3. Walking Lunges DB 3x12 steps @ 16kg\n4. Standing Calf Raises 4x20',
-    rpeRate: 9,
-    condition: 'Lelah / Recovery',
-    coachNotes: 'Depth squat konsisten parallel. Bracing pernapasan terjaga dengan sabuk. Member berkeringat deras.',
-    nextSessionGoal: 'Deload ringan sesi berikutnya, fokus mobilitas panggul dan hamstring.'
-  }
-];
+import {
+  INITIAL_WORKOUT_LOGS,
+  loadWorkoutLogsFromStorage,
+  saveWorkoutLogsToStorage
+} from '../data/workoutLogData';
 
 export const TrainerPortalView: React.FC<TrainerPortalViewProps> = ({
   currentUser,
@@ -159,6 +130,7 @@ export const TrainerPortalView: React.FC<TrainerPortalViewProps> = ({
 
   // Sub-tabs within Trainer Portal
   const [activeTab, setActiveTab] = useState<'jadwal' | 'klien' | 'log' | 'attendance' | 'performa' | 'rekomendasi'>(initialSubTab || 'jadwal');
+  const [isMobileMode, setIsMobileMode] = useState(false);
 
   // Trainer Attendance Logs State (Persisted in localStorage)
   const [attendanceLogs, setAttendanceLogs] = useState<TrainerAttendanceLog[]>(() => {
@@ -203,29 +175,103 @@ export const TrainerPortalView: React.FC<TrainerPortalViewProps> = ({
 
   // Workout Logs State (Persisted in localStorage)
   const [workoutLogs, setWorkoutLogs] = useState<TrainerWorkoutLog[]>(() => {
-    const saved = localStorage.getItem('rfa_trainer_workout_logs');
-    if (!saved) return INITIAL_WORKOUT_LOGS;
-    try {
-      return JSON.parse(saved);
-    } catch {
-      return INITIAL_WORKOUT_LOGS;
-    }
+    return loadWorkoutLogsFromStorage();
   });
 
   const saveWorkoutLogs = (logs: TrainerWorkoutLog[]) => {
     setWorkoutLogs(logs);
-    localStorage.setItem('rfa_trainer_workout_logs', JSON.stringify(logs));
+    saveWorkoutLogsToStorage(logs);
   };
 
-  // Modal: Add / Edit Workout Log
+  // Modal: Add / Edit Workout Log (Mode Fokus Pelatih)
   const [isLogModalOpen, setIsLogModalOpen] = useState(false);
   const [selectedScheduleForLog, setSelectedScheduleForLog] = useState<Schedule | null>(null);
-  const [logFocusArea, setLogFocusArea] = useState('Chest & Triceps');
+  const [selectedClientForLog, setSelectedClientForLog] = useState<{
+    memberId: string;
+    memberName: string;
+    phone: string;
+    ptQuota: number;
+    photo: string;
+    packageName: string;
+    totalPurchased: number;
+    completedCount: number;
+    lastSessionDate?: string;
+  } | null>(null);
+  const [editingLogId, setEditingLogId] = useState<string | null>(null);
+
+  // Form Fields for Mode Fokus Pelatih
+  const [logDate, setLogDate] = useState(APP_TODAY);
+  const [logTime, setLogTime] = useState('17:00');
+  const [logDuration, setLogDuration] = useState<number>(60);
+  const [logSessionNumber, setLogSessionNumber] = useState<number>(1);
+  const [logFocusArea, setLogFocusArea] = useState('Chest & Triceps Hypertrophy');
   const [logExercises, setLogExercises] = useState('');
   const [logRPE, setLogRPE] = useState<number>(8);
-  const [logCondition, setLogCondition] = useState<'Prima & Bertenaga' | 'Normal' | 'Lelah / Recovery' | 'Nyeri Otot Ringan'>('Prima & Bertenaga');
+  const [logCondition, setLogCondition] = useState<string>('Prima & Bertenaga');
+  const [logFormQuality, setLogFormQuality] = useState<'Sempurna' | 'Baik' | 'Perlu Perbaikan Form' | 'Kurang Stabil'>('Baik');
   const [logCoachNotes, setLogCoachNotes] = useState('');
   const [logNextGoal, setLogNextGoal] = useState('');
+  const [logWeightProgressKg, setLogWeightProgressKg] = useState<string>('');
+  const [logAutoValidateSession, setLogAutoValidateSession] = useState<boolean>(false);
+
+  // Focus Mode Live Session Stopwatch & Rest Interval Countdown
+  const [isFocusTimerRunning, setIsFocusTimerRunning] = useState(false);
+  const [focusSecondsElapsed, setFocusSecondsElapsed] = useState(0);
+  const [restTimerSeconds, setRestTimerSeconds] = useState(0);
+  const [isRestTimerRunning, setIsRestTimerRunning] = useState(false);
+  const [activeSetCount, setActiveSetCount] = useState(1);
+
+  // Modal: Client Workout History & Detail Progress
+  const [clientHistoryModal, setClientHistoryModal] = useState<{
+    memberId: string;
+    memberName: string;
+    phone: string;
+    ptQuota: number;
+    photo: string;
+    packageName: string;
+    totalPurchased: number;
+    completedCount: number;
+    lastSessionDate?: string;
+  } | null>(null);
+  const [historySearchQuery, setHistorySearchQuery] = useState('');
+  const [historyFocusFilter, setHistoryFocusFilter] = useState('all');
+
+  // Client List Filter & Search in Tab Klien Binaan
+  const [clientSearchQuery, setClientSearchQuery] = useState('');
+  const [clientFilterStatus, setClientFilterStatus] = useState<'all' | 'renewal' | 'has_logs' | 'no_logs'>('all');
+
+  // Live Timer Interval Effects
+  useEffect(() => {
+    let interval: any = null;
+    if (isFocusTimerRunning) {
+      interval = setInterval(() => {
+        setFocusSecondsElapsed((prev) => prev + 1);
+      }, 1000);
+    }
+    return () => clearInterval(interval);
+  }, [isFocusTimerRunning]);
+
+  useEffect(() => {
+    let interval: any = null;
+    if (isRestTimerRunning && restTimerSeconds > 0) {
+      interval = setInterval(() => {
+        setRestTimerSeconds((prev) => {
+          if (prev <= 1) {
+            setIsRestTimerRunning(false);
+            return 0;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+    }
+    return () => clearInterval(interval);
+  }, [isRestTimerRunning, restTimerSeconds]);
+
+  const formatTimerDigits = (totalSec: number) => {
+    const mins = Math.floor(totalSec / 60);
+    const secs = totalSec % 60;
+    return `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+  };
 
   // Modal: Quick Add Schedule from Trainer Portal
   const [isAddScheduleModalOpen, setIsAddScheduleModalOpen] = useState(false);
@@ -414,48 +460,164 @@ export const TrainerPortalView: React.FC<TrainerPortalViewProps> = ({
     onUpdateSchedule(updated);
   };
 
-  // Handler: Open Log Modal for a Schedule
-  const handleOpenLogForSchedule = (schedule: Schedule) => {
-    setSelectedScheduleForLog(schedule);
-    const existingLog = workoutLogs.find((l) => l.scheduleId === schedule.id);
+  // Handler: Open Log Modal for a Specific Client (Mode Fokus Pelatih)
+  const handleOpenLogForClient = (
+    client: {
+      memberId: string;
+      memberName: string;
+      phone: string;
+      ptQuota: number;
+      photo: string;
+      packageName: string;
+      totalPurchased: number;
+      completedCount: number;
+      lastSessionDate?: string;
+    },
+    existingLog?: TrainerWorkoutLog
+  ) => {
+    setSelectedClientForLog(client);
+    setSelectedScheduleForLog(null);
+
+    const pastLogs = workoutLogs.filter((l) => l.memberId === client.memberId);
+
     if (existingLog) {
+      setEditingLogId(existingLog.id);
+      setLogDate(existingLog.date);
+      setLogTime(existingLog.time || '17:00');
+      setLogDuration(existingLog.durationMinutes || 60);
+      setLogSessionNumber(existingLog.sessionNumber || (pastLogs.length > 0 ? pastLogs.length : 1));
       setLogFocusArea(existingLog.focusArea);
       setLogExercises(existingLog.exercisesSummary);
       setLogRPE(existingLog.rpeRate);
-      setLogCondition(existingLog.condition);
+      setLogCondition(existingLog.condition as any);
+      setLogFormQuality(existingLog.formQuality || 'Baik');
       setLogCoachNotes(existingLog.coachNotes);
       setLogNextGoal(existingLog.nextSessionGoal);
+      setLogWeightProgressKg(existingLog.weightProgressKg ? String(existingLog.weightProgressKg) : '');
+      setLogAutoValidateSession(false);
     } else {
-      setLogFocusArea(schedule.note || 'Chest & Triceps');
+      setEditingLogId(null);
+      // Check if client has a scheduled session today
+      const todaySch = trainerSchedules.find((s) => s.memberId === client.memberId && s.date === APP_TODAY);
+      setLogDate(APP_TODAY);
+      setLogTime(todaySch ? todaySch.time : '17:00');
+      setLogDuration(60);
+      setLogSessionNumber(pastLogs.length + 1);
+      setLogFocusArea(todaySch?.note || 'Chest & Triceps Hypertrophy');
       setLogExercises('');
       setLogRPE(8);
       setLogCondition('Prima & Bertenaga');
+      setLogFormQuality('Baik');
       setLogCoachNotes('');
       setLogNextGoal('');
+      setLogWeightProgressKg('');
+      setLogAutoValidateSession(todaySch ? todaySch.status === 'Menunggu' : false);
     }
+
+    // Reset and start live session stopwatch
+    setFocusSecondsElapsed(0);
+    setIsFocusTimerRunning(true);
+    setRestTimerSeconds(0);
+    setIsRestTimerRunning(false);
+    setActiveSetCount(1);
+
+    setIsLogModalOpen(true);
+  };
+
+  // Handler: Open Log Modal for a Schedule
+  const handleOpenLogForSchedule = (schedule: Schedule) => {
+    setSelectedScheduleForLog(schedule);
+    const client = myClients.find((c) => c.memberId === schedule.memberId) || {
+      memberId: schedule.memberId,
+      memberName: schedule.memberName,
+      phone: '081234567890',
+      ptQuota: 5,
+      photo: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=200&auto=format&fit=crop',
+      packageName: 'Program Personal Trainer',
+      totalPurchased: 10,
+      completedCount: 1,
+      lastSessionDate: schedule.date
+    };
+    setSelectedClientForLog(client);
+
+    const existingLog = workoutLogs.find((l) => l.scheduleId === schedule.id);
+    const pastLogs = workoutLogs.filter((l) => l.memberId === schedule.memberId);
+
+    if (existingLog) {
+      setEditingLogId(existingLog.id);
+      setLogDate(existingLog.date);
+      setLogTime(existingLog.time || schedule.time);
+      setLogDuration(existingLog.durationMinutes || 60);
+      setLogSessionNumber(existingLog.sessionNumber || schedule.sessionNumber || 1);
+      setLogFocusArea(existingLog.focusArea);
+      setLogExercises(existingLog.exercisesSummary);
+      setLogRPE(existingLog.rpeRate);
+      setLogCondition(existingLog.condition as any);
+      setLogFormQuality(existingLog.formQuality || 'Baik');
+      setLogCoachNotes(existingLog.coachNotes);
+      setLogNextGoal(existingLog.nextSessionGoal);
+      setLogWeightProgressKg(existingLog.weightProgressKg ? String(existingLog.weightProgressKg) : '');
+      setLogAutoValidateSession(false);
+    } else {
+      setEditingLogId(null);
+      setLogDate(schedule.date);
+      setLogTime(schedule.time);
+      setLogDuration(60);
+      setLogSessionNumber(schedule.sessionNumber || pastLogs.length + 1);
+      setLogFocusArea(schedule.note || 'Chest & Triceps Hypertrophy');
+      setLogExercises('');
+      setLogRPE(8);
+      setLogCondition('Prima & Bertenaga');
+      setLogFormQuality('Baik');
+      setLogCoachNotes('');
+      setLogNextGoal('');
+      setLogWeightProgressKg('');
+      setLogAutoValidateSession(schedule.status === 'Menunggu');
+    }
+
+    setFocusSecondsElapsed(0);
+    setIsFocusTimerRunning(true);
+    setRestTimerSeconds(0);
+    setIsRestTimerRunning(false);
+    setActiveSetCount(1);
+
     setIsLogModalOpen(true);
   };
 
   // Handler: Save Workout Log
   const handleSaveWorkoutLog = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedScheduleForLog) return;
+    const targetMemberId = selectedClientForLog?.memberId || selectedScheduleForLog?.memberId;
+    const targetMemberName = selectedClientForLog?.memberName || selectedScheduleForLog?.memberName || 'Member';
 
-    const existingIndex = workoutLogs.findIndex((l) => l.scheduleId === selectedScheduleForLog.id);
+    if (!targetMemberId) return;
+
+    const existingIndex = editingLogId
+      ? workoutLogs.findIndex((l) => l.id === editingLogId)
+      : selectedScheduleForLog
+      ? workoutLogs.findIndex((l) => l.scheduleId === selectedScheduleForLog.id)
+      : -1;
+
     const newEntry: TrainerWorkoutLog = {
-      id: existingIndex >= 0 ? workoutLogs[existingIndex].id : 'LOG-' + Date.now(),
-      scheduleId: selectedScheduleForLog.id,
+      id: editingLogId || (existingIndex >= 0 ? workoutLogs[existingIndex].id : 'LOG-' + Date.now()),
+      scheduleId: selectedScheduleForLog?.id,
       trainerId: activeTrainerId,
       trainerName: activeTrainerName,
-      memberId: selectedScheduleForLog.memberId,
-      memberName: selectedScheduleForLog.memberName,
-      date: selectedScheduleForLog.date,
+      memberId: targetMemberId,
+      memberName: targetMemberName,
+      date: logDate,
+      time: logTime,
+      sessionNumber: logSessionNumber,
+      durationMinutes: logDuration,
       focusArea: logFocusArea,
       exercisesSummary: logExercises || 'Latihan sesuai program periodisasi harian.',
       rpeRate: logRPE,
       condition: logCondition,
+      formQuality: logFormQuality,
       coachNotes: logCoachNotes || 'Sesi berlangsung dengan intensitas terukur dan form solid.',
-      nextSessionGoal: logNextGoal || 'Melanjutkan progres beban dan konsistensi diet protein.'
+      nextSessionGoal: logNextGoal || 'Melanjutkan progres beban dan konsistensi diet protein.',
+      weightProgressKg: logWeightProgressKg ? Number(logWeightProgressKg) : undefined,
+      createdAt: APP_TODAY
     };
 
     let updatedLogs: TrainerWorkoutLog[];
@@ -467,8 +629,59 @@ export const TrainerPortalView: React.FC<TrainerPortalViewProps> = ({
     }
 
     saveWorkoutLogs(updatedLogs);
+
+    // If auto-validate session is checked:
+    if (logAutoValidateSession) {
+      const matchSchedule =
+        selectedScheduleForLog ||
+        trainerSchedules.find((s) => s.memberId === targetMemberId && s.date === logDate);
+      if (matchSchedule) {
+        onUpdateSchedule({
+          ...matchSchedule,
+          status: 'Selesai',
+          valTrainer: true,
+          valStaf: true,
+          valMember: true
+        });
+        if (onUpdateMember) {
+          const mem = members.find((m) => m.id === targetMemberId);
+          if (mem && mem.ptQuota > 0) {
+            onUpdateMember({ ...mem, ptQuota: mem.ptQuota - 1 });
+          }
+        }
+      }
+    }
+
     setIsLogModalOpen(false);
-    showToast('Log Latihan Disimpan', `Catatan sesi untuk ${selectedScheduleForLog.memberName} berhasil diperbarui.`, 'success');
+    setIsFocusTimerRunning(false);
+    setIsRestTimerRunning(false);
+
+    showToast(
+      'Log Latihan Disimpan 🏋️',
+      `Catatan sesi (${formatDateIndo(logDate)}) untuk ${targetMemberName} berhasil disimpan.`,
+      'success'
+    );
+  };
+
+  // Handler: Delete Workout Log
+  const handleDeleteWorkoutLog = (logId: string) => {
+    const updated = workoutLogs.filter((l) => l.id !== logId);
+    saveWorkoutLogs(updated);
+    showToast('Log Dihapus', 'Catatan latihan telah dihapus dari sistem.', 'info');
+  };
+
+  // Handler: Share Workout to WhatsApp
+  const handleShareWorkoutToWhatsApp = (log: TrainerWorkoutLog) => {
+    const mem = members.find((m) => m.id === log.memberId);
+    const phone = mem?.phone ? mem.phone.replace(/[^0-9]/g, '') : '6281234567890';
+    const formattedPhone = phone.startsWith('0') ? '62' + phone.substring(1) : phone;
+
+    const message = encodeURIComponent(
+      `Halo Kak ${log.memberName}! 💪\n\nBerikut ringkasan hasil latihan Sesi Personal Trainer kita bersama Coach ${activeTrainerName}:\n\n📅 Tanggal: ${formatDateIndo(log.date)}\n⏰ Pukul: ${log.time || '17:00'} WIB (${log.durationMinutes || 60} Menit)\n🔢 Sesi Ke-: ${log.sessionNumber || '-'}\n🎯 Fokus Otot: ${log.focusArea}\n⚡ Intensitas: RPE ${log.rpeRate}/10 (${log.condition})\n⭐ Kualitas Form: ${log.formQuality || 'Baik'}${log.weightProgressKg ? `\n⚖️ Berat Badan: ${log.weightProgressKg} kg` : ''}\n\n📋 Rincian Gerakan & Beban:\n${log.exercisesSummary}\n\n📝 Evaluasi Pelatih:\n${log.coachNotes || '-'}\n\n🏆 Target Sesi Berikutnya:\n${log.nextSessionGoal || '-'}\n\nTerus jaga konsistensi, hidrasi, dan nutrisi proteinmu! Sampai jumpa di sesi berikutnya! 🚀`
+    );
+
+    window.open(`https://wa.me/${formattedPhone}?text=${message}`, '_blank');
+    showToast('WhatsApp Dibuka', `Membuka laporan sesi latihan untuk dikirim ke ${log.memberName}.`, 'info');
   };
 
   // Handler: Send WhatsApp Reminder
@@ -536,6 +749,22 @@ export const TrainerPortalView: React.FC<TrainerPortalViewProps> = ({
     showToast('Reschedule Berhasil', `Jadwal ${rescheduleTarget.memberName} dipindahkan ke ${formatDateIndo(rescheduleDate)} ${rescheduleTime}.`, 'info');
   };
 
+  if (isMobileMode) {
+    return (
+      <TrainerMobileFocusPortal
+        onBackToDesktop={() => setIsMobileMode(false)}
+        currentUser={activeTrainer}
+        schedules={schedules}
+        members={members}
+        workoutLogs={workoutLogs}
+        ptPurchases={ptPurchases}
+        onAddSchedule={onAddSchedule}
+        onUpdateSchedule={onUpdateSchedule}
+        showToast={showToast}
+      />
+    );
+  }
+
   return (
     <div className="space-y-6 pb-20 max-w-7xl mx-auto">
       {/* ========================================================================= */}
@@ -567,6 +796,14 @@ export const TrainerPortalView: React.FC<TrainerPortalViewProps> = ({
                 <span className="text-[10px] uppercase font-bold px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
                   Aktif Bertugas
                 </span>
+                <button
+                  type="button"
+                  onClick={() => setIsMobileMode(true)}
+                  className="text-[10px] uppercase font-bold px-3 py-1 rounded-full bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-400 hover:to-amber-400 text-zinc-950 shadow-md shadow-orange-500/20 cursor-pointer flex items-center gap-1.5 transition active:scale-95"
+                >
+                  <Smartphone className="w-3 h-3" />
+                  <span>📱 Buka Mode Mobile Web Smartphone</span>
+                </button>
               </div>
 
               <h2 className="text-xl sm:text-2xl font-black text-white tracking-tight mt-1.5 flex items-center gap-2">
@@ -1140,100 +1377,305 @@ export const TrainerPortalView: React.FC<TrainerPortalViewProps> = ({
       )}
 
       {/* ========================================================================= */}
-      {/* TAB 2: KLIEN BINAAN SAYA (ROSTER & QUOTA)                                 */}
+      {/* TAB 2: KLIEN BINAAN SAYA (ROSTER, QUOTA & DETAIL CATAT HASIL LATIHAN)     */}
       {/* ========================================================================= */}
       {activeTab === 'klien' && (
         <div className="space-y-4">
-          <div className="bg-zinc-900/60 border border-zinc-800 p-4 rounded-2xl flex items-center justify-between text-xs">
+          {/* Header & Controls Bar */}
+          <div className="bg-zinc-900/60 border border-zinc-800 p-4 rounded-2xl flex flex-col md:flex-row md:items-center justify-between gap-3 text-xs">
             <div>
-              <h4 className="font-bold text-white text-sm">Daftar Member yang Dilatih Oleh {activeTrainerName}</h4>
+              <div className="flex items-center gap-2">
+                <h4 className="font-bold text-white text-sm">Daftar Klien Binaan {activeTrainerName}</h4>
+                <span className="px-2 py-0.5 rounded-full bg-orange-500/20 text-orange-400 font-extrabold text-[10px] border border-orange-500/30">
+                  Mode Fokus Pelatih
+                </span>
+              </div>
               <p className="text-zinc-400 text-xs mt-0.5">
-                Pantau sisa kuota sesi member, lakukan follow-up jadwal, dan hubungi klien langsung.
+                Pantau sisa kuota, catat rincian hasil latihan per sesi (tanggal, jam, RPE, beban & form), serta evaluasi progres klien.
               </p>
             </div>
-            <span className="px-3 py-1 rounded-lg bg-orange-500/10 border border-orange-500/30 text-orange-400 font-bold">
-              Total: {myClients.length} Member
-            </span>
+
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="px-3 py-1.5 rounded-xl bg-orange-500/10 border border-orange-500/30 text-orange-400 font-bold">
+                Total: {myClients.length} Klien Binaan
+              </span>
+              <span className="px-3 py-1.5 rounded-xl bg-purple-500/10 border border-purple-500/30 text-purple-300 font-bold">
+                {workoutLogs.length} Catatan Sesi Tersimpan
+              </span>
+            </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {myClients.map((client) => {
-              const isQuotaLow = client.ptQuota <= 2;
-              return (
-                <div
-                  key={client.memberId}
-                  className={`bg-zinc-900/80 border rounded-2xl p-4 flex flex-col justify-between gap-4 transition hover:border-zinc-700 ${
-                    isQuotaLow ? 'border-amber-500/40 bg-amber-950/10' : 'border-zinc-800'
+          {/* Search & Filter Toolbar */}
+          <div className="bg-zinc-900/40 border border-zinc-800 p-3 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <span className="text-zinc-400 font-bold">Filter:</span>
+              {[
+                { id: 'all', label: `Semua Klien (${myClients.length})` },
+                { id: 'has_logs', label: 'Sudah Ada Log Latihan' },
+                { id: 'no_logs', label: 'Belum Ada Log Latihan' },
+                { id: 'renewal', label: 'Perlu Renewal (≤ 2 Sesi)' }
+              ].map((f) => (
+                <button
+                  key={f.id}
+                  onClick={() => setClientFilterStatus(f.id as any)}
+                  className={`px-3 py-1.5 rounded-xl font-bold transition text-xs ${
+                    clientFilterStatus === f.id
+                      ? 'bg-orange-500 text-zinc-950 shadow-sm'
+                      : 'bg-zinc-800/80 text-zinc-300 hover:bg-zinc-700'
                   }`}
                 >
-                  <div>
-                    <div className="flex items-center gap-3">
-                      <img
-                        src={client.photo}
-                        alt={client.memberName}
-                        className="w-12 h-12 rounded-xl object-cover border border-zinc-700"
-                      />
-                      <div className="min-w-0 flex-1">
-                        <h5 className="font-bold text-white truncate">{client.memberName}</h5>
-                        <p className="text-xs text-zinc-400 font-mono">{client.memberId} • {client.phone}</p>
-                        <span className="inline-block mt-1 text-[10px] px-2 py-0.5 rounded bg-zinc-800 text-zinc-300 font-semibold">
-                          {client.packageName}
-                        </span>
-                      </div>
-                    </div>
+                  {f.label}
+                </button>
+              ))}
+            </div>
 
-                    {/* Quota Status Box */}
-                    <div className="mt-4 bg-zinc-950/70 border border-zinc-800 rounded-xl p-3 flex items-center justify-between">
-                      <div>
-                        <span className="text-[10px] text-zinc-400 uppercase font-bold block">Sisa Kuota Latihan</span>
-                        <div className="flex items-baseline gap-1.5 mt-0.5">
-                          <span className={`text-xl font-black ${isQuotaLow ? 'text-amber-400' : 'text-emerald-400'}`}>
-                            {client.ptQuota} Sesi
-                          </span>
-                          <span className="text-xs text-zinc-500">/ {client.totalPurchased}</span>
-                        </div>
-                      </div>
+            <div className="relative">
+              <Search className="w-3.5 h-3.5 text-zinc-400 absolute left-3 top-2.5" />
+              <input
+                type="text"
+                placeholder="Cari nama atau ID klien..."
+                value={clientSearchQuery}
+                onChange={(e) => setClientSearchQuery(e.target.value)}
+                className="bg-zinc-900 border border-zinc-700 rounded-xl pl-8 pr-3 py-1.5 text-xs text-white placeholder-zinc-500 outline-none w-full sm:w-56 focus:border-orange-500"
+              />
+            </div>
+          </div>
 
-                      {isQuotaLow && (
-                        <div className="text-right">
-                          <span className="text-[9px] font-bold px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30 inline-block">
-                            Perlu Renewal!
-                          </span>
-                          <p className="text-[9px] text-zinc-500 mt-0.5">Sisa ≤ 2 sesi</p>
-                        </div>
-                      )}
-                    </div>
-                  </div>
+          {/* Client Cards Grid */}
+          {(() => {
+            const filteredClients = myClients.filter((client) => {
+              if (clientSearchQuery.trim()) {
+                const q = clientSearchQuery.toLowerCase();
+                const matchName = client.memberName.toLowerCase().includes(q);
+                const matchId = client.memberId.toLowerCase().includes(q);
+                if (!matchName && !matchId) return false;
+              }
 
-                  {/* Client Card Buttons */}
-                  <div className="pt-3 border-t border-zinc-800 flex items-center justify-between gap-2">
-                    <button
-                      onClick={() => {
-                        const phone = client.phone.replace(/[^0-9]/g, '');
-                        const formatted = phone.startsWith('0') ? '62' + phone.substring(1) : phone;
-                        window.open(`https://wa.me/${formatted}`, '_blank');
-                      }}
-                      className="px-3 py-1.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-emerald-400 border border-zinc-700 text-xs font-bold transition flex items-center gap-1.5"
-                    >
-                      <Phone className="w-3.5 h-3.5" />
-                      <span>Chat WA</span>
-                    </button>
+              const logs = workoutLogs.filter((l) => l.memberId === client.memberId);
+              if (clientFilterStatus === 'has_logs' && logs.length === 0) return false;
+              if (clientFilterStatus === 'no_logs' && logs.length > 0) return false;
+              if (clientFilterStatus === 'renewal' && client.ptQuota > 2) return false;
 
-                    <button
-                      onClick={() => {
-                        setNewSchMemberId(client.memberId);
-                        setIsAddScheduleModalOpen(true);
-                      }}
-                      className="px-3.5 py-1.5 rounded-xl bg-orange-500 hover:bg-orange-400 text-zinc-950 text-xs font-black transition flex items-center gap-1.5"
-                    >
-                      <Plus className="w-3.5 h-3.5" />
-                      <span>Atur Sesi Baru</span>
-                    </button>
-                  </div>
+              return true;
+            });
+
+            if (filteredClients.length === 0) {
+              return (
+                <div className="bg-zinc-900/40 border border-zinc-800 rounded-2xl p-10 text-center text-zinc-400">
+                  <Users className="w-12 h-12 mx-auto text-zinc-600 mb-2" />
+                  <p className="font-bold text-white text-sm">Tidak ada klien binaan yang sesuai filter</p>
+                  <p className="text-xs text-zinc-500 mt-1">
+                    Coba ganti kata kunci pencarian atau ubah filter status di atas.
+                  </p>
                 </div>
               );
-            })}
-          </div>
+            }
+
+            return (
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                {filteredClients.map((client) => {
+                  const isQuotaLow = client.ptQuota <= 2;
+                  const clientLogs = workoutLogs
+                    .filter((l) => l.memberId === client.memberId)
+                    .sort((a, b) => b.date.localeCompare(a.date));
+                  const latestLog = clientLogs[0] || null;
+
+                  return (
+                    <div
+                      key={client.memberId}
+                      className={`bg-zinc-900/80 border rounded-3xl p-5 flex flex-col justify-between gap-4 transition hover:border-zinc-700 ${
+                        isQuotaLow ? 'border-amber-500/40 bg-amber-950/10' : 'border-zinc-800'
+                      }`}
+                    >
+                      <div className="space-y-4">
+                        {/* Client Identity Header */}
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="flex items-center gap-3.5 min-w-0">
+                            <img
+                              src={client.photo}
+                              alt={client.memberName}
+                              className="w-13 h-13 rounded-2xl object-cover border-2 border-orange-500/50 shrink-0"
+                            />
+                            <div className="min-w-0">
+                              <div className="flex items-center gap-2">
+                                <h5 className="font-extrabold text-white text-base truncate">{client.memberName}</h5>
+                                {clientLogs.length > 0 && (
+                                  <span className="px-2 py-0.5 rounded-md bg-emerald-500/20 text-emerald-300 font-extrabold text-[10px] border border-emerald-500/30 shrink-0">
+                                    {clientLogs.length} Sesi Tercatat
+                                  </span>
+                                )}
+                              </div>
+                              <p className="text-xs text-zinc-400 font-mono mt-0.5">
+                                {client.memberId} • {client.phone}
+                              </p>
+                              <span className="inline-block mt-1 text-[10px] px-2.5 py-0.5 rounded-lg bg-zinc-800/90 text-orange-300 font-bold border border-zinc-700">
+                                🏋️ {client.packageName}
+                              </span>
+                            </div>
+                          </div>
+
+                          {/* Quota Badge */}
+                          <div className="text-right shrink-0">
+                            <span className="text-[10px] text-zinc-400 uppercase font-bold block">Sisa Kuota</span>
+                            <div className="flex items-baseline justify-end gap-1 mt-0.5">
+                              <span className={`text-xl font-black ${isQuotaLow ? 'text-amber-400' : 'text-emerald-400'}`}>
+                                {client.ptQuota}
+                              </span>
+                              <span className="text-xs text-zinc-500">/ {client.totalPurchased} Sesi</span>
+                            </div>
+                            {isQuotaLow && (
+                              <span className="text-[9px] font-extrabold px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30 inline-block mt-1">
+                                Perlu Renewal
+                              </span>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* DETAIL CATATAN HASIL LATIHAN TERAKHIR (MODE FOKUS PELATIH) */}
+                        <div className="bg-zinc-950/80 border border-zinc-800/90 rounded-2xl p-4 space-y-3">
+                          <div className="flex items-center justify-between border-b border-zinc-800 pb-2.5">
+                            <div className="flex items-center gap-2">
+                              <div className="w-6 h-6 rounded-lg bg-orange-500/20 text-orange-400 flex items-center justify-center font-black">
+                                <Dumbbell className="w-3.5 h-3.5" />
+                              </div>
+                              <span className="text-xs font-black text-white uppercase tracking-wider">
+                                Catatan Hasil Latihan Terakhir
+                              </span>
+                            </div>
+
+                            {latestLog ? (
+                              <div className="flex items-center gap-2">
+                                <span className="text-[11px] font-mono font-bold text-orange-400 bg-orange-500/10 px-2 py-0.5 rounded-md border border-orange-500/20">
+                                  📅 {formatDateIndo(latestLog.date)}
+                                </span>
+                              </div>
+                            ) : (
+                              <span className="text-[10px] text-zinc-500 font-bold">Belum Ada Sesi</span>
+                            )}
+                          </div>
+
+                          {latestLog ? (
+                            <div className="space-y-2.5 text-xs">
+                              {/* Session Metadata Badges */}
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <span className="px-2.5 py-0.5 rounded-md bg-zinc-900 border border-zinc-800 text-zinc-300 text-[11px] font-bold flex items-center gap-1">
+                                  <Clock className="w-3 h-3 text-orange-400" />
+                                  <span>{latestLog.time || '17:00'} WIB ({latestLog.durationMinutes || 60} Menit)</span>
+                                </span>
+
+                                <span className="px-2.5 py-0.5 rounded-md bg-blue-500/15 border border-blue-500/30 text-blue-300 text-[11px] font-bold">
+                                  Sesi ke-{latestLog.sessionNumber || 1}
+                                </span>
+
+                                <span className="px-2.5 py-0.5 rounded-md bg-purple-500/15 border border-purple-500/30 text-purple-300 text-[11px] font-bold">
+                                  Intensitas: RPE {latestLog.rpeRate}/10
+                                </span>
+
+                                <span className="px-2.5 py-0.5 rounded-md bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 text-[11px] font-bold">
+                                  {latestLog.condition}
+                                </span>
+
+                                {latestLog.formQuality && (
+                                  <span className="px-2 py-0.5 rounded-md bg-amber-500/15 border border-amber-500/30 text-amber-300 text-[11px] font-bold">
+                                    Form: {latestLog.formQuality}
+                                  </span>
+                                )}
+
+                                {latestLog.weightProgressKg && (
+                                  <span className="px-2 py-0.5 rounded-md bg-zinc-800 text-zinc-200 text-[11px] font-mono font-bold">
+                                    ⚖️ {latestLog.weightProgressKg} kg
+                                  </span>
+                                )}
+                              </div>
+
+                              {/* Muscle Focus */}
+                              <div className="flex items-center gap-2">
+                                <span className="text-zinc-400 font-bold">Fokus Otot:</span>
+                                <span className="text-orange-400 font-black">{latestLog.focusArea}</span>
+                              </div>
+
+                              {/* Exercises & Weights Preview */}
+                              <div className="bg-zinc-900/90 border border-zinc-800/80 rounded-xl p-3 text-zinc-200 font-mono text-[11px] whitespace-pre-line leading-relaxed max-h-28 overflow-y-auto">
+                                {latestLog.exercisesSummary}
+                              </div>
+
+                              {/* Coach Evaluation & Next Goal */}
+                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px] pt-1">
+                                <div className="bg-zinc-900/50 p-2.5 rounded-xl border border-zinc-800">
+                                  <span className="text-zinc-400 font-bold block mb-0.5">📝 Evaluasi Pelatih:</span>
+                                  <p className="text-zinc-300 line-clamp-2">{latestLog.coachNotes || '-'}</p>
+                                </div>
+                                <div className="bg-zinc-900/50 p-2.5 rounded-xl border border-zinc-800">
+                                  <span className="text-orange-400 font-bold block mb-0.5">🏆 Target Sesi Berikutnya:</span>
+                                  <p className="text-zinc-300 line-clamp-2">{latestLog.nextSessionGoal || '-'}</p>
+                                </div>
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="py-4 text-center text-zinc-500 text-xs space-y-1">
+                              <p className="font-semibold text-zinc-400">Belum ada catatan sesi latihan untuk {client.memberName}.</p>
+                              <p className="text-[11px]">
+                                Klik tombol <strong>Catat Hasil Latihan</strong> untuk memasukkan tanggal, jam, latihan & beban, serta evaluasi teknik.
+                              </p>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Interactive Action Buttons */}
+                      <div className="pt-3 border-t border-zinc-800 flex items-center justify-between gap-2 flex-wrap">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <button
+                            onClick={() => handleOpenLogForClient(client)}
+                            className="px-3.5 py-2 rounded-xl bg-orange-500 hover:bg-orange-400 text-zinc-950 font-black text-xs transition flex items-center gap-1.5 shadow-md shadow-orange-500/20 active:scale-95"
+                            title="Buka Mode Fokus Pelatih untuk mencatat hasil latihan sesi ini (tanggal, waktu, beban, RPE, evaluasi)"
+                          >
+                            <Zap className="w-4 h-4 fill-zinc-950" />
+                            <span>Catat Hasil Latihan (Mode Fokus)</span>
+                          </button>
+
+                          <button
+                            onClick={() => setClientHistoryModal(client)}
+                            className="px-3 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-200 border border-zinc-700 text-xs font-bold transition flex items-center gap-1.5"
+                            title="Lihat semua riwayat hasil latihan klien ini"
+                          >
+                            <FileText className="w-3.5 h-3.5 text-orange-400" />
+                            <span>Riwayat ({clientLogs.length})</span>
+                          </button>
+                        </div>
+
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={() => {
+                              setNewSchMemberId(client.memberId);
+                              setIsAddScheduleModalOpen(true);
+                            }}
+                            className="px-3 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs font-bold transition flex items-center gap-1"
+                            title="Atur jadwal sesi latihan baru"
+                          >
+                            <Plus className="w-3.5 h-3.5" />
+                            <span>Jadwal</span>
+                          </button>
+
+                          <button
+                            onClick={() => {
+                              const phone = client.phone.replace(/[^0-9]/g, '');
+                              const formatted = phone.startsWith('0') ? '62' + phone.substring(1) : phone;
+                              window.open(`https://wa.me/${formatted}`, '_blank');
+                            }}
+                            className="p-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-emerald-400 border border-zinc-700 transition"
+                            title="Hubungi klien via WhatsApp"
+                          >
+                            <Phone className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            );
+          })()}
         </div>
       )}
 
@@ -1504,125 +1946,630 @@ export const TrainerPortalView: React.FC<TrainerPortalViewProps> = ({
       )}
 
       {/* ========================================================================= */}
-      {/* MODAL: CATAT LOG LATIHAN (WORKOUT LOG MODAL)                              */}
+      {/* MODAL: MODE FOKUS PELATIH — CATAT RINCIAN HASIL LATIHAN                   */}
       {/* ========================================================================= */}
-      {isLogModalOpen && selectedScheduleForLog && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-3 sm:p-4 overflow-y-auto">
-          <div className="bg-zinc-900 border border-zinc-700 text-white rounded-3xl shadow-2xl w-full max-w-xl my-auto p-4 sm:p-6 max-h-[92vh] overflow-y-auto space-y-5">
-            <div className="flex items-center justify-between border-b border-zinc-800 pb-4">
+      {isLogModalOpen && (selectedClientForLog || selectedScheduleForLog) && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-md p-3 sm:p-4 overflow-y-auto">
+          <div className="bg-zinc-950 border border-zinc-700 text-white rounded-3xl shadow-2xl w-full max-w-2xl my-auto p-4 sm:p-6 max-h-[94vh] overflow-y-auto space-y-5">
+            {/* Modal Header */}
+            <div className="flex items-start justify-between border-b border-zinc-800 pb-4 gap-3">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-2xl bg-orange-500/20 text-orange-400 flex items-center justify-center">
-                  <Edit3 className="w-5 h-5" />
+                <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-orange-500 to-amber-600 text-zinc-950 flex items-center justify-center font-black shadow-lg shadow-orange-500/20 shrink-0">
+                  <Zap className="w-6 h-6 fill-zinc-950" />
                 </div>
                 <div>
-                  <h3 className="font-bold text-white text-base">Catat Log Latihan Sesi</h3>
-                  <p className="text-xs text-zinc-400">
-                    {selectedScheduleForLog.memberName} • {formatDateIndo(selectedScheduleForLog.date)} ({selectedScheduleForLog.time} WIB)
+                  <div className="flex items-center gap-2">
+                    <h3 className="font-extrabold text-white text-base sm:text-lg">
+                      Mode Fokus Pelatih — Catat Hasil Latihan
+                    </h3>
+                    <span className="px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 font-extrabold text-[10px] border border-emerald-500/30">
+                      LIVE COACHING
+                    </span>
+                  </div>
+                  <p className="text-xs text-zinc-400 mt-0.5">
+                    Klien: <strong className="text-white">{selectedClientForLog?.memberName || selectedScheduleForLog?.memberName}</strong> ({selectedClientForLog?.memberId || selectedScheduleForLog?.memberId}) • Pelatih: <span className="text-orange-400 font-bold">{activeTrainerName}</span>
                   </p>
                 </div>
               </div>
+
               <button
-                onClick={() => setIsLogModalOpen(false)}
+                type="button"
+                onClick={() => {
+                  setIsLogModalOpen(false);
+                  setIsFocusTimerRunning(false);
+                  setIsRestTimerRunning(false);
+                }}
+                className="w-8 h-8 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-white flex items-center justify-center shrink-0"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* LIVE FOCUS MODE TOOLBAR: STOPWATCH SESI, JEDA ISTIRAHAT & SET COUNTER */}
+            <div className="bg-zinc-900/90 border border-zinc-800 p-3.5 rounded-2xl flex flex-wrap items-center justify-between gap-3 text-xs">
+              {/* 1. Live Session Stopwatch */}
+              <div className="flex items-center gap-2.5">
+                <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-zinc-950 border border-zinc-800">
+                  <Timer className="w-4 h-4 text-orange-400" />
+                  <span className="text-zinc-400 text-[11px] font-bold">Stopwatch Sesi:</span>
+                  <span className="font-mono font-black text-white text-sm">
+                    {formatTimerDigits(focusSecondsElapsed)}
+                  </span>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setIsFocusTimerRunning(!isFocusTimerRunning)}
+                  className={`p-1.5 rounded-lg border transition ${
+                    isFocusTimerRunning
+                      ? 'bg-amber-500/20 text-amber-300 border-amber-500/30'
+                      : 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30'
+                  }`}
+                  title={isFocusTimerRunning ? 'Jeda Stopwatch' : 'Jalankan Stopwatch'}
+                >
+                  {isFocusTimerRunning ? <Pause className="w-3.5 h-3.5" /> : <Play className="w-3.5 h-3.5" />}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsFocusTimerRunning(false);
+                    setFocusSecondsElapsed(0);
+                  }}
+                  className="p-1.5 rounded-lg bg-zinc-800 text-zinc-400 hover:text-white border border-zinc-700 transition"
+                  title="Reset Stopwatch"
+                >
+                  <RotateCcw className="w-3.5 h-3.5" />
+                </button>
+              </div>
+
+              {/* 2. Rest Interval Timer */}
+              <div className="flex items-center gap-1.5">
+                <span className="text-zinc-400 text-[11px] font-bold">Jeda Set:</span>
+                {[60, 90, 120].map((sec) => (
+                  <button
+                    key={sec}
+                    type="button"
+                    onClick={() => {
+                      setRestTimerSeconds(sec);
+                      setIsRestTimerRunning(true);
+                    }}
+                    className={`px-2 py-1 rounded-lg font-bold text-[11px] transition ${
+                      restTimerSeconds === sec && isRestTimerRunning
+                        ? 'bg-orange-500 text-zinc-950 animate-pulse'
+                        : 'bg-zinc-800 text-zinc-300 hover:bg-zinc-700'
+                    }`}
+                  >
+                    {sec}s
+                  </button>
+                ))}
+
+                {isRestTimerRunning && (
+                  <span className="px-2 py-0.5 rounded-md bg-rose-500/20 border border-rose-500/30 text-rose-300 font-mono font-black text-xs animate-ping ml-1">
+                    {restTimerSeconds}s
+                  </span>
+                )}
+              </div>
+
+              {/* 3. Completed Set Counter */}
+              <div className="flex items-center gap-1.5 bg-zinc-950 px-2.5 py-1 rounded-xl border border-zinc-800">
+                <span className="text-[11px] text-zinc-400 font-bold">Set:</span>
+                <button
+                  type="button"
+                  onClick={() => setActiveSetCount(Math.max(1, activeSetCount - 1))}
+                  className="w-5 h-5 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-300 font-black flex items-center justify-center text-xs"
+                >
+                  -
+                </button>
+                <span className="font-black text-orange-400 text-xs px-1">{activeSetCount}</span>
+                <button
+                  type="button"
+                  onClick={() => setActiveSetCount(activeSetCount + 1)}
+                  className="w-5 h-5 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-300 font-black flex items-center justify-center text-xs"
+                >
+                  +
+                </button>
+              </div>
+            </div>
+
+            {/* FORM INPUT DETAIL CATATAN LATIHAN */}
+            <form onSubmit={handleSaveWorkoutLog} className="space-y-4 text-xs">
+              {/* Row 1: Tanggal Latihan, Jam Sesi & Durasi */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                {/* Tanggal Latihan */}
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="text-zinc-300 font-bold flex items-center gap-1">
+                      <Calendar className="w-3.5 h-3.5 text-orange-400" />
+                      <span>Tanggal Latihan</span>
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => setLogDate(APP_TODAY)}
+                      className="text-[10px] text-orange-400 hover:underline font-bold"
+                    >
+                      Hari Ini
+                    </button>
+                  </div>
+                  <input
+                    type="date"
+                    required
+                    value={logDate}
+                    onChange={(e) => setLogDate(e.target.value)}
+                    className="w-full bg-zinc-900 border border-zinc-700 rounded-xl px-3 py-2 text-white outline-none focus:border-orange-500 font-bold"
+                  />
+                </div>
+
+                {/* Jam Sesi */}
+                <div>
+                  <label className="text-zinc-300 font-bold block mb-1 flex items-center gap-1">
+                    <Clock className="w-3.5 h-3.5 text-orange-400" />
+                    <span>Waktu / Jam Sesi</span>
+                  </label>
+                  <input
+                    type="time"
+                    required
+                    value={logTime}
+                    onChange={(e) => setLogTime(e.target.value)}
+                    className="w-full bg-zinc-900 border border-zinc-700 rounded-xl px-3 py-2 text-white outline-none focus:border-orange-500 font-mono font-bold"
+                  />
+                </div>
+
+                {/* Durasi Sesi & Sesi Ke- */}
+                <div>
+                  <label className="text-zinc-300 font-bold block mb-1 flex items-center gap-1">
+                    <Activity className="w-3.5 h-3.5 text-emerald-400" />
+                    <span>Durasi & Sesi Ke-</span>
+                  </label>
+                  <div className="flex items-center gap-2">
+                    <select
+                      value={logDuration}
+                      onChange={(e) => setLogDuration(Number(e.target.value))}
+                      className="w-1/2 bg-zinc-900 border border-zinc-700 rounded-xl px-2.5 py-2 text-white outline-none focus:border-orange-500 font-bold"
+                    >
+                      <option value={30}>30 Mnt</option>
+                      <option value={45}>45 Mnt</option>
+                      <option value={60}>60 Mnt</option>
+                      <option value={90}>90 Mnt</option>
+                      <option value={120}>120 Mnt</option>
+                    </select>
+
+                    <div className="w-1/2 flex items-center bg-zinc-900 border border-zinc-700 rounded-xl px-2 py-1.5">
+                      <span className="text-[10px] text-zinc-400 mr-1">Sesi:</span>
+                      <input
+                        type="number"
+                        min={1}
+                        value={logSessionNumber}
+                        onChange={(e) => setLogSessionNumber(Number(e.target.value))}
+                        className="w-full bg-transparent text-white font-mono font-black text-xs outline-none"
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Row 2: Fokus Otot & Bagian Tubuh */}
+              <div>
+                <label className="text-zinc-300 font-bold block mb-1.5 flex items-center justify-between">
+                  <span className="flex items-center gap-1.5">
+                    <Dumbbell className="w-3.5 h-3.5 text-orange-400" />
+                    <span>Fokus Otot / Bagian Tubuh</span>
+                  </span>
+                  <span className="text-[10px] text-zinc-500">Klik pill untuk memilih cepat</span>
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={logFocusArea}
+                  onChange={(e) => setLogFocusArea(e.target.value)}
+                  placeholder="Contoh: Chest & Triceps Hypertrophy, Back & Biceps, Leg Day & Core"
+                  className="w-full bg-zinc-900 border border-zinc-700 rounded-xl px-3.5 py-2.5 text-white outline-none focus:border-orange-500 font-bold"
+                />
+
+                {/* Quick Muscle Group Pills */}
+                <div className="flex items-center gap-1.5 flex-wrap mt-2">
+                  {[
+                    'Chest & Triceps',
+                    'Back & Biceps',
+                    'Leg Day & Squat',
+                    'Shoulder & Traps',
+                    'Full Body Power',
+                    'Core & Abs Strength',
+                    'Glutes & Hamstrings',
+                    'Mobility & Conditioning'
+                  ].map((muscle) => (
+                    <button
+                      key={muscle}
+                      type="button"
+                      onClick={() => setLogFocusArea(muscle)}
+                      className={`px-2 py-0.5 rounded-lg text-[10px] font-bold border transition ${
+                        logFocusArea === muscle
+                          ? 'bg-orange-500 text-zinc-950 border-orange-500'
+                          : 'bg-zinc-800/80 text-zinc-400 hover:text-white border-zinc-700'
+                      }`}
+                    >
+                      {muscle}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Row 3: Rincian Latihan & Beban (Progressive Overload) */}
+              <div>
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="text-zinc-300 font-bold flex items-center gap-1.5">
+                    <Flame className="w-3.5 h-3.5 text-rose-400" />
+                    <span>Rincian Latihan & Beban (Gerakan, Set, Reps, Beban Kg)</span>
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const template = '\n• Barbell Bench Press 4x8 @ 65kg\n• Incline DB Press 3x10 @ 22kg\n• Cable Pushdown 4x12 @ 25kg';
+                      setLogExercises((prev) => (prev ? prev + template : template.trim()));
+                    }}
+                    className="text-[10px] text-orange-400 hover:underline font-bold"
+                  >
+                    + Sisipkan Template Format
+                  </button>
+                </div>
+
+                {/* Quick Exercise Library Buttons */}
+                <div className="flex items-center gap-1 flex-wrap mb-2">
+                  <span className="text-[10px] text-zinc-500 font-bold mr-1">Gerakan:</span>
+                  {[
+                    'Bench Press',
+                    'Back Squat',
+                    'Deadlift',
+                    'Incline DB',
+                    'Lat Pulldown',
+                    'Barbell Row',
+                    'Leg Press',
+                    'OHP',
+                    'Romanian DL',
+                    'Hip Thrust'
+                  ].map((ex) => (
+                    <button
+                      key={ex}
+                      type="button"
+                      onClick={() => {
+                        const line = `\n• ${ex} 4x10 @ kg`;
+                        setLogExercises((prev) => (prev ? prev + line : `• ${ex} 4x10 @ kg`));
+                      }}
+                      className="px-2 py-0.5 rounded bg-zinc-800 text-zinc-300 hover:text-white text-[10px] font-mono border border-zinc-700"
+                    >
+                      +{ex}
+                    </button>
+                  ))}
+                </div>
+
+                <textarea
+                  rows={4}
+                  required
+                  value={logExercises}
+                  onChange={(e) => setLogExercises(e.target.value)}
+                  placeholder="Contoh:&#10;1. Barbell Bench Press 4x8 @ 70kg (PR!)&#10;2. Incline DB Press 3x10 @ 24kg&#10;3. Dips Bodyweight 3x12&#10;4. Rope Triceps Pushdown 4x15 @ 25kg"
+                  className="w-full bg-zinc-900 border border-zinc-700 rounded-xl px-3.5 py-2.5 text-white font-mono text-xs outline-none focus:border-orange-500 leading-relaxed"
+                />
+              </div>
+
+              {/* Row 4: Intensitas RPE, Kondisi Fisik, Kualitas Form & Berat Badan */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                {/* RPE 1-10 */}
+                <div>
+                  <label className="text-zinc-300 font-bold block mb-1.5 flex items-center justify-between">
+                    <span>Intensitas (RPE)</span>
+                    <span className="text-orange-400 font-black">{logRPE}/10</span>
+                  </label>
+                  <select
+                    value={logRPE}
+                    onChange={(e) => setLogRPE(Number(e.target.value))}
+                    className="w-full bg-zinc-900 border border-zinc-700 rounded-xl px-2.5 py-2 text-white outline-none focus:border-orange-500 font-bold"
+                  >
+                    {[6, 7, 8, 9, 10].map((num) => (
+                      <option key={num} value={num}>
+                        RPE {num} ({num <= 7 ? 'Sedang' : num === 8 ? 'Intensif' : 'Maksimal / PR'})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Kondisi Fisik */}
+                <div>
+                  <label className="text-zinc-300 font-bold block mb-1.5">Kondisi Fisik Klien</label>
+                  <select
+                    value={logCondition}
+                    onChange={(e) => setLogCondition(e.target.value)}
+                    className="w-full bg-zinc-900 border border-zinc-700 rounded-xl px-2.5 py-2 text-white outline-none focus:border-orange-500 font-bold"
+                  >
+                    <option value="Prima & Bertenaga">Prima & Bertenaga</option>
+                    <option value="Normal">Normal</option>
+                    <option value="Lelah / Recovery">Lelah / Recovery</option>
+                    <option value="Nyeri Otot Ringan">Nyeri Otot Ringan</option>
+                    <option value="Kurang Tidur / Lelah">Kurang Tidur / Lelah</option>
+                  </select>
+                </div>
+
+                {/* Kualitas Form */}
+                <div>
+                  <label className="text-zinc-300 font-bold block mb-1.5">Kualitas Form / Teknik</label>
+                  <select
+                    value={logFormQuality}
+                    onChange={(e: any) => setLogFormQuality(e.target.value)}
+                    className="w-full bg-zinc-900 border border-zinc-700 rounded-xl px-2.5 py-2 text-white outline-none focus:border-orange-500 font-bold"
+                  >
+                    <option value="Sempurna">⭐ Sempurna & Terkontrol</option>
+                    <option value="Baik">👍 Baik</option>
+                    <option value="Perlu Perbaikan Form">⚠️ Perlu Koreksi Form</option>
+                    <option value="Kurang Stabil">❌ Kurang Stabil</option>
+                  </select>
+                </div>
+
+                {/* Catatan Berat Badan (Kg) */}
+                <div>
+                  <label className="text-zinc-300 font-bold block mb-1.5 flex items-center gap-1">
+                    <Scale className="w-3 h-3 text-cyan-400" />
+                    <span>Berat Badan (Kg)</span>
+                  </label>
+                  <input
+                    type="number"
+                    step="0.1"
+                    placeholder="Misal: 72.5"
+                    value={logWeightProgressKg}
+                    onChange={(e) => setLogWeightProgressKg(e.target.value)}
+                    className="w-full bg-zinc-900 border border-zinc-700 rounded-xl px-2.5 py-2 text-white font-mono text-xs outline-none focus:border-orange-500"
+                  />
+                </div>
+              </div>
+
+              {/* Row 5: Evaluasi Pelatih & Target Sesi Berikutnya */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="text-zinc-300 font-bold block mb-1.5">📝 Evaluasi Form & Catatan Pelatih</label>
+                  <input
+                    type="text"
+                    value={logCoachNotes}
+                    onChange={(e) => setLogCoachNotes(e.target.value)}
+                    placeholder="Contoh: Form squat membaik, bracing core kuat, tempo stabil."
+                    className="w-full bg-zinc-900 border border-zinc-700 rounded-xl px-3 py-2 text-white outline-none focus:border-orange-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-orange-400 font-bold block mb-1.5">🏆 Target Sesi Berikutnya (Progressive Overload)</label>
+                  <input
+                    type="text"
+                    value={logNextGoal}
+                    onChange={(e) => setLogNextGoal(e.target.value)}
+                    placeholder="Contoh: Naikkan bench press ke 75kg 3x6 atau fokus deadlift 4x8."
+                    className="w-full bg-zinc-900 border border-zinc-700 rounded-xl px-3 py-2 text-white outline-none focus:border-orange-500"
+                  />
+                </div>
+              </div>
+
+              {/* Checkbox: Auto Validate Schedule */}
+              <div className="p-3 rounded-xl bg-zinc-900/80 border border-zinc-800 flex items-center gap-2.5">
+                <input
+                  type="checkbox"
+                  id="autoValidateCheck"
+                  checked={logAutoValidateSession}
+                  onChange={(e) => setLogAutoValidateSession(e.target.checked)}
+                  className="w-4 h-4 rounded text-orange-500 bg-zinc-800 border-zinc-700 focus:ring-orange-500 cursor-pointer"
+                />
+                <label htmlFor="autoValidateCheck" className="text-xs text-zinc-300 cursor-pointer select-none">
+                  Tandai sesi jadwal hari ini sebagai <strong>Selesai (Completed)</strong> & sahkan validasi tanda tangan pelatih.
+                </label>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="pt-3 border-t border-zinc-800 flex items-center justify-end gap-2.5">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsLogModalOpen(false);
+                    setIsFocusTimerRunning(false);
+                    setIsRestTimerRunning(false);
+                  }}
+                  className="px-4 py-2.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 font-bold text-xs"
+                >
+                  Batal
+                </button>
+
+                <button
+                  type="submit"
+                  className="px-6 py-2.5 rounded-xl bg-orange-500 hover:bg-orange-400 text-zinc-950 font-black text-xs shadow-lg shadow-orange-500/20 flex items-center gap-2 active:scale-95 transition"
+                >
+                  <Save className="w-4 h-4" />
+                  <span>Simpan Hasil Latihan</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* MODAL: RIWAYAT LENGKAP HASIL LATIHAN KLIEN                                */}
+      {/* ========================================================================= */}
+      {clientHistoryModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-md p-3 sm:p-4 overflow-y-auto">
+          <div className="bg-zinc-950 border border-zinc-700 text-white rounded-3xl shadow-2xl w-full max-w-3xl my-auto p-4 sm:p-6 max-h-[94vh] overflow-y-auto space-y-5">
+            {/* Header */}
+            <div className="flex items-start justify-between border-b border-zinc-800 pb-4 gap-3">
+              <div className="flex items-center gap-3.5">
+                <img
+                  src={clientHistoryModal.photo}
+                  alt={clientHistoryModal.memberName}
+                  className="w-13 h-13 rounded-2xl object-cover border-2 border-orange-500/50"
+                />
+                <div>
+                  <h3 className="font-extrabold text-white text-base sm:text-lg flex items-center gap-2">
+                    <span>Riwayat Hasil Latihan — {clientHistoryModal.memberName}</span>
+                  </h3>
+                  <p className="text-xs text-zinc-400 font-mono mt-0.5">
+                    ID: {clientHistoryModal.memberId} • Paket: {clientHistoryModal.packageName} • Sisa Kuota: <span className="text-orange-400 font-bold">{clientHistoryModal.ptQuota} Sesi</span>
+                  </p>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setClientHistoryModal(null)}
                 className="w-8 h-8 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-white flex items-center justify-center"
               >
                 <X className="w-4 h-4" />
               </button>
             </div>
 
-            <form onSubmit={handleSaveWorkoutLog} className="space-y-4 text-xs">
-              <div>
-                <label className="text-zinc-400 font-bold block mb-1.5">Fokus Otot / Bagian Tubuh</label>
-                <input
-                  type="text"
-                  required
-                  value={logFocusArea}
-                  onChange={(e) => setLogFocusArea(e.target.value)}
-                  placeholder="Contoh: Chest & Triceps Hypertrophy, Back Day, Legs & Core"
-                  className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-3.5 py-2.5 text-white outline-none focus:border-orange-500"
-                />
-              </div>
+            {/* Quick Metrics & Action to Record New */}
+            {(() => {
+              const allClientLogs = workoutLogs
+                .filter((l) => l.memberId === clientHistoryModal.memberId)
+                .sort((a, b) => b.date.localeCompare(a.date));
 
-              <div>
-                <label className="text-zinc-400 font-bold block mb-1.5">Rincian Latihan & Beban (Exercises & Weights)</label>
-                <textarea
-                  rows={4}
-                  required
-                  value={logExercises}
-                  onChange={(e) => setLogExercises(e.target.value)}
-                  placeholder="Contoh:&#10;1. Bench Press 4x10 @ 65kg&#10;2. Incline DB Press 3x12 @ 22kg&#10;3. Triceps Pushdown 4x15 @ 25kg"
-                  className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-3.5 py-2.5 text-white font-mono outline-none focus:border-orange-500"
-                />
-              </div>
+              const avgRpe =
+                allClientLogs.length > 0
+                  ? (allClientLogs.reduce((acc, curr) => acc + curr.rpeRate, 0) / allClientLogs.length).toFixed(1)
+                  : 0;
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <label className="text-zinc-400 font-bold block mb-1.5">Tingkat Kelelahan / Intensitas (RPE 1-10)</label>
-                  <select
-                    value={logRPE}
-                    onChange={(e) => setLogRPE(Number(e.target.value))}
-                    className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-3.5 py-2.5 text-white outline-none focus:border-orange-500"
-                  >
-                    {[6, 7, 8, 9, 10].map((num) => (
-                      <option key={num} value={num}>
-                        RPE {num} ({num <= 7 ? 'Sedang' : num === 8 ? 'Intensif' : 'Maksimal/Batas'})
-                      </option>
-                    ))}
-                  </select>
+              return (
+                <div className="space-y-4">
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                    <div className="bg-zinc-900/80 border border-zinc-800 p-3 rounded-xl text-center">
+                      <span className="text-[10px] text-zinc-400 uppercase font-bold block">Total Sesi Dicatat</span>
+                      <span className="text-xl font-black text-white mt-0.5 block">{allClientLogs.length} Sesi</span>
+                    </div>
+
+                    <div className="bg-zinc-900/80 border border-zinc-800 p-3 rounded-xl text-center">
+                      <span className="text-[10px] text-zinc-400 uppercase font-bold block">Rata-rata RPE</span>
+                      <span className="text-xl font-black text-purple-400 mt-0.5 block">{avgRpe} / 10</span>
+                    </div>
+
+                    <div className="bg-zinc-900/80 border border-zinc-800 p-3 rounded-xl text-center">
+                      <span className="text-[10px] text-zinc-400 uppercase font-bold block">Sesi Terakhir</span>
+                      <span className="text-xs font-bold text-orange-400 mt-1 block truncate">
+                        {allClientLogs[0] ? formatDateIndo(allClientLogs[0].date) : '-'}
+                      </span>
+                    </div>
+
+                    <div className="bg-zinc-900/80 border border-zinc-800 p-3 rounded-xl flex items-center justify-center">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const client = clientHistoryModal;
+                          setClientHistoryModal(null);
+                          handleOpenLogForClient(client);
+                        }}
+                        className="w-full py-2 px-3 rounded-xl bg-orange-500 hover:bg-orange-400 text-zinc-950 font-black text-xs transition flex items-center justify-center gap-1.5 shadow-md shadow-orange-500/20"
+                      >
+                        <Plus className="w-3.5 h-3.5" />
+                        <span>Catat Sesi Baru</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* List of Sessions */}
+                  <div className="space-y-3">
+                    {allClientLogs.length === 0 ? (
+                      <div className="bg-zinc-900/40 border border-zinc-800 rounded-2xl p-8 text-center text-zinc-400">
+                        <Dumbbell className="w-10 h-10 mx-auto text-zinc-600 mb-2" />
+                        <p className="font-bold text-white text-sm">Belum ada riwayat hasil latihan</p>
+                        <p className="text-xs text-zinc-500 mt-1">
+                          Gunakan tombol "Catat Sesi Baru" untuk memasukkan catatan latihan pertama klien ini.
+                        </p>
+                      </div>
+                    ) : (
+                      allClientLogs.map((log) => (
+                        <div
+                          key={log.id}
+                          className="bg-zinc-900/70 border border-zinc-800 rounded-2xl p-4 space-y-3 hover:border-zinc-700 transition"
+                        >
+                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-zinc-800 pb-2.5">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className="px-2.5 py-0.5 rounded-lg bg-orange-500/20 text-orange-400 font-mono font-bold text-xs border border-orange-500/30">
+                                📅 {formatDateIndo(log.date)}
+                              </span>
+                              <span className="text-xs text-zinc-400 font-mono">
+                                ⏰ {log.time || '17:00'} WIB ({log.durationMinutes || 60} Menit)
+                              </span>
+                              <span className="px-2 py-0.5 rounded-md bg-zinc-800 text-zinc-300 font-bold text-[10px]">
+                                Sesi ke-{log.sessionNumber || 1}
+                              </span>
+                              <span className="px-2 py-0.5 rounded-md bg-purple-500/15 border border-purple-500/30 text-purple-300 font-bold text-[10px]">
+                                RPE {log.rpeRate}/10
+                              </span>
+                              <span className="px-2 py-0.5 rounded-md bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 font-bold text-[10px]">
+                                {log.condition}
+                              </span>
+                              {log.weightProgressKg && (
+                                <span className="px-2 py-0.5 rounded-md bg-zinc-800 text-cyan-300 font-mono font-bold text-[10px]">
+                                  ⚖️ {log.weightProgressKg} kg
+                                </span>
+                              )}
+                            </div>
+
+                            <div className="flex items-center gap-1.5 self-end sm:self-auto">
+                              <button
+                                type="button"
+                                onClick={() => handleShareWorkoutToWhatsApp(log)}
+                                className="p-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-emerald-400 border border-zinc-700 transition"
+                                title="Kirim Laporan Sesi via WhatsApp"
+                              >
+                                <Share2 className="w-3.5 h-3.5" />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const client = clientHistoryModal;
+                                  setClientHistoryModal(null);
+                                  handleOpenLogForClient(client, log);
+                                }}
+                                className="p-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-orange-400 border border-zinc-700 transition"
+                                title="Edit Catatan Latihan Sesi Ini"
+                              >
+                                <Edit3 className="w-3.5 h-3.5" />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteWorkoutLog(log.id)}
+                                className="p-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-rose-400 border border-zinc-700 transition"
+                                title="Hapus Catatan Latihan"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          </div>
+
+                          <div className="text-xs space-y-2">
+                            <div className="flex items-center gap-2">
+                              <span className="text-zinc-400 font-bold">Fokus Otot:</span>
+                              <span className="text-orange-400 font-black">{log.focusArea}</span>
+                              {log.formQuality && (
+                                <span className="text-zinc-500 text-[11px] font-medium">• Form: {log.formQuality}</span>
+                              )}
+                            </div>
+
+                            <div className="bg-zinc-950/80 border border-zinc-800/80 rounded-xl p-3 text-zinc-200 font-mono text-[11px] whitespace-pre-line leading-relaxed">
+                              {log.exercisesSummary}
+                            </div>
+
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px] pt-1">
+                              <div className="bg-zinc-950/50 p-2.5 rounded-xl border border-zinc-800">
+                                <span className="text-zinc-400 font-bold block mb-0.5">📝 Evaluasi Pelatih:</span>
+                                <p className="text-zinc-300">{log.coachNotes || '-'}</p>
+                              </div>
+                              <div className="bg-zinc-950/50 p-2.5 rounded-xl border border-zinc-800">
+                                <span className="text-orange-400 font-bold block mb-0.5">🏆 Target Sesi Berikutnya:</span>
+                                <p className="text-zinc-300">{log.nextSessionGoal || '-'}</p>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
                 </div>
-
-                <div>
-                  <label className="text-zinc-400 font-bold block mb-1.5">Kondisi Fisik Member</label>
-                  <select
-                    value={logCondition}
-                    onChange={(e: any) => setLogCondition(e.target.value)}
-                    className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-3.5 py-2.5 text-white outline-none focus:border-orange-500"
-                  >
-                    <option value="Prima & Bertenaga">Prima & Bertenaga</option>
-                    <option value="Normal">Normal</option>
-                    <option value="Lelah / Recovery">Lelah / Recovery</option>
-                    <option value="Nyeri Otot Ringan">Nyeri Otot Ringan</option>
-                  </select>
-                </div>
-              </div>
-
-              <div>
-                <label className="text-zinc-400 font-bold block mb-1.5">Evaluasi & Catatan Pelatih</label>
-                <input
-                  type="text"
-                  value={logCoachNotes}
-                  onChange={(e) => setLogCoachNotes(e.target.value)}
-                  placeholder="Contoh: Form squat membaik, pernapasan stabil, perlu perbanyak istirahat."
-                  className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-3.5 py-2.5 text-white outline-none focus:border-orange-500"
-                />
-              </div>
-
-              <div>
-                <label className="text-orange-400 font-bold block mb-1.5">Target Sesi Berikutnya</label>
-                <input
-                  type="text"
-                  value={logNextGoal}
-                  onChange={(e) => setLogNextGoal(e.target.value)}
-                  placeholder="Contoh: Naikkan beban bench press 2.5kg atau fokus deadlift 4x8."
-                  className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-3.5 py-2.5 text-white outline-none focus:border-orange-500"
-                />
-              </div>
-
-              <div className="pt-3 border-t border-zinc-800 flex items-center justify-end gap-2">
-                <button
-                  type="button"
-                  onClick={() => setIsLogModalOpen(false)}
-                  className="px-4 py-2.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 font-bold"
-                >
-                  Batal
-                </button>
-                <button
-                  type="submit"
-                  className="px-5 py-2.5 rounded-xl bg-orange-500 hover:bg-orange-400 text-zinc-950 font-black shadow-lg shadow-orange-500/20"
-                >
-                  Simpan Catatan Latihan
-                </button>
-              </div>
-            </form>
+              );
+            })()}
           </div>
         </div>
       )}

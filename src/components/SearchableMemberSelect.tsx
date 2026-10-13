@@ -11,7 +11,8 @@ import {
   CheckCircle2,
   Dumbbell,
   Sparkles,
-  Flame
+  Flame,
+  Building2
 } from 'lucide-react';
 import { Member, Attendance } from '../types';
 import { APP_TODAY, formatDateIndo } from '../utils/formatters';
@@ -455,6 +456,11 @@ export const SearchableMemberSelect: React.FC<SearchableMemberSelectProps> = ({
                         <div className="flex items-center gap-2 mt-0.5 text-[10px] text-zinc-400 flex-wrap">
                           <span>{member.phone}</span>
                           <span>•</span>
+                          <span className="text-orange-400 font-semibold flex items-center gap-0.5">
+                            <Building2 className="w-2.5 h-2.5 text-orange-400 inline shrink-0" />
+                            {member.branchName ? member.branchName.split(',')[0] : 'Cabang Utama'}
+                          </span>
+                          <span>•</span>
                           {isFrz ? (
                             <span className="text-sky-400 font-semibold">Freeze: {member.freezeReason || 'Cuti'}</span>
                           ) : expired ? (
@@ -471,8 +477,9 @@ export const SearchableMemberSelect: React.FC<SearchableMemberSelectProps> = ({
                     {/* Right Badges & Checkmark */}
                     <div className="flex items-center gap-2 shrink-0">
                       {inGym && (
-                        <span className="text-[9px] font-extrabold uppercase px-2 py-0.5 rounded-md bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
-                          Di Gym
+                        <span className="text-[9px] font-extrabold uppercase px-2 py-0.5 rounded-md bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 flex items-center gap-1">
+                          <Building2 className="w-2.5 h-2.5 text-emerald-400 shrink-0" />
+                          <span>Di Gym ({member.branchName ? member.branchName.split(',')[0] : 'Unit Cabang'})</span>
                         </span>
                       )}
                       {isSelected ? (

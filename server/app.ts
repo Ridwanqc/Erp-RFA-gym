@@ -17,6 +17,7 @@ import { memberRouter } from './routes/memberRoutes';
 import { transactionRouter } from './routes/transactionRoutes';
 import { securityRouter } from './routes/securityRoutes';
 import { uploadRouter } from './routes/uploadRoutes';
+import { expenseRouter } from './routes/expenseRoutes';
 import { AuditService } from './services/auditService';
 
 dotenv.config();
@@ -68,6 +69,7 @@ app.use('/api/members', memberRouter);
 app.use('/api/transactions', transactionRouter);
 app.use('/api/admin/security', securityRouter);
 app.use('/api/upload', uploadRouter);
+app.use('/api/expenses', expenseRouter);
 
 // 9. Static Assets & Frontend Integration
 if (isProduction || fs.existsSync(distPath)) {
@@ -128,27 +130,12 @@ app.use((err: any, req: Request, res: Response, _next: NextFunction) => {
   });
 });
 
-// 11. Multi-Port Binding for Cloud Run & AI Studio Environments
+// 11. Port Binding for Cloud Run & AI Studio Environments
 const host = '0.0.0.0';
-const primaryPort = parseInt(process.env.PORT || '8080', 10);
-const portsToListen = Array.from(new Set([primaryPort, 3000, 8080]));
+const port = parseInt(process.env.PORT || '3000', 10);
 
-for (const port of portsToListen) {
-  try {
-    const srv = app.listen(port, host, () => {
-      console.log(`[GymPro Enterprise] Security Shield successfully active on http://${host}:${port}`);
-    });
-
-    srv.on('error', (err: any) => {
-      if (err && err.code === 'EADDRINUSE') {
-        console.warn(`[GymPro Enterprise] Port ${port} is occupied by reverse-proxy / container process.`);
-      } else {
-        console.error(`[GymPro Enterprise] Listener error on port ${port}:`, err);
-      }
-    });
-  } catch (err) {
-    console.warn(`[GymPro Enterprise] Could not initialize listener on port ${port}:`, err);
-  }
-}
+app.listen(port, host, () => {
+  console.log(`[GymPro Enterprise] Security Shield successfully active on http://${host}:${port}`);
+});
 
 export default app;

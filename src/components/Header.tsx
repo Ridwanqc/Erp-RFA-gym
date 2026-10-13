@@ -3,7 +3,6 @@ import {
   Menu,
   ShieldAlert,
   LogOut,
-  Flame,
   ChevronDown,
   User as UserIcon,
   Shield,
@@ -12,12 +11,9 @@ import {
   Settings,
   Globe,
   Bell,
-  CheckCircle2,
-  Clock,
-  Dumbbell
+  FileSpreadsheet
 } from 'lucide-react';
 import { User, PTBackofficeNotification } from '../types';
-import { PWAInstallButton } from './PWAInstallButton';
 import { RealTimeClock } from './RealTimeClock';
 
 interface HeaderProps {
@@ -45,12 +41,8 @@ export const Header: React.FC<HeaderProps> = ({
   onToggleMobileSidebar,
   isSidebarCollapsed = false,
   isStoreClosed,
-  staffUsers = [],
-  onSwitchUser,
   onLogout,
-  firebaseConnected = true,
   onOpenSettings,
-  onOpenAddBranchModal,
   onOpenLandingPage,
   ptNotifications = [],
   onNavigateTab
@@ -96,13 +88,14 @@ export const Header: React.FC<HeaderProps> = ({
   }, []);
 
   return (
-    <header className="h-16 border-b border-zinc-800 flex items-center justify-between px-3 sm:px-5 lg:px-6 z-30 shrink-0 bg-[#09090b]/90 backdrop-blur-md sticky top-0 w-full">
-      {/* Left: Hamburger Toggles & Brand Title */}
-      <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+    <header className="h-16 border-b border-zinc-800/80 flex items-center justify-between px-3 sm:px-5 lg:px-6 z-30 shrink-0 bg-zinc-950/90 backdrop-blur-md sticky top-0 w-full transition-all">
+      {/* Left: Sidebar Navigation Toggles & Page Title */}
+      <div className="flex items-center gap-2 sm:gap-3.5 min-w-0">
         {/* Mobile Hamburger (< 1024px) */}
         <button
           id="btn-toggle-sidebar-mobile"
-          className="lg:hidden text-zinc-300 hover:text-white p-2.5 rounded-xl hover:bg-zinc-800/80 active:scale-95 transition flex items-center justify-center min-w-[44px] min-h-[44px]"
+          type="button"
+          className="lg:hidden text-zinc-300 hover:text-white p-2 rounded-xl bg-zinc-900/60 hover:bg-zinc-800 border border-zinc-800 active:scale-95 transition flex items-center justify-center min-w-[40px] min-h-[40px] cursor-pointer"
           onClick={onToggleMobileSidebar}
           aria-label="Buka menu navigasi"
         >
@@ -113,10 +106,11 @@ export const Header: React.FC<HeaderProps> = ({
         {onToggleSidebar && (
           <button
             id="btn-toggle-sidebar-desktop"
-            className="hidden lg:flex text-zinc-400 hover:text-white p-2 rounded-xl hover:bg-zinc-800 transition items-center justify-center"
+            type="button"
+            className="hidden lg:flex text-zinc-400 hover:text-white p-2 rounded-xl hover:bg-zinc-800/80 transition items-center justify-center cursor-pointer"
             onClick={onToggleSidebar}
-            title={isSidebarCollapsed ? 'Perluas Sidebar (Desktop)' : 'Ciutkan Sidebar (Desktop)'}
-            aria-label="Toggle collapse sidebar desktop"
+            title={isSidebarCollapsed ? 'Perluas Sidebar' : 'Ciutkan Sidebar'}
+            aria-label="Toggle collapse sidebar"
           >
             {isSidebarCollapsed ? (
               <PanelLeftOpen className="w-5 h-5 text-orange-400" />
@@ -139,33 +133,34 @@ export const Header: React.FC<HeaderProps> = ({
         </div>
       </div>
 
-      {/* Right: Cloud Sync, Date, PWA, Landing & User Profile */}
-      <div className="flex items-center gap-1.5 sm:gap-3 shrink-0">
-        {/* Firebase Cloud Status Indicator */}
-        <div
-          title={firebaseConnected ? 'Terkoneksi ke Cloud Firestore' : 'Mode Offline / Transien'}
-          className="flex items-center gap-1.5 text-xs text-amber-300 bg-amber-500/10 px-2 sm:px-2.5 py-1.5 rounded-xl border border-amber-500/20"
-        >
-          <Flame className="w-3.5 h-3.5 text-amber-400 animate-pulse shrink-0" />
-          <span className="hidden md:inline text-[11px] font-bold text-amber-200">Cloud Sync</span>
-        </div>
-
+      {/* Right: RealTime Clock, Landing Page, Notification, & User Profile */}
+      <div className="flex items-center gap-2 sm:gap-3 shrink-0">
         {/* Real-Time Live DateTime Widget */}
         <RealTimeClock variant="header" />
-
-        {/* PWA Install Button (Android / iOS / Desktop) */}
-        <PWAInstallButton variant="compact" />
 
         {/* Public Landing Page Portal Button */}
         {onOpenLandingPage && (
           <button
             type="button"
             onClick={onOpenLandingPage}
-            className="flex items-center gap-1.5 p-1.5 sm:px-2.5 sm:py-1.5 rounded-xl border bg-orange-500/10 hover:bg-orange-500/20 border-orange-500/30 text-orange-300 transition active:scale-95 text-xs font-bold min-h-[44px]"
+            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border bg-orange-500/10 hover:bg-orange-500/20 border-orange-500/30 text-orange-300 transition active:scale-95 text-xs font-bold min-h-[38px] cursor-pointer"
             title="Lihat Landing Page Publik RFA Gym Platform"
           >
             <Globe className="w-4 h-4 text-orange-400 shrink-0" />
             <span className="hidden xl:inline">Landing Page</span>
+          </button>
+        )}
+
+        {/* Google Sheets Sync Quick Access */}
+        {onNavigateTab && (
+          <button
+            type="button"
+            onClick={() => onNavigateTab('google-sheets')}
+            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border bg-emerald-500/10 hover:bg-emerald-500/20 border-emerald-500/30 text-emerald-300 transition active:scale-95 text-xs font-bold min-h-[38px] cursor-pointer"
+            title="Sinkronisasi & Integrasi Google Sheets"
+          >
+            <FileSpreadsheet className="w-4 h-4 text-emerald-400 shrink-0" />
+            <span className="hidden xl:inline">Google Sheets</span>
           </button>
         )}
 
@@ -174,8 +169,8 @@ export const Header: React.FC<HeaderProps> = ({
           <button
             type="button"
             onClick={() => setIsNotifOpen(!isNotifOpen)}
-            className="relative p-2.5 rounded-xl bg-zinc-900/90 hover:bg-zinc-800 border border-zinc-800 text-zinc-300 hover:text-white transition active:scale-95 min-h-[44px] min-w-[44px] flex items-center justify-center"
-            title="Notifikasi Booking PT & Sistem"
+            className="relative p-2 rounded-xl bg-zinc-900/80 hover:bg-zinc-800 border border-zinc-800 text-zinc-300 hover:text-white transition active:scale-95 min-h-[38px] min-w-[38px] flex items-center justify-center cursor-pointer"
+            title="Notifikasi Backoffice & Sistem"
           >
             <Bell className="w-4 h-4 text-orange-400" />
             {unreadCount > 0 && (
@@ -238,7 +233,7 @@ export const Header: React.FC<HeaderProps> = ({
                                 onNavigateTab('jadwal-pt');
                               }
                             }}
-                            className="text-[10px] text-orange-400 font-bold hover:underline"
+                            className="text-[10px] text-orange-400 font-bold hover:underline cursor-pointer"
                           >
                             Buka Jadwal &rarr;
                           </button>
@@ -252,7 +247,7 @@ export const Header: React.FC<HeaderProps> = ({
           )}
         </div>
 
-        {/* User Profile Trigger & Dropdown */}
+        {/* User Profile Pill Trigger & Dropdown */}
         <div className="relative" ref={profileMenuRef}>
           <button
             type="button"
@@ -261,7 +256,7 @@ export const Header: React.FC<HeaderProps> = ({
             aria-expanded={isProfileOpen}
             aria-haspopup="true"
             aria-label="Buka menu pengguna"
-            className="flex items-center gap-2 p-1 sm:px-3 sm:py-1.5 rounded-xl bg-zinc-900/90 hover:bg-zinc-800 border border-zinc-800 transition active:scale-95 text-left min-h-[44px]"
+            className="flex items-center gap-2 p-1 sm:px-2.5 sm:py-1 rounded-xl bg-zinc-900/80 hover:bg-zinc-800 border border-zinc-800 transition active:scale-95 text-left min-h-[38px] cursor-pointer"
           >
             <img
               src={
@@ -269,9 +264,9 @@ export const Header: React.FC<HeaderProps> = ({
                 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=200&auto=format&fit=crop'
               }
               alt={currentUser?.name || 'User'}
-              className="w-8 h-8 rounded-lg object-cover border border-zinc-700 shrink-0"
+              className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg object-cover border border-zinc-700 shrink-0"
             />
-            <div className="hidden md:block truncate max-w-[140px] lg:max-w-[180px]">
+            <div className="hidden md:block truncate max-w-[130px] lg:max-w-[160px]">
               <p className="text-xs font-bold text-white truncate leading-tight">
                 {currentUser?.name || 'Pengguna'}
               </p>
@@ -417,51 +412,6 @@ export const Header: React.FC<HeaderProps> = ({
                 </div>
               </div>
 
-              {/* Quick User Switcher Demo Helper */}
-              {onSwitchUser && staffUsers && staffUsers.length > 0 && (
-                <div className="p-3 border-t border-zinc-800 bg-zinc-950/40">
-                  <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider mb-2 flex items-center justify-between">
-                    <span>Simulasi Ganti Role Staf:</span>
-                    <span className="text-orange-400 font-mono">1-Klik</span>
-                  </p>
-                  <div className="grid grid-cols-2 gap-1.5 max-h-36 overflow-y-auto scrollbar-thin scrollbar-thumb-zinc-800 pr-1">
-                    {staffUsers
-                      .filter((u) => u.id !== currentUser?.id)
-                      .slice(0, 6)
-                      .map((u) => {
-                        const isAdm = u.role === 'admin';
-                        const isAdmCab = u.role === 'admin_cabang';
-                        return (
-                          <button
-                            key={u.id}
-                            type="button"
-                            onClick={() => {
-                              setIsProfileOpen(false);
-                              onSwitchUser(u.id);
-                            }}
-                            className={`p-1.5 rounded-xl text-left border transition text-[11px] flex items-center gap-1.5 cursor-pointer ${
-                              isAdm
-                                ? 'bg-rose-500/10 hover:bg-rose-500/20 text-rose-300 border-rose-500/30'
-                                : isAdmCab
-                                ? 'bg-teal-500/10 hover:bg-teal-500/20 text-teal-300 border-teal-500/30'
-                                : 'bg-zinc-800/60 hover:bg-zinc-700/80 text-zinc-300 border-zinc-700'
-                            }`}
-                            title={`Beralih ke ${u.name} (${u.roleName})`}
-                          >
-                            <span className="text-xs">{isAdm ? '👑' : isAdmCab ? '🏢' : '👤'}</span>
-                            <div className="truncate min-w-0">
-                              <p className="font-bold truncate text-[10px]">{u.name.split(' ')[0]}</p>
-                              <p className="text-[9px] text-zinc-400 truncate">
-                                {isAdm ? 'Super Admin' : isAdmCab ? 'Admin Cabang' : u.role}
-                              </p>
-                            </div>
-                          </button>
-                        );
-                      })}
-                  </div>
-                </div>
-              )}
-
               {/* Logout Button */}
               {onLogout && (
                 <div className="p-3 border-t border-zinc-800 bg-zinc-950/60">
@@ -485,4 +435,3 @@ export const Header: React.FC<HeaderProps> = ({
     </header>
   );
 };
-

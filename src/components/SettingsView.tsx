@@ -49,7 +49,8 @@ import {
   Receipt,
   Image as ImageIcon,
   Flame,
-  Crown
+  Crown,
+  Globe
 } from 'lucide-react';
 import {
   User,
@@ -78,6 +79,7 @@ import {
   BranchWhatsAppVerificationModal,
   validateIndonesianWhatsApp
 } from './BranchWhatsAppVerificationModal';
+import { LandingSettingsView } from './landing/LandingSettingsView';
 
 interface SettingsViewProps {
   currentUser: User | null;
@@ -86,11 +88,12 @@ interface SettingsViewProps {
   allSystemData?: any;
   onRestoreSystemData?: (data: any) => void;
   showToast?: (title: string, message: string, type: 'success' | 'info' | 'warning' | 'error') => void;
-  initialSubTab?: 'printer' | 'theme' | 'roles' | 'security' | 'profile' | 'branches' | 'finance' | 'templates' | 'backup';
+  initialSubTab?: 'printer' | 'theme' | 'roles' | 'security' | 'profile' | 'branches' | 'finance' | 'templates' | 'backup' | 'landing';
   onNavigateToGoogleSheets?: () => void;
+  onPreviewLanding?: () => void;
 }
 
-type SettingsSubTab = 'printer' | 'theme' | 'roles' | 'security' | 'profile' | 'branches' | 'finance' | 'templates' | 'backup';
+type SettingsSubTab = 'printer' | 'theme' | 'roles' | 'security' | 'profile' | 'branches' | 'finance' | 'templates' | 'backup' | 'landing';
 
 export const SettingsView: React.FC<SettingsViewProps> = ({
   currentUser,
@@ -100,7 +103,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   onRestoreSystemData,
   showToast,
   initialSubTab = 'printer',
-  onNavigateToGoogleSheets
+  onNavigateToGoogleSheets,
+  onPreviewLanding
 }) => {
   const {
     settings,
@@ -115,6 +119,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
     updatePicProtectionConfig,
     verifyPicPassword,
     updateRolePermission,
+    saveRolePermissions,
     resetRolePermissionsToDefault,
     resetSettingsToDefault,
     executeTestPrint,
@@ -287,7 +292,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
       ])
     };
     setTestReceiptTrx(mockTrx);
-    notifySuccess('Simulasi Struk POS Dibuka', `Memuat ReceiptModal dengan format ${settings.printer.paperWidth.toUpperCase()}`);
+    notifySuccess('Pratinjau Struk Kasir Dibuka', `Memuat ReceiptModal dengan format ${settings.printer.paperWidth.toUpperCase()}`);
   };
 
   // -------------------------------------------------------------
@@ -327,6 +332,12 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   const handleResetRole = (role: UserRole) => {
     resetRolePermissionsToDefault(role);
     notifySuccess('Reset Role', `Hak akses ${role.toUpperCase()} dikembalikan ke standar bawaan.`);
+  };
+
+  const handleSaveRolePermissions = (role?: UserRole) => {
+    saveRolePermissions(role);
+    const targetRoleName = role ? roles[role]?.roleName || role.toUpperCase() : 'Semua Role';
+    notifySuccess('Pengaturan Hak Akses Tersimpan', `Matriks hak akses untuk ${targetRoleName} berhasil disimpan.`);
   };
 
   const handleSaveStaffRole = (staffId: string) => {
@@ -610,6 +621,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
         <div className="flex items-center gap-2 mt-6 pt-5 border-t border-zinc-800/80 overflow-x-auto no-scrollbar">
           {[
             { id: 'printer', label: 'Printer & Struk POS', icon: Printer, badge: settings.printer.paperWidth },
+            { id: 'landing', label: 'Landing Page (CMS)', icon: Globe, badge: 'Visual & Foto' },
             { id: 'theme', label: 'Tema & Tampilan', icon: Palette, badge: `${theme.mode}` },
             ...(!isSuperAdmin ? [] : [{ id: 'roles', label: 'Manajemen Role & Akses', icon: ShieldCheck, badge: 'RBAC' }]),
             { id: 'security', label: 'Keamanan & Password PIC', icon: KeyRound, badge: picProtection.requirePasswordToChangePic ? 'Aktif 🔒' : 'Off' },
@@ -1248,7 +1260,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                   title="Buka dialog ReceiptModal lengkap dengan transaksi contoh kasir"
                 >
                   <Receipt className="w-4 h-4 text-orange-400" />
-                  <span>Buka Simulasi Modal Struk Kasir (ReceiptModal)</span>
+                  <span>Pratinjau Format Struk Kasir (ReceiptModal)</span>
                 </button>
               </div>
 
@@ -1619,11 +1631,11 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                 </p>
               </div>
 
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 flex-wrap">
                 <button
                   type="button"
                   onClick={() => handleResetRole(selectedRoleKey)}
-                  className="px-3 py-1.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs font-bold transition flex items-center gap-1.5"
+                  className="px-3 py-1.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs font-bold transition flex items-center gap-1.5 cursor-pointer"
                   title="Kembalikan izin role ini ke standar bawaan"
                 >
                   <RotateCcw className="w-3.5 h-3.5 text-zinc-400" />
@@ -1632,16 +1644,25 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                 <button
                   type="button"
                   onClick={() => handleGrantAll(selectedRoleKey)}
-                  className="px-3 py-1.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-emerald-400 text-xs font-bold transition"
+                  className="px-3 py-1.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-emerald-400 text-xs font-bold transition cursor-pointer"
                 >
                   Pilih Semua
                 </button>
                 <button
                   type="button"
                   onClick={() => handleRevokeAll(selectedRoleKey)}
-                  className="px-3 py-1.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-rose-400 text-xs font-bold transition"
+                  className="px-3 py-1.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-rose-400 text-xs font-bold transition cursor-pointer"
                 >
                   Cabut Semua
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleSaveRolePermissions(selectedRoleKey)}
+                  className="px-4 py-1.5 rounded-xl bg-orange-500 hover:bg-orange-600 active:scale-95 text-white text-xs font-bold transition flex items-center gap-1.5 shadow-md shadow-orange-500/20 cursor-pointer"
+                  title="Simpan perubahan matriks hak akses role ini"
+                >
+                  <Save className="w-3.5 h-3.5" />
+                  <span>Simpan Role {currentRoleDef.roleName}</span>
                 </button>
               </div>
             </div>
@@ -1813,6 +1834,35 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                   })}
                 </tbody>
               </table>
+            </div>
+
+            {/* Matrix Action & Save Bar */}
+            <div className="pt-2 flex flex-col sm:flex-row items-center justify-between gap-3 border-t border-zinc-800/80">
+              <div className="flex items-center gap-2 text-xs text-zinc-400">
+                <ShieldCheck className="w-4 h-4 text-orange-400 shrink-0" />
+                <span>
+                  Mengatur <strong>{filteredModules.length}</strong> modul untuk <strong>{currentRoleDef.roleName}</strong>.
+                </span>
+              </div>
+
+              <div className="flex items-center gap-2.5 w-full sm:w-auto">
+                <button
+                  type="button"
+                  onClick={() => handleResetRole(selectedRoleKey)}
+                  className="px-3 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer flex-1 sm:flex-initial"
+                >
+                  <RotateCcw className="w-3.5 h-3.5 text-zinc-400" />
+                  <span>Reset Bawaan</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleSaveRolePermissions(selectedRoleKey)}
+                  className="px-5 py-2 rounded-xl bg-gradient-to-r from-orange-600 to-orange-500 hover:from-orange-500 hover:to-orange-400 active:scale-95 text-white text-xs font-black transition flex items-center justify-center gap-2 shadow-lg shadow-orange-500/25 cursor-pointer flex-1 sm:flex-initial"
+                >
+                  <Save className="w-4 h-4" />
+                  <span>Simpan Perubahan Hak Akses</span>
+                </button>
+              </div>
             </div>
           </div>
 
@@ -3381,6 +3431,16 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
         </div>
       )}
 
+      {/* ========================================================================= */}
+      {/* SUB-TAB: LANDING PAGE CMS & VISUAL                                       */}
+      {/* ========================================================================= */}
+      {activeTab === 'landing' && (
+        <LandingSettingsView
+          showToast={showToast}
+          onPreviewLanding={onPreviewLanding}
+        />
+      )}
+
       {/* Modal Verifikasi & Ekspor Kontak WhatsApp Cabang */}
       <BranchWhatsAppVerificationModal
         isOpen={isBranchWaModalOpen}
@@ -3390,7 +3450,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
         showToast={showToast}
       />
 
-      {/* Modal Simulasi Struk POS & ReceiptModal */}
+      {/* Modal Pratinjau Struk POS & ReceiptModal */}
       {testReceiptTrx && (
         <ReceiptModal
           isOpen={Boolean(testReceiptTrx)}

@@ -52,7 +52,8 @@ import {
   Coffee,
   BellRing,
   Lock,
-  Unlock
+  Unlock,
+  Building2
 } from 'lucide-react';
 import {
   Member,
@@ -311,7 +312,7 @@ export const FrontDeskPortalView: React.FC<FrontDeskPortalViewProps> = ({
   const [isUniversalSearchOpen, setIsUniversalSearchOpen] = useState(false);
 
   // Settings & PIC Password Protection
-  const { settings } = useSettings();
+  const { settings, activeBranch, isAllBranches, branches } = useSettings();
   const picProtection = settings?.picProtection || DEFAULT_PIC_PROTECTION;
   const [isPicPasswordModalOpen, setIsPicPasswordModalOpen] = useState(false);
   const [passwordUnlockTarget, setPasswordUnlockTarget] = useState<'reg' | 'renewal'>('reg');
@@ -682,8 +683,17 @@ export const FrontDeskPortalView: React.FC<FrontDeskPortalViewProps> = ({
       );
     }
 
+    const targetBranchId = member.branchId || (activeBranch && !isAllBranches ? activeBranch.id : 'BR-001');
+    const targetBranchObj = branches.find((b) => b.id === targetBranchId);
+    const targetBranchName =
+      targetBranchObj?.name ||
+      member.branchName ||
+      (activeBranch && !isAllBranches ? activeBranch.name : (branches[0]?.name || 'RFA GYM Cibubur, Bekasi (Flagship HQ)'));
+
     const newAtt: Attendance = {
       id: `ATT-${Date.now().toString().slice(-6)}`,
+      branchId: targetBranchId,
+      branchName: targetBranchName,
       date: APP_TODAY,
       timeIn: getTimestamp(),
       timeOut: '',
@@ -801,7 +811,8 @@ export const FrontDeskPortalView: React.FC<FrontDeskPortalViewProps> = ({
       status: 'Paid',
       picId: assignedPic?.id || renewalStaffId,
       picIds: [assignedPic?.id || renewalStaffId],
-      picNames: assignedPic?.name || 'Staf Kasir'
+      picNames: assignedPic?.name || 'Staf Kasir',
+      trxCategory: 'RENEWAL'
     };
 
     onAddTransaction(newTrx);
@@ -878,7 +889,8 @@ export const FrontDeskPortalView: React.FC<FrontDeskPortalViewProps> = ({
         cashier: currentUser?.name || 'Kasir Front Desk',
         status: 'Paid',
         picId: newMember.picId,
-        picNames: newMember.picName
+        picNames: newMember.picName,
+        trxCategory: 'NEW MEMBERSHIP'
       };
       onAddTransaction(trx);
       if (onReprintReceipt) {
@@ -2005,6 +2017,7 @@ export const FrontDeskPortalView: React.FC<FrontDeskPortalViewProps> = ({
                             </span>
                           </div>
                           <span className="text-[10px] text-zinc-400 block truncate">
+                            <span className="text-orange-400/90 font-semibold mr-1.5">[{member.branchName || 'Cabang Utama'}]</span>
                             {isExp ? (
                               <strong className="text-red-400">Expired ({formatDateIndo(member.expired)})</strong>
                             ) : isFrz ? (
@@ -2019,8 +2032,9 @@ export const FrontDeskPortalView: React.FC<FrontDeskPortalViewProps> = ({
                       {/* Action Button */}
                       <div>
                         {isInGym ? (
-                          <span className="px-2.5 py-1 rounded-xl bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 text-[10px] font-bold flex items-center gap-1">
-                            <CheckCircle2 className="w-3 h-3" /> Di Gym
+                          <span className="px-2 py-1 rounded-xl bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 text-[10px] font-bold flex items-center gap-1">
+                            <CheckCircle2 className="w-3 h-3 shrink-0" />
+                            <span>Di Gym ({member.branchName ? member.branchName.split(',')[0] : 'Unit Cabang'})</span>
                           </span>
                         ) : isExp ? (
                           <button
@@ -2079,6 +2093,12 @@ export const FrontDeskPortalView: React.FC<FrontDeskPortalViewProps> = ({
                 <div className="space-y-2.5 max-h-[480px] overflow-y-auto pr-1">
                   {currentlyInGymAttendances.map((att) => {
                     const memberObj = members.find((m) => m.id === att.memberId || m.name === att.memberName);
+                    const targetBranchObj = branches.find((b) => b.id === (att.branchId || memberObj?.branchId));
+                    const branchUnitName =
+                      targetBranchObj?.name ||
+                      att.branchName ||
+                      memberObj?.branchName ||
+                      (isAllBranches ? (branches[0]?.name || 'Cabang Utama') : activeBranch?.name);
                     const lockerNum =
                       typeof att.lockerNumber === 'string'
                         ? parseInt(att.lockerNumber.replace(/\D/g, ''), 10)
@@ -2109,7 +2129,7 @@ export const FrontDeskPortalView: React.FC<FrontDeskPortalViewProps> = ({
                           )}
 
                           <div className="min-w-0">
-                            <div className="flex items-center gap-2">
+                            <div className="flex items-center gap-1.5 flex-wrap">
                               <span className="font-bold text-white text-xs truncate">
                                 {att.memberName}
                               </span>
@@ -2119,12 +2139,21 @@ export const FrontDeskPortalView: React.FC<FrontDeskPortalViewProps> = ({
                               <span className="text-[9px] font-bold px-1.5 py-0.2 rounded-md bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
                                 {att.badge}
                               </span>
+                              {/* Unit Cabang Badge */}
+                              <span className="text-[9px] font-bold px-1.5 py-0.2 rounded-md bg-orange-500/10 text-orange-400 border border-orange-500/20 flex items-center gap-1">
+                                <Building2 className="w-2.5 h-2.5 text-orange-400 shrink-0" />
+                                <span>Unit: {branchUnitName}</span>
+                              </span>
                             </div>
 
-                            <div className="text-[11px] text-zinc-400 flex items-center gap-2 mt-0.5">
+                            <div className="text-[11px] text-zinc-400 flex items-center gap-2 mt-0.5 flex-wrap">
                               <span className="flex items-center gap-1 text-zinc-400">
                                 <Clock className="w-3 h-3 text-zinc-500" />
                                 Masuk: <strong className="text-zinc-300">{att.timeIn}</strong>
+                              </span>
+                              <span className="text-emerald-400 font-semibold flex items-center gap-1 text-[10px]">
+                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                                Sedang Latihan di {branchUnitName}
                               </span>
                               {occupiedLocker && (
                                 <span className="flex items-center gap-1 text-amber-400 font-bold">

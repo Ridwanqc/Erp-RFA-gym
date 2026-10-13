@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { Crown, Sparkles, Check, AlertCircle, Plus, DollarSign, Info, CreditCard, Wallet, QrCode, Building2, CheckCircle2, CalendarClock, Users, UserCheck, Copy, Gift, Layers, BarChart3, Settings, Percent, TrendingUp, Dumbbell, Search, Trash2, Edit3, HelpCircle, Lightbulb, Zap, ArrowRight, ShieldCheck, Lock, Unlock } from 'lucide-react';
 import { PackageItem, Member, User, Transaction, BundlePackage } from '../types';
 import { formatRp, getTimestamp, APP_TODAY } from '../utils/formatters';
@@ -12,6 +12,7 @@ interface MembershipViewProps {
   members: Member[];
   staffUsers: User[];
   currentUser: User | null;
+  transactions?: Transaction[];
   bundlePackages?: BundlePackage[];
   onOpenBundlingManager?: () => void;
   onOpenBundlingReports?: () => void;
@@ -28,6 +29,7 @@ export const MembershipView: React.FC<MembershipViewProps> = ({
   members,
   staffUsers,
   currentUser,
+  transactions = [],
   bundlePackages = [],
   onOpenBundlingManager,
   onOpenBundlingReports,
@@ -207,6 +209,42 @@ export const MembershipView: React.FC<MembershipViewProps> = ({
     if (!selectedMember1?.expired) return false;
     return selectedMember1.expired >= APP_TODAY;
   }, [selectedMember1]);
+
+  // Deteksi riwayat pembelian paket sebelumnya untuk Member 1
+  // Jika sudah pernah beli paket: otomatis RENEWAL atau UPGRADE
+  // Jika member baru belum ada catatan pembelian: otomatis NEW MEMBERSHIP
+  const hasPackageHistory = useMemo(() => {
+    if (!selectedMember1) return false;
+
+    // 1. Cek riwayat transaksi pembelian paket terdahulu
+    const hasTrx = (transactions || []).some((t) => {
+      const isThisMember = t.memberId === selectedMember1.id || (selectedMember1.name && t.customer.includes(selectedMember1.name));
+      const isPackageTrx = t.type === 'Membership' || t.type === 'PT' || t.type === 'Bundling' || t.type === 'Class';
+      return isThisMember && isPackageTrx && t.status !== 'VOID';
+    });
+    if (hasTrx) return true;
+
+    // 2. Cek apakah member sudah memiliki tanggal expired / kuota aktif sebelumnya
+    if (selectedMember1.expired && selectedMember1.expired !== '-' && selectedMember1.expired.trim() !== '') return true;
+    if ((selectedMember1.ptQuota && selectedMember1.ptQuota > 0) || (selectedMember1.classQuota && selectedMember1.classQuota > 0)) return true;
+
+    return false;
+  }, [selectedMember1, transactions]);
+
+  // Otomatis tentukan Tipe Transaksi saat member dipilih
+  useEffect(() => {
+    if (!p1Id) {
+      setTrxType('NEW MEMBERSHIP');
+      return;
+    }
+    if (hasPackageHistory) {
+      // Member lama dengan riwayat paket: otomatis set RENEWAL (atau pertahankan UPGRADE jika kasir memilih UPGRADE)
+      setTrxType((prev) => (prev === 'UPGRADE' ? 'UPGRADE' : 'RENEWAL'));
+    } else {
+      // Member baru tanpa riwayat paket: otomatis set NEW MEMBERSHIP
+      setTrxType('NEW MEMBERSHIP');
+    }
+  }, [p1Id, hasPackageHistory]);
 
   // Price calculations
   const rawPrice = cat === 'Bundling' ? (currentBundle ? currentBundle.price : 0) : (currentPackage ? currentPackage.price : 0);
@@ -1409,18 +1447,42 @@ export const MembershipView: React.FC<MembershipViewProps> = ({
             <div className="space-y-4">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-wider mb-1.5 ml-1">
-                    Tipe Transaksi
-                  </label>
+                  <div className="flex items-center justify-between mb-1.5 ml-1">
+                    <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider block">
+                      Tipe Transaksi <span className="text-orange-400">*</span>
+                    </label>
+                    {p1Id && (
+                      <span
+                        className={`px-2 py-0.5 rounded-full text-[9px] font-bold border ${
+                          hasPackageHistory
+                            ? 'bg-blue-500/15 text-blue-400 border-blue-500/30'
+                            : 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30'
+                        }`}
+                      >
+                        {hasPackageHistory ? 'Member Lama (Ada Riwayat Paket)' : 'Member Baru (Belum Beli Paket)'}
+                      </span>
+                    )}
+                  </div>
                   <select
                     value={trxType}
                     onChange={(e) => setTrxType(e.target.value as any)}
                     className="w-full bg-zinc-950 border border-zinc-700 rounded-xl px-3.5 py-2.5 text-xs font-bold text-white outline-none focus:border-orange-500"
                   >
+                    <option value="RENEWAL">Renewal (Perpanjangan Paket)</option>
+                    <option value="UPGRADE">Upgrade Paket (Naik Tingkat/Durasi)</option>
                     <option value="NEW MEMBERSHIP">New Membership (Member Baru)</option>
-                    <option value="RENEWAL">Renewal (Perpanjangan)</option>
-                    <option value="UPGRADE">Upgrade Paket</option>
                   </select>
+                  {p1Id && hasPackageHistory ? (
+                    <p className="text-[10px] text-blue-400/90 mt-1 ml-1 flex items-center gap-1">
+                      <CheckCircle2 className="w-3 h-3 shrink-0" />
+                      <span>Terdeteksi riwayat pembelian paket ➔ Otomatis diset ke <strong>{trxType === 'UPGRADE' ? 'Upgrade Paket' : 'Renewal (Perpanjangan)'}</strong>.</span>
+                    </p>
+                  ) : p1Id ? (
+                    <p className="text-[10px] text-emerald-400/90 mt-1 ml-1 flex items-center gap-1">
+                      <Info className="w-3 h-3 shrink-0" />
+                      <span>Member baru belum ada catatan pembelian ➔ Otomatis diset ke <strong>New Membership</strong>.</span>
+                    </p>
+                  ) : null}
                 </div>
 
                 {type === 'Personal' && (

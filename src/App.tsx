@@ -17,7 +17,10 @@ import {
   INITIAL_PT_ASSIGNMENTS,
   INITIAL_WORK_SCHEDULES,
   INITIAL_LEAVES,
-  INITIAL_GUEST_VISITORS
+  INITIAL_GUEST_VISITORS,
+  INITIAL_EXPENSE_CATEGORIES,
+  INITIAL_COMPANY_EXPENSES,
+  INITIAL_EXPENSE_POLICY
 } from './data/initialData';
 import {
   User,
@@ -40,6 +43,9 @@ import {
   MemberMembershipRecord,
   TrainerCommissionRecord,
   SalesCommissionRecord,
+  CompanyExpense,
+  ExpenseCategory,
+  ExpenseApprovalPolicy,
   GymAsset,
   AssetMaintenance,
   DamageReport,
@@ -57,8 +63,21 @@ import {
   LockerSlot,
   GuestPassVisitor,
   ALL_BRANCHES_ID,
-  BodyCompositionRecord
+  BodyCompositionRecord,
+  PTBooking,
+  TrainerChangeRequest,
+  PTBackofficeNotification,
+  TrainerWorkoutLog
 } from './types';
+import {
+  INITIAL_PT_BOOKINGS,
+  INITIAL_TRAINER_CHANGE_REQUESTS,
+  INITIAL_PT_NOTIFICATIONS
+} from './data/ptBookingData';
+import {
+  loadWorkoutLogsFromStorage,
+  saveWorkoutLogsToStorage
+} from './data/workoutLogData';
 import { INITIAL_BODY_COMPOSITION_RECORDS } from './data/bodyCompositionData';
 import { INITIAL_LOCKERS, sortAttendancesByNewest, syncLockersWithAttendances } from './data/lockerData';
 import {
@@ -123,7 +142,8 @@ import { OfflineIndicator } from './components/OfflineIndicator';
 import { OnlineReservation } from './types/landingTypes';
 import { INITIAL_ONLINE_RESERVATIONS } from './data/landingData';
 import { APP_TODAY, formatRp, getTimestamp } from './utils/formatters';
-import { testConnection, auth, onAuthStateChanged, logOutFirebase } from './lib/firebase';
+import { testConnection, auth, onAuthStateChanged, logOutFirebase, getAccessToken } from './lib/firebase';
+import { syncAllGymDataToSpreadsheet } from './lib/googleSheetsService';
 import {
   saveMemberToFirestore,
   saveTransactionToFirestore,
@@ -191,13 +211,19 @@ export default function App() {
   });
 
   const [currentUser, setCurrentUser] = useState<User | null>(() => {
-    const sessionActive = localStorage.getItem('rfa_session_active');
-    const savedUserId = localStorage.getItem('rfa_current_user_id');
-    if (sessionActive === 'true' && savedUserId) {
-      const saved = localStorage.getItem('rfa_staff');
-      const pool = saved ? JSON.parse(saved) : INITIAL_USERS;
-      const found = pool.find((u: User) => u.id === savedUserId);
-      if (found) return found;
+    try {
+      const sessionActive = localStorage.getItem('rfa_session_active');
+      const savedUserId = localStorage.getItem('rfa_current_user_id');
+      if (sessionActive === 'true' && savedUserId) {
+        const saved = localStorage.getItem('rfa_staff');
+        const pool = saved ? JSON.parse(saved) : INITIAL_USERS;
+        if (Array.isArray(pool)) {
+          const found = pool.find((u: User) => u && u.id === savedUserId);
+          if (found) return found;
+        }
+      }
+    } catch (e) {
+      console.warn('Error reading current user session from storage:', e);
     }
     // Default to null so user lands on the newly created Login Page
     return null;
@@ -271,8 +297,16 @@ export default function App() {
   });
 
   const [studioClasses, setStudioClasses] = useState<StudioClass[]>(() => {
-    const saved = localStorage.getItem('rfa_studioclasses');
-    return saved ? JSON.parse(saved) : INITIAL_STUDIO_CLASSES;
+    try {
+      const saved = localStorage.getItem('rfa_studioclasses');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) return parsed;
+      }
+    } catch (e) {
+      console.warn('Error loading studio classes from storage:', e);
+    }
+    return INITIAL_STUDIO_CLASSES;
   });
 
   const [leads, setLeads] = useState<Lead[]>(() => {
@@ -288,9 +322,44 @@ export default function App() {
     }
   });
 
+  // Google Sheets Real-Time Auto-Sync State
+  const [activeSpreadsheetId, setActiveSpreadsheetId] = useState<string>(() => {
+    try {
+      return localStorage.getItem('gympro_active_spreadsheet_id') || '';
+    } catch {
+      return '';
+    }
+  });
+
+  const [autoSyncEnabled, setAutoSyncEnabled] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem('gympro_sheets_autosync') !== 'false';
+    } catch {
+      return true;
+    }
+  });
+
+  const [lastSheetsSyncTime, setLastSheetsSyncTime] = useState<string | null>(() => {
+    try {
+      return localStorage.getItem('gympro_sheets_last_sync') || null;
+    } catch {
+      return null;
+    }
+  });
+
+  const [isSheetsAutoSyncing, setIsSheetsAutoSyncing] = useState<boolean>(false);
+
   const [followUps, setFollowUps] = useState<FollowUpLog[]>(() => {
-    const saved = localStorage.getItem('rfa_followups');
-    return saved ? JSON.parse(saved) : INITIAL_FOLLOW_UPS;
+    try {
+      const saved = localStorage.getItem('rfa_followups');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) return parsed;
+      }
+    } catch (e) {
+      console.warn('Error loading followups from storage:', e);
+    }
+    return INITIAL_FOLLOW_UPS;
   });
 
    const [attendances, setAttendances] = useState<Attendance[]>(() => {
@@ -446,9 +515,78 @@ export default function App() {
   });
 
   const [closingRecords, setClosingRecords] = useState<DailyClosingRecord[]>(() => {
-    const saved = localStorage.getItem('rfa_closing');
-    return saved ? JSON.parse(saved) : INITIAL_CLOSING;
+    try {
+      const saved = localStorage.getItem('rfa_closing');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) return parsed;
+      }
+    } catch (e) {
+      console.warn('Error loading closing records from storage:', e);
+    }
+    return INITIAL_CLOSING;
   });
+
+  // Modul Biaya Operasional & Pengeluaran Perusahaan ERP
+  const [companyExpenses, setCompanyExpenses] = useState<CompanyExpense[]>(() => {
+    const saved = localStorage.getItem('rfa_company_expenses');
+    if (!saved) return INITIAL_COMPANY_EXPENSES;
+    try {
+      const parsed: CompanyExpense[] = JSON.parse(saved);
+      const existingIds = new Set(parsed.map((e) => e.id));
+      const missing = INITIAL_COMPANY_EXPENSES.filter((e) => !existingIds.has(e.id));
+      return missing.length > 0 ? [...parsed, ...missing] : parsed;
+    } catch {
+      return INITIAL_COMPANY_EXPENSES;
+    }
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('rfa_company_expenses', JSON.stringify(companyExpenses));
+    } catch (e) {
+      console.error(e);
+    }
+  }, [companyExpenses]);
+
+  const [expenseCategories, setExpenseCategories] = useState<ExpenseCategory[]>(() => {
+    const saved = localStorage.getItem('rfa_expense_categories');
+    if (!saved) return INITIAL_EXPENSE_CATEGORIES;
+    try {
+      const parsed: ExpenseCategory[] = JSON.parse(saved);
+      const existingIds = new Set(parsed.map((c) => c.id));
+      const missing = INITIAL_EXPENSE_CATEGORIES.filter((c) => !existingIds.has(c.id));
+      return missing.length > 0 ? [...parsed, ...missing] : parsed;
+    } catch {
+      return INITIAL_EXPENSE_CATEGORIES;
+    }
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('rfa_expense_categories', JSON.stringify(expenseCategories));
+    } catch (e) {
+      console.error(e);
+    }
+  }, [expenseCategories]);
+
+  const [expensePolicy, setExpensePolicy] = useState<ExpenseApprovalPolicy>(() => {
+    const saved = localStorage.getItem('rfa_expense_policy');
+    if (!saved) return INITIAL_EXPENSE_POLICY;
+    try {
+      return JSON.parse(saved);
+    } catch {
+      return INITIAL_EXPENSE_POLICY;
+    }
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('rfa_expense_policy', JSON.stringify(expensePolicy));
+    } catch (e) {
+      console.error(e);
+    }
+  }, [expensePolicy]);
 
   const [ptPurchases, setPtPurchases] = useState<PTPurchaseRecord[]>(() => {
     const saved = localStorage.getItem('rfa_pt_purchases');
@@ -544,8 +682,16 @@ export default function App() {
   }, [trainerCommissions]);
 
   const [salesCommissions, setSalesCommissions] = useState<SalesCommissionRecord[]>(() => {
-    const saved = localStorage.getItem('rfa_sales_commissions');
-    return saved ? JSON.parse(saved) : [];
+    try {
+      const saved = localStorage.getItem('rfa_sales_commissions');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) return parsed;
+      }
+    } catch (e) {
+      console.warn('Error loading sales commissions from storage:', e);
+    }
+    return [];
   });
 
   useEffect(() => {
@@ -555,6 +701,79 @@ export default function App() {
   useEffect(() => {
     localStorage.setItem('rfa_packages', JSON.stringify(packages));
   }, [packages]);
+
+  // ==================== PERSONAL TRAINER BOOKING & PORTAL STATE ====================
+  const [ptBookings, setPtBookings] = useState<PTBooking[]>(() => {
+    const saved = localStorage.getItem('rfa_pt_bookings');
+    if (!saved) return INITIAL_PT_BOOKINGS;
+    try {
+      const parsed: PTBooking[] = JSON.parse(saved);
+      const existingIds = new Set(parsed.map((b) => b.id));
+      const missing = INITIAL_PT_BOOKINGS.filter((b) => !existingIds.has(b.id));
+      return missing.length > 0 ? [...parsed, ...missing] : parsed;
+    } catch {
+      return INITIAL_PT_BOOKINGS;
+    }
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('rfa_pt_bookings', JSON.stringify(ptBookings));
+    } catch (e) {
+      console.error(e);
+    }
+  }, [ptBookings]);
+
+  const [trainerChangeRequests, setTrainerChangeRequests] = useState<TrainerChangeRequest[]>(() => {
+    const saved = localStorage.getItem('rfa_trainer_change_requests');
+    if (!saved) return INITIAL_TRAINER_CHANGE_REQUESTS;
+    try {
+      const parsed: TrainerChangeRequest[] = JSON.parse(saved);
+      const existingIds = new Set(parsed.map((r) => r.id));
+      const missing = INITIAL_TRAINER_CHANGE_REQUESTS.filter((r) => !existingIds.has(r.id));
+      return missing.length > 0 ? [...parsed, ...missing] : parsed;
+    } catch {
+      return INITIAL_TRAINER_CHANGE_REQUESTS;
+    }
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('rfa_trainer_change_requests', JSON.stringify(trainerChangeRequests));
+    } catch (e) {
+      console.error(e);
+    }
+  }, [trainerChangeRequests]);
+
+  const [ptNotifications, setPtNotifications] = useState<PTBackofficeNotification[]>(() => {
+    const saved = localStorage.getItem('rfa_pt_notifications');
+    if (!saved) return INITIAL_PT_NOTIFICATIONS;
+    try {
+      const parsed: PTBackofficeNotification[] = JSON.parse(saved);
+      const existingIds = new Set(parsed.map((n) => n.id));
+      const missing = INITIAL_PT_NOTIFICATIONS.filter((n) => !existingIds.has(n.id));
+      return missing.length > 0 ? [...parsed, ...missing] : parsed;
+    } catch {
+      return INITIAL_PT_NOTIFICATIONS;
+    }
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('rfa_pt_notifications', JSON.stringify(ptNotifications));
+    } catch (e) {
+      console.error(e);
+    }
+  }, [ptNotifications]);
+
+  // Workout Logs State (Persisted in localStorage & Shared with Portal)
+  const [workoutLogs, setWorkoutLogs] = useState<TrainerWorkoutLog[]>(() => {
+    return loadWorkoutLogsFromStorage();
+  });
+
+  useEffect(() => {
+    saveWorkoutLogsToStorage(workoutLogs);
+  }, [workoutLogs]);
 
   // ==================== MEMBERSHIP FREEZE / UNFREEZE STATE ====================
   const [freezeRecords, setFreezeRecords] = useState<MemberFreezeRecord[]>(() => {
@@ -783,6 +1002,16 @@ export default function App() {
       }
     }
   }, [currentUser, activeBranchId, setActiveBranchId]);
+
+  // Track component mounting lifecycle and view state in console
+  useEffect(() => {
+    console.log('[GymPro Lifecycle] 4. App component mounted successfully.');
+    console.log('[GymPro Lifecycle] 4a. Initial auth status:', currentUser ? `Logged in as ${currentUser.name} (${currentUser.role})` : 'Guest / No active session');
+  }, []);
+
+  useEffect(() => {
+    console.log(`[GymPro Lifecycle] 5. Active View: ${!currentUser ? `Guest Portal (view: ${guestView})` : `ERP System (tab: ${activeTab}, branch: ${activeBranchId})`}`);
+  }, [currentUser, guestView, activeTab, activeBranchId]);
 
   // Multi-Branch Scoped Data Partitioning
   const scopedTransactions = useMemo(() => {
@@ -1116,6 +1345,17 @@ export default function App() {
     return closingRecords.filter((c) => c.branchId === effectiveBranchId || (!c.branchId && effectiveBranchId === 'BR-001'));
   }, [closingRecords, effectiveIsAllBranches, effectiveBranchId]);
 
+  const activeBranchFilteredExpenses = useMemo(() => {
+    if (effectiveIsAllBranches) return companyExpenses;
+    return companyExpenses.filter(
+      (e) => e.branchId === effectiveBranchId || (!e.branchId && effectiveBranchId === 'BR-001')
+    );
+  }, [companyExpenses, effectiveIsAllBranches, effectiveBranchId]);
+
+  const pendingExpensesCount = useMemo(() => {
+    return activeBranchFilteredExpenses.filter((e) => e.approvalStatus === 'Menunggu Persetujuan').length;
+  }, [activeBranchFilteredExpenses]);
+
   const activeBranchFilteredAssets = useMemo(() => {
     if (effectiveIsAllBranches) return gymAssets;
     return gymAssets.filter((a) => a.branchId === effectiveBranchId || (!a.branchId && effectiveBranchId === 'BR-001'));
@@ -1423,6 +1663,102 @@ export default function App() {
     };
   }, []);
 
+  // Auto-Sync to Google Sheets: Every time data is inputted, updated, or deleted, it stays synchronized
+  useEffect(() => {
+    if (!autoSyncEnabled || !activeSpreadsheetId) return;
+
+    const syncTimer = setTimeout(async () => {
+      try {
+        const token = await getAccessToken();
+        if (!token) return;
+
+        setIsSheetsAutoSyncing(true);
+        const res = await syncAllGymDataToSpreadsheet(token, activeSpreadsheetId, {
+          members: activeBranchFilteredMembers,
+          transactions: activeBranchFilteredTransactions,
+          products: activeBranchFilteredProducts,
+          schedules: activeBranchFilteredSchedules,
+          staffUsers: activeBranchFilteredStaffUsers,
+          expenses: activeBranchFilteredExpenses,
+          attendances: attendances,
+          packages: packages
+        });
+
+        if (res.success) {
+          setLastSheetsSyncTime(res.timestamp);
+          try {
+            localStorage.setItem('gympro_sheets_last_sync', res.timestamp);
+          } catch {}
+        }
+      } catch (err: any) {
+        console.warn('Google Sheets background auto-sync warning:', err?.message || err);
+      } finally {
+        setIsSheetsAutoSyncing(false);
+      }
+    }, 1500);
+
+    return () => clearTimeout(syncTimer);
+  }, [
+    members,
+    transactions,
+    products,
+    schedules,
+    staffUsers,
+    companyExpenses,
+    activeBranchFilteredExpenses,
+    attendances,
+    packages,
+    autoSyncEnabled,
+    activeSpreadsheetId,
+    activeBranchFilteredMembers,
+    activeBranchFilteredTransactions,
+    activeBranchFilteredProducts,
+    activeBranchFilteredSchedules,
+    activeBranchFilteredStaffUsers
+  ]);
+
+  const handleTriggerInstantSync = async () => {
+    const token = await getAccessToken();
+    if (!token) {
+      showToast('Autentikasi Diperlukan', 'Silakan hubungkan akun Google terlebih dahulu.', 'warning');
+      return;
+    }
+    if (!activeSpreadsheetId) {
+      showToast('Peringatan', 'Pilih atau buat spreadsheet tujuan terlebih dahulu.', 'warning');
+      return;
+    }
+
+    try {
+      setIsSheetsAutoSyncing(true);
+      const res = await syncAllGymDataToSpreadsheet(token, activeSpreadsheetId, {
+        members: activeBranchFilteredMembers,
+        transactions: activeBranchFilteredTransactions,
+        products: activeBranchFilteredProducts,
+        schedules: activeBranchFilteredSchedules,
+        staffUsers: activeBranchFilteredStaffUsers,
+        expenses: activeBranchFilteredExpenses,
+        attendances: attendances,
+        packages: packages
+      });
+
+      if (res.success) {
+        setLastSheetsSyncTime(res.timestamp);
+        try {
+          localStorage.setItem('gympro_sheets_last_sync', res.timestamp);
+        } catch {}
+        showToast(
+          'Sinkronisasi Google Sheets Berhasil',
+          `Seluruh data sistem (${res.counts.members} Member, ${res.counts.transactions} Transaksi, ${res.counts.schedules} Jadwal, ${res.counts.products} Produk, ${res.counts.staff} Staf, ${res.counts.expenses} Beban, ${res.counts.attendances} Presensi, ${res.counts.packages} Paket) telah tersinkronkan dan terupdate di Google Sheets.`,
+          'success'
+        );
+      }
+    } catch (err: any) {
+      showToast('Gagal Sinkronisasi', err?.message || 'Gagal menyinkronkan data.', 'error');
+    } finally {
+      setIsSheetsAutoSyncing(false);
+    }
+  };
+
   // Handler: Switch User
   const handleSwitchUser = (userId: string) => {
     const found = staffUsers.find((u) => u.id === userId);
@@ -1512,7 +1848,7 @@ export default function App() {
     // Record optional admin fee transaction to cash flow
     if (record.adminFee && record.adminFee > 0) {
       const branchIdToTag = isAllBranches ? (branches[0]?.id || 'BR-001') : activeBranchId;
-      const branchNameToTag = activeBranchId === ALL_BRANCHES_ID ? (branches[0]?.name || 'GymPro Flagship Kelapa Gading') : activeBranch.name;
+      const branchNameToTag = activeBranchId === ALL_BRANCHES_ID ? (branches[0]?.name || 'RFA GYM Cibubur, Bekasi (Flagship HQ)') : activeBranch.name;
       const feeTrx: Transaction = {
         id: 'TRX-FRZ-' + Math.floor(100000 + Math.random() * 900000),
         date: record.startDate || APP_TODAY,
@@ -2286,7 +2622,7 @@ export default function App() {
   // Handler: Daily Closing Execution
   const handleExecuteDailyClosing = (record: DailyClosingRecord) => {
     const branchIdToTag = record.branchId || (isAllBranches ? (branches[0]?.id || 'BR-001') : activeBranchId);
-    const branchNameToTag = record.branchName || (activeBranchId === ALL_BRANCHES_ID ? (branches[0]?.name || 'GymPro Flagship Kelapa Gading') : activeBranch.name);
+    const branchNameToTag = record.branchName || (activeBranchId === ALL_BRANCHES_ID ? (branches[0]?.name || 'RFA GYM Cibubur, Bekasi (Flagship HQ)') : activeBranch.name);
     const stampedRecord: DailyClosingRecord = {
       ...record,
       branchId: branchIdToTag,
@@ -2296,10 +2632,215 @@ export default function App() {
     showToast('Tutup Kasir Berhasil', `Closing harian cabang ${branchNameToTag} telah tersimpan.`, 'success');
   };
 
+  // Handlers: Modul Biaya Operasional & Pengeluaran Perusahaan ERP
+  const handleSaveExpense = (expense: CompanyExpense, autoCapitalizeAsset?: boolean) => {
+    const branchIdToTag = expense.branchId || (isAllBranches ? (branches[0]?.id || 'BR-001') : activeBranchId);
+    const branchNameToTag = expense.branchName || (activeBranchId === ALL_BRANCHES_ID ? (branches[0]?.name || 'RFA GYM Cibubur, Bekasi (Flagship HQ)') : activeBranch.name);
+    const stampedExpense: CompanyExpense = {
+      ...expense,
+      branchId: branchIdToTag,
+      branchName: branchNameToTag
+    };
+
+    setCompanyExpenses((prev) => {
+      const idx = prev.findIndex((e) => e.id === stampedExpense.id);
+      if (idx >= 0) {
+        const copy = [...prev];
+        copy[idx] = stampedExpense;
+        return copy;
+      }
+      return [stampedExpense, ...prev];
+    });
+
+    // Auto-kapitalisasi aset jika jenis pencatatan adalah Aset Tetap
+    if (autoCapitalizeAsset && stampedExpense.accountingType === 'ASET_TETAP') {
+      const assetCodeGenerated = `AST-${Date.now().toString().slice(-6)}`;
+      const newAsset: GymAsset = {
+        id: `AST-${Date.now()}`,
+        code: assetCodeGenerated,
+        assetCode: assetCodeGenerated,
+        name: stampedExpense.name,
+        category: 'Equipment',
+        brand: 'RFA Pro Equipment',
+        model: 'Standard Edition',
+        serialNumber: stampedExpense.invoiceRefNumber || `SN-${Date.now().toString().slice(-6)}`,
+        location: stampedExpense.branchName,
+        branchId: stampedExpense.branchId,
+        branchName: stampedExpense.branchName,
+        condition: 'Baik',
+        status: 'Aktif',
+        purchaseDate: stampedExpense.date,
+        purchasePrice: stampedExpense.amount,
+        currentBookValue: stampedExpense.amount,
+        notes: `Auto-kapitalisasi dari Pengeluaran #${stampedExpense.expenseNumber}`
+      };
+      setGymAssets((prev) => [newAsset, ...prev]);
+      showToast('Aset Dikapitalisasi', `Aset "${stampedExpense.name}" otomatis masuk ke inventaris.`, 'success');
+    }
+
+    showToast(
+      'Pengeluaran Disimpan',
+      `Transaksi ${stampedExpense.expenseNumber} status "${stampedExpense.approvalStatus}" berhasil disimpan.`,
+      'success'
+    );
+  };
+
+  const handleSaveExpensePayment = (
+    expenseId: string,
+    paidAmount: number,
+    paidAccount: string,
+    paymentMethod: CompanyExpense['paymentMethod'],
+    refNumber?: string,
+    notes?: string
+  ) => {
+    setCompanyExpenses((prev) =>
+      prev.map((exp) => {
+        if (exp.id !== expenseId) return exp;
+        const currentPaid = exp.paidAmount || 0;
+        const newPaid = currentPaid + paidAmount;
+        const newBalance = Math.max(0, exp.amount - newPaid);
+        const newStatus: CompanyExpense['paymentStatus'] = newBalance === 0 ? 'Lunas' : 'Dibayar Sebagian';
+
+        const paymentRecord = {
+          id: `PAY-${Date.now()}`,
+          date: new Date().toISOString().split('T')[0],
+          amount: paidAmount,
+          paidAccount,
+          paymentMethod,
+          refNumber: refNumber || `REF-${Date.now().toString().slice(-6)}`,
+          paidByStaffId: currentUser?.id || 'ADM-01',
+          paidByStaffName: currentUser?.name || 'Administrator',
+          notes
+        };
+
+        const audit = {
+          id: `AUD-${Date.now()}`,
+          timestamp: new Date().toISOString(),
+          action: 'PAYMENT' as const,
+          performedByStaffId: currentUser?.id || 'ADM-01',
+          performedByStaffName: currentUser?.name || 'Administrator',
+          notes: `Pembayaran Rp ${paidAmount.toLocaleString('id-ID')} via ${paymentMethod} (${paidAccount})`
+        };
+
+        return {
+          ...exp,
+          paidAmount: newPaid,
+          balanceRemaining: newBalance,
+          paymentStatus: newStatus,
+          paidDate: new Date().toISOString().split('T')[0],
+          paidAccount,
+          paymentMethod,
+          paymentHistory: [...(exp.paymentHistory || []), paymentRecord],
+          auditLogs: [...(exp.auditLogs || []), audit]
+        };
+      })
+    );
+    showToast('Pembayaran Dicatat', `Pembayaran pengeluaran Rp ${paidAmount.toLocaleString('id-ID')} berhasil dicatat.`, 'success');
+  };
+
+  const handleApproveExpense = (expense: CompanyExpense) => {
+    if (expensePolicy.preventSelfApproval && expense.picStaffId === currentUser?.id) {
+      showToast('Otorisasi Ditolak', 'Kebijakan perusahaan melarang persetujuan oleh pembuat transaksi sendiri.', 'error');
+      return;
+    }
+
+    setCompanyExpenses((prev) =>
+      prev.map((exp) => {
+        if (exp.id !== expense.id) return exp;
+        const audit = {
+          id: `AUD-${Date.now()}`,
+          timestamp: new Date().toISOString(),
+          action: 'APPROVAL' as const,
+          performedByStaffId: currentUser?.id || 'ADM-01',
+          performedByStaffName: currentUser?.name || 'Administrator',
+          notes: 'Pengeluaran telah disetujui untuk pemrosesan kas/bank.'
+        };
+        return {
+          ...exp,
+          approvalStatus: 'Disetujui',
+          approvedByStaffId: currentUser?.id || 'ADM-01',
+          approvedByStaffName: currentUser?.name || 'Administrator',
+          approvedAt: new Date().toISOString(),
+          auditLogs: [...(exp.auditLogs || []), audit]
+        };
+      })
+    );
+    showToast('Pengeluaran Disetujui', `Pengeluaran ${expense.expenseNumber} disetujui.`, 'success');
+  };
+
+  const handleRejectExpense = (expense: CompanyExpense, reason: string) => {
+    setCompanyExpenses((prev) =>
+      prev.map((exp) => {
+        if (exp.id !== expense.id) return exp;
+        const audit = {
+          id: `AUD-${Date.now()}`,
+          timestamp: new Date().toISOString(),
+          action: 'REJECTION' as const,
+          performedByStaffId: currentUser?.id || 'ADM-01',
+          performedByStaffName: currentUser?.name || 'Administrator',
+          notes: `Ditolak: ${reason}`
+        };
+        return {
+          ...exp,
+          approvalStatus: 'Ditolak',
+          rejectionReason: reason,
+          approvedByStaffId: currentUser?.id || 'ADM-01',
+          approvedByStaffName: currentUser?.name || 'Administrator',
+          auditLogs: [...(exp.auditLogs || []), audit]
+        };
+      })
+    );
+    showToast('Pengeluaran Ditolak', `Pengeluaran ${expense.expenseNumber} ditolak.`, 'warning');
+  };
+
+  const handleCancelExpense = (expenseId: string, reason: string) => {
+    setCompanyExpenses((prev) =>
+      prev.map((exp) => {
+        if (exp.id !== expenseId) return exp;
+        const audit = {
+          id: `AUD-${Date.now()}`,
+          timestamp: new Date().toISOString(),
+          action: 'CANCELLATION' as const,
+          performedByStaffId: currentUser?.id || 'ADM-01',
+          performedByStaffName: currentUser?.name || 'Administrator',
+          notes: `Pengeluaran dibatalkan: ${reason}`
+        };
+        return {
+          ...exp,
+          approvalStatus: 'Dibatalkan',
+          cancellationReason: reason,
+          auditLogs: [...(exp.auditLogs || []), audit]
+        };
+      })
+    );
+    showToast('Pengeluaran Dibatalkan', 'Transaksi telah dibatalkan dengan jejak audit.', 'info');
+  };
+
+  const handleSaveExpenseCategory = (category: ExpenseCategory, isNew: boolean) => {
+    if (isNew) {
+      setExpenseCategories((prev) => [...prev, category]);
+      showToast('Kategori Baru', `Kategori ${category.name} berhasil ditambahkan.`, 'success');
+    } else {
+      setExpenseCategories((prev) => prev.map((c) => (c.id === category.id ? category : c)));
+      showToast('Kategori Diperbarui', `Kategori ${category.name} berhasil diperbarui.`, 'success');
+    }
+  };
+
+  const handleToggleExpenseCategoryStatus = (categoryId: string) => {
+    setExpenseCategories((prev) =>
+      prev.map((c) => (c.id === categoryId ? { ...c, isActive: !c.isActive } : c))
+    );
+  };
+
+  const handleUpdateExpensePolicy = (newPolicy: ExpenseApprovalPolicy) => {
+    setExpensePolicy(newPolicy);
+    showToast('Kebijakan Persetujuan', 'Kebijakan persetujuan pengeluaran berhasil diperbarui.', 'success');
+  };
+
   // Handler: Member Attendance & Locker Assignment
   const handleAddAttendance = (newAtt: Attendance, updatedMember?: Member) => {
     const branchIdToTag = newAtt.branchId || (isAllBranches ? (branches[0]?.id || 'BR-001') : activeBranchId);
-    const branchNameToTag = newAtt.branchName || (activeBranchId === ALL_BRANCHES_ID ? (branches[0]?.name || 'GymPro Flagship Kelapa Gading') : activeBranch.name);
+    const branchNameToTag = newAtt.branchName || (activeBranchId === ALL_BRANCHES_ID ? (branches[0]?.name || 'RFA GYM Cibubur, Bekasi (Flagship HQ)') : activeBranch.name);
     const stampedAtt: Attendance = {
       ...newAtt,
       branchId: branchIdToTag,
@@ -2863,7 +3404,7 @@ export default function App() {
   const handleConvertLeadToMember = (lead: Lead) => {
     const newMemberId = 'M' + Math.floor(100 + Math.random() * 900);
     const branchIdToTag = lead.branchId || (isAllBranches ? (branches[0]?.id || 'BR-001') : activeBranchId);
-    const branchNameToTag = lead.branchName || (activeBranchId === ALL_BRANCHES_ID ? (branches[0]?.name || 'GymPro Flagship Kelapa Gading') : activeBranch.name);
+    const branchNameToTag = lead.branchName || (activeBranchId === ALL_BRANCHES_ID ? (branches[0]?.name || 'RFA GYM Cibubur, Bekasi (Flagship HQ)') : activeBranch.name);
     const newMember: Member = {
       id: newMemberId,
       name: lead.name,
@@ -2954,6 +3495,128 @@ export default function App() {
     });
   };
 
+  // Personal Trainer Booking Portal Handlers
+  const handleAddPTBookingFromPortal = (booking: PTBooking, notification: PTBackofficeNotification) => {
+    setPtBookings((prev) => [booking, ...prev]);
+    setPtNotifications((prev) => [notification, ...prev]);
+    const newSchedule: Schedule = {
+      id: booking.scheduleId || 'SCH-' + Date.now().toString().slice(-6),
+      bookingId: booking.id,
+      bookingCode: booking.bookingCode,
+      memberId: booking.memberId,
+      memberName: booking.memberName,
+      trainer: booking.trainerName,
+      trainerId: booking.trainerId,
+      date: booking.bookingDate,
+      time: booking.startTime,
+      endTime: booking.endTime,
+      status: 'Menunggu',
+      sessionStatus: 'BOOKED',
+      workoutFocus: booking.workoutFocus || 'Personal Training',
+      source: 'PORTAL_MEMBER',
+      valStaf: false,
+      valTrainer: false,
+      valMember: true,
+      note: booking.notes
+    };
+    setSchedules((prev) => [newSchedule, ...prev]);
+    showToast('Booking PT Berhasil', `Jadwal sesi PT ${booking.bookingDate} pukul ${booking.startTime} berhasil dikonfirmasi.`, 'success');
+  };
+
+  const handleReschedulePTBookingFromPortal = (
+    bookingId: string,
+    newDate: string,
+    newStartTime: string,
+    newEndTime: string,
+    notes?: string
+  ) => {
+    setPtBookings((prev) =>
+      prev.map((b) => {
+        if (b.id !== bookingId) return b;
+        return {
+          ...b,
+          bookingDate: newDate,
+          startTime: newStartTime,
+          endTime: newEndTime,
+          status: 'RESCHEDULED',
+          notes: notes || b.notes,
+          updatedAt: `${APP_TODAY} (Reschedule via Portal)`
+        };
+      })
+    );
+    setSchedules((prev) =>
+      prev.map((s) => {
+        if (s.bookingId !== bookingId && s.id !== bookingId) return s;
+        return {
+          ...s,
+          date: newDate,
+          time: newStartTime,
+          endTime: newEndTime,
+          status: 'Reschedule',
+          sessionStatus: 'RESCHEDULED',
+          note: notes || s.note
+        };
+      })
+    );
+    showToast('Jadwal Diubah', `Sesi PT berhasil dijadwalkan ulang ke ${newDate} pukul ${newStartTime}.`, 'success');
+  };
+
+  const handleCancelPTBookingFromPortal = (bookingId: string, reason?: string) => {
+    setPtBookings((prev) =>
+      prev.map((b) => {
+        if (b.id !== bookingId) return b;
+        return {
+          ...b,
+          status: 'CANCELLED',
+          notes: reason ? `Dibatalkan: ${reason}` : b.notes,
+          updatedAt: `${APP_TODAY} (Batal via Portal)`
+        };
+      })
+    );
+    setSchedules((prev) =>
+      prev.map((s) => {
+        if (s.bookingId !== bookingId && s.id !== bookingId) return s;
+        return { ...s, status: 'Batal', sessionStatus: 'CANCELLED', note: reason ? `Batal: ${reason}` : s.note };
+      })
+    );
+    showToast('Booking Dibatalkan', 'Sesi booking PT telah dibatalkan.', 'info');
+  };
+
+  const handleRequestChangeTrainerFromPortal = (request: TrainerChangeRequest) => {
+    setTrainerChangeRequests((prev) => [request, ...prev]);
+    const notif: PTBackofficeNotification = {
+      id: 'PTN-' + Date.now(),
+      bookingId: 'CHANGE-TRAINER-' + request.id,
+      title: 'Permintaan Ganti Trainer Baru',
+      message: `Member ${request.memberName} mengajukan permohonan pergantian trainer. Alasan: ${request.reason}`,
+      targetRole: 'LEADER_PT',
+      trainerId: request.currentTrainerId,
+      memberId: request.memberId,
+      memberName: request.memberName,
+      bookingDate: APP_TODAY,
+      timeSlot: '-',
+      createdAt: `${APP_TODAY} (Portal Member)`,
+      isRead: false
+    };
+    setPtNotifications((prev) => [notif, ...prev]);
+    showToast('Pengajuan Terkirim', 'Permintaan pergantian trainer Anda telah diteruskan ke Leader PT.', 'success');
+  };
+
+  const handleSaveWorkoutLog = (log: TrainerWorkoutLog) => {
+    setWorkoutLogs((prev) => {
+      const idx = prev.findIndex((l) => l.id === log.id);
+      let updated: TrainerWorkoutLog[];
+      if (idx >= 0) {
+        updated = [...prev];
+        updated[idx] = log;
+      } else {
+        updated = [log, ...prev];
+      }
+      saveWorkoutLogsToStorage(updated);
+      return updated;
+    });
+  };
+
   // If user is not logged in as staff, render Landing Page or Staff Login Page
   if (!currentUser) {
     return (
@@ -2972,6 +3635,17 @@ export default function App() {
             onCancelReservation={handleCancelReservation}
             bodyCompositionRecords={bodyCompositionRecords}
             onSaveBodyCompositionRecord={handleSaveBodyCompositionRecord}
+            ptPurchases={ptPurchases}
+            bookings={ptBookings}
+            schedules={schedules}
+            trainerChangeRequests={trainerChangeRequests}
+            onAddBooking={handleAddPTBookingFromPortal}
+            onRescheduleBooking={handleReschedulePTBookingFromPortal}
+            onCancelBooking={handleCancelPTBookingFromPortal}
+            onRequestChangeTrainer={handleRequestChangeTrainerFromPortal}
+            workoutLogs={workoutLogs}
+            onSaveWorkoutLog={handleSaveWorkoutLog}
+            showToast={showToast}
           />
         ) : (
           <LoginPage
@@ -3039,6 +3713,17 @@ export default function App() {
           onCancelReservation={handleCancelReservation}
           bodyCompositionRecords={bodyCompositionRecords}
           onSaveBodyCompositionRecord={handleSaveBodyCompositionRecord}
+          ptPurchases={ptPurchases}
+          bookings={ptBookings}
+          schedules={schedules}
+          trainerChangeRequests={trainerChangeRequests}
+          onAddBooking={handleAddPTBookingFromPortal}
+          onRescheduleBooking={handleReschedulePTBookingFromPortal}
+          onCancelBooking={handleCancelPTBookingFromPortal}
+          onRequestChangeTrainer={handleRequestChangeTrainerFromPortal}
+          workoutLogs={workoutLogs}
+          onSaveWorkoutLog={handleSaveWorkoutLog}
+          showToast={showToast}
         />
       </div>
     );
@@ -3059,6 +3744,8 @@ export default function App() {
         isSidebarCollapsed={isDesktopCollapsed}
         onOpenAddBranchModal={() => setIsAddBranchModalOpen(true)}
         onOpenLandingPage={() => setStaffViewMode('landing')}
+        ptNotifications={ptNotifications}
+        onNavigateTab={(tab) => setActiveTab(tab)}
         onOpenSettings={(subTab) => {
           if (subTab) {
             setActiveTab(`settings-${subTab}` as any);
@@ -3096,6 +3783,7 @@ export default function App() {
           piutangCount={piutangCount}
           freezeCount={freezeCount}
           ptWaitingCount={ptWaitingCount}
+          pendingExpensesCount={pendingExpensesCount}
           onLogout={handleLogout}
         />
 
@@ -3272,6 +3960,7 @@ export default function App() {
               members={activeBranchFilteredMembers}
               staffUsers={activeBranchFilteredStaffUsers}
               currentUser={currentUser}
+              transactions={activeBranchFilteredTransactions}
               onPurchasePackage={handlePurchasePackage}
               onAddPackage={(pkg) => setPackages([...packages, pkg])}
               onUpdatePackage={(pkg) => setPackages((prev) => prev.map((p) => (p.id === pkg.id ? pkg : p)))}
@@ -3571,15 +4260,47 @@ export default function App() {
             />
           )}
 
-          {activeTab === 'piutang' && (
+          {(activeTab === 'piutang' ||
+            activeTab === 'laporan' ||
+            activeTab === 'laporan-harian' ||
+            activeTab === 'laporan-bulanan' ||
+            activeTab === 'tutup-toko' ||
+            activeTab === 'dashboard-keuangan' ||
+            activeTab === 'laba-rugi' ||
+            activeTab === 'input-pengeluaran' ||
+            activeTab === 'riwayat-pengeluaran' ||
+            activeTab === 'kategori-pengeluaran' ||
+            activeTab === 'persetujuan-pengeluaran' ||
+            activeTab === 'laporan-pengeluaran') && (
             <FinanceView
               transactions={activeBranchFilteredTransactions}
               pettyCashList={activeBranchFilteredPettyCash}
               closingRecords={activeBranchFilteredClosings}
+              companyExpenses={activeBranchFilteredExpenses}
+              expenseCategories={expenseCategories}
+              expensePolicy={expensePolicy}
               currentUser={currentUser}
               isStoreClosed={isStoreClosed}
-              initialSubTab="piutang"
+              initialSubTab={
+                activeTab === 'laporan'
+                  ? 'bukubesar'
+                  : activeTab === 'laporan-harian'
+                  ? 'harian'
+                  : activeTab === 'laporan-bulanan'
+                  ? 'bulanan'
+                  : activeTab === 'tutup-toko'
+                  ? 'closing'
+                  : (activeTab as any)
+              }
               initialSelectedPiutangId={targetPiutangTrxId || undefined}
+              onSaveExpense={handleSaveExpense}
+              onSaveExpensePayment={handleSaveExpensePayment}
+              onApproveExpense={handleApproveExpense}
+              onRejectExpense={handleRejectExpense}
+              onCancelExpense={handleCancelExpense}
+              onSaveExpenseCategory={handleSaveExpenseCategory}
+              onToggleExpenseCategoryStatus={handleToggleExpenseCategoryStatus}
+              onUpdateExpensePolicy={handleUpdateExpensePolicy}
               onPayInstallment={(payTrx, origId, amount) => {
                 handlePayInstallment(payTrx, origId, amount);
                 setTargetPiutangTrxId(null);
@@ -3588,86 +4309,6 @@ export default function App() {
                 handleBatchPayInstallment(payments);
                 setTargetPiutangTrxId(null);
               }}
-              onAddPettyCash={(pc) => setPettyCashList([pc, ...pettyCashList])}
-              onUpdatePettyCashList={setPettyCashList}
-              onExecuteDailyClosing={handleExecuteDailyClosing}
-              onVoidTransaction={handleVoidTransaction}
-              onReprintReceipt={(trx) => setActiveReceipt(trx)}
-              onUpdatePaymentMethod={handleUpdatePaymentMethod}
-              showToast={showToast}
-            />
-          )}
-
-          {activeTab === 'laporan' && (
-            <FinanceView
-              transactions={activeBranchFilteredTransactions}
-              pettyCashList={activeBranchFilteredPettyCash}
-              closingRecords={activeBranchFilteredClosings}
-              currentUser={currentUser}
-              isStoreClosed={isStoreClosed}
-              initialSubTab="bukubesar"
-              onPayInstallment={handlePayInstallment}
-              onBatchPayInstallment={handleBatchPayInstallment}
-              onAddPettyCash={(pc) => setPettyCashList([pc, ...pettyCashList])}
-              onUpdatePettyCashList={setPettyCashList}
-              onExecuteDailyClosing={handleExecuteDailyClosing}
-              onVoidTransaction={handleVoidTransaction}
-              onReprintReceipt={(trx) => setActiveReceipt(trx)}
-              onUpdatePaymentMethod={handleUpdatePaymentMethod}
-              showToast={showToast}
-            />
-          )}
-
-          {activeTab === 'laporan-harian' && (
-            <FinanceView
-              transactions={activeBranchFilteredTransactions}
-              pettyCashList={activeBranchFilteredPettyCash}
-              closingRecords={activeBranchFilteredClosings}
-              currentUser={currentUser}
-              isStoreClosed={isStoreClosed}
-              initialSubTab="harian"
-              onPayInstallment={handlePayInstallment}
-              onBatchPayInstallment={handleBatchPayInstallment}
-              onAddPettyCash={(pc) => setPettyCashList([pc, ...pettyCashList])}
-              onUpdatePettyCashList={setPettyCashList}
-              onExecuteDailyClosing={handleExecuteDailyClosing}
-              onVoidTransaction={handleVoidTransaction}
-              onReprintReceipt={(trx) => setActiveReceipt(trx)}
-              onUpdatePaymentMethod={handleUpdatePaymentMethod}
-              showToast={showToast}
-            />
-          )}
-
-          {activeTab === 'laporan-bulanan' && (
-            <FinanceView
-              transactions={activeBranchFilteredTransactions}
-              pettyCashList={activeBranchFilteredPettyCash}
-              closingRecords={activeBranchFilteredClosings}
-              currentUser={currentUser}
-              isStoreClosed={isStoreClosed}
-              initialSubTab="bulanan"
-              onPayInstallment={handlePayInstallment}
-              onBatchPayInstallment={handleBatchPayInstallment}
-              onAddPettyCash={(pc) => setPettyCashList([pc, ...pettyCashList])}
-              onUpdatePettyCashList={setPettyCashList}
-              onExecuteDailyClosing={handleExecuteDailyClosing}
-              onVoidTransaction={handleVoidTransaction}
-              onReprintReceipt={(trx) => setActiveReceipt(trx)}
-              onUpdatePaymentMethod={handleUpdatePaymentMethod}
-              showToast={showToast}
-            />
-          )}
-
-          {activeTab === 'tutup-toko' && (
-            <FinanceView
-              transactions={activeBranchFilteredTransactions}
-              pettyCashList={activeBranchFilteredPettyCash}
-              closingRecords={activeBranchFilteredClosings}
-              currentUser={currentUser}
-              isStoreClosed={isStoreClosed}
-              initialSubTab="closing"
-              onPayInstallment={handlePayInstallment}
-              onBatchPayInstallment={handleBatchPayInstallment}
               onAddPettyCash={(pc) => setPettyCashList([pc, ...pettyCashList])}
               onUpdatePettyCashList={setPettyCashList}
               onExecuteDailyClosing={handleExecuteDailyClosing}
@@ -3710,6 +4351,27 @@ export default function App() {
               transactions={activeBranchFilteredTransactions}
               products={activeBranchFilteredProducts}
               schedules={activeBranchFilteredSchedules}
+              staffUsers={activeBranchFilteredStaffUsers}
+              expenses={activeBranchFilteredExpenses}
+              attendances={attendances}
+              packages={packages}
+              activeSpreadsheetId={activeSpreadsheetId}
+              onSetActiveSpreadsheetId={(id) => {
+                setActiveSpreadsheetId(id);
+                try {
+                  localStorage.setItem('gympro_active_spreadsheet_id', id);
+                } catch {}
+              }}
+              autoSyncEnabled={autoSyncEnabled}
+              onToggleAutoSync={(enabled) => {
+                setAutoSyncEnabled(enabled);
+                try {
+                  localStorage.setItem('gympro_sheets_autosync', String(enabled));
+                } catch {}
+              }}
+              lastSyncTime={lastSheetsSyncTime}
+              isAutoSyncing={isSheetsAutoSyncing}
+              onTriggerInstantSync={handleTriggerInstantSync}
               onImportMembers={(importedMembers) => {
                 setMembers((prev) => {
                   const existingIds = new Set(prev.map((m) => m.id));
@@ -3732,7 +4394,8 @@ export default function App() {
             activeTab === 'settings-branches' ||
             activeTab === 'settings-profile' ||
             activeTab === 'settings-finance' ||
-            activeTab === 'settings-backup') && (
+            activeTab === 'settings-backup' ||
+            activeTab === 'settings-landing') && (
             <SettingsView
               currentUser={currentUser}
               staffUsers={activeBranchFilteredStaffUsers}
@@ -3766,6 +4429,7 @@ export default function App() {
               }}
               showToast={showToast}
               onNavigateToGoogleSheets={() => setActiveTab('google-sheets')}
+              onPreviewLanding={() => setStaffViewMode('landing')}
               initialSubTab={
                 activeTab === 'settings-printer'
                   ? 'printer'
@@ -3781,6 +4445,8 @@ export default function App() {
                   ? 'finance'
                   : activeTab === 'settings-backup'
                   ? 'backup'
+                  : activeTab === 'settings-landing'
+                  ? 'landing'
                   : 'printer'
               }
             />

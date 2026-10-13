@@ -419,7 +419,7 @@ export const FreezeMemberModal: React.FC<FreezeMemberModalProps> = ({
             ))}
           </div>
 
-          {/* SIMULASI PENYESUAIAN MASA AKTIF (Visual preview per user requirement) */}
+          {/* KALKULASI PENYESUAIAN MASA AKTIF (Visual preview) */}
           <div className="bg-gradient-to-br from-sky-950/30 via-zinc-950 to-zinc-950 border border-sky-500/30 rounded-2xl p-4 space-y-2">
             <div className="flex justify-between items-center">
               <span className="text-xs font-bold text-sky-400 uppercase tracking-wider flex items-center gap-1.5">

@@ -76,7 +76,10 @@ export const ThemeSettingsModal: React.FC<ThemeSettingsModalProps> = ({
     }
   };
 
-  const getModeIcon = (iconType: string) => {
+  const getModeIcon = (iconType: string, id?: string) => {
+    if (id === 'claymorphism-light') {
+      return <Layers className="w-5 h-5 text-amber-400" />;
+    }
     switch (iconType) {
       case 'moon':
         return <Moon className="w-5 h-5 text-orange-400" />;
@@ -158,7 +161,7 @@ export const ThemeSettingsModal: React.FC<ThemeSettingsModalProps> = ({
                     <div className="flex items-start justify-between gap-2 mb-2">
                       <div className="flex items-center gap-2.5">
                         <div className="p-2 rounded-xl bg-zinc-900 border border-zinc-800">
-                          {getModeIcon(modeOpt.iconType)}
+                          {getModeIcon(modeOpt.iconType, modeOpt.id)}
                         </div>
                         <div>
                           <div className="text-xs font-bold text-white flex items-center gap-1.5">

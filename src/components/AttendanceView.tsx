@@ -27,7 +27,9 @@ import {
   Settings,
   Wrench,
   Crown,
-  Building2
+  Building2,
+  TrendingUp,
+  BarChart3
 } from 'lucide-react';
 import { Member, User, Attendance, StaffAttendance, LockerSlot, Transaction } from '../types';
 import { getTimestamp, APP_TODAY, formatRp, formatDateIndo, getDayDiff } from '../utils/formatters';
@@ -36,6 +38,7 @@ import { SearchableStaffSelect } from './SearchableStaffSelect';
 import { QRCodeScannerModal } from './QRCodeScannerModal';
 import { LockerManagementModal } from './LockerManagementModal';
 import { RealTimeClock } from './RealTimeClock';
+import { MemberWorkoutAnalyticsSection, isValidAttendanceRecord } from './MemberWorkoutAnalyticsSection';
 import { getRecommendedLocker, getLockerStats, getAvailableLockersByGender, sortAttendancesByNewest } from '../data/lockerData';
 import { useSettings } from '../context/SettingsContext';
 import { printViaHiddenIframe, generateLockerSlipHtml, PrintPaperSize } from '../utils/printEngine';
@@ -71,10 +74,30 @@ export const AttendanceView: React.FC<AttendanceViewProps> = ({
   transactions = [],
   showToast
 }) => {
-  const { settings, activeBranch, isAllBranches } = useSettings();
-  const [activeTab, setActiveTab] = useState<'member' | 'staff'>('member');
+  const { settings, activeBranch, isAllBranches, branches } = useSettings();
+  const [activeTab, setActiveTab] = useState<'member' | 'staff' | 'analytics'>('member');
   const [activeMemberSubTab, setActiveMemberSubTab] = useState<'attendance-list' | 'locker-board'>('attendance-list');
   const [isScannerOpen, setIsScannerOpen] = useState(false);
+  const [attendanceBranchFilter, setAttendanceBranchFilter] = useState<string>('ALL');
+
+  // Total unique members who have completed valid workouts / attendances
+  const totalMembersTrainedCount = useMemo(() => {
+    const uniqueIds = new Set(
+      attendances
+        .filter((a) => {
+          if (!isValidAttendanceRecord(a)) return false;
+          if (attendanceBranchFilter !== 'ALL') {
+            const matches =
+              a.branchId === attendanceBranchFilter ||
+              a.branchName?.toLowerCase().includes(attendanceBranchFilter.toLowerCase());
+            if (!matches) return false;
+          }
+          return true;
+        })
+        .map((a) => (a.memberId && a.memberId.trim() ? a.memberId : a.memberName.toLowerCase().trim()))
+    );
+    return uniqueIds.size;
+  }, [attendances, attendanceBranchFilter]);
 
   // Member form state
   const [selectedMemberId, setSelectedMemberId] = useState('');
@@ -401,9 +424,16 @@ export const AttendanceView: React.FC<AttendanceViewProps> = ({
   };
 
   const todayMemberAttendances = useMemo(() => {
-    const list = attendances.filter((a) => a.date === APP_TODAY);
+    let list = attendances.filter((a) => a.date === APP_TODAY);
+    if (attendanceBranchFilter !== 'ALL') {
+      list = list.filter(
+        (a) =>
+          a.branchId === attendanceBranchFilter ||
+          (a.branchName && a.branchName.toLowerCase().includes(attendanceBranchFilter.toLowerCase()))
+      );
+    }
     return sortAttendancesByNewest(list);
-  }, [attendances]);
+  }, [attendances, attendanceBranchFilter]);
   const activeInGymCount = todayMemberAttendances.filter((a) => !a.timeOut).length;
   const todayStaffAttendances = staffAttendances.filter((s) => s.date === APP_TODAY);
 
@@ -511,24 +541,36 @@ export const AttendanceView: React.FC<AttendanceViewProps> = ({
             </button>
           )}
 
-          <div className="flex bg-zinc-900 p-1.5 rounded-2xl border border-zinc-800">
+          <div className="flex bg-zinc-900 p-1.5 rounded-2xl border border-zinc-800 flex-wrap gap-1">
             <button
+              type="button"
               onClick={() => setActiveTab('member')}
-              className={`px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 ${
+              className={`px-3.5 sm:px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 ${
                 activeTab === 'member' ? 'bg-orange-500 text-zinc-950 font-black shadow-md' : 'text-zinc-400 hover:text-white'
               }`}
             >
               <UserCheck className="w-3.5 h-3.5" />
-              Presensi Member ({activeInGymCount} Aktif)
+              <span>Presensi ({activeInGymCount} Aktif)</span>
             </button>
             <button
+              type="button"
+              onClick={() => setActiveTab('analytics')}
+              className={`px-3.5 sm:px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 ${
+                activeTab === 'analytics' ? 'bg-orange-500 text-zinc-950 font-black shadow-md' : 'text-zinc-400 hover:text-white'
+              }`}
+            >
+              <TrendingUp className="w-3.5 h-3.5" />
+              <span>Grafik Jam Latihan ({totalMembersTrainedCount} Member)</span>
+            </button>
+            <button
+              type="button"
               onClick={() => setActiveTab('staff')}
-              className={`px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 ${
+              className={`px-3.5 sm:px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 ${
                 activeTab === 'staff' ? 'bg-orange-500 text-zinc-950 font-black shadow-md' : 'text-zinc-400 hover:text-white'
               }`}
             >
               <Clock className="w-3.5 h-3.5" />
-              Clock In Staf ({todayStaffAttendances.length})
+              <span>Clock In Staf ({todayStaffAttendances.length})</span>
             </button>
           </div>
         </div>
@@ -623,7 +665,7 @@ export const AttendanceView: React.FC<AttendanceViewProps> = ({
             
             {/* SUB-TAB TOGGLE: DAFTAR PRESENSI VS PAPAN KUNCI LOKER */}
             <div className="flex items-center justify-between bg-zinc-900/90 border border-zinc-800 p-2 rounded-2xl shadow-sm">
-              <div className="flex items-center gap-1.5">
+              <div className="flex items-center gap-1.5 flex-wrap">
                 <button
                   type="button"
                   onClick={() => setActiveMemberSubTab('attendance-list')}
@@ -650,11 +692,24 @@ export const AttendanceView: React.FC<AttendanceViewProps> = ({
                   }`}
                 >
                   <Key className="w-3.5 h-3.5" />
-                  <span>Papan Kunci Loker (30 Loker)</span>
+                  <span>Papan Kunci Loker ({lockers.length} Loker)</span>
                   <span className={`px-1.5 py-0.2 rounded-md text-[10px] font-black ${
                     activeMemberSubTab === 'locker-board' ? 'bg-zinc-950 text-white' : 'bg-orange-500/20 text-orange-400'
                   }`}>
                     {lockerStats.occupied} Terpakai
+                  </span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('analytics')}
+                  className="px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 bg-zinc-950 hover:bg-zinc-800 text-orange-400 border border-orange-500/30 hover:border-orange-500/60 shadow-sm"
+                  title="Lihat grafik seluruh member yang sudah latih dan rincian jam latihan"
+                >
+                  <TrendingUp className="w-3.5 h-3.5 text-orange-400" />
+                  <span>Grafik & Jam Latihan</span>
+                  <span className="px-1.5 py-0.2 rounded-md text-[10px] font-black bg-orange-500/20 text-orange-400">
+                    {totalMembersTrainedCount} Member
                   </span>
                 </button>
               </div>
@@ -667,74 +722,136 @@ export const AttendanceView: React.FC<AttendanceViewProps> = ({
             {/* VIEW 1: LIVE ATTENDANCE LOG LIST */}
             {activeMemberSubTab === 'attendance-list' && (
               <div className="bg-zinc-900/90 border border-zinc-800 rounded-3xl flex flex-col h-[560px] overflow-hidden shadow-sm">
-                <div className="p-4 border-b border-zinc-800 flex justify-between items-center bg-zinc-950/40 shrink-0">
+                <div className="p-4 border-b border-zinc-800 flex flex-col sm:flex-row justify-between sm:items-center gap-2 bg-zinc-950/40 shrink-0">
                   <h3 className="text-xs font-bold text-white flex items-center gap-2">
                     <Clock className="w-4 h-4 text-orange-500" /> Log Kunjungan Member Hari Ini ({todayMemberAttendances.length})
                   </h3>
-                  <span className="bg-emerald-500/20 text-emerald-400 px-2.5 py-1 rounded-xl text-[11px] font-bold border border-emerald-500/30 flex items-center gap-1.5">
-                    <span className="w-2 h-2 bg-emerald-400 rounded-full animate-pulse" />
-                    <span>{activeInGymCount} Sedang Di Gym</span>
-                  </span>
+
+                  <div className="flex items-center gap-2 flex-wrap">
+                    {/* Unit Cabang Filter */}
+                    <div className="flex items-center gap-1.5 bg-zinc-900 border border-zinc-700/80 rounded-xl px-2.5 py-1">
+                      <Building2 className="w-3.5 h-3.5 text-orange-400 shrink-0" />
+                      <select
+                        value={attendanceBranchFilter}
+                        onChange={(e) => setAttendanceBranchFilter(e.target.value)}
+                        className="bg-transparent text-xs text-zinc-200 font-bold outline-none cursor-pointer"
+                        title="Filter Unit Cabang"
+                      >
+                        <option value="ALL" className="bg-zinc-900 text-white">
+                          Semua Unit Cabang ({attendances.filter((a) => a.date === APP_TODAY && !a.timeOut).length} di Gym)
+                        </option>
+                        {branches.map((b) => {
+                          const countInBranch = attendances.filter(
+                            (a) => a.date === APP_TODAY && !a.timeOut && (a.branchId === b.id || a.branchName === b.name)
+                          ).length;
+                          return (
+                            <option key={b.id} value={b.id} className="bg-zinc-900 text-white">
+                              {b.name} ({countInBranch} di Gym)
+                            </option>
+                          );
+                        })}
+                      </select>
+                    </div>
+
+                    <span className="bg-emerald-500/20 text-emerald-400 px-2.5 py-1 rounded-xl text-[11px] font-bold border border-emerald-500/30 flex items-center gap-1.5 shrink-0">
+                      <span className="w-2 h-2 bg-emerald-400 rounded-full animate-pulse" />
+                      <span>{activeInGymCount} Sedang Di Gym</span>
+                    </span>
+                  </div>
                 </div>
 
                 <div className="flex-1 overflow-y-auto p-4 space-y-3 scrollbar-thin scrollbar-thumb-zinc-800">
                   {todayMemberAttendances.length === 0 ? (
                     <div className="flex flex-col items-center justify-center h-full text-zinc-500 text-xs py-10">
                       <UserCheck className="w-8 h-8 opacity-20 mb-2" />
-                      <p>Belum ada member yang check-in hari ini.</p>
+                      <p>Belum ada member yang check-in pada unit cabang ini hari ini.</p>
                     </div>
                   ) : (
-                    todayMemberAttendances.map((att) => (
-                      <div
-                        key={att.id}
-                        className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-zinc-950/60 border border-zinc-800/80 p-3.5 rounded-2xl hover:border-zinc-700 transition"
-                      >
-                        <div className="flex items-center gap-3 min-w-0">
-                          <div className="w-10 h-10 rounded-xl bg-zinc-800 flex items-center justify-center font-black text-white text-xs border border-zinc-700 shrink-0">
-                            {att.memberName.substring(0, 2).toUpperCase()}
-                          </div>
-                          <div className="min-w-0">
-                            <h4 className="text-xs font-bold text-white leading-tight truncate">{att.memberName}</h4>
-                            <div className="flex flex-wrap items-center gap-1.5 mt-1">
-                              <span
-                                className={`inline-block px-2 py-0.5 rounded text-[10px] font-bold ${
-                                  att.type === 'PT'
-                                    ? 'bg-purple-500/20 text-purple-400 border border-purple-500/30'
-                                    : 'bg-blue-500/20 text-blue-400 border border-blue-500/30'
-                                }`}
-                              >
-                                {att.badge}
-                              </span>
+                    todayMemberAttendances.map((att) => {
+                      const memberObj = members.find((m) => m.id === att.memberId || m.name === att.memberName);
+                      const targetBranchObj = branches.find((b) => b.id === (att.branchId || memberObj?.branchId));
+                      const branchUnitName =
+                        targetBranchObj?.name ||
+                        att.branchName ||
+                        memberObj?.branchName ||
+                        (isAllBranches ? (branches[0]?.name || 'Cabang Utama') : activeBranch?.name);
 
-                              {att.lockerNumber ? (
-                                <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold border ${
-                                  att.timeOut || att.lockerReturned
-                                    ? 'bg-zinc-800/80 text-zinc-400 border-zinc-700'
-                                    : 'bg-amber-500/20 text-amber-400 border-amber-500/30'
-                                }`}>
-                                  <Key className="w-3 h-3" />
-                                  <span>Loker #{att.lockerNumber} {att.lockerGender ? `(${att.lockerGender})` : ''}</span>
-                                  {att.hasTowel && <span title="Handuk">+Handuk</span>}
-                                  {(att.timeOut || att.lockerReturned) ? (
-                                    <span className="text-emerald-400 font-bold">✓ Kunci Kembali</span>
-                                  ) : (
-                                    <span className="text-amber-400 text-[9px] font-medium">(Kunci Dipegang)</span>
-                                  )}
+                      return (
+                        <div
+                          key={att.id}
+                          className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-zinc-950/60 border border-zinc-800/80 p-3.5 rounded-2xl hover:border-zinc-700 transition"
+                        >
+                          <div className="flex items-center gap-3 min-w-0">
+                            <div className="w-10 h-10 rounded-xl bg-zinc-800 flex items-center justify-center font-black text-white text-xs border border-zinc-700 shrink-0">
+                              {att.memberName.substring(0, 2).toUpperCase()}
+                            </div>
+                            <div className="min-w-0">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <h4 className="text-xs font-bold text-white leading-tight truncate">{att.memberName}</h4>
+                                <span className="text-[10px] text-zinc-500 font-mono font-bold">
+                                  ({att.memberId || 'VISIT'})
                                 </span>
-                              ) : (
-                                <span className="text-[10px] text-zinc-500">Tanpa Loker</span>
-                              )}
+                              </div>
+
+                              <div className="flex flex-wrap items-center gap-1.5 mt-1">
+                                <span
+                                  className={`inline-block px-2 py-0.5 rounded text-[10px] font-bold ${
+                                    att.type === 'PT'
+                                      ? 'bg-purple-500/20 text-purple-400 border border-purple-500/30'
+                                      : 'bg-blue-500/20 text-blue-400 border border-blue-500/30'
+                                  }`}
+                                >
+                                  {att.badge}
+                                </span>
+
+                                {/* Unit Cabang Badge */}
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-orange-500/10 text-orange-400 border border-orange-500/20">
+                                  <Building2 className="w-3 h-3 text-orange-400 shrink-0" />
+                                  <span>Unit: {branchUnitName}</span>
+                                </span>
+
+                                {att.lockerNumber ? (
+                                  <span
+                                    className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold border ${
+                                      att.timeOut || att.lockerReturned
+                                        ? 'bg-zinc-800/80 text-zinc-400 border-zinc-700'
+                                        : 'bg-amber-500/20 text-amber-400 border-amber-500/30'
+                                    }`}
+                                  >
+                                    <Key className="w-3 h-3" />
+                                    <span>
+                                      Loker #{att.lockerNumber} {att.lockerGender ? `(${att.lockerGender})` : ''}
+                                    </span>
+                                    {att.hasTowel && <span title="Handuk">+Handuk</span>}
+                                    {att.timeOut || att.lockerReturned ? (
+                                      <span className="text-emerald-400 font-bold">✓ Kunci Kembali</span>
+                                    ) : (
+                                      <span className="text-amber-400 text-[9px] font-medium">(Kunci Dipegang)</span>
+                                    )}
+                                  </span>
+                                ) : (
+                                  <span className="text-[10px] text-zinc-500">Tanpa Loker</span>
+                                )}
+                              </div>
                             </div>
                           </div>
-                        </div>
 
-                        <div className="flex items-center justify-between sm:justify-end gap-2 sm:gap-3 w-full sm:w-auto pt-2 sm:pt-0 border-t sm:border-t-0 border-zinc-800/70">
-                          <div className="text-left sm:text-right">
-                            <p className="text-xs font-bold text-white">Masuk: {att.timeIn}</p>
-                            <p className={`text-[10px] font-semibold mt-0.5 ${att.timeOut ? 'text-zinc-500' : 'text-emerald-400 animate-pulse'}`}>
-                              {att.timeOut ? `Keluar: ${att.timeOut}` : 'Masih Di Dalam Gym'}
-                            </p>
-                          </div>
+                          <div className="flex items-center justify-between sm:justify-end gap-2 sm:gap-3 w-full sm:w-auto pt-2 sm:pt-0 border-t sm:border-t-0 border-zinc-800/70">
+                            <div className="text-left sm:text-right">
+                              <p className="text-xs font-bold text-white">Masuk: {att.timeIn}</p>
+                              <div
+                                className={`text-[10px] font-semibold mt-0.5 flex items-center sm:justify-end gap-1.5 ${
+                                  att.timeOut ? 'text-zinc-500' : 'text-emerald-400'
+                                }`}
+                              >
+                                {!att.timeOut && <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />}
+                                <span>
+                                  {att.timeOut
+                                    ? `Keluar: ${att.timeOut}`
+                                    : `Sedang Latihan di ${branchUnitName}`}
+                                </span>
+                              </div>
+                            </div>
 
                           {!att.timeOut ? (
                             <div className="flex items-center gap-1.5 shrink-0">
@@ -772,8 +889,9 @@ export const AttendanceView: React.FC<AttendanceViewProps> = ({
                           )}
                         </div>
                       </div>
-                    ))
-                  )}
+                    );
+                  })
+                )}
                 </div>
               </div>
             )}
@@ -1124,6 +1242,20 @@ export const AttendanceView: React.FC<AttendanceViewProps> = ({
             </div>
           </div>
         </div>
+      )}
+
+      {/* TAB 3: MEMBER WORKOUT ANALYTICS & TRAINING HOURS (GRAFIK & KETERANGAN MEMBER DAN JAM LATIHAN) */}
+      {activeTab === 'analytics' && (
+        <MemberWorkoutAnalyticsSection
+          members={members}
+          attendances={attendances}
+          activeBranchFilter={attendanceBranchFilter}
+          onSelectMemberForCheckIn={(mId) => {
+            setSelectedMemberId(mId);
+            setActiveTab('member');
+            setIsCheckInModalOpen(true);
+          }}
+        />
       )}
 
       {/* QR CODE SCANNER OVERLAY MODAL (DIRECT AUTO ATTENDANCE: 1X IN, 2X OUT) */}

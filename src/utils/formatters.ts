@@ -52,7 +52,13 @@ export function getTimestamp(withSeconds = false): string {
 export function formatDateIndo(dateStr: string): string {
   if (!dateStr) return '-';
   try {
-    const d = new Date(dateStr + 'T00:00:00');
+    const cleanStr = dateStr.includes('T') ? dateStr.split('T')[0] : dateStr.trim();
+    const d = new Date(cleanStr + 'T00:00:00');
+    if (isNaN(d.getTime())) {
+      const fallback = new Date(dateStr);
+      if (isNaN(fallback.getTime())) return dateStr;
+      return fallback.toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' });
+    }
     return d.toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' });
   } catch {
     return dateStr;
@@ -70,7 +76,10 @@ export function formatFullDateIndo(date: Date = new Date()): string {
 
 export function getDayDiff(targetDateStr: string, baseDateStr: string = APP_TODAY): number {
   if (!targetDateStr) return 999;
-  const t = new Date(targetDateStr + 'T00:00:00').getTime();
-  const b = new Date(baseDateStr + 'T00:00:00').getTime();
+  const cleanTarget = targetDateStr.includes('T') ? targetDateStr.split('T')[0] : targetDateStr.trim();
+  const cleanBase = baseDateStr.includes('T') ? baseDateStr.split('T')[0] : baseDateStr.trim();
+  const t = new Date(cleanTarget + 'T00:00:00').getTime();
+  const b = new Date(cleanBase + 'T00:00:00').getTime();
+  if (isNaN(t) || isNaN(b)) return 0;
   return Math.ceil((t - b) / (1000 * 60 * 60 * 24));
 }

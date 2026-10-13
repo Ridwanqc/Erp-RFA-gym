@@ -4,7 +4,6 @@ import {
   Menu,
   X,
   User,
-  LogIn,
   Calendar,
   ChevronDown,
   Building2,
@@ -28,7 +27,6 @@ interface LandingHeaderProps {
   onLogoutMember: () => void;
   isStaffLoggedIn?: boolean;
   onReturnToERP?: () => void;
-  activeInGymCount?: number;
 }
 
 export const LandingHeader: React.FC<LandingHeaderProps> = ({
@@ -40,12 +38,12 @@ export const LandingHeader: React.FC<LandingHeaderProps> = ({
   loggedInMember,
   onLogoutMember,
   isStaffLoggedIn,
-  onReturnToERP,
-  activeInGymCount = 0
+  onReturnToERP
 }) => {
   const { settings } = useSettings();
   const gymName = settings?.profile?.gymName || 'RFA GYM';
   const logoUrl = settings?.profile?.logoUrl || '';
+  const announcement = settings?.landing?.announcement;
 
   const [isScrolled, setIsScrolled] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -69,6 +67,42 @@ export const LandingHeader: React.FC<LandingHeaderProps> = ({
     };
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  // Akses Tersembunyi: Klik logo RFA Gym 5x berturut-turut (jeda maks 3 detik) untuk membuka Login Staf & Kasir
+  const logoClickCountRef = useRef(0);
+  const logoClickTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+  const handleLogoClick = () => {
+    // Navigasi normal landing page ke bagian hero / beranda
+    handleNavClick('hero');
+
+    // Reset timer jeda sebelumnya
+    if (logoClickTimerRef.current) {
+      clearTimeout(logoClickTimerRef.current);
+      logoClickTimerRef.current = null;
+    }
+
+    logoClickCountRef.current += 1;
+
+    // Jika telah diklik 5 kali berturut-turut dalam rentang 3 detik
+    if (logoClickCountRef.current >= 5) {
+      logoClickCountRef.current = 0;
+      onOpenStaffLogin();
+    } else {
+      // Jeda maksimal 3 detik. Jika terlampaui tanpa klik berikutnya, hitungan kembali ke 0
+      logoClickTimerRef.current = setTimeout(() => {
+        logoClickCountRef.current = 0;
+      }, 3000);
+    }
+  };
+
+  useEffect(() => {
+    return () => {
+      if (logoClickTimerRef.current) {
+        clearTimeout(logoClickTimerRef.current);
+      }
+    };
   }, []);
 
   const coreNavItems = [
@@ -110,8 +144,40 @@ export const LandingHeader: React.FC<LandingHeaderProps> = ({
 
   return (
     <>
+      {/* Optional Top Announcement Promo Bar */}
+      {announcement?.enabled && (
+        <div className="fixed top-0 left-0 right-0 z-50 bg-gradient-to-r from-orange-600 via-amber-600 to-orange-600 text-white text-[11px] sm:text-xs font-semibold py-1.5 px-3 flex items-center justify-between shadow-md">
+          <div className="max-w-7xl mx-auto w-full flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2 truncate">
+              {announcement.badgeText && (
+                <span className="px-1.5 py-0.5 rounded-full bg-black/40 border border-white/20 text-[9px] font-black uppercase tracking-wider shrink-0">
+                  {announcement.badgeText}
+                </span>
+              )}
+              {announcement.highlightText && (
+                <span className="font-extrabold text-amber-200 shrink-0">
+                  {announcement.highlightText}
+                </span>
+              )}
+              <span className="truncate">{announcement.text}</span>
+            </div>
+            {announcement.ctaText && (
+              <button
+                type="button"
+                onClick={() => onOpenReservation()}
+                className="px-2.5 py-0.5 rounded-md bg-zinc-950 hover:bg-black text-white text-[10px] font-bold shrink-0 transition cursor-pointer"
+              >
+                {announcement.ctaText} &rarr;
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+
       <header
-        className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${
+        className={`fixed left-0 right-0 z-50 transition-all duration-300 ${
+          announcement?.enabled ? 'top-7 sm:top-8' : 'top-0'
+        } ${
           isScrolled
             ? 'bg-zinc-950/95 backdrop-blur-md border-b border-zinc-800 shadow-xl shadow-black/40 h-16'
             : 'bg-zinc-950/80 backdrop-blur-md border-b border-zinc-900/60 h-16 sm:h-[68px]'
@@ -121,7 +187,7 @@ export const LandingHeader: React.FC<LandingHeaderProps> = ({
           <div className="flex items-center justify-between h-full gap-3 xl:gap-6">
             {/* Zone 1: Brand Wordmark (Single Row, No Wrap) */}
             <div
-              onClick={() => handleNavClick('hero')}
+              onClick={handleLogoClick}
               className="flex items-center gap-2.5 cursor-pointer group select-none shrink-0"
               title={`${gymName} PLATFORM - Beranda`}
             >
@@ -234,20 +300,6 @@ export const LandingHeader: React.FC<LandingHeaderProps> = ({
 
             {/* Zone 3: Action Buttons (Right Aligned, Compact & Elegant) */}
             <div className="hidden lg:flex items-center gap-2 xl:gap-2.5 shrink-0">
-              {/* Live in-gym member count pulse indicator */}
-              <button
-                onClick={() => handleNavClick('live-occupancy')}
-                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs font-semibold hover:bg-emerald-500/20 transition-all cursor-pointer whitespace-nowrap active:scale-95"
-                title="Info member aktif latihan di gym saat ini (Klik untuk Join Now & Detail)"
-              >
-                <span className="relative flex h-2 w-2">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
-                  <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
-                </span>
-                <span className="font-mono tabular-nums font-bold text-white text-xs">{activeInGymCount}</span>
-                <span className="text-zinc-300 text-[11px] xl:text-xs">di Gym</span>
-              </button>
-
               {/* If staff is logged in, show quick return button */}
               {isStaffLoggedIn && onReturnToERP && (
                 <button
@@ -302,29 +354,11 @@ export const LandingHeader: React.FC<LandingHeaderProps> = ({
                 </button>
               )}
 
-              {/* Staff ERP Login (if not already logged in) */}
-              {!isStaffLoggedIn && (
-                <button
-                  onClick={onOpenStaffLogin}
-                  className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-xs font-medium text-zinc-400 hover:text-zinc-200 hover:bg-zinc-900 transition-all whitespace-nowrap ml-1"
-                  title="Akses Portal Staf & Kasir ERP"
-                >
-                  <LogIn className="w-3.5 h-3.5" />
-                  <span className="hidden xl:inline">Staf</span>
-                </button>
-              )}
+              {/* Tombol login Staf/Kasir tersembunyi pada logo RFA Gym (5x klik cepat) */}
             </div>
 
-            {/* Mobile Hamburger Button */}
+            {/* Mobile Action & Hamburger Button */}
             <div className="flex items-center gap-2 lg:hidden">
-              <button
-                onClick={() => handleNavClick('live-occupancy')}
-                className="flex items-center gap-1 px-2.5 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-[11px] font-semibold"
-              >
-                <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                <span className="font-mono font-bold text-white">{activeInGymCount}</span>
-              </button>
-
               {/* Mobile Join Now Button: Sembunyikan jika member sudah login */}
               {!loggedInMember && (
                 <button
@@ -392,29 +426,17 @@ export const LandingHeader: React.FC<LandingHeaderProps> = ({
                 <span>{loggedInMember ? `Dashboard Member (${loggedInMember.name})` : 'Portal Login Member'}</span>
               </button>
 
-              {!isStaffLoggedIn ? (
+              {isStaffLoggedIn && onReturnToERP && (
                 <button
                   onClick={() => {
                     setMobileMenuOpen(false);
-                    onOpenStaffLogin();
+                    onReturnToERP();
                   }}
-                  className="w-full py-2 rounded-xl text-xs font-medium text-zinc-400 hover:text-white text-center"
+                  className="w-full py-2.5 rounded-xl bg-emerald-600/20 text-emerald-300 text-xs font-bold flex items-center justify-center gap-2 border border-emerald-500/40"
                 >
-                  Portal Login Staf & Kasir ERP →
+                  <Building2 className="w-4 h-4" />
+                  <span>Kembali ke Ruang Kerja Staf ERP</span>
                 </button>
-              ) : (
-                onReturnToERP && (
-                  <button
-                    onClick={() => {
-                      setMobileMenuOpen(false);
-                      onReturnToERP();
-                    }}
-                    className="w-full py-2.5 rounded-xl bg-emerald-600/20 text-emerald-300 text-xs font-bold flex items-center justify-center gap-2 border border-emerald-500/40"
-                  >
-                    <Building2 className="w-4 h-4" />
-                    <span>Kembali ke Ruang Kerja Staf ERP</span>
-                  </button>
-                )
               )}
             </div>
           </div>

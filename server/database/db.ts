@@ -106,6 +106,66 @@ export interface BackupRecordEntity {
   createdAt: Date;
 }
 
+export interface ExpenseCategoryEntity {
+  id: string;
+  name: string;
+  group: 'OPERASIONAL' | 'SDM' | 'FASILITAS' | 'KEUANGAN_LAIN' | 'ASET_PERSEDIAAN';
+  accountingType: 'BEBAN_OPERASIONAL' | 'BEBAN_SDM' | 'BEBAN_FASILITAS' | 'BEBAN_FINANSIAL' | 'ASET_TETAP' | 'PERSEDIAAN' | 'PEMBAYARAN_UTANG';
+  description: string;
+  subcategories: string[];
+  defaultPaymentAccount?: string;
+  isActive: boolean;
+  createdAt: string;
+}
+
+export interface CompanyExpenseEntity {
+  id: string;
+  expenseNumber: string;
+  date: string;
+  branchId: string;
+  branchName: string;
+  categoryId: string;
+  categoryName: string;
+  subcategory: string;
+  name: string;
+  description: string;
+  amount: number;
+  accountingType: 'BEBAN_OPERASIONAL' | 'BEBAN_SDM' | 'BEBAN_FASILITAS' | 'BEBAN_FINANSIAL' | 'ASET_TETAP' | 'PERSEDIAAN' | 'PEMBAYARAN_UTANG';
+  paymentMethod: 'Kas' | 'Transfer Bank' | 'QRIS' | 'Kartu Debit/EDC' | 'Lainnya';
+  sourceAccount: string;
+  vendorOrBeneficiary: string;
+  picStaffId: string;
+  picStaffName: string;
+  invoiceRefNumber?: string;
+  attachmentUrl?: string;
+  attachmentFileName?: string;
+  approvalStatus: 'Draft' | 'Menunggu Persetujuan' | 'Disetujui' | 'Ditolak' | 'Dibatalkan';
+  paymentStatus: 'Belum Dibayar' | 'Dibayar Sebagian' | 'Lunas';
+  paidAmount: number;
+  balanceRemaining: number;
+  paidAt?: string;
+  paidByUserId?: string;
+  paidByUserName?: string;
+  paidAccount?: string;
+  approvedByUserId?: string;
+  approvedByUserName?: string;
+  approvedAt?: string;
+  rejectionReason?: string;
+  notes?: string;
+  auditLogs: {
+    id: string;
+    timestamp: string;
+    userId: string;
+    userName: string;
+    action: string;
+    notes?: string;
+  }[];
+  isAssetCapitalized?: boolean;
+  linkedAssetId?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 // In-Memory Database Store for Enterprise Security layer
 class DatabaseStore {
   public users: Map<string, UserEntity> = new Map();
@@ -116,6 +176,8 @@ class DatabaseStore {
   public members: Map<string, MemberEntity> = new Map();
   public transactions: Map<string, TransactionEntity> = new Map();
   public backups: BackupRecordEntity[] = [];
+  public expenseCategories: Map<string, ExpenseCategoryEntity> = new Map();
+  public companyExpenses: Map<string, CompanyExpenseEntity> = new Map();
 
   constructor() {
     this.seed();

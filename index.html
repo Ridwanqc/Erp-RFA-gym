@@ -22,11 +22,19 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrious/4.0.2/qrious.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
   </head>
   <body class="bg-[#09090b] text-[#f4f4f5] antialiased selection:bg-orange-500 selection:text-white">
-    <div id="root"></div>
+    <div id="root">
+      <div style="min-height: 100vh; background-color: #09090b; display: flex; flex-direction: column; align-items: center; justify-content: center; font-family: 'Plus Jakarta Sans', system-ui, sans-serif; color: #f4f4f5;">
+        <div style="width: 52px; height: 52px; border-radius: 16px; background: linear-gradient(135deg, #f97316, #ea580c); display: flex; align-items: center; justify-content: center; box-shadow: 0 10px 25px -5px rgba(249, 115, 22, 0.4); margin-bottom: 16px;">
+          <svg style="width: 28px; height: 28px; color: white;" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2.5">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />
+          </svg>
+        </div>
+        <div style="font-size: 16px; font-weight: 800; letter-spacing: -0.02em; color: #ffffff;">GymPro ERP Enterprise</div>
+        <div style="font-size: 11px; color: #71717a; margin-top: 6px; font-weight: 500;">Memuat sistem & otentikasi...</div>
+      </div>
+    </div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

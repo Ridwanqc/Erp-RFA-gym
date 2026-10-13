@@ -487,13 +487,19 @@ export interface TrainerWorkoutLog {
   trainerName: string;
   memberId: string;
   memberName: string;
-  date: string;
+  date: string; // YYYY-MM-DD
+  time?: string; // HH:mm
+  sessionNumber?: number;
+  durationMinutes?: number;
   focusArea: string;
   exercisesSummary: string;
   rpeRate: number; // 1 - 10
-  condition: 'Prima & Bertenaga' | 'Normal' | 'Lelah / Recovery' | 'Nyeri Otot Ringan';
+  condition: 'Prima & Bertenaga' | 'Normal' | 'Lelah / Recovery' | 'Nyeri Otot Ringan' | string;
+  formQuality?: 'Sempurna' | 'Baik' | 'Perlu Perbaikan Form' | 'Kurang Stabil';
   coachNotes: string;
   nextSessionGoal: string;
+  weightProgressKg?: number;
+  createdAt?: string;
 }
 
 export interface TrainerAttendanceLog {
@@ -971,6 +977,125 @@ export interface PettyCash {
 }
 
 export type PettyCashItem = PettyCash;
+
+// ========================================================
+// MODUL BIAYA OPERASIONAL & PENGELUARAN PERUSAHAAN (ERP)
+// ========================================================
+
+export type ExpenseAccountingType =
+  | 'BEBAN_OPERASIONAL'   // Beban operasional rutin (memotong laba)
+  | 'BEBAN_SDM'           // Beban gaji, komisi, lembur, tunjangan (memotong laba)
+  | 'BEBAN_FASILITAS'     // Beban pemeliharaan alat, AC, gedung (memotong laba)
+  | 'BEBAN_FINANSIAL'     // Beban sewa, bunga, pajak, adm bank, beban lain (memotong laba)
+  | 'ASET_TETAP'          // Pembelian alat gym baru, komputer (kapitalisasi aset, neraca)
+  | 'PERSEDIAAN'          // Pembelian barang dagang/suplemen (masuk stok, HPP saat laku)
+  | 'PEMBAYARAN_UTANG';   // Pembayaran utang vendor / cicilan pokok (mengurangi liabilitas)
+
+export type ExpenseCategoryGroup =
+  | 'OPERASIONAL'
+  | 'SDM'
+  | 'FASILITAS'
+  | 'KEUANGAN_LAIN'
+  | 'ASET_PERSEDIAAN';
+
+export interface ExpenseCategory {
+  id: string;
+  name: string;
+  group: ExpenseCategoryGroup;
+  accountingType: ExpenseAccountingType;
+  description: string;
+  subcategories: string[];
+  defaultPaymentAccount?: string;
+  isActive: boolean;
+  createdAt: string;
+}
+
+export type ExpenseApprovalStatus =
+  | 'Draft'
+  | 'Menunggu Persetujuan'
+  | 'Disetujui'
+  | 'Ditolak'
+  | 'Dibatalkan';
+
+export type ExpensePaymentStatus =
+  | 'Belum Dibayar'
+  | 'Dibayar Sebagian'
+  | 'Lunas';
+
+export type ExpensePaymentMethod =
+  | 'Kas'
+  | 'Transfer Bank'
+  | 'QRIS'
+  | 'Kartu Debit/EDC'
+  | 'Lainnya';
+
+export interface ExpenseAuditLog {
+  id: string;
+  timestamp: string;
+  userId?: string;
+  userName?: string;
+  performedByStaffId?: string;
+  performedByStaffName?: string;
+  action: string;
+  notes?: string;
+}
+
+export interface CompanyExpense {
+  id: string; // e.g. "EXP-20261010-0001"
+  expenseNumber: string; // Unik, auto-generated
+  date: string; // YYYY-MM-DD
+  branchId: string;
+  branchName: string;
+  categoryId: string;
+  categoryName: string;
+  subcategory: string;
+  name: string; // Nama pengeluaran
+  description: string;
+  amount: number; // Nominal pengeluaran > 0
+  accountingType: ExpenseAccountingType;
+  paymentMethod: ExpensePaymentMethod;
+  sourceAccount: string; // e.g. 'Kas Laci (Petty Cash)', 'Bank Mandiri', 'Bank BCA / Artha Graha'
+  vendorOrBeneficiary: string; // Nama penerima / vendor
+  picStaffId: string; // PIC atau pengaju
+  picStaffName: string;
+  invoiceRefNumber?: string; // No invoice / referensi bukti
+  attachmentUrl?: string; // Struk / nota / invoice image or pdf base64
+  attachmentFileName?: string;
+  approvalStatus: ExpenseApprovalStatus;
+  paymentStatus: ExpensePaymentStatus;
+  paidAmount: number; // Nominal yang sudah dibayar
+  balanceRemaining: number; // Sisa yang belum dibayar
+  paidAt?: string;
+  paidByUserId?: string;
+  paidByUserName?: string;
+  paidAccount?: string;
+  approvedByUserId?: string;
+  approvedByUserName?: string;
+  approvedAt?: string;
+  rejectionReason?: string;
+  notes?: string;
+  auditLogs: ExpenseAuditLog[];
+  paymentHistory?: {
+    id: string;
+    date: string;
+    amount: number;
+    paidAccount: string;
+    paymentMethod: ExpensePaymentMethod;
+    refNumber: string;
+    paidByStaffId?: string;
+    paidByStaffName?: string;
+    notes?: string;
+  }[];
+  isAssetCapitalized?: boolean;
+  linkedAssetId?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ExpenseApprovalPolicy {
+  requireApprovalAbove: number; // Nominal di atas ini butuh persetujuan
+  preventSelfApproval: boolean; // Pengaju dilarang approve pengajuan sendiri
+}
 
 export interface StockTransferRecord {
   id: string; // e.g. "TRF-202609-001"
@@ -1516,12 +1641,83 @@ export interface PicProtectionConfig {
   requirePasswordOnLeadHandover?: boolean; // Oper Alih Prospek CRM Leads
 }
 
+export interface LandingHeroConfig {
+  headlineStart: string;
+  headlineGradient: string;
+  headlineEnd: string;
+  subheadline: string;
+  badgeText: string;
+  heroImageUrl: string;
+  heroImageAlt: string;
+  hubTag: string;
+  hubTitle: string;
+  hubDesc: string;
+  hubStatus: string;
+  primaryCtaText: string;
+  secondaryCtaText: string;
+  ratingScore: string;
+  ratingReviews: string;
+  ratingTagline: string;
+  communityCount: string;
+  communityTagline: string;
+  highlights: string[];
+}
+
+export interface LandingAnnouncementConfig {
+  enabled: boolean;
+  text: string;
+  highlightText: string;
+  badgeText: string;
+  ctaText?: string;
+  targetUrl?: string;
+}
+
+export interface LandingAboutConfig {
+  badge: string;
+  title: string;
+  description: string;
+  storyTitle: string;
+  storyP1: string;
+  storyP2: string;
+  stat1Value: string;
+  stat1Label: string;
+  stat2Value: string;
+  stat2Label: string;
+}
+
+export interface LandingSocialConfig {
+  whatsapp: string;
+  instagram: string;
+  tiktok: string;
+  youtube: string;
+  email: string;
+  operationalWeekday: string;
+  operationalWeekend: string;
+}
+
+export interface LandingGalleryItem {
+  id: string;
+  title: string;
+  category: 'gym' | 'studio' | 'recovery' | 'lounge';
+  image: string;
+  description: string;
+}
+
+export interface LandingPageConfig {
+  hero: LandingHeroConfig;
+  announcement: LandingAnnouncementConfig;
+  about: LandingAboutConfig;
+  social: LandingSocialConfig;
+  galleryItems?: LandingGalleryItem[];
+}
+
 export interface SystemSettings {
   printer: PrinterConfig;
   profile: GymBusinessProfile;
   paymentAndTax: PaymentAndTaxConfig;
   templates: WhatsAppTemplateConfig;
   picProtection?: PicProtectionConfig;
+  landing?: LandingPageConfig;
   updatedAt?: string;
 }
 

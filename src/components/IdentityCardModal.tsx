@@ -1,6 +1,7 @@
-import React, { useRef } from 'react';
-import { X, Download, Printer, ShieldCheck, FileText, CheckCircle2, User, Phone, MapPin, Calendar } from 'lucide-react';
+import React, { useRef, useState } from 'react';
+import { X, Download, Printer, ShieldCheck, FileText, CheckCircle2, User, Phone, MapPin, Calendar, ZoomIn } from 'lucide-react';
 import { Member, User as StaffUser } from '../types';
+import { PhotoEnlargeModal } from './common/PhotoEnlargeModal';
 
 interface IdentityCardModalProps {
   isOpen: boolean;
@@ -18,6 +19,7 @@ export const IdentityCardModal: React.FC<IdentityCardModalProps> = ({
   onEdit
 }) => {
   const cardPrintRef = useRef<HTMLDivElement | null>(null);
+  const [isPhotoEnlarged, setIsPhotoEnlarged] = useState(false);
 
   if (!isOpen || !person) return null;
 
@@ -27,6 +29,7 @@ export const IdentityCardModal: React.FC<IdentityCardModalProps> = ({
   const address = person.address || 'Alamat belum dilengkapi';
   const birthDate = person.birthDate || '-';
   const idPhoto = person.idPhoto;
+  const activePhotoUrl = idPhoto || person.photo || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=300&auto=format&fit=crop';
 
   const handlePrint = () => {
     window.print();
@@ -97,18 +100,37 @@ export const IdentityCardModal: React.FC<IdentityCardModalProps> = ({
             <div className="mt-4 grid grid-cols-1 sm:grid-cols-3 gap-4 items-start">
               {/* Profile / ID Card Scan Preview */}
               <div className="col-span-1 flex flex-col items-center gap-2">
-                <div className="w-full aspect-[4/3] sm:aspect-square rounded-xl overflow-hidden border-2 border-zinc-700 bg-zinc-950 relative group shadow-md">
+                <div
+                  onClick={() => setIsPhotoEnlarged(true)}
+                  className="w-full aspect-[4/3] sm:aspect-square rounded-xl overflow-hidden border-2 border-zinc-700 hover:border-orange-500 bg-zinc-950 relative group shadow-md cursor-pointer transition-all duration-200"
+                  title="Klik untuk memperbesar foto / dokumen identitas"
+                >
                   <img
-                    src={idPhoto || person.photo || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=300&auto=format&fit=crop'}
+                    src={activePhotoUrl}
                     alt={person.name}
-                    className="w-full h-full object-cover"
+                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                   />
+                  {/* Hover Overlay with Zoom Icon */}
+                  <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center gap-1.5 text-white backdrop-blur-[2px]">
+                    <div className="w-8 h-8 rounded-full bg-orange-500/80 flex items-center justify-center shadow-lg">
+                      <ZoomIn className="w-4 h-4 text-white" />
+                    </div>
+                    <span className="text-[10px] font-bold tracking-wide drop-shadow">Perbesar Foto</span>
+                  </div>
+
                   {idPhoto && (
-                    <span className="absolute bottom-1 right-1 text-[9px] bg-black/75 backdrop-blur-xs text-white px-1.5 py-0.5 rounded font-mono">
+                    <span className="absolute bottom-1 right-1 text-[9px] bg-black/75 backdrop-blur-xs text-white px-1.5 py-0.5 rounded font-mono group-hover:hidden">
                       Scan Lampiran
                     </span>
                   )}
                 </div>
+                <button
+                  type="button"
+                  onClick={() => setIsPhotoEnlarged(true)}
+                  className="w-full py-1 px-2 rounded-lg bg-zinc-800/80 hover:bg-orange-500/20 text-zinc-300 hover:text-orange-400 border border-zinc-700/60 text-[10px] font-bold transition flex items-center justify-center gap-1"
+                >
+                  <ZoomIn className="w-3 h-3 text-orange-400" /> Perbesar Foto
+                </button>
                 <div className="text-center">
                   <p className="text-[11px] font-mono text-zinc-400 font-bold">ID: {person.id}</p>
                   <p className="text-[10px] text-orange-400 font-semibold">
@@ -235,6 +257,18 @@ export const IdentityCardModal: React.FC<IdentityCardModalProps> = ({
           </div>
         </div>
       </div>
+
+      {/* Enlarged Photo Lightbox Modal */}
+      <PhotoEnlargeModal
+        isOpen={isPhotoEnlarged}
+        onClose={() => setIsPhotoEnlarged(false)}
+        imageUrl={activePhotoUrl}
+        name={person.name}
+        id={person.id}
+        roleOrType={isStaff ? (person as StaffUser).roleName : `${idType}: ${idNumber}`}
+        subInfo={address}
+        badgeType={idPhoto ? 'document' : isStaff ? 'staff' : 'member'}
+      />
     </div>
   );
 };
