@@ -253,6 +253,9 @@ export interface PackageItem {
   // Catatan Kebijakan & Saran
   commissionNotes?: string;
   presetApplied?: string;
+  // Fasilitas Cicilan & Pengaturan Hari Jatuh Tempo
+  allowInstallment?: boolean; // Boleh menggunakan fasilitas cicilan (misal khusus paket 6 bulan & 1 tahun)
+  installmentDueDays?: number; // Durasi jatuh tempo cicilan dalam hari (misal 40 hari utk 6 bulan, 60 hari utk 1 tahun)
 }
 
 export type BundleType =
@@ -303,6 +306,8 @@ export interface BundlePackage {
   salesCommissionNominal?: number; // Rp Komisi Penjualan Kasir/Sales
   items: BundleItem[];
   allowDpActivation?: boolean; // If true, benefits activate even when paying DP
+  allowInstallment?: boolean; // Apakah paket bundling ini bisa dicicil (misal minimal 6 bulan)
+  installmentDueDays?: number; // Durasi hari jatuh tempo cicilan (misal 40 hari utk 6 bln, 60 hari utk 1 thn)
 }
 
 export interface SalesCommissionRecord {
@@ -423,6 +428,9 @@ export interface Transaction {
   splitCashAmount?: number;
   splitNonCashAmount?: number;
   splitNonCashMethod?: string;
+  // Membership & Installment details
+  expiredDate?: string;      // YYYY-MM-DD (Masa Aktif / Tanggal Kadaluarsa Paket)
+  tenorDays?: number;        // Durasi Hari Jatuh Tempo Cicilan (e.g. 7, 14, 30, 40 hari)
   // Multi-Branch Unit Identifier
   branchId?: string;
   branchName?: string;

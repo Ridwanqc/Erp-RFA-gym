@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { Crown, Sparkles, Check, AlertCircle, Plus, DollarSign, Info, CreditCard, Wallet, QrCode, Building2, CheckCircle2, CalendarClock, Users, UserCheck, Copy, Gift, Layers, BarChart3, Settings, Percent, TrendingUp, Dumbbell, Search, Trash2, Edit3, HelpCircle, Lightbulb, Zap, ArrowRight, ShieldCheck, Lock, Unlock } from 'lucide-react';
+import { Crown, Sparkles, Check, AlertCircle, Plus, DollarSign, Info, CreditCard, Wallet, QrCode, Building2, CheckCircle2, CalendarClock, Clock, Users, UserCheck, Copy, Gift, Layers, BarChart3, Settings, Percent, TrendingUp, Dumbbell, Search, Trash2, Edit3, HelpCircle, Lightbulb, Zap, ArrowRight, ShieldCheck, Lock, Unlock } from 'lucide-react';
 import { PackageItem, Member, User, Transaction, BundlePackage } from '../types';
-import { formatRp, getTimestamp, APP_TODAY } from '../utils/formatters';
+import { formatRp, getTimestamp, APP_TODAY, formatDateIndo } from '../utils/formatters';
 import { SearchableMemberSelect } from './SearchableMemberSelect';
 import { useSettings } from '../context/SettingsContext';
 import { DEFAULT_PIC_PROTECTION } from '../data/settingsData';
@@ -100,6 +100,22 @@ export const MembershipView: React.FC<MembershipViewProps> = ({
   // Opsi DP Cicilan
   const [dpPercent, setDpPercent] = useState<number>(50);
   const [customDpAmount, setCustomDpAmount] = useState<string>('');
+  // Durasi Hari Jatuh Tempo Cicilan (Bisa disetting per-transaksi & sinkron dengan Pengaturan Sistem)
+  const defaultDueDays = settings?.paymentAndTax?.defaultPaymentDueDays || 30;
+  const [installmentDueDays, setInstallmentDueDays] = useState<number>(defaultDueDays);
+
+  useEffect(() => {
+    if (settings?.paymentAndTax?.defaultPaymentDueDays) {
+      setInstallmentDueDays(settings.paymentAndTax.defaultPaymentDueDays);
+    }
+  }, [settings?.paymentAndTax?.defaultPaymentDueDays]);
+
+  const calculatedDueDateStr = useMemo(() => {
+    const d = new Date(APP_TODAY + 'T00:00:00');
+    d.setDate(d.getDate() + (installmentDueDays || 30));
+    return d.toISOString().split('T')[0];
+  }, [installmentDueDays]);
+
   // Kebijakan Aktivasi Sesi Kelas jika Cicilan: 'proportional' (sesi sesuai DP) vs 'full' (buka semua kuota, sisa piutang)
   const [classDpPolicy, setClassDpPolicy] = useState<'proportional' | 'full'>('proportional');
 
@@ -140,6 +156,10 @@ export const MembershipView: React.FC<MembershipViewProps> = ({
   const [productBonusNominal, setProductBonusNominal] = useState<string>('0');
   const [commissionNotes, setCommissionNotes] = useState<string>('');
 
+  // Pengaturan Fasilitas Cicilan & Jatuh Tempo untuk Master Paket Baru/Edit
+  const [newPkgAllowInstallment, setNewPkgAllowInstallment] = useState<boolean>(false);
+  const [newPkgInstallmentDueDays, setNewPkgInstallmentDueDays] = useState<string>('40');
+
   const filteredPackages = useMemo(() => {
     const matched = packages.filter((p) => p.cat === cat && p.type === type);
     if (matched.length === 0 && cat === 'Class') {
@@ -153,6 +173,54 @@ export const MembershipView: React.FC<MembershipViewProps> = ({
   // Bundling packages
   const activeBundles = bundlePackages.filter((b) => b.status === 'ACTIVE');
   const currentBundle = activeBundles.find((b) => b.bundleId === selectedBundleId) || activeBundles[0];
+
+  // Evaluasi fasilitas cicilan: Hanya produk 6 bulan (>= 180 hari, tempo 40 hari) dan 1 tahun (>= 360 hari, tempo 60 hari)
+  const isCurrentPackageInstallmentAllowed = useMemo(() => {
+    if (cat === 'Bundling') {
+      if (!currentBundle) return false;
+      if (currentBundle.allowInstallment !== undefined) return currentBundle.allowInstallment;
+      const memItem = (currentBundle.items || []).find((i) => i.itemType === 'MEMBERSHIP');
+      const dur = currentBundle.durationDays || memItem?.duration || 0;
+      return dur >= 180;
+    }
+    if (!currentPackage) return false;
+    if (currentPackage.allowInstallment !== undefined) return currentPackage.allowInstallment;
+    if (currentPackage.cat === 'Membership') {
+      return currentPackage.value >= 180;
+    }
+    if (currentPackage.cat === 'PT') {
+      return currentPackage.value >= 20 || (currentPackage.validityDays !== undefined && currentPackage.validityDays >= 180);
+    }
+    return false;
+  }, [cat, currentBundle, currentPackage]);
+
+  // Durasi hari jatuh tempo bawaan paket (misal 40 hari utk 6 bln, 60 hari utk 1 thn)
+  const currentPackageDefaultDueDays = useMemo(() => {
+    if (cat === 'Bundling' && currentBundle) {
+      if (currentBundle.installmentDueDays) return currentBundle.installmentDueDays;
+      const memItem = (currentBundle.items || []).find((i) => i.itemType === 'MEMBERSHIP');
+      const dur = currentBundle.durationDays || memItem?.duration || 0;
+      if (dur >= 360) return 60;
+      if (dur >= 180) return 40;
+      return 30;
+    }
+    if (currentPackage) {
+      if (currentPackage.installmentDueDays) return currentPackage.installmentDueDays;
+      if (currentPackage.value >= 360) return 60;
+      if (currentPackage.value >= 180) return 40;
+      return 30;
+    }
+    return 30;
+  }, [cat, currentBundle, currentPackage]);
+
+  // Otomatis sinkronkan durasi jatuh tempo saat paket berganti & reset ke Lunas jika paket tidak boleh dicicil
+  useEffect(() => {
+    if (isCurrentPackageInstallmentAllowed) {
+      setInstallmentDueDays(currentPackageDefaultDueDays);
+    } else if (paymentType === 'Cicilan') {
+      setPaymentType('Lunas');
+    }
+  }, [currentPackage, currentBundle, isCurrentPackageInstallmentAllowed, currentPackageDefaultDueDays]);
 
   // Auto-sync PIC when Member 1 is selected
   const handleP1Change = (memberId: string) => {
@@ -326,6 +394,15 @@ export const MembershipView: React.FC<MembershipViewProps> = ({
       return;
     }
 
+    if (isCicilan && !isCurrentPackageInstallmentAllowed) {
+      showToast(
+        'Cicilan Tidak Diizinkan',
+        'Fasilitas cicilan hanya tersedia untuk produk 6 bulan (jatuh tempo 40 hari) dan 1 tahun (jatuh tempo 60 hari).',
+        'warning'
+      );
+      return;
+    }
+
     if (isCicilan && downPayment <= 0 && netTotal > 0) {
       showToast('Peringatan', 'Nominal DP cicilan harus lebih besar dari Rp 0.', 'warning');
       return;
@@ -366,6 +443,20 @@ export const MembershipView: React.FC<MembershipViewProps> = ({
       return;
     }
 
+    // Calculate PT package expiration / validity in days
+    const ptDays = currentPackage ? (currentPackage.validityDays || (
+      currentPackage.value >= 30 ? 180 :
+      currentPackage.value >= 20 ? 120 :
+      currentPackage.value >= 16 ? 90 :
+      currentPackage.value >= 10 ? 60 :
+      currentPackage.value >= 8 ? 45 : 30
+    )) : 30;
+
+    let ptExpStr = APP_TODAY;
+    const ptExpDateCalc = new Date(APP_TODAY + 'T00:00:00');
+    ptExpDateCalc.setDate(ptExpDateCalc.getDate() + ptDays);
+    ptExpStr = ptExpDateCalc.toISOString().split('T')[0];
+
     // Prepare updated members with dedicated PICs
     const updatedMembersList: Member[] = [];
     chosenIds.forEach((mId) => {
@@ -382,17 +473,21 @@ export const MembershipView: React.FC<MembershipViewProps> = ({
           isPicLocked: true
         };
 
-        if (cat === 'Bundling') {
+        if (cat === 'Bundling' && currentBundle) {
           // Extend membership and add PT sessions automatically
-          const currentExp = new Date(existing.expired + 'T00:00:00');
-          const todayDate = new Date(APP_TODAY + 'T00:00:00');
-          const baseDate = currentExp > todayDate ? currentExp : todayDate;
-          const memItem = currentBundle.items.find((i) => i.itemType === 'MEMBERSHIP');
+          let baseDate = new Date(APP_TODAY + 'T00:00:00');
+          if (existing.expired && existing.expired !== '-' && existing.expired.trim() !== '') {
+            const currentExp = new Date(existing.expired.includes('T') ? existing.expired : existing.expired + 'T00:00:00');
+            if (!isNaN(currentExp.getTime()) && currentExp > baseDate) {
+              baseDate = currentExp;
+            }
+          }
+          const memItem = (currentBundle.items || []).find((i) => i.itemType === 'MEMBERSHIP');
           const durationDays = currentBundle.durationDays || memItem?.duration || 30;
           baseDate.setDate(baseDate.getDate() + durationDays);
           const newExp = baseDate.toISOString().split('T')[0];
 
-          const ptItem = currentBundle.items.find((i) => i.itemType === 'PT');
+          const ptItem = (currentBundle.items || []).find((i) => i.itemType === 'PT');
           const addPt = ptItem?.sessionCount || 2;
 
           updatedMember = {
@@ -401,12 +496,16 @@ export const MembershipView: React.FC<MembershipViewProps> = ({
             ptQuota: (existing.ptQuota || 0) + addPt,
             followUpStatus: 'SUDAH RENEWAL'
           };
-        } else if (cat === 'Membership') {
-          // Extend membership
-          const currentExp = new Date(existing.expired + 'T00:00:00');
-          const todayDate = new Date(APP_TODAY + 'T00:00:00');
-          const baseDate = currentExp > todayDate ? currentExp : todayDate;
-          baseDate.setDate(baseDate.getDate() + currentPackage.value);
+        } else if (cat === 'Membership' && currentPackage) {
+          // Extend membership safely avoiding NaN
+          let baseDate = new Date(APP_TODAY + 'T00:00:00');
+          if (existing.expired && existing.expired !== '-' && existing.expired.trim() !== '') {
+            const currentExp = new Date(existing.expired.includes('T') ? existing.expired : existing.expired + 'T00:00:00');
+            if (!isNaN(currentExp.getTime()) && currentExp > baseDate) {
+              baseDate = currentExp;
+            }
+          }
+          baseDate.setDate(baseDate.getDate() + (currentPackage.value || 30));
           const newExp = baseDate.toISOString().split('T')[0];
 
           updatedMember = {
@@ -414,18 +513,20 @@ export const MembershipView: React.FC<MembershipViewProps> = ({
             expired: newExp,
             followUpStatus: 'SUDAH RENEWAL'
           };
-        } else if (cat === 'Class') {
+        } else if (cat === 'Class' && currentPackage) {
           // Add Studio Class Quota & validity
           const totalSessions = currentPackage.sessionCount || currentPackage.value || 1;
           const sessionsToAdd = isCicilan && classDpPolicy === 'proportional'
             ? Math.max(1, Math.round((totalSessions * downPayment) / (netTotal || 1)))
             : totalSessions;
 
-          const currentClassExp = existing.classPackageExpired
-            ? new Date(existing.classPackageExpired + 'T00:00:00')
-            : null;
-          const todayDate = new Date(APP_TODAY + 'T00:00:00');
-          const baseDate = (currentClassExp && currentClassExp > todayDate) ? currentClassExp : todayDate;
+          let baseDate = new Date(APP_TODAY + 'T00:00:00');
+          if (existing.classPackageExpired && existing.classPackageExpired !== '-') {
+            const currentClassExp = new Date(existing.classPackageExpired.includes('T') ? existing.classPackageExpired : existing.classPackageExpired + 'T00:00:00');
+            if (!isNaN(currentClassExp.getTime()) && currentClassExp > baseDate) {
+              baseDate = currentClassExp;
+            }
+          }
           const daysToAdd = currentPackage.validityDays || 30;
           baseDate.setDate(baseDate.getDate() + daysToAdd);
           const newClassExp = baseDate.toISOString().split('T')[0];
@@ -438,11 +539,16 @@ export const MembershipView: React.FC<MembershipViewProps> = ({
             classCategoryAllowed: currentPackage.classCategory || 'Semua Kelas',
             followUpStatus: 'AKTIF KELAS'
           };
-        } else {
-          // Add PT Quota
+        } else if (cat === 'PT' && currentPackage) {
+          // Add PT Quota & extend member access if currently expired
+          const hasValidExp = existing.expired && existing.expired !== '-' && existing.expired >= APP_TODAY;
+          const finalExp = hasValidExp ? existing.expired : ptExpStr;
+
           updatedMember = {
             ...updatedMember,
-            ptQuota: (existing.ptQuota || 0) + currentPackage.value
+            ptQuota: (existing.ptQuota || 0) + currentPackage.value,
+            expired: finalExp,
+            followUpStatus: 'AKTIF PT'
           };
         }
         updatedMembersList.push(updatedMember);
@@ -451,19 +557,31 @@ export const MembershipView: React.FC<MembershipViewProps> = ({
 
     // Create Transaction
     const dueDateDate = new Date(APP_TODAY + 'T00:00:00');
-    dueDateDate.setDate(dueDateDate.getDate() + 40);
+    dueDateDate.setDate(dueDateDate.getDate() + (installmentDueDays || 30));
     const dueDateStr = dueDateDate.toISOString().split('T')[0];
+
+    const primaryExpiredDate = cat === 'Class'
+      ? (updatedMembersList[0]?.classPackageExpired || updatedMembersList[0]?.expired)
+      : cat === 'PT'
+      ? (updatedMembersList[0]?.expired || ptExpStr)
+      : updatedMembersList[0]?.expired;
 
     const customerNames = updatedMembersList.map((m) => m.name).join(', ');
 
     // Participant-PIC pairing summary
     const participantsDetail = updatedMembersList.map((m) => {
       const staff = staffUsers.find((s) => s.id === m.picId);
+      const mExp = cat === 'Class' && m.classPackageExpired
+        ? m.classPackageExpired
+        : cat === 'PT'
+        ? (m.expired || ptExpStr)
+        : m.expired;
       return {
         memberId: m.id,
         memberName: m.name,
         picId: m.picId,
-        picName: staff?.name || m.picName || '-'
+        picName: staff?.name || m.picName || '-',
+        expiredDate: mExp
       };
     });
 
@@ -488,7 +606,7 @@ export const MembershipView: React.FC<MembershipViewProps> = ({
       .join(', ');
 
     const schemeLabel = isCicilan
-      ? `Cicilan DP ${formatRp(downPayment)} (Sisa Piutang ${formatRp(sisaCicilan)})`
+      ? `Cicilan DP ${formatRp(downPayment)} (Sisa Piutang ${formatRp(sisaCicilan)} Jatuh Tempo ${installmentDueDays} Hari)`
       : isSplit
       ? `Split Payment (Tunai ${formatRp(Number(splitCashAmount))} + ${splitNonCashMethod} ${formatRp(Number(splitNonCashAmount))})`
       : `Lunas via ${paymentMethod}`;
@@ -509,10 +627,13 @@ export const MembershipView: React.FC<MembershipViewProps> = ({
         ? `Paket Kelas Studio ${currentPackage.name} (${currentPackage.value} Sesi) [${schemeLabel}]`
         : `Paket ${currentPackage ? currentPackage.name : ''} [${schemeLabel}]`,
       customer: customerNames,
+      memberId: updatedMembersList[0]?.id || p1Id, // BUG FIXED: Populate memberId
+      subtotal: rawPrice, // BUG FIXED: Subtotal
+      discount: discValue, // BUG FIXED: Diskon
       amount: netTotal,
       amountPaid: downPayment,
       amountRemaining: sisaCicilan,
-      dueDate: isCicilan ? dueDateStr : '-',
+      dueDate: isCicilan ? dueDateStr : undefined,
       cogs: 0,
       profit: downPayment,
       method: effectiveMethod,
@@ -534,7 +655,12 @@ export const MembershipView: React.FC<MembershipViewProps> = ({
               bundleId: currentBundle.bundleId,
               bundleType: currentBundle.bundleType,
               price: currentBundle.price,
+              subtotal: rawPrice,
+              discount: discValue,
               qty: 1,
+              expiredDate: primaryExpiredDate,
+              dueDate: isCicilan ? dueDateStr : undefined,
+              tenorDays: isCicilan ? (installmentDueDays || 30) : undefined,
               items: currentBundle.items,
               participants: participantsDetail
             }
@@ -542,8 +668,13 @@ export const MembershipView: React.FC<MembershipViewProps> = ({
               name: currentPackage ? currentPackage.name : '',
               category: cat,
               price: currentPackage ? currentPackage.price : 0,
+              subtotal: rawPrice,
+              discount: discValue,
               sessions: currentPackage?.value,
-              validityDays: currentPackage?.validityDays || 30,
+              validityDays: cat === 'PT' ? ptDays : (currentPackage?.validityDays || 30),
+              expiredDate: primaryExpiredDate,
+              dueDate: isCicilan ? dueDateStr : undefined,
+              tenorDays: isCicilan ? (installmentDueDays || 30) : undefined,
               qty: 1,
               participants: participantsDetail
             }
@@ -552,7 +683,8 @@ export const MembershipView: React.FC<MembershipViewProps> = ({
       picIds: closingPicIds,
       picNames: closingPicNames,
       trxCategory: trxType,
-      initialCashPaid: downPayment
+      expiredDate: primaryExpiredDate,
+      tenorDays: isCicilan ? (installmentDueDays || 30) : undefined
     };
 
     onPurchasePackage(newTrx, updatedMembersList);
@@ -597,6 +729,10 @@ export const MembershipView: React.FC<MembershipViewProps> = ({
     setTrainerCommissionPerSession(String(pkg.trainerCommissionPerSession ?? (pkg.cat === 'PT' && pkg.value ? Math.round((pkg.price * 0.4) / pkg.value) : 0)));
     setProductBonusNominal(String(pkg.productBonusNominal || 0));
     setCommissionNotes(pkg.commissionNotes || '');
+    const isEligible = pkg.allowInstallment ?? (pkg.value >= 180);
+    const dueDays = pkg.installmentDueDays ?? (pkg.value >= 360 ? 60 : pkg.value >= 180 ? 40 : 30);
+    setNewPkgAllowInstallment(isEligible);
+    setNewPkgInstallmentDueDays(String(dueDays));
     setPkgModalTab('form');
   };
 
@@ -615,6 +751,8 @@ export const MembershipView: React.FC<MembershipViewProps> = ({
     setTrainerCommissionPerSession('0');
     setProductBonusNominal('0');
     setCommissionNotes('');
+    setNewPkgAllowInstallment(false);
+    setNewPkgInstallmentDueDays('40');
   };
 
   // Smart Commission Advisor Presets
@@ -746,7 +884,9 @@ export const MembershipView: React.FC<MembershipViewProps> = ({
       trainerCommissionNominal: tNom,
       trainerCommissionPerSession: tPerSess,
       productBonusNominal: Number(productBonusNominal) || 0,
-      commissionNotes: commissionNotes.trim()
+      commissionNotes: commissionNotes.trim(),
+      allowInstallment: newPkgAllowInstallment,
+      installmentDueDays: newPkgAllowInstallment ? (Number(newPkgInstallmentDueDays) || (valueNum >= 360 ? 60 : 40)) : undefined
     };
 
     if (editingPkgId && onUpdatePackage) {
@@ -1743,16 +1883,26 @@ export const MembershipView: React.FC<MembershipViewProps> = ({
 
                 <button
                   type="button"
-                  onClick={() => setPaymentType('Cicilan')}
-                  className={`p-3.5 rounded-2xl border text-left transition flex items-start gap-3 cursor-pointer ${
-                    paymentType === 'Cicilan'
-                      ? 'bg-amber-500/10 border-amber-500 text-white shadow-sm ring-1 ring-amber-500/30'
-                      : 'bg-zinc-950/60 border-zinc-800 text-zinc-400 hover:border-zinc-700 hover:text-zinc-200'
+                  onClick={() => {
+                    if (!isCurrentPackageInstallmentAllowed) {
+                      showToast('Fasilitas Cicilan Tidak Tersedia', 'Fasilitas cicilan hanya tersedia untuk produk 6 bulan (tempo 40 hari) dan 1 tahun (tempo 60 hari).', 'warning');
+                      return;
+                    }
+                    setPaymentType('Cicilan');
+                  }}
+                  className={`p-3.5 rounded-2xl border text-left transition flex items-start gap-3 ${
+                    !isCurrentPackageInstallmentAllowed
+                      ? 'opacity-40 bg-zinc-950/40 border-zinc-900 cursor-not-allowed text-zinc-500'
+                      : paymentType === 'Cicilan'
+                      ? 'bg-amber-500/10 border-amber-500 text-white shadow-sm ring-1 ring-amber-500/30 cursor-pointer'
+                      : 'bg-zinc-950/60 border-zinc-800 text-zinc-400 hover:border-zinc-700 hover:text-zinc-200 cursor-pointer'
                   }`}
                 >
                   <div
                     className={`p-2 rounded-xl shrink-0 ${
-                      paymentType === 'Cicilan'
+                      !isCurrentPackageInstallmentAllowed
+                        ? 'bg-zinc-900 text-zinc-600'
+                        : paymentType === 'Cicilan'
                         ? 'bg-amber-500 text-zinc-950 font-black'
                         : 'bg-zinc-800 text-zinc-400'
                     }`}
@@ -1762,12 +1912,20 @@ export const MembershipView: React.FC<MembershipViewProps> = ({
                   <div>
                     <div className="flex items-center gap-2">
                       <span className="font-bold text-xs sm:text-sm text-white">Fasilitas Cicilan</span>
-                      <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-400 border border-amber-500/30">
-                        Uang Muka (DP)
+                      <span
+                        className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${
+                          isCurrentPackageInstallmentAllowed
+                            ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
+                            : 'bg-zinc-800 text-zinc-500 border border-zinc-700'
+                        }`}
+                      >
+                        {isCurrentPackageInstallmentAllowed ? `DP (${installmentDueDays} Hari)` : 'Wajib Lunas'}
                       </span>
                     </div>
                     <p className="text-[11px] text-zinc-400 mt-0.5 leading-relaxed">
-                      Bayar DP hari ini, sisa tagihan dicatat di Buku Piutang (40 hari).
+                      {isCurrentPackageInstallmentAllowed
+                        ? `Bayar DP hari ini, sisa tagihan dicatat di Buku Piutang (tempo ${installmentDueDays} hari).`
+                        : 'Khusus paket 6 bulan (tempo 40 hari) & 1 tahun (tempo 60 hari).'}
                     </p>
                   </div>
                 </button>
@@ -1913,6 +2071,56 @@ export const MembershipView: React.FC<MembershipViewProps> = ({
                     </div>
                   </div>
                 )}
+
+                {/* Pengaturan Hari Jatuh Tempo Cicilan */}
+                <div className="pt-2.5 border-t border-amber-500/20 space-y-2">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
+                    <label className="text-[10px] font-bold text-amber-300 uppercase tracking-wider flex items-center gap-1.5">
+                      <Clock className="w-3.5 h-3.5 text-amber-400" /> Pengaturan Hari Jatuh Tempo Pelunasan
+                    </label>
+                    <span className="text-[11px] text-zinc-300 font-semibold">
+                      Jatuh Tempo: <strong className="text-amber-400">{formatDateIndo(calculatedDueDateStr)}</strong>
+                    </span>
+                  </div>
+
+                  <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+                    {/* Preset Tenor Buttons */}
+                    <div className="flex gap-1 overflow-x-auto pb-0.5">
+                      {[7, 14, 30, 40, 60].map((days) => (
+                        <button
+                          key={days}
+                          type="button"
+                          onClick={() => setInstallmentDueDays(days)}
+                          className={`px-3 py-1.5 rounded-xl text-xs font-bold transition border cursor-pointer ${
+                            installmentDueDays === days
+                              ? 'bg-amber-500 text-zinc-950 border-amber-400 font-black shadow-sm'
+                              : 'bg-zinc-950 border-zinc-800 text-zinc-400 hover:text-white hover:border-zinc-700'
+                          }`}
+                        >
+                          {days} Hari
+                        </button>
+                      ))}
+                    </div>
+
+                    {/* Custom Days Input */}
+                    <div className="flex items-center gap-1.5 flex-1 bg-zinc-950 border border-zinc-700 rounded-xl px-3 py-1.5">
+                      <span className="text-zinc-500 text-[11px] font-medium shrink-0">Atau Kustom:</span>
+                      <input
+                        type="number"
+                        min="1"
+                        max="365"
+                        value={installmentDueDays}
+                        onChange={(e) => setInstallmentDueDays(Math.max(1, parseInt(e.target.value) || 1))}
+                        className="w-16 bg-transparent text-white font-bold text-xs outline-none text-center"
+                      />
+                      <span className="text-zinc-400 text-xs font-bold">Hari</span>
+                    </div>
+                  </div>
+
+                  <p className="text-[10px] text-zinc-400 leading-relaxed">
+                    Sisa piutang ({formatRp(sisaCicilan)}) wajib dilunasi sebelum <strong>{formatDateIndo(calculatedDueDateStr)}</strong> ({installmentDueDays} hari dari sekarang). Keterangan ini otomatis dicantumkan di struk kasir & faktur.
+                  </p>
+                </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1 text-xs">
                   <div className="bg-zinc-950/80 border border-zinc-800/80 rounded-xl p-3 flex justify-between items-center">
@@ -2201,7 +2409,7 @@ export const MembershipView: React.FC<MembershipViewProps> = ({
                 </div>
                 {isCicilan && (
                   <span className="text-xs text-amber-400 font-semibold block mt-0.5">
-                    Sisa piutang: {formatRp(sisaCicilan)} (Jatuh tempo 40 hari)
+                    Sisa piutang: {formatRp(sisaCicilan)} (Jatuh tempo {installmentDueDays} hari: {formatDateIndo(calculatedDueDateStr)})
                   </span>
                 )}
               </div>
@@ -2297,7 +2505,7 @@ export const MembershipView: React.FC<MembershipViewProps> = ({
                 </div>
                 {isCicilan && (
                   <div className="flex justify-between text-[11px] text-zinc-400 pt-1 border-t border-dashed border-zinc-800">
-                    <span>Sisa Piutang (40 hari):</span>
+                    <span>Sisa Piutang ({installmentDueDays} hari):</span>
                     <span className="font-bold text-rose-400">{formatRp(sisaCicilan)}</span>
                   </div>
                 )}
@@ -2360,7 +2568,7 @@ export const MembershipView: React.FC<MembershipViewProps> = ({
                 </div>
                 {isCicilan && (
                   <div className="flex justify-between text-[11px] text-zinc-400 pt-1 border-t border-dashed border-zinc-800">
-                    <span>Sisa Piutang (40 hari):</span>
+                    <span>Sisa Piutang ({installmentDueDays} hari):</span>
                     <span className="font-bold text-rose-400">{formatRp(sisaCicilan)}</span>
                   </div>
                 )}
@@ -2681,6 +2889,18 @@ export const MembershipView: React.FC<MembershipViewProps> = ({
                             const vNum = Number(vVal) || 1;
                             const tNom = Number(trainerCommissionNominal) || 0;
                             setTrainerCommissionPerSession(String(Math.round(tNom / vNum)));
+                            // Auto-suggest installment policy based on package duration
+                            if (newPkgCat === 'Membership') {
+                              if (vNum >= 360) {
+                                setNewPkgAllowInstallment(true);
+                                setNewPkgInstallmentDueDays('60');
+                              } else if (vNum >= 180) {
+                                setNewPkgAllowInstallment(true);
+                                setNewPkgInstallmentDueDays('40');
+                              } else if (!editingPkgId) {
+                                setNewPkgAllowInstallment(false);
+                              }
+                            }
                           }}
                           placeholder={newPkgCat === 'Membership' ? 'Cth: 30 (hari)' : 'Cth: 12 (sesi)'}
                           required
@@ -3161,6 +3381,130 @@ export const MembershipView: React.FC<MembershipViewProps> = ({
                   </div>
                 </div>
 
+                {/* Section 3: Pengaturan Fasilitas Cicilan & Jatuh Tempo */}
+                <div className="bg-zinc-950/80 border border-zinc-800/80 rounded-2xl p-4 sm:p-5 space-y-4">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-zinc-800/80 pb-3">
+                    <div>
+                      <span className="text-xs font-bold text-zinc-300 uppercase tracking-wider flex items-center gap-1.5">
+                        <CalendarClock className="w-4 h-4 text-amber-400" /> 3. Pengaturan Fasilitas Cicilan & Jatuh Tempo
+                      </span>
+                      <p className="text-[11px] text-zinc-500 mt-0.5">
+                        Atur apakah paket ini boleh dibeli dengan metode cicilan (DP) dan tentukan masa hari jatuh tempo pelunasannya.
+                      </p>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <label className="relative inline-flex items-center cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={newPkgAllowInstallment}
+                          onChange={(e) => {
+                            const checked = e.target.checked;
+                            setNewPkgAllowInstallment(checked);
+                            if (checked && (!newPkgInstallmentDueDays || newPkgInstallmentDueDays === '0')) {
+                              const vNum = Number(newPkgValue) || 0;
+                              setNewPkgInstallmentDueDays(vNum >= 360 ? '60' : '40');
+                            }
+                          }}
+                          className="sr-only peer"
+                        />
+                        <div className="w-11 h-6 bg-zinc-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-zinc-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-amber-500"></div>
+                        <span className="ml-2 text-xs font-bold text-white">
+                          {newPkgAllowInstallment ? 'Fasilitas Cicilan Aktif' : 'Hanya Bayar Lunas'}
+                        </span>
+                      </label>
+                    </div>
+                  </div>
+
+                  {newPkgAllowInstallment ? (
+                    <div className="p-3.5 bg-amber-500/10 border border-amber-500/20 rounded-xl space-y-3">
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                        <div>
+                          <label className="block text-xs font-bold text-amber-300">
+                            Durasi Masa Jatuh Tempo Pelunasan
+                          </label>
+                          <p className="text-[11px] text-zinc-400">
+                            Jumlah hari batas waktu pelunasan sisa piutang sejak tanggal transaksi di kasir.
+                          </p>
+                        </div>
+
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="number"
+                            min="1"
+                            max="365"
+                            value={newPkgInstallmentDueDays}
+                            onChange={(e) => setNewPkgInstallmentDueDays(e.target.value)}
+                            placeholder="40"
+                            className="w-24 bg-zinc-900 border border-amber-500/50 rounded-xl px-3 py-2 text-center text-xs font-bold text-white outline-none focus:border-amber-400"
+                          />
+                          <span className="text-xs font-bold text-zinc-300">Hari</span>
+                        </div>
+                      </div>
+
+                      {/* Preset Cepat Berdasarkan Kebijakan */}
+                      <div className="flex flex-wrap items-center gap-2 pt-1 border-t border-amber-500/20 text-xs">
+                        <span className="text-[11px] text-zinc-400 font-semibold">Preset Kebijakan Toko:</span>
+                        <button
+                          type="button"
+                          onClick={() => setNewPkgInstallmentDueDays('40')}
+                          className={`px-3 py-1.5 rounded-lg font-bold border transition text-[11px] cursor-pointer ${
+                            newPkgInstallmentDueDays === '40'
+                              ? 'bg-amber-500 text-zinc-950 border-amber-400 font-black shadow-sm'
+                              : 'bg-zinc-900 text-amber-300 border-amber-500/30 hover:bg-zinc-800'
+                          }`}
+                        >
+                          📦 Paket 6 Bulan (Jatuh Tempo 40 Hari)
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setNewPkgInstallmentDueDays('60')}
+                          className={`px-3 py-1.5 rounded-lg font-bold border transition text-[11px] cursor-pointer ${
+                            newPkgInstallmentDueDays === '60'
+                              ? 'bg-amber-500 text-zinc-950 border-amber-400 font-black shadow-sm'
+                              : 'bg-zinc-900 text-amber-300 border-amber-500/30 hover:bg-zinc-800'
+                          }`}
+                        >
+                          ⭐ Paket 1 Tahun (Jatuh Tempo 60 Hari)
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setNewPkgInstallmentDueDays('30')}
+                          className={`px-3 py-1.5 rounded-lg font-bold border transition text-[11px] cursor-pointer ${
+                            newPkgInstallmentDueDays === '30'
+                              ? 'bg-amber-500 text-zinc-950 border-amber-400 font-black shadow-sm'
+                              : 'bg-zinc-900 text-zinc-300 border-zinc-700 hover:bg-zinc-800'
+                          }`}
+                        >
+                          Standar (30 Hari)
+                        </button>
+                      </div>
+
+                      <div className="text-[11px] text-amber-200/90 bg-amber-950/40 p-2.5 rounded-lg border border-amber-500/20 leading-relaxed flex items-start gap-2">
+                        <Sparkles className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+                        <div>
+                          <strong>Ketentuan Sistem Kasir:</strong> Produk yang menggunakan fasilitas cicilan diutamakan produk 6 bulan (jatuh tempo 40 hari) dan 1 tahun (jatuh tempo 60 hari). Tanggal jatuh tempo dan sisa tagihan akan tercetak otomatis pada struk kasir dan faktur.
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="p-3 bg-zinc-900/60 border border-zinc-800 rounded-xl text-xs text-zinc-400 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
+                      <span>Paket ini <strong>wajib dibayar lunas</strong> saat transaksi di kasir (fasilitas cicilan nonaktif).</span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setNewPkgAllowInstallment(true);
+                          const vNum = Number(newPkgValue) || 0;
+                          setNewPkgInstallmentDueDays(vNum >= 360 ? '60' : '40');
+                        }}
+                        className="text-amber-400 hover:text-amber-300 font-bold text-xs underline cursor-pointer"
+                      >
+                        + Aktifkan Fasilitas Cicilan
+                      </button>
+                    </div>
+                  )}
+                </div>
+
                 {/* Form Action Buttons */}
                 <div className="flex flex-col sm:flex-row gap-3 pt-2">
                   <button
@@ -3274,7 +3618,14 @@ export const MembershipView: React.FC<MembershipViewProps> = ({
                             return (
                               <tr key={pkg.id} className="hover:bg-zinc-900/50 transition">
                                 <td className="py-3 px-3.5">
-                                  <div className="font-bold text-white">{pkg.name}</div>
+                                  <div className="font-bold text-white flex items-center gap-1.5">
+                                    <span>{pkg.name}</span>
+                                    {pkg.allowInstallment ? (
+                                      <span className="text-[9px] bg-amber-500/20 text-amber-300 px-1.5 py-0.5 rounded border border-amber-500/30 font-bold whitespace-nowrap">
+                                        Cicilan {pkg.installmentDueDays || (pkg.value >= 360 ? 60 : 40)} Hari
+                                      </span>
+                                    ) : null}
+                                  </div>
                                   <span className="text-[10px] text-zinc-500 font-mono">{pkg.id} • {pkg.type}</span>
                                 </td>
                                 <td className="py-3 px-3">

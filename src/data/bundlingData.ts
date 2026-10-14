@@ -17,6 +17,7 @@ export const INITIAL_BUNDLE_PACKAGES: BundlePackage[] = [
     ptComponentValue: 150000, // Rp 150.000 basis komisi PT
     commissionRate: 20, // 20% komisi trainer (Rp 30.000)
     allowDpActivation: true,
+    allowInstallment: false,
     items: [
       {
         bundleItemId: 'BITEM-01-1',
@@ -58,6 +59,7 @@ export const INITIAL_BUNDLE_PACKAGES: BundlePackage[] = [
     ptComponentValue: 600000, // Basis komisi PT
     commissionRate: 20, // 20% = Rp 120.000
     allowDpActivation: true,
+    allowInstallment: false,
     items: [
       {
         bundleItemId: 'BITEM-02-1',
@@ -99,6 +101,8 @@ export const INITIAL_BUNDLE_PACKAGES: BundlePackage[] = [
     ptComponentValue: 1200000,
     commissionRate: 20, // 20% = Rp 240.000
     allowDpActivation: true,
+    allowInstallment: true,
+    installmentDueDays: 40,
     items: [
       {
         bundleItemId: 'BITEM-03-1',
@@ -140,6 +144,7 @@ export const INITIAL_BUNDLE_PACKAGES: BundlePackage[] = [
     ptComponentValue: 300000,
     commissionRate: 20, // 20% = Rp 60.000
     allowDpActivation: true,
+    allowInstallment: false,
     items: [
       {
         bundleItemId: 'BITEM-04-1',
@@ -201,6 +206,8 @@ export const INITIAL_BUNDLE_PACKAGES: BundlePackage[] = [
     ptComponentValue: 800000,
     commissionRate: 20, // 20% = Rp 160.000
     allowDpActivation: true,
+    allowInstallment: true,
+    installmentDueDays: 40,
     items: [
       {
         bundleItemId: 'BITEM-05-1',

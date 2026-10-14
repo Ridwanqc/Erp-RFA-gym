@@ -396,7 +396,7 @@ export const DEFAULT_PAYMENT_AND_TAX: PaymentAndTaxConfig = {
   ],
   qrisMerchantName: 'GYMPRO FITNESS & WELLNESS',
   qrisNmid: 'ID1020088991234',
-  defaultPaymentDueDays: 14
+  defaultPaymentDueDays: 30
 };
 
 export const DEFAULT_WHATSAPP_TEMPLATES: WhatsAppTemplateConfig = {

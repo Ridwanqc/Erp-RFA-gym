@@ -44,6 +44,8 @@ export const BundlingManagerModal: React.FC<BundlingManagerModalProps> = ({
   const [ptComponentValue, setPtComponentValue] = useState('150000');
   const [commissionRate, setCommissionRate] = useState('20');
   const [allowDpActivation, setAllowDpActivation] = useState(true);
+  const [allowInstallment, setAllowInstallment] = useState(false);
+  const [installmentDueDays, setInstallmentDueDays] = useState('40');
 
   // Items in current bundle
   const [items, setItems] = useState<BundleItem[]>([
@@ -85,6 +87,8 @@ export const BundlingManagerModal: React.FC<BundlingManagerModalProps> = ({
     setPtComponentValue('150000');
     setCommissionRate('20');
     setAllowDpActivation(true);
+    setAllowInstallment(false);
+    setInstallmentDueDays('40');
     setItems([
       {
         bundleItemId: 'ITEM-' + Date.now() + '-1',
@@ -123,6 +127,10 @@ export const BundlingManagerModal: React.FC<BundlingManagerModalProps> = ({
     setPtComponentValue(String(pkg.ptComponentValue || 0));
     setCommissionRate(String(pkg.commissionRate || 20));
     setAllowDpActivation(pkg.allowDpActivation !== false);
+    const has6Mos = (pkg.items || []).some((it) => it.itemType === 'MEMBERSHIP' && (it.duration || 0) >= 180);
+    const has1Yr = (pkg.items || []).some((it) => it.itemType === 'MEMBERSHIP' && (it.duration || 0) >= 365);
+    setAllowInstallment(pkg.allowInstallment ?? has6Mos);
+    setInstallmentDueDays(String(pkg.installmentDueDays || (has1Yr ? 60 : 40)));
     setItems(pkg.items && pkg.items.length > 0 ? pkg.items : []);
   };
 
@@ -153,17 +161,34 @@ export const BundlingManagerModal: React.FC<BundlingManagerModalProps> = ({
   };
 
   const handleItemFieldChange = (index: number, field: keyof BundleItem, value: any) => {
-    setItems(
-      items.map((it, idx) => {
-        if (idx !== index) return it;
-        const updated = { ...it, [field]: value };
-        if (field === 'duration') {
-          const days = Number(value);
-          updated.durationLabel = days >= 365 ? '1 Tahun' : days >= 180 ? '6 Bulan' : days >= 90 ? '3 Bulan' : `${Math.round(days / 30)} Bulan`;
+    const updatedItems = items.map((it, idx) => {
+      if (idx !== index) return it;
+      const updated = { ...it, [field]: value };
+      if (field === 'duration') {
+        const days = Number(value);
+        updated.durationLabel = days >= 365 ? '1 Tahun' : days >= 180 ? '6 Bulan' : days >= 90 ? '3 Bulan' : `${Math.round(days / 30)} Bulan`;
+      }
+      return updated;
+    });
+    setItems(updatedItems);
+
+    // Auto-detect installment eligibility when membership duration is changed
+    if (field === 'duration') {
+      const days = Number(value);
+      if (days >= 365) {
+        setAllowInstallment(true);
+        setInstallmentDueDays('60');
+      } else if (days >= 180) {
+        setAllowInstallment(true);
+        setInstallmentDueDays('40');
+      } else if (days < 180) {
+        // If all items are less than 6 months, default off
+        const hasOther6Mos = updatedItems.some((it, i) => i !== index && it.itemType === 'MEMBERSHIP' && (it.duration || 0) >= 180);
+        if (!hasOther6Mos) {
+          setAllowInstallment(false);
         }
-        return updated;
-      })
-    );
+      }
+    }
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -201,7 +226,9 @@ export const BundlingManagerModal: React.FC<BundlingManagerModalProps> = ({
       ptComponentValue: Number(ptComponentValue) || 0,
       commissionRate: Number(commissionRate) || 0,
       items: savedItems,
-      allowDpActivation
+      allowDpActivation,
+      allowInstallment,
+      installmentDueDays: allowInstallment ? (Number(installmentDueDays) || 40) : undefined
     };
 
     onSaveBundle(newBundle, !editingBundle);
@@ -266,9 +293,20 @@ export const BundlingManagerModal: React.FC<BundlingManagerModalProps> = ({
                       <div className="space-y-3">
                         <div className="flex justify-between items-start">
                           <div>
-                            <span className="text-[10px] font-mono font-bold text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20">
-                              {pkg.bundleCode}
-                            </span>
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <span className="text-[10px] font-mono font-bold text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20">
+                                {pkg.bundleCode}
+                              </span>
+                              {pkg.allowInstallment ? (
+                                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-300 border border-amber-500/30">
+                                  ✓ Cicilan ({pkg.installmentDueDays || 40} Hari)
+                                </span>
+                              ) : (
+                                <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-zinc-800/80 text-zinc-500 border border-zinc-700">
+                                  Lunas Penuh
+                                </span>
+                              )}
+                            </div>
                             <h4 className="text-lg font-black text-white mt-1">{pkg.bundleName}</h4>
                           </div>
                           <span
@@ -487,17 +525,85 @@ export const BundlingManagerModal: React.FC<BundlingManagerModalProps> = ({
                   />
                 </div>
 
-                <div className="md:col-span-3 flex items-center gap-2 pt-1">
-                  <input
-                    type="checkbox"
-                    id="allowDpAct"
-                    checked={allowDpActivation}
-                    onChange={(e) => setAllowDpActivation(e.target.checked)}
-                    className="w-4 h-4 rounded text-orange-500 bg-zinc-950 border-zinc-700"
-                  />
-                  <label htmlFor="allowDpAct" className="text-xs text-zinc-300 font-medium cursor-pointer">
-                    Aktivasi benefit langsung saat transaksi bayar DP (Cicilan). Jika tidak dicentang, benefit baru aktif setelah pembayaran lunas.
-                  </label>
+                <div className="md:col-span-3 space-y-3 p-3.5 bg-amber-500/10 border border-amber-500/30 rounded-2xl">
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-bold text-amber-300 flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={allowInstallment}
+                        onChange={(e) => setAllowInstallment(e.target.checked)}
+                        className="w-4 h-4 rounded text-amber-500 bg-zinc-950 border-zinc-700"
+                      />
+                      <span>Boleh Menggunakan Fasilitas Cicilan (DP & Piutang)</span>
+                    </label>
+                    <span className="text-[10px] text-zinc-400">
+                      Rekomendasi: Paket ≥ 6 Bulan (40 hari) & 1 Tahun (60 hari)
+                    </span>
+                  </div>
+
+                  {allowInstallment && (
+                    <div className="pt-2 border-t border-amber-500/20 space-y-2">
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                        <div>
+                          <label className="text-[11px] font-bold text-zinc-300 block">
+                            Durasi Masa Jatuh Tempo Cicilan (Hari)
+                          </label>
+                          <span className="text-[10px] text-zinc-400">
+                            Berapa hari tenggat pelunasan piutang dicantumkan di struk & buku piutang
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-1.5">
+                          <input
+                            type="number"
+                            min={1}
+                            max={365}
+                            value={installmentDueDays}
+                            onChange={(e) => setInstallmentDueDays(e.target.value)}
+                            className="w-20 bg-zinc-950 border border-amber-500/40 rounded-xl px-2.5 py-1.5 text-center text-xs font-bold text-white outline-none"
+                          />
+                          <span className="text-xs font-bold text-zinc-300">Hari</span>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-1.5 text-[10px]">
+                        <span className="text-zinc-500 font-semibold">Preset Cepat:</span>
+                        <button
+                          type="button"
+                          onClick={() => { setAllowInstallment(true); setInstallmentDueDays('40'); }}
+                          className="px-2 py-0.5 rounded bg-zinc-900 hover:bg-zinc-800 text-amber-300 border border-amber-500/30 font-bold"
+                        >
+                          6 Bulan (40 Hari)
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => { setAllowInstallment(true); setInstallmentDueDays('60'); }}
+                          className="px-2 py-0.5 rounded bg-zinc-900 hover:bg-zinc-800 text-amber-300 border border-amber-500/30 font-bold"
+                        >
+                          1 Tahun (60 Hari)
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => { setAllowInstallment(false); }}
+                          className="px-2 py-0.5 rounded bg-zinc-900 hover:bg-zinc-800 text-zinc-400 border border-zinc-700"
+                        >
+                          Nonaktifkan Cicilan
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="flex items-center gap-2 pt-1 border-t border-amber-500/20">
+                    <input
+                      type="checkbox"
+                      id="allowDpAct"
+                      checked={allowDpActivation}
+                      onChange={(e) => setAllowDpActivation(e.target.checked)}
+                      className="w-4 h-4 rounded text-orange-500 bg-zinc-950 border-zinc-700"
+                    />
+                    <label htmlFor="allowDpAct" className="text-xs text-zinc-300 font-medium cursor-pointer">
+                      Aktivasi benefit langsung saat transaksi bayar DP (Cicilan). Jika tidak dicentang, benefit baru aktif setelah pembayaran lunas.
+                    </label>
+                  </div>
                 </div>
               </div>
 

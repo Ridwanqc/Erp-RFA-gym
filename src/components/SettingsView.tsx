@@ -2936,7 +2936,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
               1. Tarif Pajak, Layanan & Biaya Administrasi
             </h3>
 
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
               {/* Pajak PPN / PB1 */}
               <div className="p-4 rounded-2xl bg-zinc-950/60 border border-zinc-800 space-y-3">
                 <div className="flex items-center justify-between">
@@ -3002,6 +3002,52 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                     }
                     className="w-full bg-zinc-900 border border-zinc-700 rounded-xl px-3 py-1.5 text-xs text-white font-bold"
                   />
+                </div>
+              </div>
+
+              {/* Default Jatuh Tempo Cicilan */}
+              <div className="p-4 rounded-2xl bg-zinc-950/60 border border-zinc-800 space-y-3">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <span className="text-xs font-bold text-white block">Default Jatuh Tempo Cicilan</span>
+                    <span className="text-[10px] text-zinc-400">Tenor pelunasan piutang paket</span>
+                  </div>
+                  <span className="text-[10px] text-amber-400 font-bold bg-amber-500/10 px-2 py-0.5 rounded-full border border-amber-500/20">
+                    {settings.paymentAndTax.defaultPaymentDueDays || 30} Hari
+                  </span>
+                </div>
+                <div>
+                  <label className="text-[11px] text-zinc-400 block mb-1">Durasi Hari Tenor</label>
+                  <div className="flex gap-1.5 items-center">
+                    <input
+                      type="number"
+                      min={1}
+                      max={180}
+                      value={settings.paymentAndTax.defaultPaymentDueDays || 30}
+                      onChange={(e) =>
+                        updatePaymentAndTaxConfig({
+                          defaultPaymentDueDays: Math.max(1, parseInt(e.target.value) || 1)
+                        })
+                      }
+                      className="w-20 bg-zinc-900 border border-zinc-700 rounded-xl px-2.5 py-1.5 text-xs text-white font-bold text-center"
+                    />
+                    <div className="flex gap-1 overflow-x-auto">
+                      {[7, 14, 30, 40, 60].map((days) => (
+                        <button
+                          key={days}
+                          type="button"
+                          onClick={() => updatePaymentAndTaxConfig({ defaultPaymentDueDays: days })}
+                          className={`px-2 py-1 rounded-lg text-[10px] font-bold border transition cursor-pointer ${
+                            (settings.paymentAndTax.defaultPaymentDueDays || 30) === days
+                              ? 'bg-amber-500 text-zinc-950 border-amber-400'
+                              : 'bg-zinc-900 border-zinc-700 text-zinc-400 hover:text-white'
+                          }`}
+                        >
+                          {days}H
+                        </button>
+                      ))}
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>

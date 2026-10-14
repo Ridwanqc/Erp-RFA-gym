@@ -2071,7 +2071,7 @@ export default function App() {
 
       if (bundle) {
         // 1. Create MemberMembershipRecord for each participant
-        const membershipItem = bundle.items.find((i) => i.itemType === 'MEMBERSHIP');
+        const membershipItem = (bundle.items || []).find((i) => i.itemType === 'MEMBERSHIP');
         const newMemberships: MemberMembershipRecord[] = updatedMembersList.map((mem) => ({
           id: 'MEM-' + Math.floor(100000 + Math.random() * 900000),
           membershipRecordId: 'MEM-' + Math.floor(100000 + Math.random() * 900000),
@@ -2095,7 +2095,7 @@ export default function App() {
         setMemberMemberships((prev) => [...newMemberships, ...prev]);
 
         // 2. Create PTPurchaseRecord if bundle includes PT (Status WAITING_ASSIGNMENT)
-        const ptItem = bundle.items.find((i) => i.itemType === 'PT');
+        const ptItem = (bundle.items || []).find((i) => i.itemType === 'PT');
         if (ptItem) {
           const ptSessions = ptItem.sessionCount || 2;
           const ptNoBnd = 'PT-BND-' + String(Math.floor(10000 + Math.random() * 90000));
@@ -2131,7 +2131,7 @@ export default function App() {
         }
 
         // 4. Reduce stock for bonus product items
-        const productItems = bundle.items.filter((i) => i.itemType === 'PRODUCT' && i.productId);
+        const productItems = (bundle.items || []).filter((i) => i.itemType === 'PRODUCT' && i.productId);
         if (productItems.length > 0) {
           setProducts((prev) =>
             prev.map((prod) => {

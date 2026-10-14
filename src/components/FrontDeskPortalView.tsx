@@ -812,7 +812,19 @@ export const FrontDeskPortalView: React.FC<FrontDeskPortalViewProps> = ({
       picId: assignedPic?.id || renewalStaffId,
       picIds: [assignedPic?.id || renewalStaffId],
       picNames: assignedPic?.name || 'Staf Kasir',
-      trxCategory: 'RENEWAL'
+      trxCategory: 'RENEWAL',
+      expiredDate: newExpiredDate,
+      itemsJSON: JSON.stringify([
+        {
+          name: `Perpanjangan ${pkg.name}`,
+          price: pkg.price,
+          qty: 1,
+          category: pkg.cat,
+          expiredDate: newExpiredDate,
+          sessions: pkg.cat === 'PT' ? pkg.value : undefined,
+          validityDays: pkg.cat === 'Membership' ? pkg.value : 30
+        }
+      ])
     };
 
     onAddTransaction(newTrx);
@@ -890,7 +902,19 @@ export const FrontDeskPortalView: React.FC<FrontDeskPortalViewProps> = ({
         status: 'Paid',
         picId: newMember.picId,
         picNames: newMember.picName,
-        trxCategory: 'NEW MEMBERSHIP'
+        trxCategory: 'NEW MEMBERSHIP',
+        expiredDate: expiredDate,
+        itemsJSON: JSON.stringify([
+          {
+            name: `Registrasi Member Baru + ${pkg ? pkg.name : 'Paket Awal'}`,
+            price: pkg ? pkg.price : 0,
+            qty: 1,
+            category: pkg ? pkg.cat : 'Membership',
+            expiredDate: expiredDate,
+            sessions: pkg?.cat === 'PT' ? pkg.value : undefined,
+            validityDays: durationDays
+          }
+        ])
       };
       onAddTransaction(trx);
       if (onReprintReceipt) {

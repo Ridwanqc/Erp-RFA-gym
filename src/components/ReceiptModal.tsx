@@ -356,7 +356,11 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({
     code?: string;
     sessions?: number;
     validityDays?: number;
+    expiredDate?: string;
+    dueDate?: string;
+    tenorDays?: number;
     items?: any[];
+    participants?: any[];
   }[] = [];
 
   if (transaction?.itemsJSON) {
@@ -381,6 +385,11 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({
   const companyNpwp = profile?.npwp || '01.345.678.9-041.000';
   const companyWebsite = profile?.website || 'https://gympro.id';
 
+  // Extract display expired date and due date from transaction or parsed items
+  const displayExpiredDate = transaction?.expiredDate || parsedItems.find((p) => p.expiredDate)?.expiredDate;
+  const displayDueDate = (transaction?.dueDate && transaction.dueDate !== '-') ? transaction.dueDate : parsedItems.find((p) => p.dueDate && p.dueDate !== '-')?.dueDate;
+  const displayTenorDays = transaction?.tenorDays || parsedItems.find((p) => p.tenorDays)?.tenorDays;
+
   // Generate plain-text receipt for WhatsApp sending
   const handleCopyWhatsAppText = () => {
     let text = `*==============================*\n`;
@@ -403,6 +412,9 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({
         parsedItems.forEach((item, idx) => {
           const qtyStr = item.qty ? `${item.qty}x ` : '1x ';
           text += `${idx + 1}. ${item.name}\n   ${qtyStr}@ ${formatRp(item.price)} = *${formatRp(item.price * (item.qty || 1))}*\n`;
+          if (item.expiredDate) {
+            text += `   Masa Aktif: ${formatDateIndo(item.expiredDate)}\n`;
+          }
         });
       } else {
         text += `- ${transaction.desc} = *${formatRp(transaction.amount)}*\n`;
@@ -419,9 +431,15 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({
       text += `Metode Bayar  : ${transaction.method}\n`;
       text += `Status        : *${transaction.status.toUpperCase()}*\n`;
 
-      if (transaction.amountRemaining > 0) {
+      if (displayExpiredDate) {
+        text += `Masa Aktif s/d: *${formatDateIndo(displayExpiredDate)}*\n`;
+      }
+
+      if (transaction.amountRemaining > 0 || transaction.paymentScheme === 'DP_CICILAN') {
         text += `Sisa Tagihan  : *${formatRp(transaction.amountRemaining)}*\n`;
-        if (transaction.dueDate) text += `Jatuh Tempo   : ${transaction.dueDate}\n`;
+        if (displayDueDate && displayDueDate !== '-') {
+          text += `Jatuh Tempo   : *${formatDateIndo(displayDueDate)}*${displayTenorDays ? ` (${displayTenorDays} Hari)` : ''}\n`;
+        }
       }
     } else if (closingRecord) {
       text += `📊 *REKAP DAILY CLOSING KASIR*\n`;
@@ -715,6 +733,14 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({
                     {transaction.customer} {transaction.memberId ? `[${transaction.memberId}]` : ''}
                   </span>
                 </div>
+                {displayExpiredDate && (
+                  <div className="flex justify-between items-center text-[10px] py-1 px-1.5 bg-zinc-100 rounded border border-zinc-300">
+                    <span className="text-zinc-700 font-bold">Masa Aktif / Expired:</span>
+                    <span className="font-black text-black bg-white px-1.5 py-0.5 rounded border border-zinc-200">
+                      {formatDateIndo(displayExpiredDate)}
+                    </span>
+                  </div>
+                )}
                 {showCashierDetails && (
                   <div className="flex justify-between">
                     <span className="text-zinc-600">Kasir / Operator</span>
@@ -800,6 +826,11 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({
                         {item.sessions && (
                           <div className="text-[9px] text-zinc-700 pl-3">
                             ✓ Kuota: {item.sessions} Sesi • Berlaku: {item.validityDays || 30} Hari
+                          </div>
+                        )}
+                        {item.expiredDate && (
+                          <div className="text-[9px] text-zinc-800 font-bold pl-3">
+                            📅 Masa Aktif s/d: {formatDateIndo(item.expiredDate)}
                           </div>
                         )}
                       </div>
@@ -930,16 +961,19 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({
                 </div>
 
                 {/* Remaining Amount & Due Date for DP / Installments */}
-                {transaction.amountRemaining > 0 && (
-                  <div className="mt-1 p-1.5 bg-zinc-100 border border-zinc-300 rounded space-y-0.5">
+                {(transaction.amountRemaining > 0 || transaction.paymentScheme === 'DP_CICILAN') && (
+                  <div className="mt-1.5 p-2 bg-amber-50 border border-amber-300 rounded space-y-1">
                     <div className="flex justify-between font-black text-black text-xs">
-                      <span>SISA PIUTANG (BELUM LUNAS):</span>
-                      <span>{formatRp(transaction.amountRemaining)}</span>
+                      <span>SISA PIUTANG CICILAN:</span>
+                      <span className="text-red-700 font-black">{formatRp(transaction.amountRemaining)}</span>
                     </div>
-                    {transaction.dueDate && (
-                      <div className="flex justify-between text-[9px] text-zinc-700">
-                        <span>Batas Waktu Pelunasan:</span>
-                        <span className="font-bold">{formatDateIndo(transaction.dueDate)}</span>
+                    {displayDueDate && displayDueDate !== '-' && (
+                      <div className="flex justify-between items-center text-[10px] text-amber-950 font-bold pt-1 border-t border-amber-200">
+                        <span>⏰ JATUH TEMPO PELUNASAN:</span>
+                        <span className="bg-amber-200/90 text-black px-1.5 py-0.5 rounded font-black">
+                          {formatDateIndo(displayDueDate)}
+                          {displayTenorDays ? ` (${displayTenorDays} Hari)` : ''}
+                        </span>
                       </div>
                     )}
                   </div>
