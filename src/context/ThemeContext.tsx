@@ -37,9 +37,9 @@ export const THEME_MODE_OPTIONS: ThemeModeOption[] = [
   {
     id: 'claymorphism-light',
     name: 'Claymorphism 3D Terang',
-    desc: 'Desain 3D clay taktil & empuk dengan latar terang bersih, bayangan timbul lembut, dan teks hitam pekat kontras tinggi agar sangat jelas terbaca.',
+    desc: 'Desain 3D clay taktil & empuk dengan latar putih polos bersih, bayangan timbul lembut, dan teks hitam pekat kontras tinggi agar sangat jelas terbaca.',
     iconType: 'layers',
-    bgPreview: 'bg-[#e8edf5]',
+    bgPreview: 'bg-[#ffffff]',
     cardPreview: 'bg-[#ffffff]'
   },
   {

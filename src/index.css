@@ -267,15 +267,20 @@ body, #root, header, aside, main, div, button, input, select {
 /* --------------------------------------------------------------------------
    Mode: Claymorphism 3D Terang (Light Clay 3D with High-Contrast Clear Text)
    -------------------------------------------------------------------------- */
+[data-theme="claymorphism-light"],
 [data-theme="claymorphism-light"] body,
 [data-theme="claymorphism-light"] #root,
 [data-theme="claymorphism-light"] .bg-zinc-950,
-[data-theme="claymorphism-light"] .bg-\[\#09090b\] {
-  background-color: #e9eef5 !important;
+[data-theme="claymorphism-light"] .bg-\[\#09090b\],
+[data-theme="claymorphism-light"] header,
+[data-theme="claymorphism-light"] aside#app-sidebar,
+[data-theme="claymorphism-light"] .bg-zinc-950\/90 {
+  background-color: #ffffff !important;
+  background-image: none !important;
   color: #0f172a !important;
 }
 
-/* Elevated Light Clay Cards & Panels */
+/* Elevated Light Clay Cards & Panels on Solid White Background */
 [data-theme="claymorphism-light"] .bg-zinc-900,
 [data-theme="claymorphism-light"] .bg-zinc-900\/90,
 [data-theme="claymorphism-light"] .bg-zinc-900\/95,
@@ -283,11 +288,11 @@ body, #root, header, aside, main, div, button, input, select {
 [data-theme="claymorphism-light"] .bg-zinc-900\/60,
 [data-theme="claymorphism-light"] .bg-zinc-900\/40 {
   background-color: #ffffff !important;
-  border-color: rgba(219, 228, 240, 0.9) !important;
-  box-shadow: 10px 10px 24px rgba(166, 178, 198, 0.45),
-              -8px -8px 20px rgba(255, 255, 255, 0.95),
-              inset 2px 2px 3px rgba(255, 255, 255, 0.9),
-              inset -2px -2px 3px rgba(166, 178, 198, 0.15) !important;
+  border-color: #e2e8f0 !important;
+  box-shadow: 6px 6px 18px rgba(148, 163, 184, 0.22),
+              -4px -4px 14px rgba(255, 255, 255, 1),
+              inset 1px 1px 2px rgba(255, 255, 255, 1),
+              inset -1px -1px 2px rgba(148, 163, 184, 0.08) !important;
   border-radius: 1.25rem;
 }
 
@@ -298,10 +303,10 @@ body, #root, header, aside, main, div, button, input, select {
 [data-theme="claymorphism-light"] .bg-zinc-950\/30,
 [data-theme="claymorphism-light"] .bg-zinc-950\/20,
 [data-theme="claymorphism-light"] .bg-zinc-950\/10 {
-  background-color: #dfe6f1 !important;
-  box-shadow: inset 4px 4px 8px rgba(166, 178, 198, 0.55),
-              inset -3px -3px 6px rgba(255, 255, 255, 0.9) !important;
-  border-color: rgba(255, 255, 255, 0.6) !important;
+  background-color: #f8fafc !important;
+  box-shadow: inset 2px 2px 5px rgba(148, 163, 184, 0.22),
+              inset -2px -2px 4px rgba(255, 255, 255, 1) !important;
+  border-color: #e2e8f0 !important;
   border-radius: 1rem;
 }
 
@@ -311,7 +316,7 @@ body, #root, header, aside, main, div, button, input, select {
 [data-theme="claymorphism-light"] .border-zinc-800\/90,
 [data-theme="claymorphism-light"] .border-zinc-700,
 [data-theme="claymorphism-light"] .border-zinc-700\/80 {
-  border-color: #cbd5e1 !important;
+  border-color: #e2e8f0 !important;
 }
 
 /* CRITICAL TEXT CONTRAST FOR LIGHT CLAY: CRYSTAL CLEAR READABILITY */
@@ -488,29 +493,25 @@ body, #root, header, aside, main, div, button, input, select {
 
 /* Tables & Rows in Light Clay */
 [data-theme="claymorphism-light"] table thead th {
-  background-color: #dfe6f1 !important;
+  background-color: #f8fafc !important;
   color: #0f172a !important;
   font-weight: 800 !important;
-  border-bottom: 2px solid #cbd5e1 !important;
+  border-bottom: 2px solid #e2e8f0 !important;
 }
 
 [data-theme="claymorphism-light"] table tbody tr {
-  border-bottom: 1px solid #e2e8f0 !important;
+  border-bottom: 1px solid #f1f5f9 !important;
 }
 
 [data-theme="claymorphism-light"] table tbody td {
   color: #1e293b !important;
 }
 
-/* Light Clay Patterns */
-[data-theme="claymorphism-light"][data-pattern="grid"] {
-  background-image: radial-gradient(rgba(148, 163, 184, 0.25) 1.5px, transparent 1.5px);
-  background-size: 24px 24px;
-}
-
-[data-theme="claymorphism-light"][data-pattern="dots"] {
-  background-image: radial-gradient(rgba(148, 163, 184, 0.3) 2px, transparent 2px);
-  background-size: 18px 18px;
+/* Light Clay Plain Background (Putih Polos Tanpa Pola) */
+[data-theme="claymorphism-light"],
+[data-theme="claymorphism-light"][data-pattern="none"] {
+  background-color: #ffffff !important;
+  background-image: none !important;
 }
 
 /* Mode: Daylight Clean (Modern Light) */
