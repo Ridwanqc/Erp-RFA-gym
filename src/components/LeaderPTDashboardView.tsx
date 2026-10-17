@@ -227,6 +227,14 @@ export const LeaderPTDashboardView: React.FC<LeaderPTDashboardViewProps> = ({
   const [quickDate, setQuickDate] = useState(APP_TODAY);
   const [quickTime, setQuickTime] = useState('10:00');
   const [quickNote, setQuickNote] = useState('');
+  const [isQuickMemberSearchOpen, setIsQuickMemberSearchOpen] = useState(false);
+  const [quickMemberSearchTerm, setQuickMemberSearchTerm] = useState('');
+
+  // Selected Member for Quick Add PT Schedule
+  const selectedQuickAddMember = useMemo(() => {
+    return members.find((m) => m.id === quickMemberId) || null;
+  }, [members, quickMemberId]);
+
 
   // Trainers pool (pt and leader_pt)
   const trainers = useMemo(() => {
@@ -267,6 +275,18 @@ export const LeaderPTDashboardView: React.FC<LeaderPTDashboardViewProps> = ({
       return hasQuota || isAssignedTrainer || notesMentionPT || hasScheduleHistory;
     });
   }, [members, trainers, schedules]);
+
+  // Filtered members for Quick Add search
+  const filteredQuickAddMembers = useMemo(() => {
+    const term = quickMemberSearchTerm.toLowerCase().trim();
+    if (!term) return memberPTList;
+    return memberPTList.filter(
+      (m) =>
+        (m.name || '').toLowerCase().includes(term) ||
+        (m.id || '').toLowerCase().includes(term) ||
+        (m.phone || '').toLowerCase().includes(term)
+    );
+  }, [memberPTList, quickMemberSearchTerm]);
 
   // Map each member to their last training date
   const memberLastTrainingMap = useMemo(() => {
@@ -4537,26 +4557,87 @@ export const LeaderPTDashboardView: React.FC<LeaderPTDashboardViewProps> = ({
 
             <form onSubmit={handleQuickAddSchedule} className="space-y-3.5">
               <div>
-                <label className="text-xs font-semibold text-zinc-300 block mb-1">Pilih Member PT *</label>
-                <select
-                  required
-                  value={quickMemberId}
-                  onChange={(e) => {
-                    setQuickMemberId(e.target.value);
-                    const mem = members.find((m) => m.id === e.target.value);
-                    if (mem?.picName) {
-                      setQuickTrainer(mem.picName);
-                    }
-                  }}
-                  className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2 text-xs text-white outline-none focus:border-orange-500"
-                >
-                  <option value="">-- Pilih Member --</option>
-                  {memberPTList.map((m) => (
-                    <option key={m.id} value={m.id}>
-                      {m.name} (Sisa Kuota: {m.ptQuota} sesi)
-                    </option>
-                  ))}
-                </select>
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="text-xs font-semibold text-zinc-300 block">Pilih Member PT *</label>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setQuickMemberSearchTerm('');
+                      setIsQuickMemberSearchOpen(true);
+                    }}
+                    className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-orange-500/15 hover:bg-orange-500/25 text-orange-400 border border-orange-500/30 text-xs font-bold transition active:scale-95 cursor-pointer shadow-xs"
+                    title="Buka pencarian member PT"
+                  >
+                    <Search className="w-3.5 h-3.5" />
+                    <span>Cari Member</span>
+                  </button>
+                </div>
+
+                {selectedQuickAddMember ? (
+                  <div className="p-3 bg-zinc-950 border border-zinc-800 rounded-xl space-y-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <img
+                          src={selectedQuickAddMember.photo || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=200&auto=format&fit=crop'}
+                          alt={selectedQuickAddMember.name}
+                          className="w-9 h-9 rounded-xl object-cover shrink-0 border border-zinc-700"
+                        />
+                        <div className="min-w-0">
+                          <h4 className="text-xs font-bold text-white truncate">{selectedQuickAddMember.name}</h4>
+                          <p className="text-[10px] text-zinc-400 truncate">
+                            ID: {selectedQuickAddMember.id} • 📞 {selectedQuickAddMember.phone || '-'}
+                          </p>
+                        </div>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() => setQuickMemberId('')}
+                        className="p-1 rounded-lg text-zinc-500 hover:text-rose-400 hover:bg-zinc-800 transition"
+                        title="Hapus pilihan"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    </div>
+
+                    <div className="flex items-center justify-between gap-2 pt-2 border-t border-zinc-800 text-[11px]">
+                      <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
+                        Sisa Kuota: {selectedQuickAddMember.ptQuota || 0} Sesi
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setQuickMemberSearchTerm('');
+                          setIsQuickMemberSearchOpen(true);
+                        }}
+                        className="text-orange-400 hover:underline font-bold text-xs flex items-center gap-1 cursor-pointer"
+                      >
+                        <Search className="w-3 h-3" />
+                        <span>Ganti Member</span>
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <select
+                    required
+                    value={quickMemberId}
+                    onChange={(e) => {
+                      setQuickMemberId(e.target.value);
+                      const mem = members.find((m) => m.id === e.target.value);
+                      if (mem?.picName) {
+                        setQuickTrainer(mem.picName);
+                      }
+                    }}
+                    className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2 text-xs text-white outline-none focus:border-orange-500"
+                  >
+                    <option value="">-- Pilih Member --</option>
+                    {memberPTList.map((m) => (
+                      <option key={m.id} value={m.id}>
+                        {m.name} (Sisa Kuota: {m.ptQuota} sesi)
+                      </option>
+                    ))}
+                  </select>
+                )}
               </div>
 
               <div>
@@ -4627,6 +4708,139 @@ export const LeaderPTDashboardView: React.FC<LeaderPTDashboardViewProps> = ({
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL SEARCH MEMBER KHUSUS QUICK ADD LEADER PT */}
+      {isQuickMemberSearchOpen && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 backdrop-blur-xs p-3 sm:p-4 overflow-y-auto">
+          <div className="bg-zinc-900 border border-zinc-700 rounded-2xl shadow-2xl w-full max-w-lg p-4 sm:p-6 my-auto max-h-[90vh] flex flex-col space-y-4 animate-in fade-in zoom-in-95">
+            {/* Header */}
+            <div className="flex items-center justify-between pb-3 border-b border-zinc-800">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-orange-500/20 text-orange-400 flex items-center justify-center">
+                  <Search className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-white">Cari & Pilih Member PT</h3>
+                  <p className="text-[11px] text-zinc-400">Temukan member berdasarkan nama, ID, atau nomor WhatsApp</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsQuickMemberSearchOpen(false)}
+                className="p-1.5 rounded-xl text-zinc-400 hover:text-white hover:bg-zinc-800 transition"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Search Input Bar */}
+            <div className="relative">
+              <Search className="w-4 h-4 text-orange-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+              <input
+                type="text"
+                autoFocus
+                value={quickMemberSearchTerm}
+                onChange={(e) => setQuickMemberSearchTerm(e.target.value)}
+                placeholder="Ketik nama member, nomor ID (contoh: M001), atau no HP..."
+                className="w-full bg-zinc-950 border border-zinc-700 rounded-xl pl-10 pr-9 py-2.5 text-xs text-white placeholder-zinc-500 outline-none focus:border-orange-500 focus:ring-1 focus:ring-orange-500"
+              />
+              {quickMemberSearchTerm && (
+                <button
+                  type="button"
+                  onClick={() => setQuickMemberSearchTerm('')}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1 text-zinc-400 hover:text-white transition"
+                  title="Hapus kata kunci"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              )}
+            </div>
+
+            {/* Member List */}
+            <div className="flex-1 overflow-y-auto space-y-2 pr-1 max-h-80 divide-y divide-zinc-800/40">
+              {filteredQuickAddMembers.length === 0 ? (
+                <div className="p-8 text-center space-y-2">
+                  <Search className="w-8 h-8 text-zinc-600 mx-auto" />
+                  <p className="text-xs font-bold text-zinc-300">Member Tidak Ditemukan</p>
+                  <p className="text-[11px] text-zinc-500">
+                    Tidak ada member yang cocok dengan kata kunci "{quickMemberSearchTerm}".
+                  </p>
+                </div>
+              ) : (
+                filteredQuickAddMembers.map((m) => {
+                  const isSelected = m.id === quickMemberId;
+                  return (
+                    <div
+                      key={m.id}
+                      onClick={() => {
+                        setQuickMemberId(m.id);
+                        if (m.picName) {
+                          setQuickTrainer(m.picName);
+                        }
+                        setIsQuickMemberSearchOpen(false);
+                      }}
+                      className={`p-3 rounded-xl border transition cursor-pointer flex items-center justify-between gap-3 ${
+                        isSelected
+                          ? 'bg-orange-500/10 border-orange-500/40'
+                          : 'bg-zinc-950/70 border-zinc-800/80 hover:bg-zinc-800/80 hover:border-zinc-700'
+                      }`}
+                    >
+                      <div className="flex items-center gap-3 min-w-0">
+                        <img
+                          src={m.photo || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=200&auto=format&fit=crop'}
+                          alt={m.name}
+                          className="w-10 h-10 rounded-xl object-cover shrink-0 border border-zinc-700"
+                        />
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <h4 className="text-xs font-bold text-white truncate">{m.name}</h4>
+                            <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-zinc-800 text-orange-400 font-bold border border-zinc-700">
+                              {m.id}
+                            </span>
+                          </div>
+                          <p className="text-[11px] text-zinc-400 mt-0.5 truncate">
+                            📞 {m.phone || '-'} {m.picName ? `• PIC: ${m.picName}` : ''}
+                          </p>
+                          <div className="flex items-center gap-2 mt-1">
+                            <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
+                              Sisa Kuota: {m.ptQuota || 0} Sesi
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="shrink-0">
+                        <button
+                          type="button"
+                          className={`px-3 py-1.5 rounded-xl font-bold text-xs transition active:scale-95 ${
+                            isSelected
+                              ? 'bg-emerald-600 text-white'
+                              : 'bg-orange-500 hover:bg-orange-600 text-white shadow-sm'
+                          }`}
+                        >
+                          {isSelected ? 'Terpilih' : 'Pilih'}
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+
+            {/* Footer Summary */}
+            <div className="pt-3 border-t border-zinc-800 flex items-center justify-between text-[11px] text-zinc-400">
+              <span>Menampilkan {filteredQuickAddMembers.length} dari {memberPTList.length} member PT</span>
+              <button
+                type="button"
+                onClick={() => setIsQuickMemberSearchOpen(false)}
+                className="px-3 py-1.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 font-bold text-xs transition cursor-pointer"
+              >
+                Tutup
+              </button>
+            </div>
           </div>
         </div>
       )}

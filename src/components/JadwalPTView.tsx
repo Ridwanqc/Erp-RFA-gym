@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   CalendarDays,
   Plus,
@@ -83,6 +83,73 @@ export const JadwalPTView: React.FC<JadwalPTViewProps> = ({
   const [schTrainer, setSchTrainer] = useState('');
   const [schDate, setSchDate] = useState(APP_TODAY);
   const [schTime, setSchTime] = useState('09:00');
+
+  // PT Member Search Modal & Inline search state
+  const [isMemberSearchOpen, setIsMemberSearchOpen] = useState(false);
+  const [memberSearchTerm, setMemberSearchTerm] = useState('');
+  const [memberSearchFilter, setMemberSearchFilter] = useState<'all' | 'has_quota' | 'no_quota' | 'active'>('all');
+  const [inlineMemberSearch, setInlineMemberSearch] = useState('');
+  const [isInlineDropdownOpen, setIsInlineDropdownOpen] = useState(false);
+
+  // Studio Class Booking Member Search state
+  const [isClassMemberSearchOpen, setIsClassMemberSearchOpen] = useState(false);
+  const [classMemberSearchTerm, setClassMemberSearchTerm] = useState('');
+  const [classMemberSearchFilter, setClassMemberSearchFilter] = useState<'all' | 'has_quota' | 'no_quota'>('all');
+
+  // Selected Member for Schedule
+  const selectedScheduleMember = useMemo(() => {
+    return members.find((m) => m.id === schMemberId) || null;
+  }, [members, schMemberId]);
+
+  // Filtered members for PT Schedule search modal
+  const filteredMembersForSchedule = useMemo(() => {
+    const term = memberSearchTerm.toLowerCase().trim();
+    return members.filter((m) => {
+      if (memberSearchFilter === 'has_quota' && (m.ptQuota || 0) <= 0) return false;
+      if (memberSearchFilter === 'no_quota' && (m.ptQuota || 0) > 0) return false;
+      if (memberSearchFilter === 'active' && m.status === 'FREEZE') return false;
+
+      if (!term) return true;
+      return (
+        (m.name || '').toLowerCase().includes(term) ||
+        (m.id || '').toLowerCase().includes(term) ||
+        (m.phone || '').toLowerCase().includes(term) ||
+        (m.picName || '').toLowerCase().includes(term)
+      );
+    });
+  }, [members, memberSearchTerm, memberSearchFilter]);
+
+  // Inline filtered members for quick dropdown
+  const inlineFilteredMembers = useMemo(() => {
+    const term = inlineMemberSearch.toLowerCase().trim();
+    if (!term) return members.slice(0, 15);
+    return members.filter(
+      (m) =>
+        (m.name || '').toLowerCase().includes(term) ||
+        (m.id || '').toLowerCase().includes(term) ||
+        (m.phone || '').toLowerCase().includes(term)
+    );
+  }, [members, inlineMemberSearch]);
+
+  const membersWithPTQuotaCount = useMemo(() => members.filter((m) => (m.ptQuota || 0) > 0).length, [members]);
+  const membersZeroPTQuotaCount = useMemo(() => members.filter((m) => (m.ptQuota || 0) <= 0).length, [members]);
+
+  // Filtered members for Studio Class booking search modal
+  const filteredMembersForClassBooking = useMemo(() => {
+    const term = classMemberSearchTerm.toLowerCase().trim();
+    return members.filter((m) => {
+      const q = m.classQuota || 0;
+      if (classMemberSearchFilter === 'has_quota' && q <= 0) return false;
+      if (classMemberSearchFilter === 'no_quota' && q > 0) return false;
+
+      if (!term) return true;
+      return (
+        (m.name || '').toLowerCase().includes(term) ||
+        (m.id || '').toLowerCase().includes(term) ||
+        (m.phone || '').toLowerCase().includes(term)
+      );
+    });
+  }, [members, classMemberSearchTerm, classMemberSearchFilter]);
 
   // Reschedule Modal state
   const [rescheduleTarget, setRescheduleTarget] = useState<Schedule | null>(null);
@@ -262,6 +329,8 @@ export const JadwalPTView: React.FC<JadwalPTViewProps> = ({
     showToast('Jadwal Dibuat', `Jadwal sesi PT ${member.name} bersama ${schTrainer} berhasil disimpan.`, 'success');
     setIsAddSchModalOpen(false);
     setSchMemberId('');
+    setInlineMemberSearch('');
+    setIsInlineDropdownOpen(false);
   };
 
   const handleRescheduleSubmit = (e: React.FormEvent) => {
@@ -939,31 +1008,228 @@ export const JadwalPTView: React.FC<JadwalPTViewProps> = ({
       {/* MODAL 1: ADD NEW SCHEDULE */}
       {isAddSchModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-xs p-3 sm:p-4 overflow-y-auto">
-          <div className="bg-zinc-900 border border-zinc-800 rounded-2xl shadow-2xl w-full max-w-sm p-4 sm:p-6 my-auto max-h-[92vh] overflow-y-auto animate-in fade-in zoom-in-95">
-            <h3 className="text-base font-bold text-white mb-4">Buat Jadwal Sesi PT</h3>
+          <div className="bg-zinc-900 border border-zinc-800 rounded-2xl shadow-2xl w-full max-w-md p-4 sm:p-6 my-auto max-h-[92vh] overflow-y-auto animate-in fade-in zoom-in-95">
+            <div className="flex items-center justify-between pb-3 border-b border-zinc-800 mb-4">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-xl bg-orange-500/15 border border-orange-500/30 flex items-center justify-center text-orange-400">
+                  <Plus className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-white">Buat Jadwal Sesi PT</h3>
+                  <p className="text-[11px] text-zinc-400">Jadwalkan sesi latihan member bersama Personal Trainer</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setIsAddSchModalOpen(false);
+                  setSchMemberId('');
+                  setInlineMemberSearch('');
+                  setIsInlineDropdownOpen(false);
+                }}
+                className="p-1.5 rounded-xl text-zinc-400 hover:text-white hover:bg-zinc-800 transition"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
             <form onSubmit={handleCreateSchedule} className="space-y-4">
+              {/* Member Selection Section with Searching Button */}
               <div>
-                <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-wider mb-1.5">
-                  Member
-                </label>
-                <select
-                  value={schMemberId}
-                  onChange={(e) => setSchMemberId(e.target.value)}
-                  required
-                  className="w-full bg-zinc-950 border border-zinc-700 rounded-xl px-4 py-3 text-xs font-semibold text-white outline-none focus:border-orange-500"
-                >
-                  <option value="">-- Pilih Member --</option>
-                  {members.map((m) => (
-                    <option key={m.id} value={m.id}>
-                      {m.name} (Sisa Kuota PT: {m.ptQuota})
-                    </option>
-                  ))}
-                </select>
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-wider">
+                    Member Peserta PT <span className="text-orange-400">*</span>
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setMemberSearchTerm('');
+                      setMemberSearchFilter('all');
+                      setIsMemberSearchOpen(true);
+                    }}
+                    className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-orange-500/15 hover:bg-orange-500/25 text-orange-400 border border-orange-500/30 text-xs font-bold transition active:scale-95 cursor-pointer shadow-xs"
+                    title="Buka jendela pencarian member lengkap"
+                  >
+                    <Search className="w-3.5 h-3.5" />
+                    <span>Cari Member</span>
+                  </button>
+                </div>
+
+                {/* If member is selected: display rich member card */}
+                {selectedScheduleMember ? (
+                  <div className="p-3 bg-zinc-950 border border-zinc-700/80 rounded-xl space-y-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-3 min-w-0">
+                        <img
+                          src={selectedScheduleMember.photo || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=200&auto=format&fit=crop'}
+                          alt={selectedScheduleMember.name}
+                          className="w-10 h-10 rounded-xl object-cover shrink-0 border border-zinc-700"
+                        />
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <h4 className="text-xs font-bold text-white truncate">{selectedScheduleMember.name}</h4>
+                            <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-zinc-800 text-orange-400 font-bold border border-zinc-700">
+                              {selectedScheduleMember.id}
+                            </span>
+                          </div>
+                          <p className="text-[11px] text-zinc-400 flex items-center gap-1.5 mt-0.5 truncate">
+                            <span>📞 {selectedScheduleMember.phone || '-'}</span>
+                            {selectedScheduleMember.picName && (
+                              <span className="text-zinc-500">• PIC: {selectedScheduleMember.picName}</span>
+                            )}
+                          </p>
+                        </div>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSchMemberId('');
+                          setInlineMemberSearch('');
+                        }}
+                        className="p-1.5 rounded-lg text-zinc-500 hover:text-rose-400 hover:bg-zinc-800 transition"
+                        title="Hapus member terpilih"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    </div>
+
+                    <div className="flex items-center justify-between gap-2 pt-2 border-t border-zinc-800/80 flex-wrap text-[11px]">
+                      <div>
+                        {(selectedScheduleMember.ptQuota || 0) > 0 ? (
+                          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
+                            <CheckCircle2 className="w-3 h-3" /> Sisa Kuota: {selectedScheduleMember.ptQuota} Sesi PT
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/15 text-amber-400 border border-amber-500/30">
+                            <AlertCircle className="w-3 h-3" /> Kuota 0 Sesi (Perlu Perpanjangan)
+                          </span>
+                        )}
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setMemberSearchTerm('');
+                          setMemberSearchFilter('all');
+                          setIsMemberSearchOpen(true);
+                        }}
+                        className="text-xs font-semibold text-orange-400 hover:text-orange-300 flex items-center gap-1 hover:underline cursor-pointer"
+                      >
+                        <Search className="w-3 h-3" />
+                        <span>Ganti Member</span>
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  /* If no member selected: Search input bar with quick dropdown & Cari button */
+                  <div className="space-y-2">
+                    <div className="relative">
+                      <Search className="w-4 h-4 text-zinc-500 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                      <input
+                        type="text"
+                        value={inlineMemberSearch}
+                        onChange={(e) => {
+                          setInlineMemberSearch(e.target.value);
+                          setIsInlineDropdownOpen(true);
+                        }}
+                        onFocus={() => setIsInlineDropdownOpen(true)}
+                        placeholder="Ketik nama, ID member (M001), atau no HP..."
+                        className="w-full bg-zinc-950 border border-zinc-700 rounded-xl pl-9 pr-24 py-2.5 text-xs text-white placeholder-zinc-500 outline-none focus:border-orange-500"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setMemberSearchTerm(inlineMemberSearch);
+                          setIsMemberSearchOpen(true);
+                        }}
+                        className="absolute right-1.5 top-1/2 -translate-y-1/2 px-2.5 py-1 bg-orange-500 hover:bg-orange-600 text-white rounded-lg text-[11px] font-bold flex items-center gap-1 shadow-sm transition cursor-pointer"
+                      >
+                        <Search className="w-3 h-3" />
+                        <span>Cari</span>
+                      </button>
+                    </div>
+
+                    {/* Inline Dropdown Suggestions when active */}
+                    {isInlineDropdownOpen && (
+                      <div className="bg-zinc-950 border border-zinc-700 rounded-xl shadow-xl max-h-48 overflow-y-auto divide-y divide-zinc-800/60 z-20">
+                        {inlineFilteredMembers.length === 0 ? (
+                          <div className="p-3 text-center text-xs text-zinc-500">
+                            Member tidak ditemukan.{' '}
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setMemberSearchTerm(inlineMemberSearch);
+                                setIsMemberSearchOpen(true);
+                              }}
+                              className="text-orange-400 font-bold underline cursor-pointer ml-1"
+                            >
+                              Buka pencarian lengkap
+                            </button>
+                          </div>
+                        ) : (
+                          inlineFilteredMembers.slice(0, 8).map((m) => (
+                            <div
+                              key={m.id}
+                              onClick={() => {
+                                setSchMemberId(m.id);
+                                if (m.picName && !schTrainer) {
+                                  setSchTrainer(m.picName);
+                                }
+                                setIsInlineDropdownOpen(false);
+                                setInlineMemberSearch('');
+                              }}
+                              className="p-2.5 hover:bg-zinc-800/80 cursor-pointer flex items-center justify-between gap-2 transition"
+                            >
+                              <div className="flex items-center gap-2 min-w-0">
+                                <img
+                                  src={m.photo || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=200&auto=format&fit=crop'}
+                                  alt={m.name}
+                                  className="w-7 h-7 rounded-lg object-cover shrink-0 border border-zinc-700"
+                                />
+                                <div className="min-w-0">
+                                  <p className="text-xs font-bold text-white truncate">{m.name}</p>
+                                  <p className="text-[10px] text-zinc-400 truncate">
+                                    ID: {m.id} • {m.phone || 'Tanpa no HP'}
+                                  </p>
+                                </div>
+                              </div>
+                              <div className="shrink-0 text-right">
+                                <span
+                                  className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                                    (m.ptQuota || 0) > 0
+                                      ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+                                      : 'bg-zinc-800 text-zinc-400'
+                                  }`}
+                                >
+                                  {m.ptQuota || 0} Sesi PT
+                                </span>
+                              </div>
+                            </div>
+                          ))
+                        )}
+                        <div className="p-2 bg-zinc-900/90 text-center border-t border-zinc-800">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setMemberSearchTerm(inlineMemberSearch);
+                              setIsMemberSearchOpen(true);
+                            }}
+                            className="text-[11px] font-bold text-orange-400 hover:text-orange-300 flex items-center justify-center gap-1 mx-auto cursor-pointer"
+                          >
+                            <Search className="w-3 h-3" />
+                            <span>Buka Jendela Pencarian Lengkap ({members.length} Member)</span>
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
 
               <div>
                 <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-wider mb-1.5">
-                  Pelatih (Trainer)
+                  Pelatih (Trainer) <span className="text-orange-400">*</span>
                 </label>
                 <select
                   value={schTrainer}
@@ -1010,19 +1276,229 @@ export const JadwalPTView: React.FC<JadwalPTViewProps> = ({
               <div className="flex gap-2 pt-2">
                 <button
                   type="button"
-                  onClick={() => setIsAddSchModalOpen(false)}
+                  onClick={() => {
+                    setIsAddSchModalOpen(false);
+                    setSchMemberId('');
+                    setInlineMemberSearch('');
+                    setIsInlineDropdownOpen(false);
+                  }}
                   className="flex-1 py-2.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-xl text-xs font-bold transition"
                 >
                   Batal
                 </button>
                 <button
                   type="submit"
-                  className="flex-1 py-2.5 bg-orange-500 hover:bg-orange-600 text-white rounded-xl text-xs font-bold shadow-md transition"
+                  disabled={!schMemberId}
+                  className={`flex-1 py-2.5 rounded-xl text-xs font-bold shadow-md transition flex items-center justify-center gap-1.5 ${
+                    schMemberId
+                      ? 'bg-orange-500 hover:bg-orange-600 text-white cursor-pointer active:scale-95'
+                      : 'bg-zinc-800 text-zinc-500 cursor-not-allowed'
+                  }`}
                 >
                   Simpan Jadwal
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL SEARCH MEMBER KHUSUS JADWAL SESI PT */}
+      {isMemberSearchOpen && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 backdrop-blur-xs p-3 sm:p-4 overflow-y-auto">
+          <div className="bg-zinc-900 border border-zinc-700 rounded-2xl shadow-2xl w-full max-w-lg p-4 sm:p-6 my-auto max-h-[90vh] flex flex-col space-y-4 animate-in fade-in zoom-in-95">
+            {/* Modal Header */}
+            <div className="flex items-center justify-between pb-3 border-b border-zinc-800">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-orange-500/20 text-orange-400 flex items-center justify-center">
+                  <Search className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-white">Cari & Pilih Member Sesi PT</h3>
+                  <p className="text-[11px] text-zinc-400">Temukan member berdasarkan nama, ID, nomor WhatsApp, atau kuota sesi PT</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsMemberSearchOpen(false)}
+                className="p-1.5 rounded-xl text-zinc-400 hover:text-white hover:bg-zinc-800 transition"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Search Input Bar with Auto-focus & Clear Button */}
+            <div className="relative">
+              <Search className="w-4 h-4 text-orange-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+              <input
+                type="text"
+                autoFocus
+                value={memberSearchTerm}
+                onChange={(e) => setMemberSearchTerm(e.target.value)}
+                placeholder="Ketik nama member, nomor ID (contoh: M001), atau no HP..."
+                className="w-full bg-zinc-950 border border-zinc-700 rounded-xl pl-10 pr-9 py-2.5 text-xs text-white placeholder-zinc-500 outline-none focus:border-orange-500 focus:ring-1 focus:ring-orange-500"
+              />
+              {memberSearchTerm && (
+                <button
+                  type="button"
+                  onClick={() => setMemberSearchTerm('')}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1 text-zinc-400 hover:text-white transition"
+                  title="Hapus kata kunci"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              )}
+            </div>
+
+            {/* Quick Filter Badges */}
+            <div className="flex items-center gap-1.5 overflow-x-auto pb-1 text-xs scrollbar-none">
+              <button
+                type="button"
+                onClick={() => setMemberSearchFilter('all')}
+                className={`px-3 py-1.5 rounded-xl font-bold transition shrink-0 cursor-pointer ${
+                  memberSearchFilter === 'all'
+                    ? 'bg-orange-500 text-white shadow-xs'
+                    : 'bg-zinc-800 hover:bg-zinc-700 text-zinc-300'
+                }`}
+              >
+                Semua ({members.length})
+              </button>
+              <button
+                type="button"
+                onClick={() => setMemberSearchFilter('has_quota')}
+                className={`px-3 py-1.5 rounded-xl font-bold transition shrink-0 flex items-center gap-1 cursor-pointer ${
+                  memberSearchFilter === 'has_quota'
+                    ? 'bg-emerald-600 text-white shadow-xs'
+                    : 'bg-zinc-800 hover:bg-zinc-700 text-emerald-400'
+                }`}
+              >
+                <span>⭐ Punya Kuota PT ({membersWithPTQuotaCount})</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setMemberSearchFilter('no_quota')}
+                className={`px-3 py-1.5 rounded-xl font-bold transition shrink-0 cursor-pointer ${
+                  memberSearchFilter === 'no_quota'
+                    ? 'bg-amber-600 text-white shadow-xs'
+                    : 'bg-zinc-800 hover:bg-zinc-700 text-amber-400'
+                }`}
+              >
+                Kuota Habis / 0 ({membersZeroPTQuotaCount})
+              </button>
+              <button
+                type="button"
+                onClick={() => setMemberSearchFilter('active')}
+                className={`px-3 py-1.5 rounded-xl font-bold transition shrink-0 cursor-pointer ${
+                  memberSearchFilter === 'active'
+                    ? 'bg-blue-600 text-white shadow-xs'
+                    : 'bg-zinc-800 hover:bg-zinc-700 text-blue-400'
+                }`}
+              >
+                Member Aktif Non-Freeze
+              </button>
+            </div>
+
+            {/* Scrollable Member List */}
+            <div className="flex-1 overflow-y-auto space-y-2 pr-1 max-h-80 divide-y divide-zinc-800/40">
+              {filteredMembersForSchedule.length === 0 ? (
+                <div className="p-8 text-center space-y-2">
+                  <Search className="w-8 h-8 text-zinc-600 mx-auto" />
+                  <p className="text-xs font-bold text-zinc-300">Member Tidak Ditemukan</p>
+                  <p className="text-[11px] text-zinc-500">
+                    Tidak ada member yang cocok dengan kata kunci "{memberSearchTerm}".
+                  </p>
+                  {memberSearchTerm && (
+                    <button
+                      type="button"
+                      onClick={() => setMemberSearchTerm('')}
+                      className="text-xs text-orange-400 hover:underline font-bold mt-1 cursor-pointer"
+                    >
+                      Reset Kata Kunci Pencarian
+                    </button>
+                  )}
+                </div>
+              ) : (
+                filteredMembersForSchedule.map((m) => {
+                  const hasQuota = (m.ptQuota || 0) > 0;
+                  const isSelected = m.id === schMemberId;
+                  return (
+                    <div
+                      key={m.id}
+                      onClick={() => {
+                        setSchMemberId(m.id);
+                        if (m.picName && !schTrainer) {
+                          setSchTrainer(m.picName);
+                        }
+                        setIsMemberSearchOpen(false);
+                      }}
+                      className={`p-3 rounded-xl border transition cursor-pointer flex items-center justify-between gap-3 ${
+                        isSelected
+                          ? 'bg-orange-500/10 border-orange-500/40'
+                          : 'bg-zinc-950/70 border-zinc-800/80 hover:bg-zinc-800/80 hover:border-zinc-700'
+                      }`}
+                    >
+                      <div className="flex items-center gap-3 min-w-0">
+                        <img
+                          src={m.photo || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=200&auto=format&fit=crop'}
+                          alt={m.name}
+                          className="w-10 h-10 rounded-xl object-cover shrink-0 border border-zinc-700"
+                        />
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <h4 className="text-xs font-bold text-white truncate">{m.name}</h4>
+                            <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-zinc-800 text-orange-400 font-bold border border-zinc-700">
+                              {m.id}
+                            </span>
+                          </div>
+                          <p className="text-[11px] text-zinc-400 mt-0.5 truncate">
+                            📞 {m.phone || '-'} {m.picName ? `• PIC: ${m.picName}` : ''}
+                          </p>
+                          <div className="flex items-center gap-2 mt-1 flex-wrap">
+                            <span
+                              className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                                hasQuota
+                                  ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+                                  : 'bg-amber-500/10 text-amber-400 border border-amber-500/20'
+                              }`}
+                            >
+                              {hasQuota ? `✓ Sisa: ${m.ptQuota} Sesi PT` : '0 Sesi PT'}
+                            </span>
+                            <span className="text-[10px] text-zinc-500">
+                              Exp: {formatDateIndo(m.expired)}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="shrink-0">
+                        <button
+                          type="button"
+                          className={`px-3 py-1.5 rounded-xl font-bold text-xs transition active:scale-95 ${
+                            isSelected
+                              ? 'bg-emerald-600 text-white'
+                              : 'bg-orange-500 hover:bg-orange-600 text-white shadow-sm'
+                          }`}
+                        >
+                          {isSelected ? 'Terpilih' : 'Pilih'}
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+
+            {/* Footer Summary */}
+            <div className="pt-3 border-t border-zinc-800 flex items-center justify-between text-[11px] text-zinc-400">
+              <span>Menampilkan {filteredMembersForSchedule.length} dari {members.length} member</span>
+              <button
+                type="button"
+                onClick={() => setIsMemberSearchOpen(false)}
+                className="px-3 py-1.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 font-bold text-xs transition cursor-pointer"
+              >
+                Tutup
+              </button>
+            </div>
           </div>
         </div>
       )}
@@ -1196,9 +1672,24 @@ export const JadwalPTView: React.FC<JadwalPTViewProps> = ({
 
             <form onSubmit={handleBookClassSubmit} className="space-y-4">
               <div>
-                <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-wider mb-1.5">
-                  Pilih Member
-                </label>
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-wider">
+                    Pilih Member <span className="text-orange-400">*</span>
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setClassMemberSearchTerm('');
+                      setClassMemberSearchFilter('all');
+                      setIsClassMemberSearchOpen(true);
+                    }}
+                    className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-orange-500/15 hover:bg-orange-500/25 text-orange-400 border border-orange-500/30 text-xs font-bold transition active:scale-95 cursor-pointer shadow-xs"
+                    title="Cari member untuk kelas studio"
+                  >
+                    <Search className="w-3.5 h-3.5" />
+                    <span>Cari Member</span>
+                  </button>
+                </div>
                 <select
                   value={bookingMemberId}
                   onChange={(e) => setBookingMemberId(e.target.value)}
@@ -1281,6 +1772,189 @@ export const JadwalPTView: React.FC<JadwalPTViewProps> = ({
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL SEARCH MEMBER KHUSUS BOOKING KELAS STUDIO */}
+      {isClassMemberSearchOpen && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 backdrop-blur-xs p-3 sm:p-4 overflow-y-auto">
+          <div className="bg-zinc-900 border border-zinc-700 rounded-2xl shadow-2xl w-full max-w-lg p-4 sm:p-6 my-auto max-h-[90vh] flex flex-col space-y-4 animate-in fade-in zoom-in-95">
+            {/* Modal Header */}
+            <div className="flex items-center justify-between pb-3 border-b border-zinc-800">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-orange-500/20 text-orange-400 flex items-center justify-center">
+                  <Search className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-white">Cari & Pilih Member Kelas Studio</h3>
+                  <p className="text-[11px] text-zinc-400">Temukan member berdasarkan nama, ID, nomor telepon, atau kuota kelas</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsClassMemberSearchOpen(false)}
+                className="p-1.5 rounded-xl text-zinc-400 hover:text-white hover:bg-zinc-800 transition"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Search Input Bar */}
+            <div className="relative">
+              <Search className="w-4 h-4 text-orange-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+              <input
+                type="text"
+                autoFocus
+                value={classMemberSearchTerm}
+                onChange={(e) => setClassMemberSearchTerm(e.target.value)}
+                placeholder="Ketik nama member, nomor ID (contoh: M001), atau no HP..."
+                className="w-full bg-zinc-950 border border-zinc-700 rounded-xl pl-10 pr-9 py-2.5 text-xs text-white placeholder-zinc-500 outline-none focus:border-orange-500 focus:ring-1 focus:ring-orange-500"
+              />
+              {classMemberSearchTerm && (
+                <button
+                  type="button"
+                  onClick={() => setClassMemberSearchTerm('')}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1 text-zinc-400 hover:text-white transition"
+                  title="Hapus kata kunci"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              )}
+            </div>
+
+            {/* Quick Filter Badges */}
+            <div className="flex items-center gap-1.5 overflow-x-auto pb-1 text-xs scrollbar-none">
+              <button
+                type="button"
+                onClick={() => setClassMemberSearchFilter('all')}
+                className={`px-3 py-1.5 rounded-xl font-bold transition shrink-0 cursor-pointer ${
+                  classMemberSearchFilter === 'all'
+                    ? 'bg-orange-500 text-white shadow-xs'
+                    : 'bg-zinc-800 hover:bg-zinc-700 text-zinc-300'
+                }`}
+              >
+                Semua ({members.length})
+              </button>
+              <button
+                type="button"
+                onClick={() => setClassMemberSearchFilter('has_quota')}
+                className={`px-3 py-1.5 rounded-xl font-bold transition shrink-0 flex items-center gap-1 cursor-pointer ${
+                  classMemberSearchFilter === 'has_quota'
+                    ? 'bg-emerald-600 text-white shadow-xs'
+                    : 'bg-zinc-800 hover:bg-zinc-700 text-emerald-400'
+                }`}
+              >
+                <span>⭐ Punya Kuota Kelas</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setClassMemberSearchFilter('no_quota')}
+                className={`px-3 py-1.5 rounded-xl font-bold transition shrink-0 cursor-pointer ${
+                  classMemberSearchFilter === 'no_quota'
+                    ? 'bg-amber-600 text-white shadow-xs'
+                    : 'bg-zinc-800 hover:bg-zinc-700 text-amber-400'
+                }`}
+              >
+                Kuota 0 Sesi
+              </button>
+            </div>
+
+            {/* Scrollable Member List */}
+            <div className="flex-1 overflow-y-auto space-y-2 pr-1 max-h-80 divide-y divide-zinc-800/40">
+              {filteredMembersForClassBooking.length === 0 ? (
+                <div className="p-8 text-center space-y-2">
+                  <Search className="w-8 h-8 text-zinc-600 mx-auto" />
+                  <p className="text-xs font-bold text-zinc-300">Member Tidak Ditemukan</p>
+                  <p className="text-[11px] text-zinc-500">
+                    Tidak ada member yang cocok dengan kata kunci "{classMemberSearchTerm}".
+                  </p>
+                  {classMemberSearchTerm && (
+                    <button
+                      type="button"
+                      onClick={() => setClassMemberSearchTerm('')}
+                      className="text-xs text-orange-400 hover:underline font-bold mt-1 cursor-pointer"
+                    >
+                      Reset Kata Kunci Pencarian
+                    </button>
+                  )}
+                </div>
+              ) : (
+                filteredMembersForClassBooking.map((m) => {
+                  const hasQuota = (m.classQuota || 0) > 0;
+                  const isSelected = m.id === bookingMemberId;
+                  return (
+                    <div
+                      key={m.id}
+                      onClick={() => {
+                        setBookingMemberId(m.id);
+                        setIsClassMemberSearchOpen(false);
+                      }}
+                      className={`p-3 rounded-xl border transition cursor-pointer flex items-center justify-between gap-3 ${
+                        isSelected
+                          ? 'bg-orange-500/10 border-orange-500/40'
+                          : 'bg-zinc-950/70 border-zinc-800/80 hover:bg-zinc-800/80 hover:border-zinc-700'
+                      }`}
+                    >
+                      <div className="flex items-center gap-3 min-w-0">
+                        <img
+                          src={m.photo || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=200&auto=format&fit=crop'}
+                          alt={m.name}
+                          className="w-10 h-10 rounded-xl object-cover shrink-0 border border-zinc-700"
+                        />
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <h4 className="text-xs font-bold text-white truncate">{m.name}</h4>
+                            <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-zinc-800 text-orange-400 font-bold border border-zinc-700">
+                              {m.id}
+                            </span>
+                          </div>
+                          <p className="text-[11px] text-zinc-400 mt-0.5 truncate">
+                            📞 {m.phone || '-'}
+                          </p>
+                          <div className="flex items-center gap-2 mt-1 flex-wrap">
+                            <span
+                              className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                                hasQuota
+                                  ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+                                  : 'bg-amber-500/10 text-amber-400 border border-amber-500/20'
+                              }`}
+                            >
+                              {hasQuota ? `✓ Kuota: ${m.classQuota} Sesi Kelas` : '0 Sesi Kelas'}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="shrink-0">
+                        <button
+                          type="button"
+                          className={`px-3 py-1.5 rounded-xl font-bold text-xs transition active:scale-95 ${
+                            isSelected
+                              ? 'bg-emerald-600 text-white'
+                              : 'bg-orange-500 hover:bg-orange-600 text-white shadow-sm'
+                          }`}
+                        >
+                          {isSelected ? 'Terpilih' : 'Pilih'}
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+
+            {/* Footer Summary */}
+            <div className="pt-3 border-t border-zinc-800 flex items-center justify-between text-[11px] text-zinc-400">
+              <span>Menampilkan {filteredMembersForClassBooking.length} dari {members.length} member</span>
+              <button
+                type="button"
+                onClick={() => setIsClassMemberSearchOpen(false)}
+                className="px-3 py-1.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 font-bold text-xs transition cursor-pointer"
+              >
+                Tutup
+              </button>
+            </div>
           </div>
         </div>
       )}
