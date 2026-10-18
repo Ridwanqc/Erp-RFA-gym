@@ -146,10 +146,10 @@ export interface Member {
   classPackageName?: string; // Nama paket kelas studio aktif
   classPackageExpired?: string; // Tanggal kadaluarsa kuota kelas (YYYY-MM-DD)
   classCategoryAllowed?: string; // Kategori kelas yang diizinkan (misal: 'Semua Kelas', 'Zumba', 'Pilates')
-  picId: string;
-  picName: string;
+  picId?: string;
+  picName?: string;
   isPicLocked?: boolean;
-  followUpStatus: string;
+  followUpStatus?: string;
   photo: string;
   gender?: 'L' | 'P';
   joinDate?: string;
@@ -167,7 +167,7 @@ export interface Member {
   freezeReason?: string;
   freezeStaffName?: string;
   freezeNotes?: string;
-  membershipType?: 'MEMBER' | 'VISIT';
+  membershipType?: 'MEMBER' | 'VISIT' | 'VIP PASS';
   // Multi-Branch Home Assignment
   branchId?: string;
   branchName?: string;

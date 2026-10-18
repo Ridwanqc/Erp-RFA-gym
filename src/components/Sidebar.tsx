@@ -148,7 +148,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
     'master-data': 'master-data',
     'bundling-reports': 'bundling',
     'body-composition': 'body-composition',
-    'absen': 'absen',
     'quick-out': 'absen',
     'crm': 'crm',
     'leader-pt': 'leader-pt',

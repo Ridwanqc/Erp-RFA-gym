@@ -645,7 +645,7 @@ export const LeaderPTDashboardView: React.FC<LeaderPTDashboardViewProps> = ({
 
     if (searchQuery) {
       const q = searchQuery.toLowerCase();
-      list = list.filter((m) => m.name.toLowerCase().includes(q) || m.phone.includes(q) || m.picName.toLowerCase().includes(q));
+      list = list.filter((m) => m.name.toLowerCase().includes(q) || m.phone.includes(q) || (m.picName ? m.picName.toLowerCase().includes(q) : false));
     }
 
     return list;

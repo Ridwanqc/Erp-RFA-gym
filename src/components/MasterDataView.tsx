@@ -159,7 +159,7 @@ export const MasterDataView: React.FC<MasterDataViewProps> = ({
       setStaffRole(item.role);
     } else {
       // Member
-      setMemberPicId(item.picId);
+      setMemberPicId(item.picId || '');
       setIsPicLocked(Boolean(item.picId));
     }
     setIsModalOpen(true);

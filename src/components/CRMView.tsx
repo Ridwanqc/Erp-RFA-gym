@@ -48,7 +48,11 @@ import {
   Unlock,
   KeyRound,
   EyeOff,
-  ShieldCheck
+  ShieldCheck,
+  UserPlus,
+  Repeat,
+  Award,
+  ArrowUpDown
 } from 'lucide-react';
 import { Lead, Member, User, FollowUpLog, Transaction, LeadFollowUpRecord, LeadHandoverRecord, getStaffDivision } from '../types';
 import { OnlineReservation } from '../types/landingTypes';
@@ -64,6 +68,10 @@ export interface ProductSaleDetail {
   category: 'Membership' | 'PT' | 'POS';
   count: number;
   revenue: number;
+  newCount?: number;
+  newRevenue?: number;
+  renewalCount?: number;
+  renewalRevenue?: number;
 }
 
 export interface PICTransactionLog {
@@ -78,6 +86,8 @@ export interface PICTransactionLog {
   method: string;
   status: string;
   trxCategory?: string;
+  isRenewal?: boolean;
+  isNewMember?: boolean;
 }
 
 export interface PICLeaderboardStat {
@@ -87,7 +97,9 @@ export interface PICLeaderboardStat {
   photo?: string;
   revenue: number;
   newCount: number;
+  newRevenue: number;
   renewalCount: number;
+  renewalRevenue: number;
   membershipCount: number;
   membershipRevenue: number;
   ptCount: number;
@@ -138,10 +150,14 @@ export const CRMView: React.FC<CRMViewProps> = ({
   const [customStartDate, setCustomStartDate] = useState('2026-09-01');
   const [customEndDate, setCustomEndDate] = useState(APP_TODAY);
 
+  // Leaderboard Separation & Sorting State (New vs Renewal)
+  const [leaderboardViewMode, setLeaderboardViewMode] = useState<'all' | 'new' | 'renewal'>('all');
+  const [leaderboardSortBy, setLeaderboardSortBy] = useState<'revenue' | 'newRevenue' | 'renewalRevenue' | 'totalClosing'>('revenue');
+
   // Accordion & Detail Modal state for PIC Sales
   const [expandedPicId, setExpandedPicId] = useState<string | null>(null);
   const [selectedModalPic, setSelectedModalPic] = useState<PICLeaderboardStat | null>(null);
-  const [modalFilterCat, setModalFilterCat] = useState<'all' | 'Membership' | 'PT' | 'POS' | 'trx'>('all');
+  const [modalFilterCat, setModalFilterCat] = useState<'all' | 'new' | 'renewal' | 'Membership' | 'PT' | 'POS' | 'trx'>('all');
   const [modalSearch, setModalSearch] = useState('');
 
   // Leads Kanban Filters & Scope (added 'online' scope)
@@ -265,8 +281,26 @@ export const CRMView: React.FC<CRMViewProps> = ({
       .trim();
   };
 
-  // Compute PIC Leaderboard stats with Date Filter
-  const { rankedPICs, globalRevenue, globalNewCount, globalRenewalCount, globalMembershipUnits, globalPtUnits, globalPosUnits, filteredTrxCount } = useMemo(() => {
+  // Compute PIC Leaderboard stats with Date Filter and separated New vs Renewal
+  const {
+    rankedPICs,
+    allPICStats,
+    globalRevenue,
+    globalNewCount,
+    globalNewRevenue,
+    globalRenewalCount,
+    globalRenewalRevenue,
+    globalMembershipUnits,
+    globalMembershipRevenue,
+    globalPtUnits,
+    globalPtRevenue,
+    globalPosUnits,
+    globalPosRevenue,
+    filteredTrxCount,
+    topPerformerAll,
+    topPerformerNew,
+    topPerformerRenewal
+  } = useMemo(() => {
     const picStatsMap: {
       [picId: string]: {
         id: string;
@@ -275,7 +309,9 @@ export const CRMView: React.FC<CRMViewProps> = ({
         photo?: string;
         revenue: number;
         newCount: number;
+        newRevenue: number;
         renewalCount: number;
+        renewalRevenue: number;
         membershipCount: number;
         membershipRevenue: number;
         ptCount: number;
@@ -295,7 +331,9 @@ export const CRMView: React.FC<CRMViewProps> = ({
         photo: s.photo,
         revenue: 0,
         newCount: 0,
+        newRevenue: 0,
         renewalCount: 0,
+        renewalRevenue: 0,
         membershipCount: 0,
         membershipRevenue: 0,
         ptCount: 0,
@@ -309,10 +347,15 @@ export const CRMView: React.FC<CRMViewProps> = ({
 
     let gRev = 0;
     let gNew = 0;
+    let gNewRevenue = 0;
     let gRenewal = 0;
+    let gRenewalRevenue = 0;
     let gMemUnits = 0;
+    let gMemRev = 0;
     let gPtUnits = 0;
+    let gPtRev = 0;
     let gPosUnits = 0;
+    let gPosRev = 0;
     let fCount = 0;
 
     transactions.forEach((t) => {
@@ -345,14 +388,32 @@ export const CRMView: React.FC<CRMViewProps> = ({
         const cat = detectCategory(t.desc, t.type);
         const cleanName = sanitizeItemName(t.desc, t.type);
 
+        const isRenewal = Boolean(
+          t.trxCategory === 'RENEWAL' ||
+          (t.trxCategory && t.trxCategory.toUpperCase().includes('RENEW')) ||
+          (t.desc && (t.desc.toLowerCase().includes('renewal') || t.desc.toLowerCase().includes('perpanjang')))
+        );
+
+        // Request 6: Di NEW Member tipe transaksi HANYA pembelian membership murni, jangan campur dengan PT/POS/lainnya
+        const isMembershipPurchase = Boolean(
+          (cat === 'Membership' || t.type === 'Membership' || t.trxCategory === 'NEW MEMBERSHIP' || t.trxCategory === 'RENEWAL') &&
+          cat !== 'PT' &&
+          cat !== 'POS'
+        );
+
+        const isNewMembership = !isRenewal && isMembershipPurchase;
+        const isRenewalMembership = isRenewal && isMembershipPurchase;
+
         pids.forEach((pid) => {
           const stat = picStatsMap[pid];
           if (stat) {
             stat.revenue += amtPerPic;
-            if (t.trxCategory === 'RENEWAL') {
+            if (isRenewalMembership) {
               stat.renewalCount += 1 / pids.length;
-            } else {
+              stat.renewalRevenue += amtPerPic;
+            } else if (isNewMembership) {
               stat.newCount += 1 / pids.length;
+              stat.newRevenue += amtPerPic;
             }
 
             if (cat === 'Membership') {
@@ -371,11 +432,22 @@ export const CRMView: React.FC<CRMViewProps> = ({
                 name: cleanName,
                 category: cat,
                 count: 0,
-                revenue: 0
+                revenue: 0,
+                newCount: 0,
+                newRevenue: 0,
+                renewalCount: 0,
+                renewalRevenue: 0
               };
             }
             stat.productsMap[cleanName].count += 1 / pids.length;
             stat.productsMap[cleanName].revenue += amtPerPic;
+            if (isRenewalMembership) {
+              stat.productsMap[cleanName].renewalCount = (stat.productsMap[cleanName].renewalCount || 0) + 1 / pids.length;
+              stat.productsMap[cleanName].renewalRevenue = (stat.productsMap[cleanName].renewalRevenue || 0) + amtPerPic;
+            } else if (isNewMembership) {
+              stat.productsMap[cleanName].newCount = (stat.productsMap[cleanName].newCount || 0) + 1 / pids.length;
+              stat.productsMap[cleanName].newRevenue = (stat.productsMap[cleanName].newRevenue || 0) + amtPerPic;
+            }
 
             stat.transactions.push({
               id: t.id,
@@ -388,55 +460,97 @@ export const CRMView: React.FC<CRMViewProps> = ({
               picRevenue: amtPerPic,
               method: t.method,
               status: t.status,
-              trxCategory: t.trxCategory
+              trxCategory: t.trxCategory,
+              isRenewal: isRenewalMembership,
+              isNewMember: isNewMembership
             });
           }
         });
 
         gRev += amt;
-        if (t.trxCategory === 'RENEWAL') {
+        if (isRenewalMembership) {
           gRenewal++;
-        } else {
+          gRenewalRevenue += amt;
+        } else if (isNewMembership) {
           gNew++;
+          gNewRevenue += amt;
         }
 
-        if (cat === 'Membership') gMemUnits++;
-        else if (cat === 'PT') gPtUnits++;
-        else gPosUnits++;
+        if (cat === 'Membership') {
+          gMemUnits++;
+          gMemRev += amt;
+        } else if (cat === 'PT') {
+          gPtUnits++;
+          gPtRev += amt;
+        } else {
+          gPosUnits++;
+          gPosRev += amt;
+        }
       }
     });
 
-    const ranked: PICLeaderboardStat[] = Object.values(picStatsMap)
-      .map((item) => ({
-        id: item.id,
-        name: item.name,
-        roleName: item.roleName,
-        photo: item.photo,
-        revenue: Math.round(item.revenue),
-        newCount: Math.round(item.newCount),
-        renewalCount: Math.round(item.renewalCount),
-        membershipCount: Math.round(item.membershipCount),
-        membershipRevenue: Math.round(item.membershipRevenue),
-        ptCount: Math.round(item.ptCount),
-        ptRevenue: Math.round(item.ptRevenue),
-        posCount: Math.round(item.posCount),
-        posRevenue: Math.round(item.posRevenue),
-        products: Object.values(item.productsMap).sort((a, b) => b.revenue - a.revenue),
-        transactions: item.transactions.sort((a, b) => b.date.localeCompare(a.date))
-      }))
-      .sort((a, b) => b.revenue - a.revenue);
+    const allStats: PICLeaderboardStat[] = Object.values(picStatsMap).map((item) => ({
+      id: item.id,
+      name: item.name,
+      roleName: item.roleName,
+      photo: item.photo,
+      revenue: Math.round(item.revenue),
+      newCount: Math.round(item.newCount),
+      newRevenue: Math.round(item.newRevenue),
+      renewalCount: Math.round(item.renewalCount),
+      renewalRevenue: Math.round(item.renewalRevenue),
+      membershipCount: Math.round(item.membershipCount),
+      membershipRevenue: Math.round(item.membershipRevenue),
+      ptCount: Math.round(item.ptCount),
+      ptRevenue: Math.round(item.ptRevenue),
+      posCount: Math.round(item.posCount),
+      posRevenue: Math.round(item.posRevenue),
+      products: Object.values(item.productsMap).sort((a, b) => b.revenue - a.revenue),
+      transactions: item.transactions.sort((a, b) => b.date.localeCompare(a.date))
+    }));
+
+    // Top performers for highlights
+    const topPerformerAll = [...allStats].filter((p) => p.revenue > 0).sort((a, b) => b.revenue - a.revenue)[0] || null;
+    const topPerformerNew = [...allStats].filter((p) => p.newRevenue > 0).sort((a, b) => b.newRevenue - a.newRevenue)[0] || null;
+    const topPerformerRenewal = [...allStats].filter((p) => p.renewalRevenue > 0).sort((a, b) => b.renewalRevenue - a.renewalRevenue)[0] || null;
+
+    // Sorting according to mode & user preference
+    const sorted = [...allStats].sort((a, b) => {
+      if (leaderboardViewMode === 'new') {
+        if (b.newRevenue !== a.newRevenue) return b.newRevenue - a.newRevenue;
+        return b.newCount - a.newCount;
+      }
+      if (leaderboardViewMode === 'renewal') {
+        if (b.renewalRevenue !== a.renewalRevenue) return b.renewalRevenue - a.renewalRevenue;
+        return b.renewalCount - a.renewalCount;
+      }
+      // Mode 'all'
+      if (leaderboardSortBy === 'newRevenue') return b.newRevenue - a.newRevenue;
+      if (leaderboardSortBy === 'renewalRevenue') return b.renewalRevenue - a.renewalRevenue;
+      if (leaderboardSortBy === 'totalClosing') return (b.newCount + b.renewalCount) - (a.newCount + a.renewalCount);
+      return b.revenue - a.revenue;
+    });
 
     return {
-      rankedPICs: ranked,
+      rankedPICs: sorted,
+      allPICStats: allStats,
       globalRevenue: gRev,
       globalNewCount: gNew,
+      globalNewRevenue: gNewRevenue,
       globalRenewalCount: gRenewal,
+      globalRenewalRevenue: gRenewalRevenue,
       globalMembershipUnits: gMemUnits,
+      globalMembershipRevenue: gMemRev,
       globalPtUnits: gPtUnits,
+      globalPtRevenue: gPtRev,
       globalPosUnits: gPosUnits,
-      filteredTrxCount: fCount
+      globalPosRevenue: gPosRev,
+      filteredTrxCount: fCount,
+      topPerformerAll,
+      topPerformerNew,
+      topPerformerRenewal
     };
-  }, [transactions, staffUsers, datePreset, customStartDate, customEndDate]);
+  }, [transactions, staffUsers, datePreset, customStartDate, customEndDate, leaderboardViewMode, leaderboardSortBy]);
 
   // Label for current date filter
   const dateFilterLabel = useMemo(() => {
@@ -1124,28 +1238,100 @@ export const CRMView: React.FC<CRMViewProps> = ({
 
           {/* MAIN LEADERBOARD & SUMMARY GRID */}
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            {/* Leaderboard Table */}
+            {/* Leaderboard Table Column */}
             <div className="lg:col-span-2 bg-zinc-900/90 border border-zinc-800 rounded-3xl p-6 shadow-sm space-y-4">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-zinc-800 pb-3">
-                <h3 className="text-sm font-bold text-white flex items-center gap-2">
-                  <Trophy className="w-4 h-4 text-amber-400" /> Leaderboard Revenue PIC Sales & Front Desk
-                </h3>
-                <span className="text-[11px] text-zinc-400">
-                  Klik baris atau tombol detail untuk melihat paket membership & PT yang dijual
-                </span>
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-zinc-800 pb-4">
+                <div>
+                  <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                    <Trophy className="w-4 h-4 text-amber-400" /> Leaderboard Revenue PIC Sales & Front Desk
+                  </h3>
+                  <p className="text-[11px] text-zinc-400 mt-0.5">
+                    Laporan penjualan PIC dipisahkan antara closing member baru (NEW: murni paket membership) dan perpanjangan (RENEWAL)
+                  </p>
+                </div>
+
+                {/* Sort Option Dropdown */}
+                <div className="flex items-center gap-2 self-start sm:self-auto">
+                  <span className="text-[10px] text-zinc-400 font-semibold flex items-center gap-1">
+                    <ArrowUpDown className="w-3 h-3 text-zinc-500" /> Urutkan:
+                  </span>
+                  <select
+                    value={leaderboardSortBy}
+                    onChange={(e) => setLeaderboardSortBy(e.target.value as any)}
+                    className="bg-zinc-950 border border-zinc-700 rounded-xl px-2.5 py-1 text-xs text-white outline-none focus:border-orange-500"
+                  >
+                    <option value="revenue">Total Omset (Tertinggi)</option>
+                    <option value="newRevenue">Omset Closing NEW Mbr (Tertinggi)</option>
+                    <option value="renewalRevenue">Omset RENEWAL (Tertinggi)</option>
+                    <option value="totalClosing">Total Transaksi Closing</option>
+                  </select>
+                </div>
               </div>
 
+              {/* Sub-Tabs: Pisahkan Mode Laporan Leaderboard */}
+              <div className="flex bg-zinc-950 p-1.5 rounded-2xl border border-zinc-800/80 overflow-x-auto max-w-full scrollbar-none items-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => setLeaderboardViewMode('all')}
+                  className={`px-3.5 py-2 rounded-xl text-xs font-bold transition whitespace-nowrap flex items-center gap-1.5 cursor-pointer ${
+                    leaderboardViewMode === 'all'
+                      ? 'bg-zinc-800 text-white shadow-md border border-zinc-700'
+                      : 'text-zinc-400 hover:text-white hover:bg-zinc-900'
+                  }`}
+                >
+                  <Trophy className="w-3.5 h-3.5 text-amber-400" />
+                  <span>Semua Transaksi ({formatRp(globalRevenue)})</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setLeaderboardViewMode('new')}
+                  className={`px-3.5 py-2 rounded-xl text-xs font-bold transition whitespace-nowrap flex items-center gap-1.5 cursor-pointer ${
+                    leaderboardViewMode === 'new'
+                      ? 'bg-emerald-500 text-zinc-950 font-black shadow-md shadow-emerald-500/20'
+                      : 'text-emerald-400 hover:text-emerald-300 hover:bg-emerald-500/10'
+                  }`}
+                >
+                  <UserPlus className="w-3.5 h-3.5" />
+                  <span>Khusus NEW Member ({globalNewCount} Mbr Baru • {formatRp(globalNewRevenue)})</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setLeaderboardViewMode('renewal')}
+                  className={`px-3.5 py-2 rounded-xl text-xs font-bold transition whitespace-nowrap flex items-center gap-1.5 cursor-pointer ${
+                    leaderboardViewMode === 'renewal'
+                      ? 'bg-blue-500 text-white font-black shadow-md shadow-blue-500/20'
+                      : 'text-blue-400 hover:text-blue-300 hover:bg-blue-500/10'
+                  }`}
+                >
+                  <Repeat className="w-3.5 h-3.5" />
+                  <span>Khusus RENEWAL ({globalRenewalCount} Unit • {formatRp(globalRenewalRevenue)})</span>
+                </button>
+              </div>
+
+              {/* Leaderboard Table with Separated Columns */}
               <div className="overflow-x-auto">
                 <table className="w-full text-left text-xs whitespace-nowrap">
                   <thead className="border-b border-zinc-800 text-zinc-400 font-bold uppercase text-[10px]">
                     <tr>
                       <th className="py-2.5 px-3">Peringkat</th>
                       <th className="py-2.5 px-3">Nama PIC</th>
-                      <th className="py-2.5 px-3">Paket Membership</th>
-                      <th className="py-2.5 px-3">Paket PT</th>
-                      <th className="py-2.5 px-3 text-center">New / Renewal</th>
+                      {/* Separate New Column */}
+                      <th className={`py-2.5 px-3 ${leaderboardViewMode === 'new' ? 'bg-emerald-500/15 text-emerald-300 rounded-t-xl' : 'text-emerald-400'}`}>
+                        <div className="flex items-center gap-1">
+                          <UserPlus className="w-3 h-3" /> Closing NEW Member
+                        </div>
+                      </th>
+                      {/* Separate Renewal Column */}
+                      <th className={`py-2.5 px-3 ${leaderboardViewMode === 'renewal' ? 'bg-blue-500/15 text-blue-300 rounded-t-xl' : 'text-blue-400'}`}>
+                        <div className="flex items-center gap-1">
+                          <Repeat className="w-3 h-3" /> Closing RENEWAL
+                        </div>
+                      </th>
+                      <th className="py-2.5 px-3">Paket Mbr & PT</th>
                       <th className="py-2.5 px-3 text-right">Total Revenue</th>
-                      <th className="py-2.5 px-3 text-center">Detail Produk</th>
+                      <th className="py-2.5 px-3 text-center">Detail PIC</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-zinc-800/70 text-zinc-300">
@@ -1176,9 +1362,9 @@ export const CRMView: React.FC<CRMViewProps> = ({
                                 <div>
                                   <div className="font-bold text-white flex items-center gap-1.5">
                                     <span>{pic.name}</span>
-                                    {idx === 0 && pic.revenue > 0 && (
+                                    {idx === 0 && (
                                       <span className="text-[9px] bg-amber-500/20 text-amber-400 px-1.5 py-0.2 rounded font-black">
-                                        TOP SALES
+                                        {leaderboardViewMode === 'new' ? 'TOP NEW' : leaderboardViewMode === 'renewal' ? 'TOP RENEWAL' : 'TOP SALES'}
                                       </span>
                                     )}
                                   </div>
@@ -1186,29 +1372,59 @@ export const CRMView: React.FC<CRMViewProps> = ({
                                 </div>
                               </div>
                             </td>
-                            <td className="py-3.5 px-3">
-                              <div className="flex items-center gap-1.5">
-                                <span className="bg-indigo-500/15 text-indigo-400 font-bold px-2 py-0.5 rounded-md text-[11px]">
-                                  {pic.membershipCount} Paket
-                                </span>
-                                <span className="text-[10px] text-zinc-400">({formatRp(pic.membershipRevenue)})</span>
+
+                            {/* SEPARATED NEW MEMBER REPORT */}
+                            <td className={`py-3.5 px-3 ${leaderboardViewMode === 'new' ? 'bg-emerald-500/10 font-bold' : ''}`}>
+                              <div className="space-y-0.5">
+                                <div className="flex items-center gap-1.5">
+                                  <span className="bg-emerald-500/15 text-emerald-400 font-black px-2 py-0.5 rounded-md text-[11px]">
+                                    {pic.newCount} New
+                                  </span>
+                                  <span className="font-bold text-emerald-300 text-xs">
+                                    {formatRp(pic.newRevenue)}
+                                  </span>
+                                </div>
                               </div>
                             </td>
-                            <td className="py-3.5 px-3">
-                              <div className="flex items-center gap-1.5">
-                                <span className="bg-emerald-500/15 text-emerald-400 font-bold px-2 py-0.5 rounded-md text-[11px]">
-                                  {pic.ptCount} Sesi/Paket
-                                </span>
-                                <span className="text-[10px] text-zinc-400">({formatRp(pic.ptRevenue)})</span>
+
+                            {/* SEPARATED RENEWAL REPORT */}
+                            <td className={`py-3.5 px-3 ${leaderboardViewMode === 'renewal' ? 'bg-blue-500/10 font-bold' : ''}`}>
+                              <div className="space-y-0.5">
+                                <div className="flex items-center gap-1.5">
+                                  <span className="bg-blue-500/15 text-blue-400 font-black px-2 py-0.5 rounded-md text-[11px]">
+                                    {pic.renewalCount} Rnw
+                                  </span>
+                                  <span className="font-bold text-blue-300 text-xs">
+                                    {formatRp(pic.renewalRevenue)}
+                                  </span>
+                                </div>
                               </div>
                             </td>
-                            <td className="py-3.5 px-3 text-center font-semibold">
-                              <span className="text-emerald-400">{pic.newCount} New</span> /{' '}
-                              <span className="text-blue-400">{pic.renewalCount} Rnw</span>
+
+                            {/* PAKET MEMBERSHIP & PT */}
+                            <td className="py-3.5 px-3">
+                              <div className="space-y-1">
+                                <div className="flex items-center gap-1.5">
+                                  <span className="bg-indigo-500/15 text-indigo-400 font-bold px-1.5 py-0.2 rounded text-[10px]">
+                                    {pic.membershipCount} Mbr
+                                  </span>
+                                  <span className="text-[10px] text-zinc-400">{formatRp(pic.membershipRevenue)}</span>
+                                </div>
+                                <div className="flex items-center gap-1.5">
+                                  <span className="bg-emerald-500/15 text-emerald-400 font-bold px-1.5 py-0.2 rounded text-[10px]">
+                                    {pic.ptCount} PT
+                                  </span>
+                                  <span className="text-[10px] text-zinc-400">{formatRp(pic.ptRevenue)}</span>
+                                </div>
+                              </div>
                             </td>
+
+                            {/* TOTAL REVENUE */}
                             <td className="py-3.5 px-3 text-right font-black text-orange-400 text-sm">
                               {formatRp(pic.revenue)}
                             </td>
+
+                            {/* ACTION BUTTONS */}
                             <td className="py-3.5 px-3 text-center">
                               <div className="flex items-center justify-center gap-1.5">
                                 <button
@@ -1222,7 +1438,7 @@ export const CRMView: React.FC<CRMViewProps> = ({
                                       ? 'bg-orange-500 text-white'
                                       : 'bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-white'
                                   }`}
-                                  title="Lihat rincian paket yang dijual"
+                                  title="Lihat rincian pemisahan New dan Renewal"
                                 >
                                   <span>{totalPackagesSold} Item</span>
                                   {isExpanded ? (
@@ -1248,21 +1464,22 @@ export const CRMView: React.FC<CRMViewProps> = ({
                             </td>
                           </tr>
 
-                          {/* EXPANDABLE ACCORDION DETAIL ROW */}
+                          {/* EXPANDABLE ACCORDION DETAIL ROW - SEPARATED NEW VS RENEWAL */}
                           {isExpanded && (
                             <tr className="bg-zinc-950/90">
                               <td colSpan={7} className="p-4 border-y border-zinc-800/80">
                                 <div className="space-y-4">
+                                  {/* Header summary of expanded PIC */}
                                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-2 border-b border-zinc-800/60">
                                     <div className="flex items-center gap-2">
                                       <Package className="w-4 h-4 text-orange-400" />
                                       <span className="font-bold text-xs text-white">
-                                        Rincian Produk & Paket Terjual oleh {pic.name} ({dateFilterLabel})
+                                        Rincian Laporan Penjualan PIC: {pic.name} ({dateFilterLabel})
                                       </span>
                                     </div>
-                                    <div className="flex items-center gap-2">
+                                    <div className="flex items-center gap-3">
                                       <span className="text-[11px] text-zinc-400">
-                                        Total: <strong className="text-orange-400">{formatRp(pic.revenue)}</strong> ({totalPackagesSold} transaksi produk/paket)
+                                        Total: <strong className="text-orange-400">{formatRp(pic.revenue)}</strong> ({totalPackagesSold} transaksi)
                                       </span>
                                       <button
                                         type="button"
@@ -1278,173 +1495,151 @@ export const CRMView: React.FC<CRMViewProps> = ({
                                     </div>
                                   </div>
 
+                                  {/* DUA KARTU UTAMA: LAPORAN CLOSING NEW vs RENEWAL TERPISAH */}
                                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                    {/* Kolom 1: Detail Paket Membership */}
-                                    <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4 space-y-3">
-                                      <div className="flex items-center justify-between">
+                                    {/* KARTU 1: LAPORAN CLOSING NEW MEMBER (MURNI MEMBERSHIP) */}
+                                    <div className="bg-zinc-900 border border-emerald-500/30 rounded-2xl p-4 space-y-3">
+                                      <div className="flex items-center justify-between border-b border-zinc-800 pb-2.5">
                                         <div className="flex items-center gap-2">
-                                          <Users className="w-4 h-4 text-indigo-400" />
-                                          <h5 className="font-bold text-xs text-white">Paket Membership Terjual</h5>
-                                        </div>
-                                        <span className="text-[10px] font-bold bg-indigo-500/20 text-indigo-300 px-2 py-0.5 rounded-full">
-                                          {pic.membershipCount} Paket • {formatRp(pic.membershipRevenue)}
-                                        </span>
-                                      </div>
-
-                                      {pic.products.filter((p) => p.category === 'Membership').length === 0 ? (
-                                        <p className="text-[11px] text-zinc-500 italic py-2">
-                                          Tidak ada penjualan paket membership pada periode ini.
-                                        </p>
-                                      ) : (
-                                        <div className="space-y-2">
-                                          {pic.products
-                                            .filter((p) => p.category === 'Membership')
-                                            .map((prod, pIdx) => {
-                                              const pct = pic.revenue > 0 ? Math.round((prod.revenue / pic.revenue) * 100) : 0;
-                                              return (
-                                                <div
-                                                  key={pIdx}
-                                                  className="bg-zinc-950/80 border border-zinc-800/80 p-2.5 rounded-xl flex items-center justify-between text-xs"
-                                                >
-                                                  <div className="space-y-0.5 max-w-[65%]">
-                                                    <div className="font-bold text-zinc-200 truncate">{prod.name}</div>
-                                                    <div className="text-[10px] text-zinc-500">
-                                                      Terjual: <strong className="text-zinc-300">{prod.count} unit</strong> ({pct}% dari total omset PIC)
-                                                    </div>
-                                                  </div>
-                                                  <div className="text-right">
-                                                    <div className="font-black text-indigo-400">{formatRp(prod.revenue)}</div>
-                                                  </div>
-                                                </div>
-                                              );
-                                            })}
-                                        </div>
-                                      )}
-                                    </div>
-
-                                    {/* Kolom 2: Detail Paket Personal Trainer (PT) & POS */}
-                                    <div className="space-y-4">
-                                      <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4 space-y-3">
-                                        <div className="flex items-center justify-between">
-                                          <div className="flex items-center gap-2">
-                                            <Dumbbell className="w-4 h-4 text-emerald-400" />
-                                            <h5 className="font-bold text-xs text-white">Paket Personal Trainer (PT) Terjual</h5>
+                                          <div className="w-7 h-7 rounded-xl bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center text-emerald-400">
+                                            <UserPlus className="w-4 h-4" />
                                           </div>
-                                          <span className="text-[10px] font-bold bg-emerald-500/20 text-emerald-300 px-2 py-0.5 rounded-full">
-                                            {pic.ptCount} Sesi/Paket • {formatRp(pic.ptRevenue)}
+                                          <div>
+                                            <h5 className="font-bold text-xs text-white">Laporan Closing NEW Member</h5>
+                                            <p className="text-[10px] text-zinc-400">Khusus pembelian paket membership member baru</p>
+                                          </div>
+                                        </div>
+                                        <div className="text-right">
+                                          <span className="text-xs font-black text-emerald-400 block">{formatRp(pic.newRevenue)}</span>
+                                          <span className="text-[10px] font-bold text-emerald-300/80 bg-emerald-500/10 px-2 py-0.5 rounded-full">
+                                            {pic.newCount} Membership Baru
                                           </span>
                                         </div>
-
-                                        {pic.products.filter((p) => p.category === 'PT').length === 0 ? (
-                                          <p className="text-[11px] text-zinc-500 italic py-2">
-                                            Tidak ada penjualan paket PT pada periode ini.
-                                          </p>
-                                        ) : (
-                                          <div className="space-y-2">
-                                            {pic.products
-                                              .filter((p) => p.category === 'PT')
-                                              .map((prod, pIdx) => {
-                                                const pct = pic.revenue > 0 ? Math.round((prod.revenue / pic.revenue) * 100) : 0;
-                                                return (
-                                                  <div
-                                                    key={pIdx}
-                                                    className="bg-zinc-950/80 border border-zinc-800/80 p-2.5 rounded-xl flex items-center justify-between text-xs"
-                                                  >
-                                                    <div className="space-y-0.5 max-w-[65%]">
-                                                      <div className="font-bold text-zinc-200 truncate">{prod.name}</div>
-                                                      <div className="text-[10px] text-zinc-500">
-                                                        Terjual: <strong className="text-zinc-300">{prod.count} sesi/paket</strong> ({pct}% dari total omset)
-                                                      </div>
-                                                    </div>
-                                                    <div className="text-right">
-                                                      <div className="font-black text-emerald-400">{formatRp(prod.revenue)}</div>
-                                                    </div>
-                                                  </div>
-                                                );
-                                              })}
-                                          </div>
-                                        )}
                                       </div>
 
-                                      {/* Produk Retail / POS jika ada */}
-                                      {pic.products.some((p) => p.category === 'POS') && (
-                                        <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4 space-y-3">
-                                          <div className="flex items-center justify-between">
-                                            <div className="flex items-center gap-2">
-                                              <ShoppingBag className="w-4 h-4 text-amber-400" />
-                                              <h5 className="font-bold text-xs text-white">Produk Retail / POS Terjual</h5>
-                                            </div>
-                                            <span className="text-[10px] font-bold bg-amber-500/20 text-amber-300 px-2 py-0.5 rounded-full">
-                                              {pic.posCount} Item • {formatRp(pic.posRevenue)}
-                                            </span>
-                                          </div>
-                                          <div className="space-y-2">
-                                            {pic.products
-                                              .filter((p) => p.category === 'POS')
-                                              .map((prod, pIdx) => (
-                                                <div
-                                                  key={pIdx}
-                                                  className="bg-zinc-950/80 border border-zinc-800/80 p-2.5 rounded-xl flex items-center justify-between text-xs"
-                                                >
-                                                  <div className="font-bold text-zinc-200">{prod.name}</div>
-                                                  <div className="text-right font-black text-amber-400">
-                                                    {formatRp(prod.revenue)} ({prod.count}x)
+                                      {/* Daftar Transaksi New PIC (Hanya Pembelian Membership Murni) */}
+                                      <div className="space-y-1.5 max-h-40 overflow-y-auto pr-1 scrollbar-thin scrollbar-thumb-zinc-800">
+                                        {pic.transactions.filter((t) => t.isNewMember).length === 0 ? (
+                                          <p className="text-[11px] text-zinc-500 italic py-2">
+                                            Tidak ada closing pembelian membership baru pada periode ini.
+                                          </p>
+                                        ) : (
+                                          pic.transactions
+                                            .filter((t) => t.isNewMember)
+                                            .map((trx) => (
+                                              <div
+                                                key={trx.id}
+                                                className="bg-zinc-950/80 border border-emerald-500/20 p-2 rounded-xl flex items-center justify-between text-xs"
+                                              >
+                                                <div className="space-y-0.5 max-w-[65%]">
+                                                  <div className="font-bold text-white truncate flex items-center gap-1.5">
+                                                    <span>{trx.customer}</span>
+                                                    <span className="text-[9px] bg-emerald-500/20 text-emerald-300 px-1 py-0.2 rounded font-bold">
+                                                      NEW MBR
+                                                    </span>
                                                   </div>
+                                                  <div className="text-[10px] text-zinc-400 truncate">{trx.desc}</div>
                                                 </div>
-                                              ))}
+                                                <div className="text-right">
+                                                  <div className="font-black text-emerald-400">{formatRp(trx.picRevenue)}</div>
+                                                  <div className="text-[9px] text-zinc-500">{trx.date}</div>
+                                                </div>
+                                              </div>
+                                            ))
+                                        )}
+                                      </div>
+                                    </div>
+
+                                    {/* KARTU 2: LAPORAN CLOSING RENEWAL */}
+                                    <div className="bg-zinc-900 border border-blue-500/30 rounded-2xl p-4 space-y-3">
+                                      <div className="flex items-center justify-between border-b border-zinc-800 pb-2.5">
+                                        <div className="flex items-center gap-2">
+                                          <div className="w-7 h-7 rounded-xl bg-blue-500/15 border border-blue-500/30 flex items-center justify-center text-blue-400">
+                                            <Repeat className="w-4 h-4" />
+                                          </div>
+                                          <div>
+                                            <h5 className="font-bold text-xs text-white">Laporan Closing RENEWAL</h5>
+                                            <p className="text-[10px] text-zinc-400">Perpanjangan paket member aktif/expired</p>
                                           </div>
                                         </div>
-                                      )}
+                                        <div className="text-right">
+                                          <span className="text-xs font-black text-blue-400 block">{formatRp(pic.renewalRevenue)}</span>
+                                          <span className="text-[10px] font-bold text-blue-300/80 bg-blue-500/10 px-2 py-0.5 rounded-full">
+                                            {pic.renewalCount} Perpanjangan
+                                          </span>
+                                        </div>
+                                      </div>
+
+                                      {/* Daftar Transaksi Renewal PIC */}
+                                      <div className="space-y-1.5 max-h-40 overflow-y-auto pr-1 scrollbar-thin scrollbar-thumb-zinc-800">
+                                        {pic.transactions.filter((t) => t.isRenewal).length === 0 ? (
+                                          <p className="text-[11px] text-zinc-500 italic py-2">
+                                            Tidak ada perpanjangan (renewal) pada periode ini.
+                                          </p>
+                                        ) : (
+                                          pic.transactions
+                                            .filter((t) => t.isRenewal)
+                                            .map((trx) => (
+                                              <div
+                                                key={trx.id}
+                                                className="bg-zinc-950/80 border border-blue-500/20 p-2 rounded-xl flex items-center justify-between text-xs"
+                                              >
+                                                <div className="space-y-0.5 max-w-[65%]">
+                                                  <div className="font-bold text-white truncate flex items-center gap-1.5">
+                                                    <span>{trx.customer}</span>
+                                                    <span className="text-[9px] bg-blue-500/20 text-blue-300 px-1 py-0.2 rounded font-bold">
+                                                      RENEWAL
+                                                    </span>
+                                                  </div>
+                                                  <div className="text-[10px] text-zinc-400 truncate">{trx.desc}</div>
+                                                </div>
+                                                <div className="text-right">
+                                                  <div className="font-black text-blue-400">{formatRp(trx.picRevenue)}</div>
+                                                  <div className="text-[9px] text-zinc-500">{trx.date}</div>
+                                                </div>
+                                              </div>
+                                            ))
+                                        )}
+                                      </div>
                                     </div>
                                   </div>
 
-                                  {/* Log Transaksi Penjualan Terakhir PIC */}
-                                  {pic.transactions.length > 0 && (
+                                  {/* Rincian Produk/Paket Membership & PT */}
+                                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-1">
                                     <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-3.5 space-y-2">
-                                      <div className="flex items-center justify-between text-xs text-zinc-400 font-bold">
-                                        <span className="flex items-center gap-1.5 text-zinc-300">
-                                          <FileText className="w-3.5 h-3.5 text-orange-400" />
-                                          Daftar Transaksi Ditangani ({pic.transactions.length} transaksi)
+                                      <div className="flex items-center justify-between text-xs font-bold text-zinc-300">
+                                        <span className="flex items-center gap-1.5">
+                                          <Users className="w-3.5 h-3.5 text-indigo-400" /> Paket Membership
                                         </span>
-                                        <span className="text-[10px] text-zinc-500">Urut dari terbaru</span>
+                                        <span className="text-indigo-400 font-bold">{pic.membershipCount} Paket • {formatRp(pic.membershipRevenue)}</span>
                                       </div>
-                                      <div className="max-h-48 overflow-y-auto space-y-1.5 pr-1 scrollbar-thin scrollbar-thumb-zinc-800">
-                                        {pic.transactions.map((trx) => (
-                                          <div
-                                            key={trx.id}
-                                            className="bg-zinc-950/60 border border-zinc-800/60 px-3 py-2 rounded-xl flex flex-wrap items-center justify-between gap-2 text-xs"
-                                          >
-                                            <div className="flex items-center gap-2">
-                                              <span className="text-[10px] font-mono text-zinc-500">{trx.id}</span>
-                                              <span className="text-[10px] text-zinc-400">{trx.date}</span>
-                                              <span className="font-bold text-white">{trx.customer}</span>
-                                              <span
-                                                className={`text-[9px] px-1.5 py-0.2 rounded font-bold ${
-                                                  trx.type === 'Membership'
-                                                    ? 'bg-indigo-500/20 text-indigo-400'
-                                                    : trx.type === 'PT'
-                                                    ? 'bg-emerald-500/20 text-emerald-400'
-                                                    : 'bg-amber-500/20 text-amber-400'
-                                                }`}
-                                              >
-                                                {trx.type}
-                                              </span>
-                                              <span className="text-zinc-400 text-[11px] truncate max-w-[200px]">
-                                                {trx.desc}
-                                              </span>
-                                            </div>
-                                            <div className="flex items-center gap-3">
-                                              <span className="text-[10px] text-zinc-400">{trx.method}</span>
-                                              <span className="font-black text-orange-400">{formatRp(trx.picRevenue)}</span>
-                                              <span className="text-[9px] bg-emerald-500/20 text-emerald-300 px-1.5 py-0.5 rounded font-bold">
-                                                {trx.status}
-                                              </span>
-                                            </div>
+                                      <div className="space-y-1">
+                                        {pic.products.filter(p => p.category === 'Membership').map((prod, pIdx) => (
+                                          <div key={pIdx} className="bg-zinc-950/60 p-2 rounded-xl flex items-center justify-between text-xs">
+                                            <span className="text-zinc-300 truncate max-w-[65%]">{prod.name} ({prod.count}x)</span>
+                                            <span className="font-bold text-indigo-400">{formatRp(prod.revenue)}</span>
                                           </div>
                                         ))}
                                       </div>
                                     </div>
-                                  )}
+
+                                    <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-3.5 space-y-2">
+                                      <div className="flex items-center justify-between text-xs font-bold text-zinc-300">
+                                        <span className="flex items-center gap-1.5">
+                                          <Dumbbell className="w-3.5 h-3.5 text-emerald-400" /> Paket Personal Trainer (PT)
+                                        </span>
+                                        <span className="text-emerald-400 font-bold">{pic.ptCount} Sesi • {formatRp(pic.ptRevenue)}</span>
+                                      </div>
+                                      <div className="space-y-1">
+                                        {pic.products.filter(p => p.category === 'PT').map((prod, pIdx) => (
+                                          <div key={pIdx} className="bg-zinc-950/60 p-2 rounded-xl flex items-center justify-between text-xs">
+                                            <span className="text-zinc-300 truncate max-w-[65%]">{prod.name} ({prod.count}x)</span>
+                                            <span className="font-bold text-emerald-400">{formatRp(prod.revenue)}</span>
+                                          </div>
+                                        ))}
+                                      </div>
+                                    </div>
+                                  </div>
                                 </div>
                               </td>
                             </tr>
@@ -1457,61 +1652,125 @@ export const CRMView: React.FC<CRMViewProps> = ({
               </div>
             </div>
 
-            {/* Global Summary Box */}
-            <div className="bg-gradient-to-br from-zinc-900 to-zinc-950 border border-zinc-800 rounded-3xl p-6 flex flex-col justify-between text-center shadow-sm space-y-6">
+            {/* Global Summary Box on Right Column with New & Renewal Separation */}
+            <div className="bg-gradient-to-br from-zinc-900 to-zinc-950 border border-zinc-800 rounded-3xl p-6 flex flex-col justify-between shadow-sm space-y-5">
               <div>
                 <p className="text-[10px] uppercase font-bold text-zinc-400 tracking-wider">
                   Total Revenue Periode Terpilih
                 </p>
-                <h3 className="text-3xl font-black text-orange-400 mt-2">{formatRp(globalRevenue)}</h3>
+                <h3 className="text-3xl font-black text-orange-400 mt-1">{formatRp(globalRevenue)}</h3>
                 <p className="text-xs text-zinc-500 mt-1">
                   Akumulasi penjualan paket membership & PT ({dateFilterLabel})
                 </p>
+
+                {/* Progress Bar: Perbandingan Omset NEW vs RENEWAL */}
+                <div className="mt-4 p-3 bg-zinc-950/80 rounded-2xl border border-zinc-800/80 text-left space-y-2">
+                  <div className="flex items-center justify-between text-[11px] font-bold">
+                    <span className="text-emerald-400 flex items-center gap-1">
+                      <span className="w-2 h-2 rounded-full bg-emerald-400"></span> NEW: {globalRevenue > 0 ? Math.round((globalNewRevenue / globalRevenue) * 100) : 0}%
+                    </span>
+                    <span className="text-blue-400 flex items-center gap-1">
+                      <span className="w-2 h-2 rounded-full bg-blue-400"></span> RENEWAL: {globalRevenue > 0 ? Math.round((globalRenewalRevenue / globalRevenue) * 100) : 0}%
+                    </span>
+                  </div>
+                  {/* Dual color progress bar */}
+                  <div className="w-full h-2.5 bg-zinc-800 rounded-full overflow-hidden flex">
+                    <div
+                      className="bg-emerald-500 h-full transition-all duration-500"
+                      style={{ width: `${globalRevenue > 0 ? (globalNewRevenue / globalRevenue) * 100 : 50}%` }}
+                      title={`New: ${formatRp(globalNewRevenue)}`}
+                    ></div>
+                    <div
+                      className="bg-blue-500 h-full transition-all duration-500"
+                      style={{ width: `${globalRevenue > 0 ? (globalRenewalRevenue / globalRevenue) * 100 : 50}%` }}
+                      title={`Renewal: ${formatRp(globalRenewalRevenue)}`}
+                    ></div>
+                  </div>
+                  <div className="flex items-center justify-between text-[10px] text-zinc-400 pt-0.5">
+                    <span>{formatRp(globalNewRevenue)}</span>
+                    <span>{formatRp(globalRenewalRevenue)}</span>
+                  </div>
+                </div>
               </div>
 
-              {/* Top Sales Highlight */}
-              {rankedPICs.length > 0 && rankedPICs[0].revenue > 0 && (
-                <div className="bg-zinc-900/80 border border-amber-500/30 rounded-2xl p-4 text-left relative overflow-hidden">
-                  <div className="absolute top-0 right-0 bg-amber-500 text-black font-black text-[9px] px-2.5 py-0.5 rounded-bl-xl uppercase tracking-wider">
-                    Top Performer
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-full bg-amber-500/20 border border-amber-500/40 flex items-center justify-center font-black text-amber-400 text-sm">
-                      🥇
+              {/* Top Sales Highlight Cards for New vs Renewal */}
+              <div className="space-y-2 text-left">
+                {/* Top Overall */}
+                {topPerformerAll && (
+                  <div className="bg-zinc-900/80 border border-amber-500/30 rounded-2xl p-3 relative overflow-hidden">
+                    <div className="absolute top-0 right-0 bg-amber-500 text-black font-black text-[8px] px-2 py-0.5 rounded-bl-lg uppercase">
+                      Top Overall
                     </div>
-                    <div>
-                      <div className="text-[11px] text-zinc-400">Peringkat 1 Omset</div>
-                      <div className="font-black text-white text-sm">{rankedPICs[0].name}</div>
-                      <div className="text-xs font-bold text-orange-400 mt-0.5">
-                        {formatRp(rankedPICs[0].revenue)}
-                        <span className="text-[10px] text-zinc-500 ml-1 font-normal">
-                          ({globalRevenue > 0 ? Math.round((rankedPICs[0].revenue / globalRevenue) * 100) : 0}% omset)
-                        </span>
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-8 h-8 rounded-full bg-amber-500/20 border border-amber-500/40 flex items-center justify-center font-black text-amber-400 text-xs">
+                        🥇
+                      </div>
+                      <div>
+                        <div className="text-[10px] text-zinc-400 font-medium">Juara Omset Keseluruhan</div>
+                        <div className="font-bold text-white text-xs">{topPerformerAll.name}</div>
+                        <div className="text-[11px] font-bold text-orange-400">{formatRp(topPerformerAll.revenue)}</div>
                       </div>
                     </div>
                   </div>
-                </div>
-              )}
+                )}
 
-              <div className="grid grid-cols-2 gap-3">
-                <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-3.5">
-                  <p className="text-[10px] font-bold text-zinc-500 uppercase">Closing New</p>
-                  <h4 className="text-xl font-black text-emerald-400 mt-1">{globalNewCount}</h4>
+                {/* Top New vs Top Renewal row */}
+                <div className="grid grid-cols-2 gap-2">
+                  {topPerformerNew && (
+                    <div className="bg-zinc-900/80 border border-emerald-500/30 rounded-2xl p-2.5">
+                      <span className="text-[8px] font-black uppercase text-emerald-400 bg-emerald-500/10 px-1.5 py-0.5 rounded">
+                        Top Closer NEW
+                      </span>
+                      <div className="font-bold text-white text-xs mt-1.5 truncate">{topPerformerNew.name}</div>
+                      <div className="text-[11px] font-black text-emerald-400">{formatRp(topPerformerNew.newRevenue)}</div>
+                      <span className="text-[9px] text-zinc-400">{topPerformerNew.newCount} member baru</span>
+                    </div>
+                  )}
+
+                  {topPerformerRenewal && (
+                    <div className="bg-zinc-900/80 border border-blue-500/30 rounded-2xl p-2.5">
+                      <span className="text-[8px] font-black uppercase text-blue-400 bg-blue-500/10 px-1.5 py-0.5 rounded">
+                        Top RENEWAL
+                      </span>
+                      <div className="font-bold text-white text-xs mt-1.5 truncate">{topPerformerRenewal.name}</div>
+                      <div className="text-[11px] font-black text-blue-400">{formatRp(topPerformerRenewal.renewalRevenue)}</div>
+                      <span className="text-[9px] text-zinc-400">{topPerformerRenewal.renewalCount} perpanjangan</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* 4 KPI Summary Cards with separated New and Renewal */}
+              <div className="grid grid-cols-2 gap-2.5">
+                <div className="bg-zinc-900 border border-emerald-500/20 rounded-2xl p-3 text-left">
+                  <p className="text-[9px] font-bold text-emerald-400 uppercase flex items-center gap-1">
+                    <UserPlus className="w-3 h-3" /> Closing NEW
+                  </p>
+                  <h4 className="text-lg font-black text-white mt-0.5">{globalNewCount}</h4>
+                  <span className="text-[10px] text-emerald-400 font-bold block">{formatRp(globalNewRevenue)}</span>
                   <span className="text-[9px] text-zinc-500">Member baru</span>
                 </div>
-                <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-3.5">
-                  <p className="text-[10px] font-bold text-zinc-500 uppercase">Renewal</p>
-                  <h4 className="text-xl font-black text-blue-400 mt-1">{globalRenewalCount}</h4>
+
+                <div className="bg-zinc-900 border border-blue-500/20 rounded-2xl p-3 text-left">
+                  <p className="text-[9px] font-bold text-blue-400 uppercase flex items-center gap-1">
+                    <Repeat className="w-3 h-3" /> RENEWAL
+                  </p>
+                  <h4 className="text-lg font-black text-white mt-0.5">{globalRenewalCount}</h4>
+                  <span className="text-[10px] text-blue-400 font-bold block">{formatRp(globalRenewalRevenue)}</span>
                   <span className="text-[9px] text-zinc-500">Perpanjangan</span>
                 </div>
-                <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-3.5">
-                  <p className="text-[10px] font-bold text-zinc-500 uppercase">Paket Membership</p>
-                  <h4 className="text-xl font-black text-indigo-400 mt-1">{globalMembershipUnits}</h4>
+
+                <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-3 text-left">
+                  <p className="text-[9px] font-bold text-zinc-400 uppercase">Paket Membership</p>
+                  <h4 className="text-lg font-black text-indigo-400 mt-0.5">{globalMembershipUnits}</h4>
+                  <span className="text-[10px] text-zinc-400 block">{formatRp(globalMembershipRevenue)}</span>
                   <span className="text-[9px] text-zinc-500">Paket terjual</span>
                 </div>
-                <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-3.5">
-                  <p className="text-[10px] font-bold text-zinc-500 uppercase">Paket PT</p>
-                  <h4 className="text-xl font-black text-emerald-400 mt-1">{globalPtUnits}</h4>
+
+                <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-3 text-left">
+                  <p className="text-[9px] font-bold text-zinc-400 uppercase">Paket PT</p>
+                  <h4 className="text-lg font-black text-emerald-400 mt-0.5">{globalPtUnits}</h4>
+                  <span className="text-[10px] text-zinc-400 block">{formatRp(globalPtRevenue)}</span>
                   <span className="text-[9px] text-zinc-500">Sesi/paket</span>
                 </div>
               </div>
@@ -3251,7 +3510,7 @@ export const CRMView: React.FC<CRMViewProps> = ({
                           <button
                             onClick={() => {
                               setSelectedMemberForFU(mem);
-                              setFuStatus(mem.followUpStatus);
+                              setFuStatus(mem.followUpStatus || 'TERTARIK RENEWAL');
                               setFuNotes('');
                             }}
                             className="px-3 py-1.5 bg-orange-500/10 hover:bg-orange-500/20 text-orange-400 border border-orange-500/30 rounded-xl text-xs font-bold transition"
@@ -4291,27 +4550,35 @@ export const CRMView: React.FC<CRMViewProps> = ({
               </button>
             </div>
 
-            {/* Quick Summary Cards */}
+            {/* Quick Summary Cards with Separated New vs Renewal */}
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 my-4">
               <div className="bg-zinc-950 border border-zinc-800 p-3 rounded-2xl">
                 <span className="text-[10px] font-bold text-zinc-500 uppercase">Total Revenue PIC</span>
                 <h4 className="text-lg font-black text-orange-400 mt-0.5">{formatRp(selectedModalPic.revenue)}</h4>
-                <p className="text-[10px] text-zinc-500">{selectedModalPic.newCount} New • {selectedModalPic.renewalCount} Rnw</p>
+                <p className="text-[10px] text-zinc-400">{selectedModalPic.transactions.length} total transaksi</p>
+              </div>
+              <div className="bg-zinc-950 border border-emerald-500/30 p-3 rounded-2xl">
+                <span className="text-[10px] font-bold text-emerald-400 uppercase flex items-center gap-1">
+                  <UserPlus className="w-3 h-3" /> Closing NEW Member
+                </span>
+                <h4 className="text-lg font-black text-emerald-400 mt-0.5">{formatRp(selectedModalPic.newRevenue)}</h4>
+                <p className="text-[10px] text-emerald-300/80">{selectedModalPic.newCount} member baru</p>
+              </div>
+              <div className="bg-zinc-950 border border-blue-500/30 p-3 rounded-2xl">
+                <span className="text-[10px] font-bold text-blue-400 uppercase flex items-center gap-1">
+                  <Repeat className="w-3 h-3" /> Closing RENEWAL
+                </span>
+                <h4 className="text-lg font-black text-blue-400 mt-0.5">{formatRp(selectedModalPic.renewalRevenue)}</h4>
+                <p className="text-[10px] text-blue-300/80">{selectedModalPic.renewalCount} perpanjangan</p>
               </div>
               <div className="bg-zinc-950 border border-zinc-800 p-3 rounded-2xl">
-                <span className="text-[10px] font-bold text-zinc-500 uppercase">Paket Membership</span>
-                <h4 className="text-lg font-black text-indigo-400 mt-0.5">{selectedModalPic.membershipCount} Paket</h4>
-                <p className="text-[10px] text-indigo-300/80">{formatRp(selectedModalPic.membershipRevenue)}</p>
-              </div>
-              <div className="bg-zinc-950 border border-zinc-800 p-3 rounded-2xl">
-                <span className="text-[10px] font-bold text-zinc-500 uppercase">Paket Personal Trainer</span>
-                <h4 className="text-lg font-black text-emerald-400 mt-0.5">{selectedModalPic.ptCount} Paket/Sesi</h4>
-                <p className="text-[10px] text-emerald-300/80">{formatRp(selectedModalPic.ptRevenue)}</p>
-              </div>
-              <div className="bg-zinc-950 border border-zinc-800 p-3 rounded-2xl">
-                <span className="text-[10px] font-bold text-zinc-500 uppercase">Produk Retail / POS</span>
-                <h4 className="text-lg font-black text-amber-400 mt-0.5">{selectedModalPic.posCount} Item</h4>
-                <p className="text-[10px] text-amber-300/80">{formatRp(selectedModalPic.posRevenue)}</p>
+                <span className="text-[10px] font-bold text-zinc-500 uppercase">Paket Mbr & PT</span>
+                <h4 className="text-sm font-black text-white mt-1">
+                  {selectedModalPic.membershipCount} Mbr • {selectedModalPic.ptCount} PT
+                </h4>
+                <p className="text-[10px] text-zinc-400">
+                  {formatRp(selectedModalPic.membershipRevenue + selectedModalPic.ptRevenue)}
+                </p>
               </div>
             </div>
 
@@ -4319,7 +4586,15 @@ export const CRMView: React.FC<CRMViewProps> = ({
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-zinc-800">
               <div className="flex flex-wrap items-center gap-1.5">
                 {[
-                  { id: 'all' as const, label: `Semua Produk (${selectedModalPic.products.length})` },
+                  { id: 'all' as const, label: `Semua (${selectedModalPic.products.length})` },
+                  {
+                    id: 'new' as const,
+                    label: `🟢 Closing NEW Mbr (${selectedModalPic.transactions.filter((t) => t.isNewMember).length})`
+                  },
+                  {
+                    id: 'renewal' as const,
+                    label: `🔵 RENEWAL (${selectedModalPic.transactions.filter((t) => t.isRenewal).length})`
+                  },
                   {
                     id: 'Membership' as const,
                     label: `Membership (${selectedModalPic.products.filter((p) => p.category === 'Membership').length})`
@@ -4365,7 +4640,7 @@ export const CRMView: React.FC<CRMViewProps> = ({
 
             {/* Content Body */}
             <div className="flex-1 overflow-y-auto space-y-3 pr-1 my-3 scrollbar-thin scrollbar-thumb-zinc-800">
-              {modalFilterCat !== 'trx' ? (
+              {modalFilterCat !== 'trx' && modalFilterCat !== 'new' && modalFilterCat !== 'renewal' ? (
                 // TABEL PRODUK & PAKET
                 <div className="overflow-x-auto">
                   <table className="w-full text-left text-xs whitespace-nowrap">
@@ -4454,14 +4729,15 @@ export const CRMView: React.FC<CRMViewProps> = ({
                   </table>
                 </div>
               ) : (
-                // TABEL LOG TRANSAKSI INDIVIDU
+                // TABEL LOG TRANSAKSI INDIVIDU (DENGAN PEMISAHAN NEW VS RENEWAL)
                 <div className="overflow-x-auto">
                   <table className="w-full text-left text-xs whitespace-nowrap">
                     <thead className="border-b border-zinc-800 text-zinc-400 font-bold uppercase text-[10px]">
                       <tr>
-                        <th className="py-2.5 px-3">No. Transaksi</th>
+                        <th className="py-2.5 px-3">No. Trx</th>
                         <th className="py-2.5 px-3">Tanggal</th>
                         <th className="py-2.5 px-3">Member / Customer</th>
+                        <th className="py-2.5 px-3 text-center">Tipe Transaksi</th>
                         <th className="py-2.5 px-3">Deskripsi Produk / Paket</th>
                         <th className="py-2.5 px-3">Metode</th>
                         <th className="py-2.5 px-3 text-right">Omset PIC</th>
@@ -4471,6 +4747,8 @@ export const CRMView: React.FC<CRMViewProps> = ({
                     <tbody className="divide-y divide-zinc-800/70 text-zinc-300">
                       {selectedModalPic.transactions
                         .filter((t) => {
+                          if (modalFilterCat === 'new' && !t.isNewMember) return false;
+                          if (modalFilterCat === 'renewal' && !t.isRenewal) return false;
                           if (
                             modalSearch &&
                             !t.customer.toLowerCase().includes(modalSearch.toLowerCase()) &&
@@ -4488,9 +4766,28 @@ export const CRMView: React.FC<CRMViewProps> = ({
                               {trx.date} <span className="text-zinc-600">{trx.time}</span>
                             </td>
                             <td className="py-3 px-3 font-bold text-white">{trx.customer}</td>
+                            <td className="py-3 px-3 text-center">
+                              {trx.isRenewal ? (
+                                <span className="bg-blue-500/20 text-blue-300 border border-blue-500/30 px-2 py-0.5 rounded-full font-bold text-[10px] inline-flex items-center gap-1">
+                                  <Repeat className="w-2.5 h-2.5" /> RENEWAL
+                                </span>
+                              ) : trx.isNewMember ? (
+                                <span className="bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 px-2 py-0.5 rounded-full font-bold text-[10px] inline-flex items-center gap-1">
+                                  <UserPlus className="w-2.5 h-2.5" /> NEW MEMBER
+                                </span>
+                              ) : trx.type === 'PT' ? (
+                                <span className="bg-purple-500/20 text-purple-300 border border-purple-500/30 px-2 py-0.5 rounded-full font-bold text-[10px] inline-flex items-center gap-1">
+                                  <Dumbbell className="w-2.5 h-2.5" /> PAKET PT
+                                </span>
+                              ) : (
+                                <span className="bg-amber-500/20 text-amber-300 border border-amber-500/30 px-2 py-0.5 rounded-full font-bold text-[10px] inline-flex items-center gap-1">
+                                  <ShoppingBag className="w-2.5 h-2.5" /> POS / RETAIL
+                                </span>
+                              )}
+                            </td>
                             <td className="py-3 px-3 text-zinc-200">
                               <span className="font-semibold">{trx.desc}</span>
-                              {trx.trxCategory && (
+                              {trx.trxCategory && trx.trxCategory !== 'RENEWAL' && (
                                 <span className="ml-2 text-[9px] bg-zinc-800 text-zinc-400 px-1.5 py-0.2 rounded font-bold uppercase">
                                   {trx.trxCategory}
                                 </span>
@@ -4515,6 +4812,8 @@ export const CRMView: React.FC<CRMViewProps> = ({
                         ))}
 
                       {selectedModalPic.transactions.filter((t) => {
+                        if (modalFilterCat === 'new' && t.isRenewal) return false;
+                        if (modalFilterCat === 'renewal' && !t.isRenewal) return false;
                         if (
                           modalSearch &&
                           !t.customer.toLowerCase().includes(modalSearch.toLowerCase()) &&
@@ -4526,8 +4825,8 @@ export const CRMView: React.FC<CRMViewProps> = ({
                         return true;
                       }).length === 0 && (
                         <tr>
-                          <td colSpan={7} className="py-8 text-center text-zinc-500 italic">
-                            Tidak ditemukan log transaksi yang sesuai.
+                          <td colSpan={8} className="py-8 text-center text-zinc-500 italic">
+                            Tidak ditemukan log transaksi yang sesuai filter ini.
                           </td>
                         </tr>
                       )}
