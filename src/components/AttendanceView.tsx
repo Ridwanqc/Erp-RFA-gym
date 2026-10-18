@@ -29,7 +29,9 @@ import {
   Crown,
   Building2,
   TrendingUp,
-  BarChart3
+  BarChart3,
+  SlidersHorizontal,
+  ShieldCheck
 } from 'lucide-react';
 import { Member, User, Attendance, StaffAttendance, LockerSlot, Transaction } from '../types';
 import { getTimestamp, APP_TODAY, formatRp, formatDateIndo, getDayDiff } from '../utils/formatters';
@@ -42,8 +44,10 @@ import { MemberWorkoutAnalyticsSection, isValidAttendanceRecord } from './Member
 import { getRecommendedLocker, getLockerStats, getAvailableLockersByGender, sortAttendancesByNewest } from '../data/lockerData';
 import { useSettings } from '../context/SettingsContext';
 import { printViaHiddenIframe, generateLockerSlipHtml, PrintPaperSize } from '../utils/printEngine';
+import { QuickOutSection } from './attendance/QuickOutSection';
 
 interface AttendanceViewProps {
+  initialTab?: 'member' | 'out' | 'staff' | 'analytics';
   members: Member[];
   staffUsers: User[];
   attendances: Attendance[];
@@ -60,6 +64,7 @@ interface AttendanceViewProps {
 }
 
 export const AttendanceView: React.FC<AttendanceViewProps> = ({
+  initialTab,
   members,
   staffUsers,
   attendances,
@@ -75,10 +80,16 @@ export const AttendanceView: React.FC<AttendanceViewProps> = ({
   showToast
 }) => {
   const { settings, activeBranch, isAllBranches, branches } = useSettings();
-  const [activeTab, setActiveTab] = useState<'member' | 'staff' | 'analytics'>('member');
+  const [activeTab, setActiveTab] = useState<'member' | 'out' | 'staff' | 'analytics'>(initialTab || 'member');
   const [activeMemberSubTab, setActiveMemberSubTab] = useState<'attendance-list' | 'locker-board'>('attendance-list');
   const [isScannerOpen, setIsScannerOpen] = useState(false);
   const [attendanceBranchFilter, setAttendanceBranchFilter] = useState<string>('ALL');
+
+  useEffect(() => {
+    if (initialTab) {
+      setActiveTab(initialTab);
+    }
+  }, [initialTab]);
 
   // Total unique members who have completed valid workouts / attendances
   const totalMembersTrainedCount = useMemo(() => {
@@ -434,7 +445,21 @@ export const AttendanceView: React.FC<AttendanceViewProps> = ({
     }
     return sortAttendancesByNewest(list);
   }, [attendances, attendanceBranchFilter]);
-  const activeInGymCount = todayMemberAttendances.filter((a) => !a.timeOut).length;
+
+  // Total active members currently in gym with an open session (no check-out timestamp)
+  const activeInGymCount = useMemo(() => {
+    return attendances.filter((a) => {
+      if (a.timeOut && a.timeOut.trim() !== '') return false;
+      if (attendanceBranchFilter !== 'ALL') {
+        return (
+          a.branchId === attendanceBranchFilter ||
+          (a.branchName && a.branchName.toLowerCase().includes(attendanceBranchFilter.toLowerCase()))
+        );
+      }
+      return true;
+    }).length;
+  }, [attendances, attendanceBranchFilter]);
+
   const todayStaffAttendances = staffAttendances.filter((s) => s.date === APP_TODAY);
 
   // Filtered lockers for the visual Locker Board
@@ -528,62 +553,94 @@ export const AttendanceView: React.FC<AttendanceViewProps> = ({
           </p>
         </div>
 
-        <div className="flex flex-wrap items-center gap-3">
+        <div className="flex items-center gap-3 shrink-0">
           <RealTimeClock variant="badge" />
-
-          {activeTab === 'member' && (
-            <button
-              type="button"
-              onClick={() => setIsScannerOpen(true)}
-              className="bg-orange-500 hover:bg-orange-600 text-zinc-950 font-black px-4 py-2.5 rounded-2xl text-xs shadow-lg shadow-orange-500/25 transition flex items-center gap-2 hover:scale-[1.02] active:scale-[0.98]"
-            >
-              <Camera className="w-4 h-4" /> Scan QR Card Member
-            </button>
-          )}
-
-          <div className="flex bg-zinc-900 p-1.5 rounded-2xl border border-zinc-800 flex-wrap gap-1">
-            <button
-              type="button"
-              onClick={() => setActiveTab('member')}
-              className={`px-3.5 sm:px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 ${
-                activeTab === 'member' ? 'bg-orange-500 text-zinc-950 font-black shadow-md' : 'text-zinc-400 hover:text-white'
-              }`}
-            >
-              <UserCheck className="w-3.5 h-3.5" />
-              <span>Presensi ({activeInGymCount} Aktif)</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => setActiveTab('analytics')}
-              className={`px-3.5 sm:px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 ${
-                activeTab === 'analytics' ? 'bg-orange-500 text-zinc-950 font-black shadow-md' : 'text-zinc-400 hover:text-white'
-              }`}
-            >
-              <TrendingUp className="w-3.5 h-3.5" />
-              <span>Grafik Jam Latihan ({totalMembersTrainedCount} Member)</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => setActiveTab('staff')}
-              className={`px-3.5 sm:px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 ${
-                activeTab === 'staff' ? 'bg-orange-500 text-zinc-950 font-black shadow-md' : 'text-zinc-400 hover:text-white'
-              }`}
-            >
-              <Clock className="w-3.5 h-3.5" />
-              <span>Clock In Staf ({todayStaffAttendances.length})</span>
-            </button>
-          </div>
+          <button
+            type="button"
+            onClick={() => setIsScannerOpen(true)}
+            className="bg-orange-500 hover:bg-orange-600 text-zinc-950 font-black px-4 py-2 rounded-2xl text-xs shadow-lg shadow-orange-500/25 transition flex items-center gap-2 hover:scale-[1.02] active:scale-[0.98] cursor-pointer shrink-0"
+          >
+            <Camera className="w-4 h-4" /> Scan QR Card Member
+          </button>
         </div>
       </div>
+
+      {/* NAVBAR MENU & NAVIGASI ABSENSI (PERSIS SEPERTI FOTO REFERENSI USER) */}
+      <div className="flex bg-zinc-900/90 p-1.5 rounded-2xl border border-zinc-800 overflow-x-auto max-w-full scrollbar-none items-center gap-1.5 shadow-sm">
+        <button
+          type="button"
+          onClick={() => setActiveTab('out')}
+          className={`px-3.5 sm:px-4 py-2 rounded-xl text-xs font-bold transition whitespace-nowrap flex items-center gap-1.5 cursor-pointer ${
+            activeTab === 'out'
+              ? 'bg-orange-500 text-zinc-950 font-black shadow-md'
+              : 'text-zinc-400 hover:text-white hover:bg-zinc-800/60'
+          }`}
+        >
+          <LogOut className="w-3.5 h-3.5" />
+          <span>OUT ({activeInGymCount})</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setActiveTab('member')}
+          className={`px-3.5 sm:px-4 py-2 rounded-xl text-xs font-bold transition whitespace-nowrap flex items-center gap-1.5 cursor-pointer ${
+            activeTab === 'member'
+              ? 'bg-orange-500 text-zinc-950 font-black shadow-md'
+              : 'text-zinc-400 hover:text-white hover:bg-zinc-800/60'
+          }`}
+        >
+          <UserCheck className="w-3.5 h-3.5" />
+          <span>Check-In & Loker</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setActiveTab('analytics')}
+          className={`px-3.5 sm:px-4 py-2 rounded-xl text-xs font-bold transition whitespace-nowrap flex items-center gap-1.5 cursor-pointer ${
+            activeTab === 'analytics'
+              ? 'bg-orange-500 text-zinc-950 font-black shadow-md'
+              : 'text-zinc-400 hover:text-white hover:bg-zinc-800/60'
+          }`}
+        >
+          <TrendingUp className="w-3.5 h-3.5" />
+          <span>Grafik Jam Latihan ({totalMembersTrainedCount} Member)</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setActiveTab('staff')}
+          className={`px-3.5 sm:px-4 py-2 rounded-xl text-xs font-bold transition whitespace-nowrap flex items-center gap-1.5 cursor-pointer ${
+            activeTab === 'staff'
+              ? 'bg-orange-500 text-zinc-950 font-black shadow-md'
+              : 'text-zinc-400 hover:text-white hover:bg-zinc-800/60'
+          }`}
+        >
+          <Clock className="w-3.5 h-3.5" />
+          <span>Clock In Staf ({todayStaffAttendances.length})</span>
+        </button>
+      </div>
+
+      {/* TAB 0: QUICK OUT MEMBER (MATCHING REFERENCE SCREENSHOT) */}
+      {activeTab === 'out' && (
+        <QuickOutSection
+          attendances={attendances}
+          members={members}
+          onCheckoutMember={onCheckoutMember}
+          showToast={showToast}
+          branches={branches}
+          activeBranch={activeBranch}
+          isAllBranches={isAllBranches}
+        />
+      )}
 
       {/* TAB 1: MEMBER ATTENDANCE & LOCKER MANAGEMENT */}
       {activeTab === 'member' && (
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
           
-          {/* LEFT COLUMN: SCANNER, FAST CHECK-IN & DESK SMART CO-PILOT (5 COLS) */}
+          {/* LEFT COLUMN: FAST-TRACK CHECK-IN */}
           <div className="lg:col-span-5 space-y-5">
             
-            {/* CHECK-IN FORM CARD */}
+            {/* FAST-TRACK CHECK-IN CARD */}
             <div className="bg-zinc-900/90 border border-zinc-800 rounded-3xl p-5 sm:p-6 shadow-sm">
               <div className="flex items-center justify-between gap-2 mb-3">
                 <div className="flex items-center gap-2">
@@ -599,7 +656,7 @@ export const AttendanceView: React.FC<AttendanceViewProps> = ({
                 <button
                   type="button"
                   onClick={() => setIsScannerOpen(true)}
-                  className="text-[11px] font-bold text-orange-400 hover:text-orange-300 flex items-center gap-1 bg-orange-500/10 hover:bg-orange-500/20 px-3 py-1.5 rounded-xl border border-orange-500/30 transition shrink-0"
+                  className="text-[11px] font-bold text-orange-400 hover:text-orange-300 flex items-center gap-1 bg-orange-500/10 hover:bg-orange-500/20 px-3 py-1.5 rounded-xl border border-orange-500/30 transition shrink-0 cursor-pointer"
                 >
                   <Camera className="w-3.5 h-3.5" /> Kamera QR
                 </button>
@@ -659,6 +716,7 @@ export const AttendanceView: React.FC<AttendanceViewProps> = ({
               </div>
             </div>
           </div>
+
 
           {/* RIGHT COLUMN: ATTENDANCE LOG OR VISUAL LOCKER BOARD (7 COLS) */}
           <div className="lg:col-span-7 flex flex-col space-y-4">

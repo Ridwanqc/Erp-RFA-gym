@@ -206,7 +206,10 @@ export const PhotoEnlargeModal: React.FC<PhotoEnlargeModalProps> = ({
         </div>
 
         {/* Image Preview Canvas */}
-        <div className="flex-1 overflow-auto bg-gradient-to-b from-zinc-950 via-zinc-900/60 to-zinc-950 p-4 sm:p-8 flex items-center justify-center relative select-none min-h-[300px]">
+        <div 
+          className="flex-1 overflow-auto bg-zinc-950 photo-enlarge-canvas p-4 sm:p-8 flex items-center justify-center relative select-none min-h-[300px]"
+          data-preserve-photo="true"
+        >
           {imgError ? (
             <div className="text-center p-8 space-y-3">
               <div className="w-16 h-16 rounded-2xl bg-zinc-900 border border-zinc-800 flex items-center justify-center mx-auto text-zinc-600">

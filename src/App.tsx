@@ -475,6 +475,14 @@ export default function App() {
 
   useEffect(() => {
     try {
+      localStorage.setItem('rfa_attendance', JSON.stringify(attendances));
+    } catch (e) {
+      console.error(e);
+    }
+  }, [attendances]);
+
+  useEffect(() => {
+    try {
       localStorage.setItem('rfa_staff_att', JSON.stringify(staffAttendances));
     } catch (e) {
       console.error(e);
@@ -2890,10 +2898,15 @@ export default function App() {
   const handleCheckoutMember = (attId: string) => {
     const timeNow = new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) + ' WIB';
     const targetAtt = attendances.find((a) => a.id === attId);
+    const updatedAtt = targetAtt ? { ...targetAtt, timeOut: timeNow, lockerReturned: true } : null;
 
     setAttendances((prev) =>
       prev.map((a) => (a.id === attId ? { ...a, timeOut: timeNow, lockerReturned: true } : a))
     );
+
+    if (updatedAtt) {
+      saveAttendanceToFirestore(updatedAtt).catch(() => {});
+    }
 
     // Release locker automatically upon checkout (cari berdasarkan nomor loker atau identitas member)
     const lockerNum = targetAtt?.lockerNumber
@@ -4042,8 +4055,9 @@ export default function App() {
             />
           )}
 
-          {activeTab === 'absen' && (
+          {(activeTab === 'absen' || activeTab === 'quick-out') && (
             <AttendanceView
+              initialTab={activeTab === 'quick-out' ? 'out' : undefined}
               members={activeBranchFilteredMembers}
               staffUsers={activeBranchFilteredStaffUsers}
               attendances={activeBranchFilteredAttendances}

@@ -583,54 +583,98 @@ export const MasterDataView: React.FC<MasterDataViewProps> = ({
                 className="bg-zinc-900/90 border border-zinc-800 rounded-3xl overflow-hidden shadow-sm hover:border-orange-500/50 transition group flex flex-col justify-between"
               >
                 <div>
+                  {/* FOTO BESAR UI CARD ASSET MEMBER */}
                   <div
-                    className={`h-16 ${
-                      isExpired
-                        ? 'bg-gradient-to-r from-rose-600/30 to-zinc-900'
-                        : 'bg-gradient-to-r from-emerald-600/30 to-zinc-900'
-                    } p-3 flex justify-end`}
+                    onClick={() =>
+                      setEnlargePhotoData({
+                        imageUrl:
+                          m.photo ||
+                          (m.gender === 'P'
+                            ? 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=800&auto=format&fit=crop&q=80'
+                            : 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=800&auto=format&fit=crop&q=80'),
+                        name: m.name,
+                        id: m.id,
+                        roleOrType: m.membershipType || 'MEMBER',
+                        subInfo: `Cabang: ${m.branchName || 'Cabang Utama'} • Exp: ${m.expired}`,
+                        badgeType: 'member'
+                      })
+                    }
+                    className="relative h-52 sm:h-56 w-full overflow-hidden cursor-pointer group/photo bg-zinc-950 border-b border-zinc-800 photo-asset-container select-none"
+                    data-preserve-photo="true"
+                    title="Klik untuk melihat foto besar profil member (Lightbox Preview)"
                   >
-                    <span
-                      className={`px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider border h-fit ${
-                        isExpired
-                          ? 'bg-rose-500/20 text-rose-400 border-rose-500/30'
-                          : 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30'
-                      }`}
-                    >
-                      {isExpired ? 'EXPIRED' : 'AKTIF'}
-                    </span>
-                  </div>
-
-                  <div className="px-5 pb-4 -mt-8 relative">
-                    <div
-                      onClick={() =>
-                        setEnlargePhotoData({
-                          imageUrl: m.photo || '',
-                          name: m.name,
-                          id: m.id,
-                          roleOrType: m.membershipType || 'MEMBER',
-                          subInfo: `Cabang: ${m.branchName || 'Cabang Utama'}`,
-                          badgeType: 'member'
-                        })
+                    {/* Big Photo Image with Robust Error Handling & Framing */}
+                    <img
+                      src={
+                        m.photo ||
+                        (m.gender === 'P'
+                          ? 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=600&auto=format&fit=crop&q=80'
+                          : 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=600&auto=format&fit=crop&q=80')
                       }
-                      className="w-16 h-16 rounded-2xl overflow-hidden border-4 border-zinc-900 shadow-md mb-3 cursor-pointer group/photo relative hover:border-orange-500 transition-all duration-200"
-                      title="Klik untuk memperbesar foto profil member"
-                    >
-                      <img
-                        src={m.photo}
-                        alt={m.name}
-                        className="w-full h-full object-cover group-hover/photo:scale-110 transition-transform duration-300"
-                      />
-                      {/* Hover Zoom Overlay */}
-                      <div className="absolute inset-0 bg-black/40 opacity-0 group-hover/photo:opacity-100 transition-opacity flex items-center justify-center text-white backdrop-blur-[1px]">
-                        <ZoomIn className="w-5 h-5 text-white drop-shadow" />
-                      </div>
+                      alt={m.name}
+                      className="w-full h-full object-cover object-top sm:object-center group-hover/photo:scale-105 transition-transform duration-500 ease-out"
+                      loading="lazy"
+                      onError={(e) => {
+                        const target = e.currentTarget;
+                        target.onerror = null;
+                        target.src =
+                          m.gender === 'P'
+                            ? 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=600&auto=format&fit=crop&q=80'
+                            : 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=600&auto=format&fit=crop&q=80';
+                      }}
+                    />
+
+                    {/* Gradient Vignette Overlays: Keeps photo face 100% visible and sharp while badges remain crisp */}
+                    <div
+                      className="absolute inset-0 pointer-events-none photo-asset-overlay"
+                      data-preserve-photo="true"
+                      style={{
+                        background:
+                          'linear-gradient(to bottom, rgba(0,0,0,0.52) 0%, rgba(0,0,0,0) 28%, rgba(0,0,0,0) 65%, rgba(0,0,0,0.72) 100%)'
+                      }}
+                    />
+
+                    {/* Top Badges Bar: Membership Tier & Status */}
+                    <div className="absolute top-3 inset-x-3 flex items-center justify-between z-10 pointer-events-none">
+                      <span className="px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-black/75 backdrop-blur-md text-amber-300 badge-amber-text border border-amber-500/50 shadow-lg flex items-center gap-1.5">
+                        <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
+                        {m.membershipType || 'VIP PASS'}
+                      </span>
+                      <span
+                        className={`px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider backdrop-blur-md shadow-lg border flex items-center gap-1.5 ${
+                          isExpired
+                            ? 'bg-rose-950/85 text-rose-300 badge-rose-text border-rose-500/50'
+                            : 'bg-emerald-950/85 text-emerald-300 badge-emerald-text border-emerald-500/50'
+                        }`}
+                      >
+                        <span className={`w-1.5 h-1.5 rounded-full ${isExpired ? 'bg-rose-400' : 'bg-emerald-400'}`} />
+                        {isExpired ? 'EXPIRED' : 'AKTIF'}
+                      </span>
                     </div>
 
-                    <h4 className="text-sm font-bold text-white group-hover:text-orange-400 transition truncate">
-                      {m.name}
-                    </h4>
-                    <p className="text-[10px] font-mono text-orange-400 font-bold tracking-wider mt-0.5">{m.id}</p>
+                    {/* Bottom Floating Bar on Photo: Member ID & Quick Zoom Button */}
+                    <div className="absolute bottom-2.5 inset-x-3 flex items-center justify-between z-10">
+                      <span className="px-2.5 py-0.5 rounded-lg text-[10px] font-mono font-black tracking-wider bg-zinc-950/85 backdrop-blur-md text-orange-400 badge-orange-text border border-orange-500/40 shadow-md">
+                        {m.id}
+                      </span>
+                      <span className="px-2.5 py-0.5 rounded-lg text-[10px] font-bold text-white badge-white-text bg-black/75 backdrop-blur-md border border-white/20 opacity-90 group-hover/photo:opacity-100 transition-opacity flex items-center gap-1.5 shadow-md">
+                        <ZoomIn className="w-3.5 h-3.5 text-orange-400" />
+                        <span>Lihat Foto</span>
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="p-4 space-y-3">
+                    <div>
+                      <h4 className="text-base font-black text-white group-hover:text-orange-400 transition truncate tracking-tight">
+                        {m.name}
+                      </h4>
+                      <p className="text-[11px] text-zinc-400 flex items-center gap-1.5 mt-0.5">
+                        <span className="font-semibold">{m.gender === 'L' ? 'Laki-laki' : 'Perempuan'}</span>
+                        <span>•</span>
+                        <span className="font-medium">{m.phone || 'No WhatsApp'}</span>
+                      </p>
+                    </div>
 
                     <div className="mt-3 pt-3 border-t border-zinc-800/80 space-y-1.5 text-xs">
                       {/* Identity Card Badge */}
@@ -883,9 +927,14 @@ export const MasterDataView: React.FC<MasterDataViewProps> = ({
                         title="Klik untuk memperbesar foto karyawan"
                       >
                         <img
-                          src={s.photo}
+                          src={s.photo || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=200&auto=format&fit=crop'}
                           alt={s.name}
                           className="w-full h-full object-cover group-hover/photo:scale-110 transition-transform duration-300"
+                          onError={(e) => {
+                            const target = e.currentTarget;
+                            target.onerror = null;
+                            target.src = 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=200&auto=format&fit=crop';
+                          }}
                         />
                         {/* Hover Zoom Overlay */}
                         <div className="absolute inset-0 bg-black/40 opacity-0 group-hover/photo:opacity-100 transition-opacity flex items-center justify-center text-white backdrop-blur-[1px]">

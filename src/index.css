@@ -293,26 +293,26 @@ body, #root, header, aside, main, div, button, input, select {
 
 /* Elevated Light Clay Cards, Divs, Panels, Widgets & Containers on Solid White Background */
 [data-theme="claymorphism-light"] div#business-health-widget,
-[data-theme="claymorphism-light"] div[class*="bg-zinc-"],
-[data-theme="claymorphism-light"] div[class*="from-zinc-"],
-[data-theme="claymorphism-light"] div[class*="via-zinc-"],
-[data-theme="claymorphism-light"] div[class*="to-zinc-"],
+[data-theme="claymorphism-light"] div[class*="bg-zinc-"]:not(.photo-asset-container):not(.photo-asset-overlay):not(.photo-enlarge-canvas):not([data-preserve-photo="true"]),
+[data-theme="claymorphism-light"] div[class*="from-zinc-"]:not(.photo-asset-container):not(.photo-asset-overlay):not(.photo-enlarge-canvas):not([data-preserve-photo="true"]),
+[data-theme="claymorphism-light"] div[class*="via-zinc-"]:not(.photo-asset-container):not(.photo-asset-overlay):not(.photo-enlarge-canvas):not([data-preserve-photo="true"]),
+[data-theme="claymorphism-light"] div[class*="to-zinc-"]:not(.photo-asset-container):not(.photo-asset-overlay):not(.photo-enlarge-canvas):not([data-preserve-photo="true"]),
 [data-theme="claymorphism-light"] div[role="menu"],
 [data-theme="claymorphism-light"] div[role="dialog"] > div,
 [data-theme="claymorphism-light"] div.modal-content,
-[data-theme="claymorphism-light"] .bg-zinc-900,
-[data-theme="claymorphism-light"] .bg-zinc-900\/95,
-[data-theme="claymorphism-light"] .bg-zinc-900\/90,
-[data-theme="claymorphism-light"] .bg-zinc-900\/80,
-[data-theme="claymorphism-light"] .bg-zinc-900\/70,
-[data-theme="claymorphism-light"] .bg-zinc-900\/60,
-[data-theme="claymorphism-light"] .bg-zinc-900\/50,
-[data-theme="claymorphism-light"] .bg-zinc-900\/40,
-[data-theme="claymorphism-light"] .bg-zinc-900\/30,
-[data-theme="claymorphism-light"] .bg-zinc-900\/20,
-[data-theme="claymorphism-light"] .bg-zinc-900\/10,
+[data-theme="claymorphism-light"] .bg-zinc-900:not(.photo-asset-container):not(.photo-asset-overlay):not(.photo-enlarge-canvas):not([data-preserve-photo="true"]),
+[data-theme="claymorphism-light"] .bg-zinc-900\/95:not(.photo-asset-container):not(.photo-asset-overlay):not(.photo-enlarge-canvas),
+[data-theme="claymorphism-light"] .bg-zinc-900\/90:not(.photo-asset-container):not(.photo-asset-overlay):not(.photo-enlarge-canvas),
+[data-theme="claymorphism-light"] .bg-zinc-900\/80:not(.photo-asset-container):not(.photo-asset-overlay):not(.photo-enlarge-canvas),
+[data-theme="claymorphism-light"] .bg-zinc-900\/70:not(.photo-asset-container):not(.photo-asset-overlay):not(.photo-enlarge-canvas),
+[data-theme="claymorphism-light"] .bg-zinc-900\/60:not(.photo-asset-container):not(.photo-asset-overlay):not(.photo-enlarge-canvas),
+[data-theme="claymorphism-light"] .bg-zinc-900\/50:not(.photo-asset-container):not(.photo-asset-overlay):not(.photo-enlarge-canvas),
+[data-theme="claymorphism-light"] .bg-zinc-900\/40:not(.photo-asset-container):not(.photo-asset-overlay):not(.photo-enlarge-canvas),
+[data-theme="claymorphism-light"] .bg-zinc-900\/30:not(.photo-asset-container):not(.photo-asset-overlay):not(.photo-enlarge-canvas),
+[data-theme="claymorphism-light"] .bg-zinc-900\/20:not(.photo-asset-container):not(.photo-asset-overlay):not(.photo-enlarge-canvas),
+[data-theme="claymorphism-light"] .bg-zinc-900\/10:not(.photo-asset-container):not(.photo-asset-overlay):not(.photo-enlarge-canvas),
 [data-theme="claymorphism-light"] .bg-zinc-850,
-[data-theme="claymorphism-light"] .bg-zinc-800:not(button),
+[data-theme="claymorphism-light"] .bg-zinc-800:not(button):not(.photo-asset-container):not(.photo-asset-overlay):not(.photo-enlarge-canvas),
 [data-theme="claymorphism-light"] .bg-zinc-800\/90:not(button),
 [data-theme="claymorphism-light"] .bg-zinc-800\/80:not(button),
 [data-theme="claymorphism-light"] .bg-zinc-800\/70:not(button),
@@ -331,6 +331,35 @@ body, #root, header, aside, main, div, button, input, select {
               -3px -3px 10px rgba(255, 255, 255, 1),
               inset 1px 1px 2px rgba(255, 255, 255, 1) !important;
   border-radius: 1.25rem;
+}
+
+/* Khusus Wadah Foto Profil Card Asset di Mode Claymorphism Terang */
+[data-theme="claymorphism-light"] .photo-asset-container,
+[data-theme="claymorphism-light"] div.photo-asset-container {
+  background-color: #0f172a !important;
+  background-image: none !important;
+  box-shadow: none !important;
+  border-bottom: 1.5px solid #e2e8f0 !important;
+}
+
+[data-theme="claymorphism-light"] .photo-asset-container img,
+[data-theme="claymorphism-light"] div.photo-asset-container img {
+  opacity: 1 !important;
+  display: block !important;
+  visibility: visible !important;
+}
+
+[data-theme="claymorphism-light"] .photo-asset-overlay,
+[data-theme="claymorphism-light"] div.photo-asset-overlay {
+  background: linear-gradient(to bottom, rgba(0,0,0,0.45) 0%, rgba(0,0,0,0) 35%, rgba(0,0,0,0) 65%, rgba(0,0,0,0.7) 100%) !important;
+  box-shadow: none !important;
+  border: none !important;
+}
+
+[data-theme="claymorphism-light"] .photo-enlarge-canvas,
+[data-theme="claymorphism-light"] div.photo-enlarge-canvas {
+  background: #09090b !important;
+  background-color: #09090b !important;
 }
 
 /* Hide dark glow blobs in business-health-widget for pure clean white surface */

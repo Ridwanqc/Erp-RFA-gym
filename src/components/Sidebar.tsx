@@ -46,6 +46,7 @@ export type ActiveTab =
   | 'pt-package-performance'
   | 'trainer-portal'
   | 'absen'
+  | 'quick-out'
   | 'jadwal-pt'
   | 'studio-class'
   | 'body-composition'
@@ -147,6 +148,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
     'master-data': 'master-data',
     'bundling-reports': 'bundling',
     'body-composition': 'body-composition',
+    'absen': 'absen',
+    'quick-out': 'absen',
     'crm': 'crm',
     'leader-pt': 'leader-pt',
     'jadwal-pt': 'pt-sessions',
@@ -234,6 +237,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
           id: 'absen' as ActiveTab,
           label: 'Absensi & Presensi',
           icon: UserCheck,
+          roles: ['admin', 'admin_cabang', 'kasir', 'leader_pt', 'pt'] as UserRole[]
+        },
+        {
+          id: 'quick-out' as ActiveTab,
+          label: 'Quick OUT Member',
+          icon: LogOut,
           roles: ['admin', 'admin_cabang', 'kasir', 'leader_pt', 'pt'] as UserRole[]
         }
       ]
