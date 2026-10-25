@@ -33,7 +33,10 @@ export const SafeImage: React.FC<SafeImageProps> = ({
     }
   };
 
-  if (!src || hasError) {
+  const cleanSrc = typeof src === 'string' ? src.trim() : src;
+  const hasValidSrc = Boolean(cleanSrc && typeof cleanSrc === 'string' && cleanSrc.length > 0);
+
+  if (!hasValidSrc || hasError) {
     return (
       <div
         className={`relative overflow-hidden bg-gradient-to-br from-zinc-900 via-zinc-800 to-zinc-950 flex flex-col items-center justify-center p-6 text-center select-none ${className}`}
@@ -65,7 +68,7 @@ export const SafeImage: React.FC<SafeImageProps> = ({
         </div>
       )}
       <img
-        src={src}
+        src={cleanSrc as string}
         alt={alt || 'RFA Gym'}
         referrerPolicy="no-referrer"
         onError={() => setHasError(true)}

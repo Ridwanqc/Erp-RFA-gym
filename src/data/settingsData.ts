@@ -9,6 +9,8 @@ import {
   SystemSettings,
   PicProtectionConfig,
   LandingPageConfig,
+  LandingPromoPlan,
+  LandingPromoConfig,
   UserRole
 } from '../types';
 
@@ -358,6 +360,42 @@ export const DEFAULT_ROLE_DEFINITIONS: Record<UserRole, RoleDefinition> = {
       };
       return acc;
     }, {} as Record<string, { view: boolean; create: boolean; edit: boolean; delete: boolean; voidRefund?: boolean; export?: boolean }>)
+  },
+  keuangan: {
+    role: 'keuangan',
+    roleName: 'Staf Keuangan & Akuntansi (HQ)',
+    description: 'Pengelolaan penuh finansial, arus kas harian, laba rugi (P&L), otorisasi pengeluaran, piutang & cicilan, buku besar, rekapitulasi penjualan, daily closing kasir, penggajian (HR Payroll), dan integrasi cloud Google Sheets.',
+    badgeColor: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30',
+    isSystemRole: true,
+    permissions: SYSTEM_MODULES.reduce((acc, m) => {
+      const allowed = [
+        'dashboard',
+        'absen',
+        'dashboard-keuangan',
+        'laba-rugi',
+        'pengeluaran',
+        'piutang',
+        'laporan',
+        'laporan-penjualan',
+        'tutup-toko',
+        'hr-payroll',
+        'bundling',
+        'master-data',
+        'google-sheets',
+        'pos',
+        'products'
+      ];
+      const canAccess = allowed.includes(m.id);
+      acc[m.id] = {
+        view: canAccess,
+        create: canAccess,
+        edit: canAccess,
+        delete: m.id === 'pengeluaran' || m.id === 'piutang',
+        voidRefund: true,
+        export: canAccess
+      };
+      return acc;
+    }, {} as Record<string, { view: boolean; create: boolean; edit: boolean; delete: boolean; voidRefund?: boolean; export?: boolean }>)
   }
 };
 
@@ -541,8 +579,78 @@ export const DEFAULT_LANDING_CONFIG: LandingPageConfig = {
       image: 'https://images.unsplash.com/photo-1554118811-1e0d58224f24?q=80&w=800&auto=format&fit=crop',
       description: 'Whey protein smoothies segar, kopi cold brew, kursi santai, dan colokan Wi-Fi cepat untuk bekerja.'
     }
-  ]
+  ],
+  promos: {
+    sectionBadge: 'Pendaftaran Membership & Chat WA Resmi RFA Gym',
+    sectionTitle: 'SIAP MERAIH GOAL KEBUGARAN ANDA? JOIN NOW DI RFA GYM',
+    sectionSubtitle: 'Nikmati akses ke 3 cabang strategis, peralatan biometrik berstandar dunia, puluhan studio classes, dan bimbingan pelatih bersertifikasi. Saat mendaftar, tiket dan konfirmasi akan langsung terkirim ke WhatsApp resmi kantor cabang pilihan Anda.',
+    allowMemberOffer: true,
+    plans: [
+      {
+        id: 'promo-1',
+        name: 'Starter Pass',
+        tagline: 'Pemula & Fokus',
+        durationMonths: 1,
+        durationLabel: '1 Bulan',
+        price: 399000,
+        billingPeriod: '/bulan',
+        memberSpecialPrice: 349000,
+        badge: 'Starter',
+        isPopular: false,
+        features: [
+          'Akses Gym Cabang Pilihan',
+          'Loker Digital & Shower Mewah',
+          'Gratis 1x Tes Komposisi InBody'
+        ],
+        ctaLabel: 'Pilih Starter • Join Now',
+        allowNegotiate: true
+      },
+      {
+        id: 'promo-2',
+        name: 'All-Access Pro',
+        tagline: 'All-Club Access',
+        durationMonths: 3,
+        durationLabel: '3 Bulan',
+        price: 699000,
+        billingPeriod: '/bulan',
+        memberSpecialPrice: 599000,
+        badge: 'Paling Populer & Rekomendasi',
+        isPopular: true,
+        features: [
+          'Akses 3 Cabang: Sudirman, Senopati & BSD',
+          'Unlimited Studio Classes (Yoga, HIIT, Combat)',
+          'Bonus 2 Sesi Privat Personal Trainer',
+          'Sauna & Luxury Hot Shower Access'
+        ],
+        ctaLabel: 'Daftar All-Access • Join Now',
+        allowNegotiate: true
+      },
+      {
+        id: 'promo-3',
+        name: 'VIP Platinum',
+        tagline: 'VIP & Performance',
+        durationMonths: 12,
+        durationLabel: '12 Bulan',
+        price: 1199000,
+        billingPeriod: '/bulan',
+        memberSpecialPrice: 999000,
+        badge: 'VIP Platinum 2026',
+        isPopular: false,
+        features: [
+          'Multi-Club All Access 3 Cabang',
+          '12 Sesi Personal Trainer Privat',
+          'Dedicated Locker & Free Merchandise Kit',
+          'Free Freeze 60 Hari Tanpa Biaya'
+        ],
+        ctaLabel: 'Ambil VIP Platinum • Join Now',
+        allowNegotiate: true
+      }
+    ]
+  }
 };
+
+export const DEFAULT_PROMO_PLANS: LandingPromoPlan[] = DEFAULT_LANDING_CONFIG.promos?.plans || [];
+export const DEFAULT_PROMO_CONFIG: LandingPromoConfig = DEFAULT_LANDING_CONFIG.promos!;
 
 export const DEFAULT_SYSTEM_SETTINGS: SystemSettings = {
   printer: DEFAULT_PRINTER_CONFIG,

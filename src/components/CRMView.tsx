@@ -638,6 +638,63 @@ export const CRMView: React.FC<CRMViewProps> = ({
       .reduce((acc, curr) => acc + (curr.estimatedValue || 0), 0);
   }, [allPipelineLeads]);
 
+  // Selected PIC staff from active filter in the distribution strip
+  const selectedPicStaff = useMemo(() => {
+    if (filterLeadPic && filterLeadPic !== 'all' && filterLeadPic !== 'unassigned') {
+      return getStaffById(filterLeadPic);
+    }
+    return undefined;
+  }, [filterLeadPic, staffUsers]);
+
+  // Leads matching the active PIC / Scope filter from the Distribusi Petugas Front / PIC strip
+  const picFilteredLeads = useMemo(() => {
+    if (filterLeadPic === 'unassigned') {
+      return allPipelineLeads.filter((l) => !l.picId);
+    }
+    if (filterLeadPic !== 'all') {
+      return allPipelineLeads.filter((l) => l.picId === filterLeadPic);
+    }
+    if (leadScope === 'my') {
+      if (!currentUser) return [];
+      return allPipelineLeads.filter((l) => l.picId === currentUser.id);
+    }
+    if (leadScope === 'online') {
+      return allPipelineLeads.filter((l) => isOnlineLead(l));
+    }
+    return allPipelineLeads;
+  }, [allPipelineLeads, filterLeadPic, leadScope, currentUser]);
+
+  // Active Responsibility Count following the Front Desk / PIC distribution filter
+  const activeResponsibilityCount = useMemo(() => {
+    if (filterLeadPic === 'unassigned') {
+      return unassignedLeadsCount;
+    }
+    if (filterLeadPic !== 'all') {
+      return allPipelineLeads.filter((l) => l.picId === filterLeadPic && l.status !== 'Lost').length;
+    }
+    if (leadScope === 'online') {
+      return allPipelineLeads.filter((l) => isOnlineLead(l) && l.status !== 'Lost').length;
+    }
+    // Default when 'all' or 'my': show currentUser's active leads
+    return myLeadsCount;
+  }, [allPipelineLeads, filterLeadPic, leadScope, unassignedLeadsCount, myLeadsCount]);
+
+  // Closing Win Rate & Converted Value following the active PIC filter
+  const picFilteredClosingStats = useMemo(() => {
+    const total = picFilteredLeads.length;
+    const wonLeads = picFilteredLeads.filter((l) => l.status === 'Member');
+    const wonCount = wonLeads.length;
+    const rate = total > 0 ? Math.round((wonCount / total) * 100) : 0;
+    const value = wonLeads.reduce((acc, curr) => acc + (curr.estimatedValue || 0), 0);
+
+    return {
+      rate,
+      value,
+      wonCount,
+      total
+    };
+  }, [picFilteredLeads]);
+
   const winClosingValue = useMemo(() => {
     return allPipelineLeads
       .filter((l) => l.status === 'Member')
@@ -1311,8 +1368,12 @@ export const CRMView: React.FC<CRMViewProps> = ({
               </div>
 
               {/* Leaderboard Table with Separated Columns */}
-              <div className="overflow-x-auto">
-                <table className="w-full text-left text-xs whitespace-nowrap">
+              <div className="md:hidden flex items-center justify-between px-3.5 py-1.5 bg-zinc-950/70 border-b border-zinc-800 text-[10px] text-zinc-400 select-none">
+                <span className="text-orange-400 font-semibold flex items-center gap-1">↔ Geser tabel ke samping untuk melihat seluruh performa PIC</span>
+                <span className="font-mono text-zinc-500">{rankedPICs.length} PIC</span>
+              </div>
+              <div className="overflow-x-auto scrollbar-thin scrollbar-thumb-zinc-800">
+                <table className="w-full text-left text-xs whitespace-nowrap min-w-[760px]">
                   <thead className="border-b border-zinc-800 text-zinc-400 font-bold uppercase text-[10px]">
                     <tr>
                       <th className="py-2.5 px-3">Peringkat</th>
@@ -1353,8 +1414,8 @@ export const CRMView: React.FC<CRMViewProps> = ({
                             <td className="py-3.5 px-3">
                               <div className="flex items-center gap-2.5">
                                 <div className="w-7 h-7 rounded-full bg-zinc-800 border border-zinc-700 flex items-center justify-center font-bold text-white text-[11px] shrink-0">
-                                  {pic.photo ? (
-                                    <img src={pic.photo} alt={pic.name} className="w-full h-full rounded-full object-cover" />
+                                  {pic.photo && pic.photo.trim() ? (
+                                    <img src={pic.photo.trim()} alt={pic.name} className="w-full h-full rounded-full object-cover" />
                                   ) : (
                                     pic.name.slice(0, 2).toUpperCase()
                                   )}
@@ -1857,36 +1918,97 @@ export const CRMView: React.FC<CRMViewProps> = ({
 
             <div
               onClick={() => {
-                setLeadScope(leadScope === 'my' ? 'all' : 'my');
-                setFilterLeadPic('all');
+                if (filterLeadPic !== 'all') {
+                  if (filterLeadPic === currentUser?.id) {
+                    setFilterLeadPic('all');
+                    setLeadScope('all');
+                  } else if (currentUser) {
+                    setFilterLeadPic(currentUser.id);
+                    setLeadScope('all');
+                  }
+                } else if (leadScope === 'my') {
+                  setLeadScope('all');
+                  setFilterLeadPic('all');
+                } else {
+                  setLeadScope('my');
+                  setFilterLeadPic('all');
+                }
               }}
               className={`p-3.5 rounded-2xl border transition cursor-pointer flex items-center justify-between ${
-                leadScope === 'my'
-                  ? 'bg-orange-500/20 border-orange-500/60 ring-1 ring-orange-500'
+                filterLeadPic !== 'all' || leadScope === 'my'
+                  ? 'bg-orange-500/20 border-orange-500/60 ring-1 ring-orange-500 shadow-md shadow-orange-500/10'
                   : 'bg-zinc-900/90 border-zinc-800 hover:border-zinc-700'
               }`}
             >
               <div>
                 <p className="text-[10px] font-bold text-orange-400 uppercase flex items-center gap-1">
-                  ⭐ Tanggung Jawab Saya
+                  {filterLeadPic === 'unassigned' ? (
+                    <>
+                      <AlertCircle className="w-3.5 h-3.5 text-amber-400" />
+                      <span>Belum Ada PIC</span>
+                    </>
+                  ) : filterLeadPic !== 'all' && selectedPicStaff ? (
+                    <>
+                      <span>⭐ Tanggung Jawab: {selectedPicStaff.name}</span>
+                    </>
+                  ) : leadScope === 'online' ? (
+                    <>
+                      <Globe className="w-3.5 h-3.5 text-cyan-400" />
+                      <span>Tanggung Jawab Online</span>
+                    </>
+                  ) : (
+                    <>
+                      <span>⭐ Tanggung Jawab Saya</span>
+                    </>
+                  )}
                 </p>
-                <h4 className="text-lg font-black text-white mt-0.5">{myLeadsCount} Prospek</h4>
-                <p className="text-[9px] text-zinc-400">
-                  {currentUser?.name || 'Petugas Aktif'} ({currentUser?.roleName || 'Front Desk'})
+                <h4 className="text-lg font-black text-white mt-0.5">{activeResponsibilityCount} Prospek</h4>
+                <p className="text-[9px] text-zinc-400 truncate max-w-[155px]">
+                  {filterLeadPic === 'unassigned'
+                    ? 'Menunggu Penugasan Petugas'
+                    : filterLeadPic !== 'all' && selectedPicStaff
+                    ? `${getStaffDivision(selectedPicStaff)} • Shift ${selectedPicStaff.shift || '-'}`
+                    : leadScope === 'online'
+                    ? 'Daftar Web & Portal Member'
+                    : `${currentUser?.name || 'Petugas Aktif'} (${currentUser?.roleName || 'Front Desk'})`}
                 </p>
               </div>
-              <div className="w-9 h-9 rounded-xl bg-orange-500/10 border border-orange-500/20 flex items-center justify-center text-orange-400">
+              <div className="w-9 h-9 rounded-xl bg-orange-500/10 border border-orange-500/20 flex items-center justify-center text-orange-400 shrink-0">
                 <UserCheck className="w-4 h-4" />
               </div>
             </div>
 
-            <div className="bg-zinc-900/90 border border-zinc-800 p-3.5 rounded-2xl flex items-center justify-between">
+            <div className={`p-3.5 rounded-2xl border transition flex items-center justify-between ${
+              filterLeadPic !== 'all' || leadScope === 'my'
+                ? 'bg-purple-500/15 border-purple-500/50 ring-1 ring-purple-500/30 shadow-md shadow-purple-500/10'
+                : 'bg-zinc-900/90 border-zinc-800'
+            }`}>
               <div>
-                <p className="text-[10px] font-bold text-zinc-500 uppercase">Closing Win Rate</p>
-                <h4 className="text-lg font-black text-purple-400 mt-0.5">{closingRate}%</h4>
-                <p className="text-[9px] text-zinc-400">{formatRp(winClosingValue)} terkonversi</p>
+                <p className="text-[10px] font-bold text-purple-400 uppercase flex items-center gap-1">
+                  <Trophy className="w-3.5 h-3.5 text-purple-400" />
+                  <span>
+                    {filterLeadPic === 'unassigned'
+                      ? 'Win Rate (Tanpa PIC)'
+                      : filterLeadPic !== 'all' && selectedPicStaff
+                      ? `Closing Win Rate: ${selectedPicStaff.name.split(' ')[0]}`
+                      : leadScope === 'my'
+                      ? 'Closing Win Rate Saya'
+                      : leadScope === 'online'
+                      ? 'Win Rate Online'
+                      : 'Closing Win Rate'}
+                  </span>
+                </p>
+                <div className="flex items-baseline gap-1.5 mt-0.5">
+                  <h4 className="text-lg font-black text-purple-400">{picFilteredClosingStats.rate}%</h4>
+                  <span className="text-[10px] text-zinc-400 font-semibold">
+                    ({picFilteredClosingStats.wonCount}/{picFilteredClosingStats.total} Member)
+                  </span>
+                </div>
+                <p className="text-[9px] text-zinc-400 truncate max-w-[155px]">
+                  {formatRp(picFilteredClosingStats.value)} terkonversi
+                </p>
               </div>
-              <div className="w-9 h-9 rounded-xl bg-purple-500/10 border border-purple-500/20 flex items-center justify-center text-purple-400">
+              <div className="w-9 h-9 rounded-xl bg-purple-500/10 border border-purple-500/20 flex items-center justify-center text-purple-400 shrink-0">
                 <Trophy className="w-4 h-4" />
               </div>
             </div>
@@ -1949,16 +2071,22 @@ export const CRMView: React.FC<CRMViewProps> = ({
               </button>
 
               {staffUsers
-                .slice()
-                .sort((a, b) => {
-                  const divA = getStaffDivision(a);
-                  const divB = getStaffDivision(b);
-                  if (divA === 'Kasir & Front Desk' && divB !== 'Kasir & Front Desk') return -1;
-                  if (divB === 'Kasir & Front Desk' && divA !== 'Kasir & Front Desk') return 1;
-                  return a.name.localeCompare(b.name);
+                .filter((staff) => {
+                  const div = getStaffDivision(staff);
+                  const role = (staff.role || '').toLowerCase();
+                  const roleName = (staff.roleName || '').toLowerCase();
+                  return (
+                    div === 'Kasir & Front Desk' ||
+                    role === 'kasir' ||
+                    roleName.includes('kasir') ||
+                    roleName.includes('front desk') ||
+                    roleName.includes('receptionist') ||
+                    roleName.includes('customer service') ||
+                    roleName.includes('cs')
+                  );
                 })
+                .sort((a, b) => a.name.localeCompare(b.name))
                 .map((staff) => {
-                  const staffDivision = getStaffDivision(staff);
                   const staffLeadsCount = allPipelineLeads.filter(
                     (l) => l.picId === staff.id && l.status !== 'Lost'
                   ).length;
@@ -1981,8 +2109,8 @@ export const CRMView: React.FC<CRMViewProps> = ({
                       }`}
                     >
                       <div className="w-6 h-6 rounded-full bg-zinc-800 overflow-hidden border border-zinc-700 flex items-center justify-center shrink-0">
-                        {staff.photo ? (
-                          <img src={staff.photo} alt={staff.name} className="w-full h-full object-cover" />
+                        {staff.photo && staff.photo.trim() ? (
+                          <img src={staff.photo.trim()} alt={staff.name} className="w-full h-full object-cover" />
                         ) : (
                           <span className="text-[10px] font-bold text-zinc-300">
                             {staff.name.charAt(0)}
@@ -1995,11 +2123,7 @@ export const CRMView: React.FC<CRMViewProps> = ({
                           {isMe && <span className="text-[9px] text-amber-300">⭐</span>}
                         </div>
                         <span className="text-[9px] opacity-75 font-normal block leading-tight">
-                          {staffDivision === 'Kasir & Front Desk'
-                            ? 'Kasir & Front Desk'
-                            : staffDivision === 'Pelatihan'
-                            ? 'Pelatihan (PT)'
-                            : staff.roleName?.split(' ')[0] || 'Staff'} {staff.shift ? `(${staff.shift})` : ''}
+                          Kasir & Front Desk {staff.shift ? `(${staff.shift})` : ''}
                         </span>
                       </div>
                       <span
@@ -4516,9 +4640,9 @@ export const CRMView: React.FC<CRMViewProps> = ({
             <div className="flex items-start justify-between pb-4 border-b border-zinc-800">
               <div className="flex items-center gap-3">
                 <div className="w-12 h-12 rounded-2xl bg-orange-500/10 border border-orange-500/30 flex items-center justify-center font-black text-orange-400 text-base shrink-0">
-                  {selectedModalPic.photo ? (
+                  {selectedModalPic.photo && selectedModalPic.photo.trim() ? (
                     <img
-                      src={selectedModalPic.photo}
+                      src={selectedModalPic.photo.trim()}
                       alt={selectedModalPic.name}
                       className="w-full h-full rounded-2xl object-cover"
                     />

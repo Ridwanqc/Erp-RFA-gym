@@ -47,11 +47,34 @@ import {
   ChevronDown,
   CheckCheck,
   Save,
-  Smartphone
+  Smartphone,
+  Sun,
+  Moon,
+  Coffee,
+  AlertTriangle
 } from 'lucide-react';
-import { Schedule, Member, User as UserType, PTPurchaseRecord, TrainerWorkoutLog, TrainerAttendanceLog } from '../types';
+import {
+  Schedule,
+  Member,
+  User as UserType,
+  PTPurchaseRecord,
+  TrainerWorkoutLog,
+  TrainerAttendanceLog,
+  PTBooking,
+  StudioClass,
+  WorkSchedule,
+  StaffAttendance,
+  LeaveRequest,
+  TrainerWorkingRule
+} from '../types';
 import { formatDateIndo, APP_TODAY } from '../utils/formatters';
 import { INITIAL_TRAINER_ATTENDANCE_LOGS } from '../data/trainerAttendanceData';
+import {
+  calculateTrainerTeachingHours,
+  validatePTDoubleBooking,
+  isTimeMatchingStudioClass,
+  getTrainerDutyStatusOnDate
+} from '../data/ptBookingData';
 import { TrainerAttendanceLogView } from './TrainerAttendanceLogView';
 import { TrainerMobileFocusPortal } from './TrainerMobileFocusPortal';
 
@@ -69,6 +92,14 @@ interface TrainerPortalViewProps {
   showToast: (title: string, message: string, type: 'success' | 'error' | 'warning' | 'info') => void;
   onNavigateTab: (tab: any) => void;
   initialSubTab?: 'jadwal' | 'klien' | 'log' | 'attendance' | 'performa' | 'rekomendasi';
+  ptBookings?: PTBooking[];
+  studioClasses?: StudioClass[];
+  trainerWorkingRules?: TrainerWorkingRule[];
+  workSchedules?: WorkSchedule[];
+  staffAttendances?: StaffAttendance[];
+  leaveRequests?: LeaveRequest[];
+  isMobileMode?: boolean;
+  onToggleMobileMode?: (val: boolean) => void;
 }
 
 import {
@@ -90,7 +121,15 @@ export const TrainerPortalView: React.FC<TrainerPortalViewProps> = ({
   onOpenSignature,
   showToast,
   onNavigateTab,
-  initialSubTab
+  initialSubTab,
+  ptBookings = [],
+  studioClasses = [],
+  trainerWorkingRules = [],
+  workSchedules = [],
+  staffAttendances = [],
+  leaveRequests = [],
+  isMobileMode: propIsMobileMode,
+  onToggleMobileMode
 }) => {
   // Filter all staff that are trainers or PT leaders
   const trainerAccounts = useMemo(() => {
@@ -130,7 +169,13 @@ export const TrainerPortalView: React.FC<TrainerPortalViewProps> = ({
 
   // Sub-tabs within Trainer Portal
   const [activeTab, setActiveTab] = useState<'jadwal' | 'klien' | 'log' | 'attendance' | 'performa' | 'rekomendasi'>(initialSubTab || 'jadwal');
-  const [isMobileMode, setIsMobileMode] = useState(false);
+  const [internalMobileMode, setInternalMobileMode] = useState(false);
+  const activeIsMobileMode = propIsMobileMode !== undefined ? propIsMobileMode : internalMobileMode;
+
+  const handleSetMobileMode = (val: boolean) => {
+    setInternalMobileMode(val);
+    onToggleMobileMode?.(val);
+  };
 
   // Trainer Attendance Logs State (Persisted in localStorage)
   const [attendanceLogs, setAttendanceLogs] = useState<TrainerAttendanceLog[]>(() => {
@@ -285,10 +330,52 @@ export const TrainerPortalView: React.FC<TrainerPortalViewProps> = ({
   const [rescheduleDate, setRescheduleDate] = useState('');
   const [rescheduleTime, setRescheduleTime] = useState('');
 
-  // Filter schedules strictly for this active trainer
+  // Filter schedules strictly for this active trainer (by name or ID)
   const trainerSchedules = useMemo(() => {
-    return schedules.filter((s) => s.trainer === activeTrainerName);
-  }, [schedules, activeTrainerName]);
+    return schedules.filter(
+      (s) => s.trainer === activeTrainerName || (s.trainerId && s.trainerId === activeTrainerId)
+    );
+  }, [schedules, activeTrainerName, activeTrainerId]);
+
+  // Synchronized Teaching Hours & Shifts Engine across all features
+  const teachingHoursData = useMemo(() => {
+    return calculateTrainerTeachingHours({
+      trainerId: activeTrainerId,
+      trainerName: activeTrainerName,
+      date: APP_TODAY,
+      schedules,
+      ptBookings,
+      studioClasses,
+      workSchedules,
+      staffAttendances,
+      leaveRequests,
+      rules: trainerWorkingRules,
+      trainerUser: activeTrainer
+    });
+  }, [
+    activeTrainerId,
+    activeTrainerName,
+    schedules,
+    ptBookings,
+    studioClasses,
+    workSchedules,
+    staffAttendances,
+    leaveRequests,
+    trainerWorkingRules,
+    activeTrainer
+  ]);
+
+  // Studio Classes taught by this trainer today
+  const todayTrainerStudioClasses = useMemo(() => {
+    return studioClasses.filter((c) => {
+      const isInstructor =
+        (c.trainerId && c.trainerId === activeTrainerId) ||
+        (c.trainerName && c.trainerName.toLowerCase().trim() === activeTrainerName.toLowerCase().trim()) ||
+        (c.trainer && c.trainer.toLowerCase().trim() === activeTrainerName.toLowerCase().trim()) ||
+        (Boolean((c as any).instructor) && String((c as any).instructor).toLowerCase().trim() === activeTrainerName.toLowerCase().trim());
+      return isInstructor && c.date === APP_TODAY;
+    });
+  }, [studioClasses, activeTrainerId, activeTrainerName]);
 
   // Today's schedules for this trainer
   const todaySchedules = useMemo(() => {
@@ -708,11 +795,38 @@ export const TrainerPortalView: React.FC<TrainerPortalViewProps> = ({
       return;
     }
 
+    // Validasi sinkronisasi jam mengajar, shift HR, kelas studio & bentrok PT
+    const validation = validatePTDoubleBooking({
+      memberId: mem.id,
+      trainerId: activeTrainerId,
+      trainerName: activeTrainerName,
+      date: newSchDate,
+      startTime: newSchTime,
+      bookings: ptBookings,
+      schedules,
+      workSchedules,
+      staffAttendances,
+      leaveRequests,
+      trainerUser: activeTrainer,
+      rules: trainerWorkingRules,
+      studioClasses
+    });
+
+    if (!validation.isValid) {
+      showToast(
+        'Jadwal Bentrok / Tidak Tersedia ⚠️',
+        validation.error || 'Trainer tidak dapat dijadwalkan pada jam dan tanggal ini.',
+        'error'
+      );
+      return;
+    }
+
     const newSch: Schedule = {
       id: 'SCH-' + Date.now(),
       memberName: mem.name,
       memberId: mem.id,
       trainer: activeTrainerName,
+      trainerId: activeTrainerId,
       date: newSchDate,
       time: newSchTime,
       status: 'Menunggu',
@@ -733,6 +847,33 @@ export const TrainerPortalView: React.FC<TrainerPortalViewProps> = ({
   const handleConfirmReschedule = () => {
     if (!rescheduleTarget || !rescheduleDate || !rescheduleTime) return;
 
+    // Validasi sinkronisasi jadwal, jam kerja & bentrok studio class
+    const validation = validatePTDoubleBooking({
+      memberId: rescheduleTarget.memberId,
+      trainerId: activeTrainerId,
+      trainerName: activeTrainerName,
+      date: rescheduleDate,
+      startTime: rescheduleTime,
+      currentBookingId: rescheduleTarget.id,
+      bookings: ptBookings,
+      schedules,
+      workSchedules,
+      staffAttendances,
+      leaveRequests,
+      trainerUser: activeTrainer,
+      rules: trainerWorkingRules,
+      studioClasses
+    });
+
+    if (!validation.isValid) {
+      showToast(
+        'Reschedule Gagal ⚠️',
+        validation.error || 'Jadwal bertabrakan atau berada di luar jam kerja trainer.',
+        'error'
+      );
+      return;
+    }
+
     const updated: Schedule = {
       ...rescheduleTarget,
       date: rescheduleDate,
@@ -749,10 +890,10 @@ export const TrainerPortalView: React.FC<TrainerPortalViewProps> = ({
     showToast('Reschedule Berhasil', `Jadwal ${rescheduleTarget.memberName} dipindahkan ke ${formatDateIndo(rescheduleDate)} ${rescheduleTime}.`, 'info');
   };
 
-  if (isMobileMode) {
+  if (activeIsMobileMode) {
     return (
       <TrainerMobileFocusPortal
-        onBackToDesktop={() => setIsMobileMode(false)}
+        onBackToDesktop={() => handleSetMobileMode(false)}
         currentUser={activeTrainer}
         schedules={schedules}
         members={members}
@@ -790,16 +931,29 @@ export const TrainerPortalView: React.FC<TrainerPortalViewProps> = ({
                 <span className="text-[10px] uppercase font-black px-2.5 py-0.5 rounded-full bg-orange-500/20 text-orange-400 border border-orange-500/40 tracking-wider">
                   Mode Fokus Pelatih (Trainer View)
                 </span>
-                <span className="text-[10px] uppercase font-bold px-2 py-0.5 rounded-full bg-zinc-800 text-zinc-300 border border-zinc-700">
-                  Shift {activeTrainer?.shift || 'Pagi'}
+                <span className={`text-[10px] uppercase font-bold px-2 py-0.5 rounded-full border ${
+                  teachingHoursData.dutyToday.isDayOff || teachingHoursData.dutyToday.isAbsent
+                    ? 'bg-rose-500/20 text-rose-400 border-rose-500/30'
+                    : 'bg-zinc-800 text-zinc-300 border-zinc-700'
+                }`}>
+                  {teachingHoursData.dutyToday.statusLabel}
                 </span>
-                <span className="text-[10px] uppercase font-bold px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
-                  Aktif Bertugas
+                <span className={`text-[10px] uppercase font-bold px-2 py-0.5 rounded-full border ${
+                  teachingHoursData.dutyToday.isAvailableForDate
+                    ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30'
+                    : 'bg-rose-500/20 text-rose-400 border-rose-500/30'
+                }`}>
+                  {teachingHoursData.dutyToday.isAvailableForDate ? 'Aktif Bertugas' : 'Tidak Mengajar'}
                 </span>
+                {teachingHoursData.dutyToday.dutyStartTime && teachingHoursData.dutyToday.dutyEndTime && (
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-300 border border-amber-500/20 font-mono">
+                    ⏰ {teachingHoursData.dutyToday.dutyStartTime} - {teachingHoursData.dutyToday.dutyEndTime}
+                  </span>
+                )}
                 <button
                   type="button"
-                  onClick={() => setIsMobileMode(true)}
-                  className="text-[10px] uppercase font-bold px-3 py-1 rounded-full bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-400 hover:to-amber-400 text-zinc-950 shadow-md shadow-orange-500/20 cursor-pointer flex items-center gap-1.5 transition active:scale-95"
+                  onClick={() => handleSetMobileMode(true)}
+                  className="text-[10px] uppercase font-bold px-3 py-1 rounded-full bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-400 hover:to-amber-400 text-zinc-950 shadow-md shadow-orange-500/20 cursor-pointer flex items-center gap-1.5 transition active:scale-95 min-h-[32px]"
                 >
                   <Smartphone className="w-3 h-3" />
                   <span>📱 Buka Mode Mobile Web Smartphone</span>
@@ -925,37 +1079,61 @@ export const TrainerPortalView: React.FC<TrainerPortalViewProps> = ({
       {/* 2. SUMMARY KPI & EARNINGS METRICS                                         */}
       {/* ========================================================================= */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-        {/* Metric 1: Today's Sessions */}
+        {/* Metric 1: Today's Sessions & Teaching Load */}
         <div className="bg-zinc-900/70 border border-zinc-800 p-4 rounded-2xl">
           <div className="flex items-center justify-between text-zinc-400 text-xs">
-            <span className="font-semibold uppercase tracking-wider">Sesi Hari Ini</span>
+            <span className="font-semibold uppercase tracking-wider">Jam Mengajar Hari Ini</span>
             <CalendarDays className="w-4 h-4 text-orange-400" />
           </div>
           <div className="flex items-baseline gap-2 mt-2">
-            <span className="text-2xl sm:text-3xl font-black text-white">{kpis.todayDone}</span>
-            <span className="text-xs text-zinc-400 font-semibold">/ {kpis.todayTotal} Sesi Selesai</span>
+            <span className="text-2xl sm:text-3xl font-black text-white">
+              {teachingHoursData.totalCompletedHoursToday} Jam
+            </span>
+            <span className="text-xs text-zinc-400 font-semibold">
+              ({kpis.todayDone} PT • {teachingHoursData.studioTodayCount} Studio)
+            </span>
           </div>
           <div className="w-full bg-zinc-800 h-1.5 rounded-full mt-3 overflow-hidden">
             <div
               className="bg-orange-500 h-full rounded-full transition-all duration-500"
-              style={{ width: `${kpis.todayTotal > 0 ? (kpis.todayDone / kpis.todayTotal) * 100 : 0}%` }}
+              style={{
+                width: `${Math.min(
+                  100,
+                  (teachingHoursData.totalTodayLoad / Math.max(1, teachingHoursData.maxSessionsPerDay)) * 100
+                )}%`
+              }}
             />
           </div>
+          <p className="text-[10px] text-zinc-400 mt-2 flex items-center justify-between">
+            <span>Beban Kuota Hari Ini:</span>
+            <span className="font-mono text-zinc-200">
+              {teachingHoursData.totalTodayLoad} / {teachingHoursData.maxSessionsPerDay} sesi max (sisa {teachingHoursData.remainingSlotsToday})
+            </span>
+          </p>
         </div>
 
-        {/* Metric 2: Completed Sessions This Month */}
+        {/* Metric 2: Completed Teaching Hours This Month */}
         <div className="bg-zinc-900/70 border border-zinc-800 p-4 rounded-2xl">
           <div className="flex items-center justify-between text-zinc-400 text-xs">
-            <span className="font-semibold uppercase tracking-wider">Sesi Tuntas (Bulan Ini)</span>
+            <span className="font-semibold uppercase tracking-wider">Total Jam Mengajar (Bulan Ini)</span>
             <CheckCircle2 className="w-4 h-4 text-emerald-400" />
           </div>
           <div className="flex items-baseline gap-2 mt-2">
-            <span className="text-2xl sm:text-3xl font-black text-emerald-400">{kpis.completedSessions}</span>
-            <span className="text-xs text-zinc-400 font-semibold">dari target {kpis.monthlyTarget}</span>
+            <span className="text-2xl sm:text-3xl font-black text-emerald-400">
+              {teachingHoursData.totalCompletedHoursMonth} Jam
+            </span>
+            <span className="text-xs text-zinc-400 font-semibold">
+              target {kpis.monthlyTarget} jam
+            </span>
           </div>
           <p className="text-[11px] text-zinc-400 mt-2 flex items-center justify-between">
-            <span>Target Tercapai:</span>
-            <strong className="text-emerald-400">{kpis.targetProgress}%</strong>
+            <span>{teachingHoursData.ptCompletedMonthCount} Sesi PT • {teachingHoursData.studioMonthCount} Kelas Studio</span>
+            <strong className="text-emerald-400">
+              {Math.min(
+                100,
+                Math.round((teachingHoursData.totalCompletedHoursMonth / Math.max(1, kpis.monthlyTarget)) * 100)
+              )}%
+            </strong>
           </p>
         </div>
 
@@ -977,16 +1155,16 @@ export const TrainerPortalView: React.FC<TrainerPortalViewProps> = ({
         {/* Metric 4: Estimated Session Fee Earnings */}
         <div className="bg-zinc-900/70 border border-zinc-800 p-4 rounded-2xl">
           <div className="flex items-center justify-between text-zinc-400 text-xs">
-            <span className="font-semibold uppercase tracking-wider">Estimasi Fee Sesi</span>
+            <span className="font-semibold uppercase tracking-wider">Estimasi Fee & Komisi</span>
             <TrendingUp className="w-4 h-4 text-amber-400" />
           </div>
           <div className="flex items-baseline gap-1 mt-2">
             <span className="text-xl sm:text-2xl font-black text-amber-400">
-              Rp {kpis.estimatedEarnings.toLocaleString('id-ID')}
+              Rp {(kpis.estimatedEarnings + teachingHoursData.studioMonthCount * 50000).toLocaleString('id-ID')}
             </span>
           </div>
           <p className="text-[11px] text-zinc-400 mt-2">
-            @ Rp {kpis.feePerSession.toLocaleString('id-ID')} / Sesi Selesai (3-Pihak Sah)
+            @ Rp {kpis.feePerSession.toLocaleString('id-ID')} / Sesi PT + Insentif Kelas Studio
           </p>
         </div>
       </div>
@@ -1220,6 +1398,38 @@ export const TrainerPortalView: React.FC<TrainerPortalViewProps> = ({
               </div>
             </div>
           </div>
+
+          {/* Synchronized Studio Classes Alert for Trainer */}
+          {todayTrainerStudioClasses.length > 0 && (
+            <div className="bg-gradient-to-r from-purple-950/40 via-zinc-900 to-zinc-900 border border-purple-500/30 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-lg">
+              <div className="flex items-start sm:items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-purple-500/20 text-purple-400 flex items-center justify-center shrink-0">
+                  <Sparkles className="w-5 h-5" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-full bg-purple-500/20 text-purple-300 border border-purple-500/30 tracking-wider">
+                      Sinkronisasi Kelas Studio
+                    </span>
+                    <span className="text-xs font-bold text-white">
+                      {todayTrainerStudioClasses.length} Kelas Studio Anda Hari Ini
+                    </span>
+                  </div>
+                  <div className="flex flex-wrap gap-2 mt-1.5 text-xs text-zinc-300">
+                    {todayTrainerStudioClasses.map((c) => (
+                      <span key={c.id} className="bg-zinc-800/80 px-2.5 py-1 rounded-lg border border-zinc-700/60 font-medium flex items-center gap-1.5">
+                        <span className="w-2 h-2 rounded-full bg-purple-400" />
+                        <strong className="text-white">{c.name}</strong> • ⏰ {c.time} • 📍 {c.room || 'Studio'} • 👥 {c.bookedMembers?.length || 0} Member
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              </div>
+              <span className="text-[11px] text-purple-300/80 font-medium shrink-0 bg-purple-500/10 px-2.5 py-1 rounded-lg border border-purple-500/20">
+                🔒 Slot PT otomatis terkunci di jam kelas
+              </span>
+            </div>
+          )}
 
           {/* Schedule List Cards */}
           {displayedSchedules.length === 0 ? (
@@ -1491,11 +1701,17 @@ export const TrainerPortalView: React.FC<TrainerPortalViewProps> = ({
                         {/* Client Identity Header */}
                         <div className="flex items-start justify-between gap-3">
                           <div className="flex items-center gap-3.5 min-w-0">
-                            <img
-                              src={client.photo}
-                              alt={client.memberName}
-                              className="w-13 h-13 rounded-2xl object-cover border-2 border-orange-500/50 shrink-0"
-                            />
+                            {client.photo && client.photo.trim() ? (
+                              <img
+                                src={client.photo.trim()}
+                                alt={client.memberName}
+                                className="w-13 h-13 rounded-2xl object-cover border-2 border-orange-500/50 shrink-0"
+                              />
+                            ) : (
+                              <div className="w-13 h-13 rounded-2xl bg-zinc-800 border-2 border-orange-500/50 flex items-center justify-center font-bold text-orange-400 text-sm shrink-0">
+                                {client.memberName.substring(0, 2).toUpperCase()}
+                              </div>
+                            )}
                             <div className="min-w-0">
                               <div className="flex items-center gap-2">
                                 <h5 className="font-extrabold text-white text-base truncate">{client.memberName}</h5>
@@ -2396,11 +2612,17 @@ export const TrainerPortalView: React.FC<TrainerPortalViewProps> = ({
             {/* Header */}
             <div className="flex items-start justify-between border-b border-zinc-800 pb-4 gap-3">
               <div className="flex items-center gap-3.5">
-                <img
-                  src={clientHistoryModal.photo}
-                  alt={clientHistoryModal.memberName}
-                  className="w-13 h-13 rounded-2xl object-cover border-2 border-orange-500/50"
-                />
+                {clientHistoryModal.photo && clientHistoryModal.photo.trim() ? (
+                  <img
+                    src={clientHistoryModal.photo.trim()}
+                    alt={clientHistoryModal.memberName}
+                    className="w-13 h-13 rounded-2xl object-cover border-2 border-orange-500/50"
+                  />
+                ) : (
+                  <div className="w-13 h-13 rounded-2xl bg-zinc-800 border-2 border-orange-500/50 flex items-center justify-center font-bold text-orange-400 text-sm">
+                    {clientHistoryModal.memberName.substring(0, 2).toUpperCase()}
+                  </div>
+                )}
                 <div>
                   <h3 className="font-extrabold text-white text-base sm:text-lg flex items-center gap-2">
                     <span>Riwayat Hasil Latihan — {clientHistoryModal.memberName}</span>

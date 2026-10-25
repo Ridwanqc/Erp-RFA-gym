@@ -110,12 +110,12 @@ const QuickOutMemberCard: React.FC<{
 
   return (
     <div
-      className="bg-[#18181b] hover:bg-[#202024] border border-zinc-800/90 hover:border-zinc-700/90 rounded-2xl p-3 flex items-center justify-between gap-3 shadow-md transition-all duration-200 group relative overflow-hidden"
+      className="quick-out-card bg-zinc-900 hover:bg-zinc-800/80 border border-zinc-800/90 hover:border-zinc-700/90 rounded-2xl p-3 flex items-center justify-between gap-3 shadow-md transition-all duration-200 group relative overflow-hidden"
     >
       {/* Left: Square Profile Photo / Emblem + Member Info */}
       <div className="flex items-center gap-3 min-w-0 flex-1">
         {/* Photo Thumbnail */}
-        <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-xl overflow-hidden bg-zinc-950 border border-zinc-800 shrink-0 relative flex items-center justify-center">
+        <div className="quick-out-photo w-14 h-14 sm:w-16 sm:h-16 rounded-xl overflow-hidden bg-zinc-950 border border-zinc-800 shrink-0 relative flex items-center justify-center">
           {photoUrl && !imgError ? (
             <img
               src={photoUrl}
@@ -160,7 +160,7 @@ const QuickOutMemberCard: React.FC<{
           type="button"
           disabled={isProcessing}
           onClick={() => onQuickOut(att)}
-          className="p-2 sm:p-2.5 text-zinc-300 hover:text-white hover:bg-zinc-800/80 active:scale-90 rounded-xl transition cursor-pointer disabled:opacity-50 flex items-center justify-center"
+          className="min-w-[44px] min-h-[44px] p-2 sm:p-2.5 text-zinc-300 hover:text-white hover:bg-zinc-800/80 active:scale-90 rounded-xl transition cursor-pointer disabled:opacity-50 flex items-center justify-center"
           title={`Quick OUT: Check-out ${att.memberName}`}
           aria-label={`Check-out ${att.memberName}`}
         >
@@ -299,7 +299,7 @@ export const QuickOutSection: React.FC<QuickOutSectionProps> = ({
   return (
     <div className="space-y-4 animate-in fade-in duration-200">
       {/* 1. TOP HEADER BAR: TITLE "OUT" + QUICK FILTER TOGGLE */}
-      <div className="bg-[#18181b] border border-zinc-800 rounded-2xl px-5 py-3.5 flex items-center justify-between shadow-sm">
+      <div className="quick-out-header bg-zinc-900 border border-zinc-800 rounded-2xl px-5 py-3.5 flex items-center justify-between shadow-sm">
         <div className="flex items-center gap-3">
           <h2 className="text-xl sm:text-2xl font-black text-white tracking-wider uppercase">
             OUT
@@ -351,7 +351,7 @@ export const QuickOutSection: React.FC<QuickOutSectionProps> = ({
 
       {/* FILTER EXPANDABLE PANEL */}
       {isFilterPanelOpen && (
-        <div className="bg-[#18181b] border border-zinc-800 rounded-2xl p-4 space-y-3 animate-in fade-in duration-150">
+        <div className="quick-out-panel bg-zinc-900 border border-zinc-800 rounded-2xl p-4 space-y-3 animate-in fade-in duration-150">
           <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
             {/* Mobile Search */}
             <div className="relative sm:hidden flex-1">
@@ -448,7 +448,7 @@ export const QuickOutSection: React.FC<QuickOutSectionProps> = ({
           <span className="text-sm font-black tracking-wider uppercase text-zinc-200">
             AKTIF
           </span>
-          <span className="bg-zinc-800/90 text-zinc-200 text-xs font-mono font-bold px-2.5 py-0.5 rounded-md border border-zinc-700/80 shadow-sm">
+          <span className="quick-out-badge bg-zinc-800/90 text-zinc-200 text-xs font-mono font-bold px-2.5 py-0.5 rounded-md border border-zinc-700/80 shadow-sm">
             {filteredActiveSessions.length}
           </span>
           {activeSessions.length !== filteredActiveSessions.length && (
@@ -465,7 +465,7 @@ export const QuickOutSection: React.FC<QuickOutSectionProps> = ({
 
       {/* 3. CARD GRID: RESPONSIVE 4 COLUMNS (MATCHING REFERENCE SCREENSHOT) */}
       {filteredActiveSessions.length === 0 ? (
-        <div className="bg-[#18181b] border border-zinc-800 rounded-3xl p-12 text-center space-y-3">
+        <div className="quick-out-empty bg-zinc-900 border border-zinc-800 rounded-3xl p-12 text-center space-y-3">
           <div className="w-16 h-16 rounded-2xl bg-zinc-900 border border-zinc-800 flex items-center justify-center mx-auto text-zinc-600">
             <UserCheck className="w-8 h-8" />
           </div>

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Lock,
   User as UserIcon,
@@ -7,6 +7,7 @@ import {
   LogIn,
   ArrowRight,
   ShieldCheck,
+  ShieldAlert,
   CheckCircle2,
   AlertCircle,
   Calendar,
@@ -25,6 +26,27 @@ import { formatDateIndo, APP_TODAY } from '../utils/formatters';
 import { signInWithGoogle } from '../lib/firebase';
 import { useTheme } from '../context/ThemeContext';
 
+// Security constants for brute-force protection
+const MAX_FAILED_LOGIN_ATTEMPTS = 5;
+const LOCKOUT_DURATION_SECONDS = 15 * 60; // 15 menit = 900 detik
+const STORAGE_KEY_ATTEMPTS = 'rfa_login_failed_attempts';
+const STORAGE_KEY_LOCKOUT_UNTIL = 'rfa_login_lockout_until';
+
+// Helper formatters
+export const formatLockoutDigital = (seconds: number): string => {
+  const m = Math.floor(seconds / 60);
+  const s = seconds % 60;
+  return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+};
+
+export const formatLockoutText = (seconds: number): string => {
+  const m = Math.floor(seconds / 60);
+  const s = seconds % 60;
+  if (m > 0 && s > 0) return `${m} menit ${s} detik`;
+  if (m > 0) return `${m} menit`;
+  return `${s} detik`;
+};
+
 interface LoginPageProps {
   onLogin: (user: User, rememberMe: boolean) => void;
   staffUsers: User[];
@@ -41,10 +63,95 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin, staffUsers, onBac
   const [isLoading, setIsLoading] = useState(false);
   const [showHelpModal, setShowHelpModal] = useState(false);
 
+  // Brute-force & Anti-Tampering Rate-Limiting Protection (5x salah sandi -> 15 menit lockout, persisted)
+  const [failedAttempts, setFailedAttempts] = useState<number>(() => {
+    try {
+      const lockoutUntilStr = localStorage.getItem(STORAGE_KEY_LOCKOUT_UNTIL);
+      if (lockoutUntilStr) {
+        const lockoutUntil = parseInt(lockoutUntilStr, 10);
+        if (lockoutUntil > Date.now()) {
+          const saved = localStorage.getItem(STORAGE_KEY_ATTEMPTS);
+          return saved ? parseInt(saved, 10) || MAX_FAILED_LOGIN_ATTEMPTS : MAX_FAILED_LOGIN_ATTEMPTS;
+        } else {
+          // Expired lockout cleanup
+          localStorage.removeItem(STORAGE_KEY_LOCKOUT_UNTIL);
+          localStorage.removeItem(STORAGE_KEY_ATTEMPTS);
+          return 0;
+        }
+      }
+      const saved = localStorage.getItem(STORAGE_KEY_ATTEMPTS);
+      return saved ? parseInt(saved, 10) || 0 : 0;
+    } catch {
+      return 0;
+    }
+  });
+
+  const [lockoutTimer, setLockoutTimer] = useState<number>(() => {
+    try {
+      const lockoutUntilStr = localStorage.getItem(STORAGE_KEY_LOCKOUT_UNTIL);
+      if (!lockoutUntilStr) return 0;
+      const lockoutUntil = parseInt(lockoutUntilStr, 10);
+      const diff = Math.ceil((lockoutUntil - Date.now()) / 1000);
+      if (diff > 0) {
+        return diff;
+      }
+      localStorage.removeItem(STORAGE_KEY_LOCKOUT_UNTIL);
+      localStorage.removeItem(STORAGE_KEY_ATTEMPTS);
+      return 0;
+    } catch {
+      return 0;
+    }
+  });
+
+  // Countdown timer synced with real-world timestamp
+  useEffect(() => {
+    if (lockoutTimer <= 0) return;
+    const interval = setInterval(() => {
+      try {
+        const lockoutUntilStr = localStorage.getItem(STORAGE_KEY_LOCKOUT_UNTIL);
+        if (lockoutUntilStr) {
+          const lockoutUntil = parseInt(lockoutUntilStr, 10);
+          const diff = Math.max(0, Math.ceil((lockoutUntil - Date.now()) / 1000));
+          setLockoutTimer(diff);
+          if (diff <= 0) {
+            localStorage.removeItem(STORAGE_KEY_LOCKOUT_UNTIL);
+            localStorage.removeItem(STORAGE_KEY_ATTEMPTS);
+            setFailedAttempts(0);
+            setErrorMsg(null);
+          }
+        } else {
+          setLockoutTimer((prev) => {
+            const next = prev - 1;
+            if (next <= 0) {
+              localStorage.removeItem(STORAGE_KEY_LOCKOUT_UNTIL);
+              localStorage.removeItem(STORAGE_KEY_ATTEMPTS);
+              setFailedAttempts(0);
+              setErrorMsg(null);
+              return 0;
+            }
+            return next;
+          });
+        }
+      } catch {
+        setLockoutTimer((prev) => Math.max(0, prev - 1));
+      }
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [lockoutTimer]);
+
   // Validate and submit login
   const handleFormSubmit = (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     setErrorMsg(null);
+
+    if (lockoutTimer > 0) {
+      setErrorMsg(
+        `Akses login dikunci sementara demi keamanan karena terdeteksi 5x kesalahan kata sandi. Silakan tunggu ${formatLockoutText(
+          lockoutTimer
+        )} (${formatLockoutDigital(lockoutTimer)}) lagi.`
+      );
+      return;
+    }
 
     const cleanUsername = username.trim().toLowerCase();
     const cleanPassword = password.trim();
@@ -61,7 +168,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin, staffUsers, onBac
 
     setIsLoading(true);
 
-    // Simulate snappy network verification (250ms)
+    // Secure timing verification (simulated 280ms)
     setTimeout(() => {
       // Find matching user by accId, id, name, or phone
       const matchedUser = staffUsers.find((u) => {
@@ -75,7 +182,32 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin, staffUsers, onBac
 
       if (!matchedUser) {
         setIsLoading(false);
-        setErrorMsg('Akun pengguna tidak ditemukan. Periksa kembali ID atau Username Anda.');
+        const nextFailed = failedAttempts + 1;
+        setFailedAttempts(nextFailed);
+        try {
+          localStorage.setItem(STORAGE_KEY_ATTEMPTS, String(nextFailed));
+        } catch {}
+
+        if (nextFailed >= MAX_FAILED_LOGIN_ATTEMPTS) {
+          const until = Date.now() + LOCKOUT_DURATION_SECONDS * 1000;
+          try {
+            localStorage.setItem(STORAGE_KEY_LOCKOUT_UNTIL, String(until));
+          } catch {}
+          setLockoutTimer(LOCKOUT_DURATION_SECONDS);
+          setErrorMsg(
+            'Terlalu banyak percobaan masuk yang salah (5x). Akses login Anda dikunci sementara selama 15 menit demi keamanan data sistem.'
+          );
+        } else {
+          setErrorMsg(
+            `ID Akun atau Username tidak cocok. Sisa kesempatan: ${MAX_FAILED_LOGIN_ATTEMPTS - nextFailed}x sebelum akun terkunci 15 menit.`
+          );
+        }
+        return;
+      }
+
+      if (matchedUser.status === 'Nonaktif' || (matchedUser as any).status === 'Suspended') {
+        setIsLoading(false);
+        setErrorMsg('Akses ditolak: Akun staf ini telah dinonaktifkan oleh Administrator. Hubungi HR / Manajemen.');
         return;
       }
 
@@ -83,11 +215,36 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin, staffUsers, onBac
       const expectedPassword = matchedUser.password || '123';
       if (cleanPassword !== expectedPassword) {
         setIsLoading(false);
-        setErrorMsg('Kata sandi yang Anda masukkan salah. Silakan periksa kembali kata sandi Anda.');
+        const nextFailed = failedAttempts + 1;
+        setFailedAttempts(nextFailed);
+        try {
+          localStorage.setItem(STORAGE_KEY_ATTEMPTS, String(nextFailed));
+        } catch {}
+
+        if (nextFailed >= MAX_FAILED_LOGIN_ATTEMPTS) {
+          const until = Date.now() + LOCKOUT_DURATION_SECONDS * 1000;
+          try {
+            localStorage.setItem(STORAGE_KEY_LOCKOUT_UNTIL, String(until));
+          } catch {}
+          setLockoutTimer(LOCKOUT_DURATION_SECONDS);
+          setErrorMsg(
+            'Kata sandi salah sebanyak 5 kali. Akses login Anda dikunci sementara selama 15 menit demi perlindungan keamanan akun.'
+          );
+        } else {
+          setErrorMsg(
+            `Kata sandi yang Anda masukkan salah. Sisa kesempatan: ${MAX_FAILED_LOGIN_ATTEMPTS - nextFailed}x (Jika salah 5 kali, akses terkunci 15 menit).`
+          );
+        }
         return;
       }
 
-      // Successful login
+      // Successful login - reset failed attempts and lockout
+      try {
+        localStorage.removeItem(STORAGE_KEY_ATTEMPTS);
+        localStorage.removeItem(STORAGE_KEY_LOCKOUT_UNTIL);
+      } catch {}
+      setFailedAttempts(0);
+      setLockoutTimer(0);
       setIsLoading(false);
       onLogin(matchedUser, rememberMe);
     }, 280);
@@ -95,6 +252,14 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin, staffUsers, onBac
 
   // Google Firebase Auth Sign-In
   const handleGoogleSignIn = async () => {
+    if (lockoutTimer > 0) {
+      setErrorMsg(
+        `Akses login sedang terkunci sementara selama ${formatLockoutText(
+          lockoutTimer
+        )} (${formatLockoutDigital(lockoutTimer)}) karena 5x salah sandi.`
+      );
+      return;
+    }
     setErrorMsg(null);
     setIsLoading(true);
     try {
@@ -137,58 +302,60 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin, staffUsers, onBac
       <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-orange-500/5 rounded-full blur-[120px] pointer-events-none"></div>
 
       {/* Top Simple Bar */}
-      <header className="px-6 py-4 border-b border-zinc-800/60 flex items-center justify-between z-10 backdrop-blur-md bg-zinc-950/40">
-        <div className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-orange-500 to-amber-600 flex items-center justify-center text-zinc-950 font-black shadow-lg shadow-orange-500/25">
-            <Dumbbell className="w-5 h-5 -rotate-45" />
+      <header className="px-3 sm:px-6 py-3 sm:py-4 border-b border-zinc-800/60 flex items-center justify-between z-10 backdrop-blur-md bg-zinc-950/40 min-w-0">
+        <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+          <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-gradient-to-br from-orange-500 to-amber-600 flex items-center justify-center text-zinc-950 font-black shadow-lg shadow-orange-500/25 shrink-0">
+            <Dumbbell className="w-4 h-4 sm:w-5 sm:h-5 -rotate-45" />
           </div>
-          <div>
-            <span className="text-sm font-black tracking-wider text-white">GYMPRO ERP</span>
-            <span className="text-[10px] ml-1.5 px-1.5 py-0.5 rounded bg-orange-500/20 text-orange-400 border border-orange-500/30 font-bold uppercase">
-              Ultimate
+          <div className="min-w-0">
+            <span className="text-xs sm:text-sm font-black tracking-wider text-white truncate block">GYMPRO ERP</span>
+            <span className="text-[9px] px-1.5 py-0.2 rounded bg-orange-500/20 text-orange-400 border border-orange-500/30 font-bold uppercase hidden xs:inline">
+              Enterprise
             </span>
           </div>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-1.5 sm:gap-2.5 shrink-0">
           {onBackToLanding && (
             <button
               type="button"
               onClick={onBackToLanding}
-              className="text-xs font-bold text-orange-400 hover:text-white flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-orange-500/10 hover:bg-orange-500/20 border border-orange-500/30 transition cursor-pointer"
+              className="text-[11px] sm:text-xs font-bold text-orange-400 hover:text-white flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-orange-500/10 hover:bg-orange-500/20 border border-orange-500/30 transition cursor-pointer min-h-[38px]"
             >
-              <span>← Landing Page RFA Gym</span>
+              <span>←</span>
+              <span className="hidden sm:inline">Landing Page</span>
+              <span className="sm:hidden">Web</span>
             </button>
           )}
 
-          <div className="flex items-center gap-1.5 text-xs text-amber-300 bg-amber-500/10 px-2.5 py-1 rounded-xl border border-amber-500/25">
-            <Flame className="w-3.5 h-3.5 text-amber-400" />
-            <span className="font-semibold text-[11px]">Firebase Cloud Connected</span>
+          <div className="hidden md:flex items-center gap-1.5 text-xs text-amber-300 bg-amber-500/10 px-2.5 py-1.5 rounded-xl border border-amber-500/25">
+            <Flame className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+            <span className="font-semibold text-[11px]">Firebase Cloud</span>
           </div>
 
-          <div className="hidden sm:flex items-center gap-1.5 text-xs text-zinc-400 bg-zinc-900/80 px-3 py-1.5 rounded-xl border border-zinc-800">
-            <Calendar className="w-3.5 h-3.5 text-orange-500" />
+          <div className="hidden lg:flex items-center gap-1.5 text-xs text-zinc-400 bg-zinc-900/80 px-3 py-1.5 rounded-xl border border-zinc-800">
+            <Calendar className="w-3.5 h-3.5 text-orange-500 shrink-0" />
             <span>{formatDateIndo(APP_TODAY)}</span>
           </div>
 
           <button
             type="button"
             onClick={openThemeModal}
-            className="text-xs text-zinc-400 hover:text-white flex items-center gap-1.5 px-3 py-1.5 rounded-xl hover:bg-zinc-900 border border-transparent hover:border-zinc-800 transition cursor-pointer"
+            className="text-xs text-zinc-400 hover:text-white flex items-center gap-1.5 p-2 sm:px-3 sm:py-1.5 rounded-xl hover:bg-zinc-900 border border-transparent hover:border-zinc-800 transition cursor-pointer min-h-[38px] min-w-[38px] justify-center"
             title={`Tema: ${theme.mode} • Aksen: ${currentAccent.name}`}
           >
-            <Palette className="w-3.5 h-3.5 text-orange-400" />
-            <span className="w-2 h-2 rounded-full" style={{ backgroundColor: currentAccent.hex }} />
+            <Palette className="w-4 h-4 text-orange-400 shrink-0" />
+            <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: currentAccent.hex }} />
             <span className="hidden sm:inline">Tema</span>
           </button>
 
           <button
             type="button"
             onClick={() => setShowHelpModal(true)}
-            className="text-xs text-zinc-400 hover:text-white flex items-center gap-1.5 px-3 py-1.5 rounded-xl hover:bg-zinc-900 border border-transparent hover:border-zinc-800 transition"
+            className="text-xs text-zinc-400 hover:text-white flex items-center gap-1.5 p-2 sm:px-3 sm:py-1.5 rounded-xl hover:bg-zinc-900 border border-transparent hover:border-zinc-800 transition min-h-[38px]"
           >
-            <HelpCircle className="w-3.5 h-3.5" />
-            <span>Bantuan</span>
+            <HelpCircle className="w-4 h-4 shrink-0" />
+            <span className="hidden xs:inline">Bantuan</span>
           </button>
         </div>
       </header>
@@ -256,8 +423,36 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin, staffUsers, onBac
                 </p>
               </div>
 
+              {/* Prominent Security Lockout Alert Banner */}
+              {lockoutTimer > 0 && (
+                <div className="mb-5 p-4 rounded-2xl bg-rose-950/80 border-2 border-rose-500/60 shadow-xl shadow-rose-950/60 animate-in fade-in zoom-in-95 duration-200">
+                  <div className="flex items-start gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-rose-500/20 border border-rose-500/40 flex items-center justify-center text-rose-400 shrink-0">
+                      <ShieldAlert className="w-5 h-5 animate-pulse" />
+                    </div>
+                    <div className="flex-1">
+                      <div className="flex items-center justify-between gap-2 flex-wrap">
+                        <h4 className="text-xs sm:text-sm font-black text-rose-200 flex items-center gap-1.5">
+                          <span>Akses Login Terkunci (15 Menit)</span>
+                        </h4>
+                        <span className="font-mono text-sm sm:text-base font-black px-2.5 py-0.5 rounded-lg bg-rose-900/90 border border-rose-500/60 text-white tracking-widest shadow-inner">
+                          {formatLockoutDigital(lockoutTimer)}
+                        </span>
+                      </div>
+                      <p className="text-xs text-rose-300/90 mt-1.5 leading-relaxed">
+                        Terdeteksi <strong className="text-white">5 kali</strong> kesalahan kata sandi berturut-turut. Sistem mengunci akses selama <strong className="text-white">15 menit</strong> demi melindungi keamanan akun staf GymPro ERP.
+                      </p>
+                      <div className="mt-2.5 flex items-center justify-between text-[11px] text-rose-400/90 border-t border-rose-500/20 pt-2">
+                        <span>Waktu tersisa: <strong className="text-rose-100 font-bold">{formatLockoutText(lockoutTimer)}</strong></span>
+                        <span className="text-[10px] text-zinc-400 hidden sm:inline">Timer tetap berjalan saat browser dimuat ulang</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
               {/* Error Alert Message */}
-              {errorMsg && (
+              {errorMsg && lockoutTimer <= 0 && (
                 <div className="mb-5 p-3.5 rounded-2xl bg-rose-500/10 border border-rose-500/30 text-rose-300 text-xs flex items-start gap-2.5 animate-in fade-in slide-in-from-top-2 duration-200">
                   <AlertCircle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
                   <div className="flex-1 leading-relaxed">{errorMsg}</div>
@@ -277,13 +472,14 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin, staffUsers, onBac
                     </div>
                     <input
                       type="text"
+                      disabled={lockoutTimer > 0 || isLoading}
                       value={username}
                       onChange={(e) => {
                         setUsername(e.target.value);
                         if (errorMsg) setErrorMsg(null);
                       }}
-                      placeholder="Contoh: admin, kasir, pt, atau S01"
-                      className="w-full pl-10 pr-4 py-3 bg-zinc-950 border border-zinc-800 rounded-2xl text-xs sm:text-sm text-white placeholder-zinc-500 focus:outline-none focus:border-orange-500 focus:ring-1 focus:ring-orange-500 transition"
+                      placeholder={lockoutTimer > 0 ? "Akses dibekukan..." : "Contoh: admin, kasir, keuangan, pt, atau S13"}
+                      className="w-full pl-10 pr-4 py-3 bg-zinc-950 border border-zinc-800 rounded-2xl text-xs sm:text-sm text-white placeholder-zinc-500 focus:outline-none focus:border-orange-500 focus:ring-1 focus:ring-orange-500 transition disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-zinc-900/60"
                       autoFocus
                     />
                   </div>
@@ -309,23 +505,33 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin, staffUsers, onBac
                     </div>
                     <input
                       type={showPassword ? 'text' : 'password'}
+                      disabled={lockoutTimer > 0 || isLoading}
                       value={password}
                       onChange={(e) => {
                         setPassword(e.target.value);
                         if (errorMsg) setErrorMsg(null);
                       }}
-                      placeholder="Masukkan kata sandi..."
-                      className="w-full pl-10 pr-11 py-3 bg-zinc-950 border border-zinc-800 rounded-2xl text-xs sm:text-sm text-white placeholder-zinc-500 focus:outline-none focus:border-orange-500 focus:ring-1 focus:ring-orange-500 transition"
+                      placeholder={lockoutTimer > 0 ? "Akses dibekukan..." : "Masukkan kata sandi..."}
+                      className="w-full pl-10 pr-11 py-3 bg-zinc-950 border border-zinc-800 rounded-2xl text-xs sm:text-sm text-white placeholder-zinc-500 focus:outline-none focus:border-orange-500 focus:ring-1 focus:ring-orange-500 transition disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-zinc-900/60"
                     />
                     <button
                       type="button"
+                      disabled={lockoutTimer > 0 || isLoading}
                       onClick={() => setShowPassword(!showPassword)}
-                      className="absolute inset-y-0 right-0 pr-3.5 flex items-center text-zinc-400 hover:text-white transition"
+                      className="absolute inset-y-0 right-0 pr-3.5 flex items-center text-zinc-400 hover:text-white transition disabled:opacity-40"
                       tabIndex={-1}
                     >
                       {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                     </button>
                   </div>
+
+                  {/* Failed attempts warning indicator */}
+                  {failedAttempts > 0 && lockoutTimer === 0 && (
+                    <div className="mt-2 px-3 py-1.5 rounded-xl bg-amber-500/10 border border-amber-500/25 flex items-center justify-between text-[11px] text-amber-300">
+                      <span>Percobaan salah: <strong className="text-white font-bold">{failedAttempts}/{MAX_FAILED_LOGIN_ATTEMPTS}</strong></span>
+                      <span className="font-semibold text-amber-400">{MAX_FAILED_LOGIN_ATTEMPTS - failedAttempts}x lagi sebelum akun dikunci 15 menit</span>
+                    </div>
+                  )}
                 </div>
 
                 {/* Remember Me Checkbox */}
@@ -333,21 +539,84 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin, staffUsers, onBac
                   <label className="flex items-center gap-2 cursor-pointer select-none">
                     <input
                       type="checkbox"
+                      disabled={lockoutTimer > 0 || isLoading}
                       checked={rememberMe}
                       onChange={(e) => setRememberMe(e.target.checked)}
-                      className="w-4 h-4 rounded bg-zinc-950 border-zinc-800 text-orange-500 focus:ring-orange-500 focus:ring-offset-zinc-900 cursor-pointer"
+                      className="w-4 h-4 rounded bg-zinc-950 border-zinc-800 text-orange-500 focus:ring-orange-500 focus:ring-offset-zinc-900 cursor-pointer disabled:opacity-50"
                     />
                     <span className="text-xs text-zinc-400 font-medium">Ingat sesi di perangkat ini</span>
                   </label>
                 </div>
 
+                {/* Quick Staff Credentials Helper */}
+                <div className="pt-2 pb-1">
+                  <p className="text-[11px] font-semibold text-zinc-400 mb-1.5">
+                    Pilih Cepat Akun Staf (Sandi: 123):
+                  </p>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
+                    <button
+                      type="button"
+                      disabled={lockoutTimer > 0 || isLoading}
+                      onClick={() => {
+                        setUsername('admin');
+                        setPassword('123');
+                        if (errorMsg) setErrorMsg(null);
+                      }}
+                      className="text-[11px] font-mono px-2 py-1.5 rounded-xl bg-zinc-950 border border-rose-500/30 text-rose-300 hover:bg-rose-500/10 transition text-center disabled:opacity-40"
+                    >
+                      👑 Admin HQ
+                    </button>
+                    <button
+                      type="button"
+                      disabled={lockoutTimer > 0 || isLoading}
+                      onClick={() => {
+                        setUsername('keuangan');
+                        setPassword('123');
+                        if (errorMsg) setErrorMsg(null);
+                      }}
+                      className="text-[11px] font-mono px-2 py-1.5 rounded-xl bg-zinc-950 border border-emerald-500/30 text-emerald-300 hover:bg-emerald-500/10 transition text-center disabled:opacity-40 font-bold"
+                    >
+                      💰 Keuangan
+                    </button>
+                    <button
+                      type="button"
+                      disabled={lockoutTimer > 0 || isLoading}
+                      onClick={() => {
+                        setUsername('kasir');
+                        setPassword('123');
+                        if (errorMsg) setErrorMsg(null);
+                      }}
+                      className="text-[11px] font-mono px-2 py-1.5 rounded-xl bg-zinc-950 border border-blue-500/30 text-blue-300 hover:bg-blue-500/10 transition text-center disabled:opacity-40"
+                    >
+                      🖥️ Kasir POS
+                    </button>
+                    <button
+                      type="button"
+                      disabled={lockoutTimer > 0 || isLoading}
+                      onClick={() => {
+                        setUsername('leader_pt');
+                        setPassword('123');
+                        if (errorMsg) setErrorMsg(null);
+                      }}
+                      className="text-[11px] font-mono px-2 py-1.5 rounded-xl bg-zinc-950 border border-amber-500/30 text-amber-300 hover:bg-amber-500/10 transition text-center disabled:opacity-40"
+                    >
+                      🏋️ Leader PT
+                    </button>
+                  </div>
+                </div>
+
                 {/* Submit Button */}
                 <button
                   type="submit"
-                  disabled={isLoading}
-                  className="w-full mt-2 py-3.5 px-4 bg-orange-500 hover:bg-orange-600 active:scale-[0.99] text-zinc-950 font-black text-sm rounded-2xl transition shadow-lg shadow-orange-500/25 flex items-center justify-center gap-2 disabled:opacity-50"
+                  disabled={isLoading || lockoutTimer > 0}
+                  className="w-full mt-2 py-3.5 px-4 bg-orange-500 hover:bg-orange-600 active:scale-[0.99] text-zinc-950 font-black text-sm rounded-2xl transition shadow-lg shadow-orange-500/25 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  {isLoading ? (
+                  {lockoutTimer > 0 ? (
+                    <>
+                      <Lock className="w-4 h-4" />
+                      <span>Akses Terkunci Sementara ({formatLockoutDigital(lockoutTimer)})</span>
+                    </>
+                  ) : isLoading ? (
                     <>
                       <span className="w-4 h-4 border-2 border-zinc-950 border-t-transparent rounded-full animate-spin"></span>
                       <span>Memverifikasi Akun...</span>
@@ -365,8 +634,8 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin, staffUsers, onBac
                 <button
                   type="button"
                   onClick={handleGoogleSignIn}
-                  disabled={isLoading}
-                  className="w-full py-3 px-4 bg-zinc-950 hover:bg-zinc-800 border border-zinc-700 hover:border-zinc-500 text-zinc-100 font-bold text-xs sm:text-sm rounded-2xl transition flex items-center justify-center gap-2.5 active:scale-[0.99] disabled:opacity-50 mt-2"
+                  disabled={isLoading || lockoutTimer > 0}
+                  className="w-full py-3 px-4 bg-zinc-950 hover:bg-zinc-800 border border-zinc-700 hover:border-zinc-500 text-zinc-100 font-bold text-xs sm:text-sm rounded-2xl transition flex items-center justify-center gap-2.5 active:scale-[0.99] disabled:opacity-50 disabled:cursor-not-allowed mt-2"
                 >
                   <svg className="w-4 h-4" viewBox="0 0 24 24">
                     <path
@@ -435,6 +704,31 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin, staffUsers, onBac
                   <p className="text-zinc-400 mt-0.5">
                     Gunakan ID pengguna resmi atau Username serta kata sandi yang telah didaftarkan oleh Administrator Sistem.
                   </p>
+                </div>
+              </div>
+
+              <div className="flex items-start gap-2.5">
+                <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
+                <div className="w-full">
+                  <span className="font-bold text-zinc-200">Daftar Akun Standar (Sandi: 123):</span>
+                  <div className="mt-2 space-y-1 font-mono text-[11px] text-zinc-300 bg-zinc-900/80 p-2.5 rounded-xl border border-zinc-800">
+                    <div className="flex justify-between">
+                      <span className="text-rose-300">Super Admin (HQ)</span>
+                      <span>Username: <strong className="text-white">admin</strong></span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-emerald-300 font-bold">Staf Keuangan (HQ)</span>
+                      <span>Username: <strong className="text-white">keuangan</strong></span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-blue-300">Kasir & Front Desk</span>
+                      <span>Username: <strong className="text-white">kasir</strong></span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-amber-300">Head Coach / Leader PT</span>
+                      <span>Username: <strong className="text-white">leader_pt</strong></span>
+                    </div>
+                  </div>
                 </div>
               </div>
 

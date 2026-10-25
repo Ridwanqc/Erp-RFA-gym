@@ -599,7 +599,8 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
             ...currentLanding.social,
             ...(newConfig.social || {})
           },
-          galleryItems: newConfig.galleryItems !== undefined ? newConfig.galleryItems : currentLanding.galleryItems
+          galleryItems: newConfig.galleryItems !== undefined ? newConfig.galleryItems : currentLanding.galleryItems,
+          promos: newConfig.promos !== undefined ? newConfig.promos : currentLanding.promos
         },
         updatedAt: new Date().toISOString()
       };

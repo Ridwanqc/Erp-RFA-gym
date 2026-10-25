@@ -872,8 +872,17 @@ export const MonthlySalesReportView: React.FC<MonthlySalesReportViewProps> = ({
             </span>
           </div>
 
+          {/* Mobile Swipe Cue */}
+          <div className="md:hidden bg-zinc-950/80 border-b border-zinc-800/80 px-4 py-2 flex items-center justify-between text-[11px] text-zinc-400">
+            <span className="flex items-center gap-1.5">
+              <span className="inline-block w-2 h-2 rounded-full bg-orange-500 animate-pulse" />
+              <span>Geser tabel ke samping untuk melihat seluruh bulan & omset</span>
+            </span>
+            <span className="text-zinc-500 font-mono text-[10px]">↔ Scroll</span>
+          </div>
+
           <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs">
+            <table className="w-full text-left text-xs min-w-[700px]">
               <thead className="bg-zinc-950/80 text-zinc-400 border-b border-zinc-800 uppercase tracking-wider text-[10px] font-mono">
                 <tr>
                   <th className="py-3 px-4">Bulan</th>
@@ -948,8 +957,17 @@ export const MonthlySalesReportView: React.FC<MonthlySalesReportViewProps> = ({
             </button>
           </div>
 
+          {/* Mobile Swipe Cue */}
+          <div className="md:hidden bg-zinc-950/80 border-b border-zinc-800/80 px-4 py-2 flex items-center justify-between text-[11px] text-zinc-400">
+            <span className="flex items-center gap-1.5">
+              <span className="inline-block w-2 h-2 rounded-full bg-orange-500 animate-pulse" />
+              <span>Geser tabel ke samping untuk melihat rincian nota & nominal</span>
+            </span>
+            <span className="text-zinc-500 font-mono text-[10px]">↔ Scroll</span>
+          </div>
+
           <div className="overflow-x-auto max-h-[500px]">
-            <table className="w-full text-left text-xs">
+            <table className="w-full text-left text-xs min-w-[780px]">
               <thead className="bg-zinc-950/80 text-zinc-400 border-b border-zinc-800 uppercase tracking-wider text-[10px] font-mono sticky top-0 z-10">
                 <tr>
                   <th className="py-3 px-4">No Trx / Tgl</th>

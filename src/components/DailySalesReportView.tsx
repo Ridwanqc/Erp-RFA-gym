@@ -946,8 +946,17 @@ export const DailySalesReportView: React.FC<DailySalesReportViewProps> = ({
       {/* TAB 1: RINCIAN TABEL TRANSAKSI HARIAN */}
       {activeSubTab === 'table' && (
         <div className="bg-zinc-900/90 border border-zinc-800 rounded-3xl overflow-hidden shadow-xl">
+          {/* Mobile Swipe Cue */}
+          <div className="md:hidden bg-zinc-950/80 border-b border-zinc-800/80 px-4 py-2 flex items-center justify-between text-[11px] text-zinc-400">
+            <span className="flex items-center gap-1.5">
+              <span className="inline-block w-2 h-2 rounded-full bg-orange-500 animate-pulse" />
+              <span>Geser tabel ke samping untuk melihat 11 kolom transaksi</span>
+            </span>
+            <span className="text-zinc-500 font-mono text-[10px]">↔ Scroll</span>
+          </div>
+
           <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs text-zinc-300">
+            <table className="w-full text-left text-xs text-zinc-300 min-w-[960px]">
               <thead className="bg-zinc-950/80 text-zinc-400 font-bold uppercase text-[10px] tracking-wider border-b border-zinc-800">
                 <tr>
                   <th className="py-3 px-3 w-10 text-center">No</th>

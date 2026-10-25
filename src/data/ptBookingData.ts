@@ -1,4 +1,20 @@
-import { PTBooking, PTBookingHistory, TrainerChangeRequest, PTBackofficeNotification, Schedule, PTPurchaseRecord, Member } from '../types';
+import {
+  PTBooking,
+  PTBookingHistory,
+  TrainerChangeRequest,
+  PTBackofficeNotification,
+  Schedule,
+  PTPurchaseRecord,
+  Member,
+  WorkSchedule,
+  StaffAttendance,
+  LeaveRequest,
+  TrainerWorkingRule,
+  TrainerDutyStatus,
+  User,
+  StudioClass
+} from '../types';
+export type { TrainerWorkingRule };
 import { APP_TODAY } from '../utils/formatters';
 
 export const DEFAULT_PT_TIME_SLOTS = [
@@ -240,17 +256,371 @@ export const INITIAL_PT_NOTIFICATIONS: PTBackofficeNotification[] = [
 ];
 
 /**
+ * Aturan Default Jam & Jadwal Kerja Trainer (Roster Melatih Resmi)
+ */
+export const DEFAULT_TRAINER_WORKING_RULES: TrainerWorkingRule[] = [
+  {
+    trainerId: 'S04',
+    trainerName: 'Reza Pratama',
+    isTeachingActive: true,
+    teachingDays: [1, 2, 3, 4, 5, 6], // Senin s/d Sabtu, Minggu Off
+    defaultShift: 'Malam',
+    startTime: '14:00',
+    endTime: '22:00',
+    maxSessionsPerDay: 8,
+    breakStartTime: '18:00',
+    breakEndTime: '18:30',
+    notes: 'Pelatih PT Spesialis Hypertrophy & Fat Loss'
+  },
+  {
+    trainerId: 'S05',
+    trainerName: 'David Chen',
+    isTeachingActive: true,
+    teachingDays: [1, 2, 3, 4, 5], // Senin s/d Jumat, Sabtu & Minggu Off
+    defaultShift: 'Pagi',
+    startTime: '06:00',
+    endTime: '14:00',
+    maxSessionsPerDay: 8,
+    breakStartTime: '11:00',
+    breakEndTime: '12:00',
+    notes: 'Pelatih PT Senior Spesialis Biomechanics'
+  },
+  {
+    trainerId: 'S06',
+    trainerName: 'Sarah Wijaya',
+    isTeachingActive: true,
+    teachingDays: [2, 3, 4, 5, 6, 0], // Selasa s/d Minggu, Senin Off
+    defaultShift: 'Siang',
+    startTime: '10:00',
+    endTime: '18:00',
+    maxSessionsPerDay: 7,
+    breakStartTime: '12:30',
+    breakEndTime: '13:30',
+    notes: 'Pelatih PT Rehab & Posture Correction'
+  },
+  {
+    trainerId: 'S07',
+    trainerName: 'Andi Saputra',
+    isTeachingActive: true,
+    teachingDays: [1, 2, 3, 4, 5, 6], // Senin s/d Sabtu, Minggu Off
+    defaultShift: 'Pagi',
+    startTime: '06:00',
+    endTime: '14:00',
+    maxSessionsPerDay: 8,
+    breakStartTime: '10:00',
+    breakEndTime: '11:00',
+    notes: 'Pelatih PT Master Powerlifting'
+  },
+  {
+    trainerId: 'S03',
+    trainerName: 'Citra Lestari',
+    isTeachingActive: true,
+    teachingDays: [1, 2, 3, 4, 5], // Senin s/d Jumat, Sabtu & Minggu Off
+    defaultShift: 'Pagi',
+    startTime: '06:00',
+    endTime: '14:00',
+    maxSessionsPerDay: 6,
+    breakStartTime: '11:00',
+    breakEndTime: '12:00',
+    notes: 'Leader PT / Head Coach Functional'
+  }
+];
+
+/**
+ * Cek status kehadiran, shift kerja, dan kelayakan melatih trainer pada tanggal tertentu
+ */
+export function getTrainerDutyStatusOnDate(params: {
+  trainerId: string;
+  trainerName?: string;
+  date: string; // YYYY-MM-DD
+  workSchedules?: WorkSchedule[];
+  staffAttendances?: StaffAttendance[];
+  leaveRequests?: LeaveRequest[];
+  trainerUser?: User;
+  rules?: TrainerWorkingRule[];
+}): TrainerDutyStatus {
+  const {
+    trainerId,
+    trainerName,
+    date,
+    workSchedules = [],
+    staffAttendances = [],
+    leaveRequests = [],
+    trainerUser,
+    rules = DEFAULT_TRAINER_WORKING_RULES
+  } = params;
+
+  // 1. Cek aturan khusus trainer
+  const matchedRule = rules.find(
+    (r) =>
+      r.trainerId === trainerId ||
+      (trainerName && r.trainerName.toLowerCase().trim() === trainerName.toLowerCase().trim())
+  );
+
+  // A. Cek Status Nonaktif / Tidak Mengajar
+  if (matchedRule && matchedRule.isTeachingActive === false) {
+    return {
+      isAvailableForDate: false,
+      isDayOff: false,
+      isAbsent: false,
+      isLeave: false,
+      isNotTeaching: true,
+      statusLabel: 'Tidak Mengajar (Nonaktif)',
+      reason: 'Trainer sedang dinonaktifkan sementara dari jadwal melatih oleh manajemen.',
+      badgeColor: 'rose'
+    };
+  }
+
+  if (trainerUser && (trainerUser.status === 'Nonaktif' || (trainerUser as any).status === 'Cuti')) {
+    return {
+      isAvailableForDate: false,
+      isDayOff: false,
+      isAbsent: false,
+      isLeave: true,
+      isNotTeaching: true,
+      statusLabel: `Trainer ${trainerUser.status}`,
+      reason: `Trainer berstatus ${trainerUser.status} pada data kepegawaian.`,
+      badgeColor: 'rose'
+    };
+  }
+
+  // B. Cek Pengajuan Cuti / Izin Resmi (Leave Requests)
+  const approvedLeave = leaveRequests.find((l) => {
+    const isTrainer =
+      l.staffId === trainerId ||
+      (trainerName && l.staffName.toLowerCase().trim() === trainerName.toLowerCase().trim());
+    if (!isTrainer) return false;
+    const isApproved = l.status === 'Approved' || (l.status as any) === 'Disetujui';
+    if (!isApproved) return false;
+    return date >= l.start && date <= l.end;
+  });
+
+  if (approvedLeave) {
+    const isOffType =
+      approvedLeave.type.toLowerCase().includes('off') || approvedLeave.type.toLowerCase().includes('libur');
+    return {
+      isAvailableForDate: false,
+      isDayOff: isOffType,
+      isAbsent: true,
+      isLeave: true,
+      isNotTeaching: false,
+      statusLabel: isOffType ? 'Day Off (Libur Rutin)' : `Sedang Cuti (${approvedLeave.type})`,
+      reason: `Trainer tidak dapat mengambil jadwal karena sedang ${approvedLeave.type} (${approvedLeave.reason || 'Izin resmi disetujui'}).`,
+      badgeColor: isOffType ? 'rose' : 'amber'
+    };
+  }
+
+  // C. Cek Presensi Harian (Staff Attendance Log pada tanggal ini)
+  const attendanceLog = staffAttendances.find((att) => {
+    const isTrainer =
+      (att.staffId && att.staffId === trainerId) ||
+      (trainerName && att.staffName.toLowerCase().trim() === trainerName.toLowerCase().trim());
+    return isTrainer && att.date === date;
+  });
+
+  if (attendanceLog) {
+    const absentStatuses = ['Izin', 'Sakit', 'Cuti', 'Alpa'];
+    if (attendanceLog.status && absentStatuses.includes(attendanceLog.status)) {
+      return {
+        isAvailableForDate: false,
+        isDayOff: false,
+        isAbsent: true,
+        isLeave: attendanceLog.status === 'Cuti',
+        isNotTeaching: false,
+        statusLabel: `Tidak Hadir (${attendanceLog.status})`,
+        reason: `Trainer berhalangan hadir pada presensi hari ini (Status: ${attendanceLog.status}${
+          attendanceLog.notes ? ' - ' + attendanceLog.notes : ''
+        }).`,
+        badgeColor: 'rose'
+      };
+    }
+  }
+
+  // D. Cek Jadwal Kerja Shift Terjadwal (Work Schedules)
+  const workSchedule = workSchedules.find((ws) => {
+    const isTrainer =
+      ws.staffId === trainerId ||
+      (trainerName && ws.staffName.toLowerCase().trim() === trainerName.toLowerCase().trim());
+    return isTrainer && ws.date === date;
+  });
+
+  if (workSchedule) {
+    if (workSchedule.shift === 'Off' || workSchedule.status === 'Off') {
+      return {
+        isAvailableForDate: false,
+        isDayOff: true,
+        isAbsent: false,
+        isLeave: false,
+        isNotTeaching: false,
+        shiftName: 'Off',
+        statusLabel: 'Sedang Libur (Day Off)',
+        reason: 'Trainer memiliki jadwal libur rutin (Day Off) pada tanggal ini.',
+        badgeColor: 'rose'
+      };
+    }
+
+    const startTime =
+      workSchedule.startTime && workSchedule.startTime !== '-'
+        ? workSchedule.startTime
+        : matchedRule?.startTime || '08:00';
+    const endTime =
+      workSchedule.endTime && workSchedule.endTime !== '-'
+        ? workSchedule.endTime
+        : matchedRule?.endTime || '17:00';
+
+    return {
+      isAvailableForDate: true,
+      isDayOff: false,
+      isAbsent: false,
+      isLeave: false,
+      isNotTeaching: false,
+      shiftName: workSchedule.shift,
+      dutyStartTime: startTime,
+      dutyEndTime: endTime,
+      statusLabel: `Bertugas (Shift ${workSchedule.shift} ${startTime} - ${endTime})`,
+      reason: undefined,
+      badgeColor: 'emerald'
+    };
+  }
+
+  // E. Fallback ke Aturan Hari Mengajar Mingguan (Weekly Roster Rule)
+  try {
+    const dayOfWeek = new Date(date + 'T00:00:00').getDay(); // 0: Sun, 1: Mon, ..., 6: Sat
+    const teachingDays = matchedRule ? matchedRule.teachingDays : [1, 2, 3, 4, 5, 6];
+
+    if (!teachingDays.includes(dayOfWeek)) {
+      const dayNames = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
+      return {
+        isAvailableForDate: false,
+        isDayOff: true,
+        isAbsent: false,
+        isLeave: false,
+        isNotTeaching: false,
+        shiftName: 'Off',
+        statusLabel: `Libur Mingguan (${dayNames[dayOfWeek]})`,
+        reason: `Hari ${dayNames[dayOfWeek]} adalah jadwal libur rutin mingguan pelatih.`,
+        badgeColor: 'rose'
+      };
+    }
+  } catch {}
+
+  const defaultShift = matchedRule?.defaultShift || (trainerUser?.shift as any) || 'Siang';
+  const defStartTime =
+    matchedRule?.startTime ||
+    (defaultShift === 'Pagi' ? '06:00' : defaultShift === 'Malam' ? '14:00' : '10:00');
+  const defEndTime =
+    matchedRule?.endTime ||
+    (defaultShift === 'Pagi' ? '14:00' : defaultShift === 'Malam' ? '22:00' : '18:00');
+
+  return {
+    isAvailableForDate: true,
+    isDayOff: false,
+    isAbsent: false,
+    isLeave: false,
+    isNotTeaching: false,
+    shiftName: defaultShift,
+    dutyStartTime: defStartTime,
+    dutyEndTime: defEndTime,
+    statusLabel: `Bertugas (Shift ${defaultShift} ${defStartTime} - ${defEndTime})`,
+    reason: undefined,
+    badgeColor: 'emerald'
+  };
+}
+
+/**
+ * Helper untuk memeriksa apakah waktu kelas studio cocok atau overlap dengan waktu slot
+ */
+export function isTimeMatchingStudioClass(classTime: string, targetTime: string): boolean {
+  if (!classTime || !targetTime) return false;
+  const cleanClass = classTime.trim();
+  const cleanTarget = targetTime.trim();
+  if (cleanClass === cleanTarget) return true;
+  if (cleanClass.includes('-')) {
+    const parts = cleanClass.split('-').map((s) => s.trim());
+    const start = parts[0];
+    const end = parts[1];
+    if (start === cleanTarget) return true;
+    if (cleanTarget >= start && cleanTarget < end) return true;
+  }
+  if (cleanClass.startsWith(cleanTarget)) return true;
+  return false;
+}
+
+/**
  * Cek ketersediaan slot trainer pada tanggal tertentu
+ * Memperhitungkan aturan jadwal kerja shift, libur (day off), presensi tidak hadir, cuti, sesi PT, dan jadwal kelas studio.
  */
 export function getTrainerSlotAvailability(
   trainerId: string,
   date: string,
   bookings: PTBooking[],
   schedules: Schedule[],
-  currentBookingId?: string
+  currentBookingId?: string,
+  options?: {
+    trainerName?: string;
+    workSchedules?: WorkSchedule[];
+    staffAttendances?: StaffAttendance[];
+    leaveRequests?: LeaveRequest[];
+    trainerUser?: User;
+    rules?: TrainerWorkingRule[];
+    studioClasses?: StudioClass[];
+  }
 ) {
+  const dutyStatus = getTrainerDutyStatusOnDate({
+    trainerId,
+    trainerName: options?.trainerName,
+    date,
+    workSchedules: options?.workSchedules,
+    staffAttendances: options?.staffAttendances,
+    leaveRequests: options?.leaveRequests,
+    trainerUser: options?.trainerUser,
+    rules: options?.rules
+  });
+
   return DEFAULT_PT_TIME_SLOTS.map((slot) => {
-    // 1. Cek apakah ada booking aktif pada jam ini untuk trainer tersebut
+    // 1. Cek apakah trainer libur / tidak hadir / tidak mengajar pada hari tersebut
+    if (!dutyStatus.isAvailableForDate) {
+      const reason = dutyStatus.isDayOff
+        ? 'Trainer Sedang Libur (Day Off)'
+        : dutyStatus.isLeave || dutyStatus.isAbsent
+        ? dutyStatus.reason || 'Trainer Berhalangan Hadir'
+        : dutyStatus.reason || 'Trainer Sedang Tidak Mengajar';
+
+      return {
+        startTime: slot.startTime,
+        endTime: slot.endTime,
+        label: slot.label,
+        isAvailable: false,
+        reasonDisabled: reason,
+        occupant: undefined,
+        clashId: undefined,
+        statusType: dutyStatus.isDayOff
+          ? ('DAY_OFF' as const)
+          : dutyStatus.isAbsent
+          ? ('ABSENT' as const)
+          : ('NOT_TEACHING' as const),
+        dutyStatus
+      };
+    }
+
+    // 2. Cek apakah jam slot berada di luar jam kerja mengajar trainer
+    if (dutyStatus.dutyStartTime && dutyStatus.dutyEndTime) {
+      if (slot.startTime < dutyStatus.dutyStartTime || slot.endTime > dutyStatus.dutyEndTime) {
+        return {
+          startTime: slot.startTime,
+          endTime: slot.endTime,
+          label: slot.label,
+          isAvailable: false,
+          reasonDisabled: `Di Luar Jam Kerja Trainer (${dutyStatus.dutyStartTime} - ${dutyStatus.dutyEndTime})`,
+          occupant: undefined,
+          clashId: undefined,
+          statusType: 'OUTSIDE_HOURS' as const,
+          dutyStatus
+        };
+      }
+    }
+
+    // 3. Cek apakah ada booking aktif pada jam ini untuk trainer tersebut
     const clashingBooking = bookings.find((b) => {
       if (b.id === currentBookingId) return false;
       if (b.status === 'CANCELLED' || b.status === 'EXPIRED') return false;
@@ -259,15 +629,42 @@ export function getTrainerSlotAvailability(
       return b.startTime === slot.startTime;
     });
 
-    // 2. Cek apakah ada schedule ERP pada jam ini untuk trainer tersebut
+    // 4. Cek apakah ada schedule ERP pada jam ini untuk trainer tersebut
     const clashingSchedule = schedules.find((s) => {
       if (s.id === currentBookingId || s.bookingId === currentBookingId) return false;
       if (s.status === 'Batal' || s.status === 'Hangus') return false;
-      const isSameTrainer = (s.trainerId && s.trainerId === trainerId) || (!s.trainerId && s.trainer);
+      const isSameTrainer =
+        (s.trainerId && s.trainerId === trainerId) || (!s.trainerId && s.trainer);
       if (!isSameTrainer) return false;
       if (s.date !== date) return false;
       return s.time === slot.startTime;
     });
+
+    // 5. Cek apakah ada Studio Class yang diajar trainer pada jam ini
+    const clashingStudioClass = (options?.studioClasses || []).find((c) => {
+      if (c.date !== date) return false;
+      const isInstructor =
+        (c.trainerId && c.trainerId === trainerId) ||
+        (options?.trainerName &&
+          (c.trainerName || c.trainer || '').toLowerCase().trim() ===
+            options.trainerName.toLowerCase().trim());
+      if (!isInstructor) return false;
+      return isTimeMatchingStudioClass(c.time, slot.startTime);
+    });
+
+    if (clashingStudioClass) {
+      return {
+        startTime: slot.startTime,
+        endTime: slot.endTime,
+        label: slot.label,
+        isAvailable: false,
+        reasonDisabled: `Mengajar Kelas Studio: ${clashingStudioClass.name} (${clashingStudioClass.room || 'Studio'})`,
+        occupant: `Kelas: ${clashingStudioClass.name}`,
+        clashId: clashingStudioClass.id,
+        statusType: 'STUDIO_CLASS' as any,
+        dutyStatus
+      };
+    }
 
     const isOccupied = Boolean(clashingBooking || clashingSchedule);
     const occupant = clashingBooking?.memberName || clashingSchedule?.memberName;
@@ -277,29 +674,89 @@ export function getTrainerSlotAvailability(
       endTime: slot.endTime,
       label: slot.label,
       isAvailable: !isOccupied,
+      reasonDisabled: isOccupied ? `Terisi oleh ${occupant}` : undefined,
       occupant: isOccupied ? occupant : undefined,
-      clashId: clashingBooking?.id || clashingSchedule?.id
+      clashId: clashingBooking?.id || clashingSchedule?.id,
+      statusType: isOccupied ? ('OCCUPIED' as const) : ('AVAILABLE' as const),
+      dutyStatus
     };
   });
 }
 
 /**
- * Validasi Double Booking:
+ * Validasi Double Booking & Kelayakan Jam Kerja:
+ * - Trainer tidak boleh sedang libur (Day Off)
+ * - Trainer tidak boleh berhalangan hadir / cuti / tidak mengajar
+ * - Waktu booking harus berada di dalam jam kerja / shift mengajar trainer
  * - Trainer tidak boleh punya 2 member di jam sama
+ * - Trainer tidak boleh sedang mengajar kelas studio di jam sama
  * - Member tidak boleh punya 2 sesi di jam sama
  */
 export function validatePTDoubleBooking(params: {
   memberId: string;
   trainerId: string;
+  trainerName?: string;
   date: string;
   startTime: string;
   currentBookingId?: string;
   bookings: PTBooking[];
   schedules: Schedule[];
+  workSchedules?: WorkSchedule[];
+  staffAttendances?: StaffAttendance[];
+  leaveRequests?: LeaveRequest[];
+  trainerUser?: User;
+  rules?: TrainerWorkingRule[];
+  studioClasses?: StudioClass[];
 }): { isValid: boolean; error?: string } {
-  const { memberId, trainerId, date, startTime, currentBookingId, bookings, schedules } = params;
+  const {
+    memberId,
+    trainerId,
+    trainerName,
+    date,
+    startTime,
+    currentBookingId,
+    bookings,
+    schedules,
+    workSchedules,
+    staffAttendances,
+    leaveRequests,
+    trainerUser,
+    rules,
+    studioClasses
+  } = params;
 
-  // 1. Cek apakah trainer sudah ada janji di jam tersebut
+  // 1. Cek status kehadiran dan jam kerja trainer
+  const duty = getTrainerDutyStatusOnDate({
+    trainerId,
+    trainerName,
+    date,
+    workSchedules,
+    staffAttendances,
+    leaveRequests,
+    trainerUser,
+    rules
+  });
+
+  if (!duty.isAvailableForDate) {
+    return {
+      isValid: false,
+      error:
+        duty.reason ||
+        'Trainer tidak dapat mengambil jadwal melatih pada tanggal ini (Sedang Libur / Berhalangan Hadir / Tidak Mengajar).'
+    };
+  }
+
+  // 2. Cek apakah slot jam berada di luar jam kerja trainer
+  if (duty.dutyStartTime && duty.dutyEndTime) {
+    if (startTime < duty.dutyStartTime || startTime >= duty.dutyEndTime) {
+      return {
+        isValid: false,
+        error: `Jam ${startTime} berada di luar jam kerja mengajar trainer (${duty.dutyStartTime} - ${duty.dutyEndTime}). Silakan pilih slot di dalam jam kerja trainer.`
+      };
+    }
+  }
+
+  // 3. Cek apakah trainer sudah ada janji di jam tersebut
   const trainerClashBooking = bookings.find((b) => {
     if (b.id === currentBookingId) return false;
     if (b.status === 'CANCELLED' || b.status === 'EXPIRED') return false;
@@ -309,7 +766,8 @@ export function validatePTDoubleBooking(params: {
   const trainerClashSchedule = schedules.find((s) => {
     if (s.id === currentBookingId || s.bookingId === currentBookingId) return false;
     if (s.status === 'Batal' || s.status === 'Hangus') return false;
-    const isTrainerMatch = (s.trainerId && s.trainerId === trainerId) || (!s.trainerId && s.trainer);
+    const isTrainerMatch =
+      (s.trainerId && s.trainerId === trainerId) || (!s.trainerId && s.trainer);
     return isTrainerMatch && s.date === date && s.time === startTime;
   });
 
@@ -320,7 +778,27 @@ export function validatePTDoubleBooking(params: {
     };
   }
 
-  // 2. Cek apakah member sudah ada sesi lain di jam tersebut
+  // 3.b Cek apakah trainer sedang mengajar Kelas Studio pada jam tersebut
+  if (studioClasses && studioClasses.length > 0) {
+    const clashClass = studioClasses.find((c) => {
+      if (c.date !== date) return false;
+      const isTrainerMatch =
+        (c.trainerId && c.trainerId === trainerId) ||
+        (trainerName &&
+          (c.trainerName || c.trainer || '').toLowerCase().trim() === trainerName.toLowerCase().trim());
+      if (!isTrainerMatch) return false;
+      return isTimeMatchingStudioClass(c.time, startTime);
+    });
+
+    if (clashClass) {
+      return {
+        isValid: false,
+        error: `Pelatih ${trainerName || 'ini'} sudah terjadwal mengajar kelas studio "${clashClass.name}" pada tanggal ${date} (${clashClass.time} di ${clashClass.room || 'Studio'}). Silakan pilih slot jam lain.`
+      };
+    }
+  }
+
+  // 4. Cek apakah member sudah ada sesi lain di jam tersebut
   const memberClashBooking = bookings.find((b) => {
     if (b.id === currentBookingId) return false;
     if (b.status === 'CANCELLED' || b.status === 'EXPIRED') return false;
@@ -341,6 +819,143 @@ export function validatePTDoubleBooking(params: {
   }
 
   return { isValid: true };
+}
+
+/**
+ * Menghitung Total Jam Mengajar & Rekap Sesi Terpadu Pelatih:
+ * - Jam Sesi PT Selesai (1 sesi = 1 jam)
+ * - Jam Kelas Studio yang Diampu (1 kelas = 1 jam)
+ * - Sesi Berjalan / Terjadwal Hari Ini
+ * - Sinkronisasi Shift & Kuota Maksimal Harian
+ */
+export function calculateTrainerTeachingHours(params: {
+  trainerId: string;
+  trainerName?: string;
+  date?: string; // default APP_TODAY
+  schedules?: Schedule[];
+  ptBookings?: PTBooking[];
+  studioClasses?: StudioClass[];
+  workSchedules?: WorkSchedule[];
+  staffAttendances?: StaffAttendance[];
+  leaveRequests?: LeaveRequest[];
+  rules?: TrainerWorkingRule[];
+  trainerUser?: User;
+}) {
+  const {
+    trainerId,
+    trainerName = '',
+    date = APP_TODAY,
+    schedules = [],
+    ptBookings = [],
+    studioClasses = [],
+    workSchedules = [],
+    staffAttendances = [],
+    leaveRequests = [],
+    rules = DEFAULT_TRAINER_WORKING_RULES,
+    trainerUser
+  } = params;
+
+  const currentMonth = date.slice(0, 7); // YYYY-MM
+  const cleanName = trainerName.toLowerCase().trim();
+
+  const isTrainerMatch = (tId?: string, tName?: string) => {
+    if (tId && tId === trainerId) return true;
+    if (cleanName && tName && tName.toLowerCase().trim() === cleanName) return true;
+    return false;
+  };
+
+  // 1. Sesi PT Selesai Bulan Ini & Hari Ini
+  const completedScheduleIds = new Set<string>();
+  let ptCompletedMonthCount = 0;
+  let ptCompletedTodayCount = 0;
+  let ptUpcomingTodayCount = 0;
+
+  schedules.forEach((s) => {
+    if (!isTrainerMatch(s.trainerId, s.trainer)) return;
+    if (s.status === 'Selesai') {
+      completedScheduleIds.add(s.id);
+      if (s.bookingId) completedScheduleIds.add(s.bookingId);
+      if (s.date.startsWith(currentMonth)) ptCompletedMonthCount++;
+      if (s.date === date) ptCompletedTodayCount++;
+    } else if (s.date === date && (s.status === 'Menunggu' || s.status === 'Reschedule')) {
+      ptUpcomingTodayCount++;
+    }
+  });
+
+  ptBookings.forEach((b) => {
+    if (!isTrainerMatch(b.trainerId, b.trainerName)) return;
+    if (completedScheduleIds.has(b.id) || (b.scheduleId && completedScheduleIds.has(b.scheduleId))) {
+      return;
+    }
+    if (b.status === 'COMPLETED') {
+      if (b.bookingDate.startsWith(currentMonth)) ptCompletedMonthCount++;
+      if (b.bookingDate === date) ptCompletedTodayCount++;
+    } else if (
+      b.bookingDate === date &&
+      (b.status === 'CONFIRMED' || b.status === 'RESCHEDULED' || b.status === 'PENDING')
+    ) {
+      ptUpcomingTodayCount++;
+    }
+  });
+
+  // 2. Kelas Studio yang Diampu Bulan Ini & Hari Ini
+  let studioMonthCount = 0;
+  let studioTodayCount = 0;
+  let studioUpcomingTodayCount = 0;
+
+  studioClasses.forEach((c) => {
+    if (!isTrainerMatch(c.trainerId, c.trainerName || c.trainer)) return;
+    const isPast = c.date < date || (c.date === date && (c.checkedInMembers?.length || 0) > 0);
+    if (c.date.startsWith(currentMonth)) {
+      studioMonthCount++;
+    }
+    if (c.date === date) {
+      if (isPast) {
+        studioTodayCount++;
+      } else {
+        studioUpcomingTodayCount++;
+      }
+    }
+  });
+
+  // Total jam mengajar (1 sesi PT = 1 jam, 1 kelas Studio = 1 jam)
+  const totalCompletedHoursMonth = ptCompletedMonthCount + studioMonthCount;
+  const totalCompletedHoursToday = ptCompletedTodayCount + studioTodayCount;
+  const totalActiveSessionsToday = ptUpcomingTodayCount + studioUpcomingTodayCount;
+
+  // Duty status hari ini
+  const dutyToday = getTrainerDutyStatusOnDate({
+    trainerId,
+    trainerName,
+    date,
+    workSchedules,
+    staffAttendances,
+    leaveRequests,
+    trainerUser,
+    rules
+  });
+
+  const matchedRule = rules.find((r) => isTrainerMatch(r.trainerId, r.trainerName));
+  const maxSessionsPerDay = matchedRule?.maxSessionsPerDay || 8;
+  const totalTodayLoad = totalCompletedHoursToday + totalActiveSessionsToday;
+  const remainingSlotsToday = Math.max(0, maxSessionsPerDay - totalTodayLoad);
+
+  return {
+    ptCompletedMonthCount,
+    studioMonthCount,
+    totalCompletedHoursMonth,
+    ptCompletedTodayCount,
+    studioTodayCount,
+    totalCompletedHoursToday,
+    ptUpcomingTodayCount,
+    studioUpcomingTodayCount,
+    totalActiveSessionsToday,
+    totalTodayLoad,
+    maxSessionsPerDay,
+    remainingSlotsToday,
+    dutyToday,
+    rule: matchedRule
+  };
 }
 
 /**

@@ -59,7 +59,7 @@ export const StaffDirectoryTab: React.FC<StaffDirectoryTabProps> = ({
   const [formAccId, setFormAccId] = useState('');
   const [formPassword, setFormPassword] = useState('123');
   const [formName, setFormName] = useState('');
-  const [formRole, setFormRole] = useState<'admin' | 'kasir' | 'pt' | 'leader_pt'>('pt');
+  const [formRole, setFormRole] = useState<'admin' | 'kasir' | 'pt' | 'leader_pt' | 'keuangan'>('pt');
   const [formRoleName, setFormRoleName] = useState('Pelatih PT');
   const [formDivision, setFormDivision] = useState('Pelatihan');
   const [formShift, setFormShift] = useState<ShiftType>('Pagi');
@@ -157,13 +157,18 @@ export const StaffDirectoryTab: React.FC<StaffDirectoryTabProps> = ({
     setIsModalOpen(true);
   };
 
-  const handleRoleSelect = (role: 'admin' | 'kasir' | 'pt' | 'leader_pt') => {
+  const handleRoleSelect = (role: 'admin' | 'kasir' | 'pt' | 'leader_pt' | 'keuangan') => {
     setFormRole(role);
     switch (role) {
       case 'admin':
         setFormRoleName('System Admin / Manager');
         setFormDivision('Manajemen');
         setFormBaseSalary(5000000);
+        break;
+      case 'keuangan':
+        setFormRoleName('Staf Keuangan & Akuntansi (HQ)');
+        setFormDivision('Keuangan');
+        setFormBaseSalary(4800000);
         break;
       case 'kasir':
         setFormRoleName('Kasir & Front Desk');
@@ -636,6 +641,7 @@ export const StaffDirectoryTab: React.FC<StaffDirectoryTabProps> = ({
                     className="w-full bg-zinc-950 border border-zinc-800 text-white rounded-xl p-2.5 text-xs font-bold"
                   >
                     <option value="kasir">Kasir & Front Desk</option>
+                    <option value="keuangan">Keuangan & Akuntansi (HQ)</option>
                     <option value="pt">Pelatih PT</option>
                     <option value="leader_pt">Leader PT</option>
                     <option value="admin">System Admin / Manager</option>
@@ -652,6 +658,7 @@ export const StaffDirectoryTab: React.FC<StaffDirectoryTabProps> = ({
                     className="w-full bg-zinc-950 border border-zinc-800 text-white rounded-xl p-2.5 text-xs font-bold"
                   >
                     <option value="Kasir & Front Desk">Devisi Kasir & Front Desk (Layanan & POS)</option>
+                    <option value="Keuangan">Devisi Keuangan & Akuntansi</option>
                     <option value="Pelatihan">Devisi Pelatihan (PT & Coach)</option>
                     <option value="Manajemen">Devisi Manajemen & Operasional</option>
                     <option value="Teknisi">Devisi Teknisi</option>

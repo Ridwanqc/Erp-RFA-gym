@@ -414,8 +414,12 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
             </div>
           ) : viewLayout === 'table' ? (
             <div className="bg-zinc-900/60 border border-zinc-800 rounded-2xl overflow-hidden shadow-xl">
-              <div className="overflow-x-auto">
-                <table className="w-full text-left text-xs text-zinc-300">
+              <div className="md:hidden flex items-center justify-between px-3.5 py-1.5 bg-zinc-950/70 border-b border-zinc-800 text-[10px] text-zinc-400 select-none">
+                <span className="text-orange-400 font-semibold flex items-center gap-1">↔ Geser tabel ke samping untuk melihat detail kondisi & aksi</span>
+                <span className="font-mono text-zinc-500">{filteredAssets.length} alat</span>
+              </div>
+              <div className="overflow-x-auto scrollbar-thin scrollbar-thumb-zinc-800">
+                <table className="w-full text-left text-xs text-zinc-300 min-w-[850px]">
                   <thead className="bg-zinc-950/80 text-zinc-400 uppercase text-[10px] font-bold border-b border-zinc-800">
                     <tr>
                       <th className="p-3">Kode Asset</th>

@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef } from 'react';
 import {
   Boxes,
   Plus,
@@ -29,13 +29,17 @@ import {
   TrendingDown,
   Info,
   Building2,
-  ArrowRightLeft
+  ArrowRightLeft,
+  Camera,
+  Upload,
+  RefreshCw
 } from 'lucide-react';
 import { Product, Transaction } from '../types';
 import { formatRp, formatDateIndo, APP_TODAY } from '../utils/formatters';
 import { useSettings } from '../context/SettingsContext';
 import { StockTransferModal } from './StockTransferModal';
 import { TransactionActions } from './transaction/TransactionActions';
+import { resizeImageFile, PRESET_PRODUCT_IMAGES } from '../utils/imageUtils';
 
 interface ProductManagementViewProps {
   products: Product[];
@@ -46,18 +50,6 @@ interface ProductManagementViewProps {
   onNavigateTab: (tab: any) => void;
   onReprintReceipt?: (trx: Transaction) => void;
 }
-
-// Preset photo options for quick product creation
-const PRESET_PRODUCT_IMAGES = [
-  { label: 'Air Mineral 600ml', url: 'https://images.unsplash.com/photo-1548839140-29a749e1bc4e?q=80&w=300&auto=format&fit=crop' },
-  { label: 'Minuman Isotonik', url: 'https://images.unsplash.com/photo-1622483767028-3f66f32aef97?q=80&w=300&auto=format&fit=crop' },
-  { label: 'Whey Protein Sachet', url: 'https://images.unsplash.com/photo-1579722821273-0f6c7d44362f?q=80&w=300&auto=format&fit=crop' },
-  { label: 'BCAA Energy Drink', url: 'https://images.unsplash.com/photo-1551024709-8f23befc6f87?q=80&w=300&auto=format&fit=crop' },
-  { label: 'Protein Bar Cokelat', url: 'https://images.unsplash.com/photo-1622484212850-cab596d66e74?q=80&w=300&auto=format&fit=crop' },
-  { label: 'Oatmeal Energy Cookie', url: 'https://images.unsplash.com/photo-1558961363-fa8fdf82db35?q=80&w=300&auto=format&fit=crop' },
-  { label: 'Shaker Bottle Gym', url: 'https://images.unsplash.com/photo-1517838277536-f5f99be501cd?q=80&w=300&auto=format&fit=crop' },
-  { label: 'Gym Hand Grip / Gloves', url: 'https://images.unsplash.com/photo-1534438327276-14e5300c3a48?q=80&w=300&auto=format&fit=crop' }
-];
 
 interface ParsedSoldItem {
   productId?: string;
@@ -106,6 +98,24 @@ export const ProductManagementView: React.FC<ProductManagementViewProps> = ({
     stock: '',
     img: ''
   });
+
+  const [isProcessingImg, setIsProcessingImg] = useState(false);
+  const [photoError, setPhotoError] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const cameraInputRef = useRef<HTMLInputElement>(null);
+
+  const handlePhotoUpload = async (file: File) => {
+    try {
+      setIsProcessingImg(true);
+      setPhotoError(null);
+      const optimizedDataUrl = await resizeImageFile(file, 500, 0.82);
+      setFormData((prev) => ({ ...prev, img: optimizedDataUrl }));
+    } catch (err: any) {
+      setPhotoError(err?.message || 'Gagal memproses file foto');
+    } finally {
+      setIsProcessingImg(false);
+    }
+  };
 
   // Modal: Restock
   const [restockModal, setRestockModal] = useState<{
@@ -1057,8 +1067,12 @@ export const ProductManagementView: React.FC<ProductManagementViewProps> = ({
             </div>
           ) : viewMode === 'table' ? (
             <div className="bg-zinc-900/90 border border-zinc-800 rounded-3xl overflow-hidden shadow-xl">
-              <div className="overflow-x-auto">
-                <table className="w-full text-left border-collapse">
+              <div className="md:hidden flex items-center justify-between px-3.5 py-1.5 bg-zinc-950/70 border-b border-zinc-800/80 text-[10px] text-zinc-400 select-none">
+                <span className="text-orange-400 font-semibold flex items-center gap-1">↔ Geser tabel untuk kolom lengkap</span>
+                <span className="font-mono text-zinc-500">{filteredProducts.length} produk</span>
+              </div>
+              <div className="overflow-x-auto scrollbar-thin scrollbar-thumb-zinc-800">
+                <table className="w-full text-left border-collapse min-w-[850px]">
                   <thead>
                     <tr className="border-b border-zinc-800 bg-zinc-950/60 text-[11px] font-black uppercase text-zinc-400 tracking-wider">
                       <th className="py-3.5 px-4">Produk</th>
@@ -1088,11 +1102,20 @@ export const ProductManagementView: React.FC<ProductManagementViewProps> = ({
                         >
                           <td className="py-3.5 px-4">
                             <div className="flex items-center gap-3">
-                              <img
-                                src={p.img || PRESET_PRODUCT_IMAGES[0].url}
-                                alt={p.name}
-                                className="w-10 h-10 rounded-xl object-cover bg-zinc-950 border border-zinc-800 shrink-0"
-                              />
+                              <div
+                                onClick={() => handleOpenEditModal(p)}
+                                className="relative group/thumb cursor-pointer shrink-0"
+                                title="Klik untuk ubah foto atau data produk"
+                              >
+                                <img
+                                  src={p.img || PRESET_PRODUCT_IMAGES[0].url}
+                                  alt={p.name}
+                                  className="w-10 h-10 rounded-xl object-cover bg-zinc-950 border border-zinc-800 group-hover/thumb:border-orange-500 transition"
+                                />
+                                <div className="absolute inset-0 bg-black/50 rounded-xl opacity-0 group-hover/thumb:opacity-100 flex items-center justify-center transition">
+                                  <Camera className="w-3.5 h-3.5 text-orange-400" />
+                                </div>
+                              </div>
                               <div className="min-w-0">
                                 <div className="flex items-center gap-1.5">
                                   <span className="text-[10px] font-mono text-zinc-500 font-bold">{p.id}</span>
@@ -1231,12 +1254,22 @@ export const ProductManagementView: React.FC<ProductManagementViewProps> = ({
                     )}
 
                     <div>
-                      <div className="w-full h-36 rounded-2xl overflow-hidden bg-zinc-950 border border-zinc-800/80 mb-3 relative">
+                      <div
+                        onClick={() => handleOpenEditModal(p)}
+                        className="w-full h-36 rounded-2xl overflow-hidden bg-zinc-950 border border-zinc-800/80 mb-3 relative cursor-pointer group/cardimg"
+                        title="Klik untuk ubah foto atau data produk"
+                      >
                         <img
                           src={p.img || PRESET_PRODUCT_IMAGES[0].url}
                           alt={p.name}
-                          className="w-full h-full object-cover group-hover:scale-105 transition duration-300"
+                          className="w-full h-full object-cover group-hover/cardimg:scale-105 transition duration-300"
                         />
+                        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover/cardimg:opacity-100 flex items-center justify-center transition">
+                          <div className="bg-black/85 px-2.5 py-1 rounded-xl border border-white/20 text-[11px] font-bold text-white flex items-center gap-1.5 shadow-lg backdrop-blur-xs">
+                            <Camera className="w-3.5 h-3.5 text-orange-400" />
+                            <span>Ubah Foto</span>
+                          </div>
+                        </div>
                         <div className="absolute bottom-2 left-2">
                           <span className="text-[10px] font-bold text-zinc-300 bg-black/70 backdrop-blur-xs px-2 py-0.5 rounded-md border border-white/10">
                             {p.cat}
@@ -2101,45 +2134,117 @@ export const ProductManagementView: React.FC<ProductManagementViewProps> = ({
                 </div>
               </div>
 
-              <div>
-                <label className="block text-xs font-bold text-zinc-300 mb-1">URL Foto Produk</label>
-                <div className="flex gap-2">
-                  <input
-                    type="url"
-                    value={formData.img}
-                    onChange={(e) => setFormData({ ...formData, img: e.target.value })}
-                    placeholder="https://images.unsplash.com/..."
-                    className="flex-1 bg-zinc-950 border border-zinc-700 rounded-xl px-3 py-2 text-xs text-white outline-none focus:border-orange-500"
-                  />
-                  {formData.img && (
-                    <img
-                      src={formData.img}
-                      alt="Preview"
-                      className="w-9 h-9 rounded-xl object-cover bg-zinc-950 border border-zinc-700 shrink-0"
-                    />
+              {/* Input & Upload Foto Produk */}
+              <div className="bg-zinc-950 p-3.5 rounded-2xl border border-zinc-800 space-y-3">
+                <div className="flex items-center justify-between">
+                  <label className="block text-xs font-bold text-zinc-200 flex items-center gap-1.5">
+                    <Camera className="w-4 h-4 text-orange-400" />
+                    <span>Foto Produk</span>
+                  </label>
+                  {isProcessingImg && (
+                    <span className="text-[11px] text-orange-400 flex items-center gap-1 font-bold animate-pulse">
+                      <RefreshCw className="w-3.5 h-3.5 animate-spin" /> Memproses Foto...
+                    </span>
                   )}
                 </div>
 
-                <div className="mt-2">
-                  <span className="text-[10px] font-bold text-zinc-500 block mb-1">
-                    Pilihan Cepat Foto Kebugaran & Suplemen (1-Klik):
+                <div className="flex items-center gap-3">
+                  <div className="w-18 h-18 rounded-2xl bg-zinc-900 border border-zinc-700/80 overflow-hidden shrink-0 relative group shadow-inner">
+                    <img
+                      src={formData.img || PRESET_PRODUCT_IMAGES[0].url}
+                      alt="Pratinjau Foto"
+                      className="w-full h-full object-cover"
+                      onError={(e) => {
+                        (e.target as HTMLImageElement).src = PRESET_PRODUCT_IMAGES[0].url;
+                      }}
+                    />
+                  </div>
+                  <div className="flex-1 space-y-2">
+                    <div className="flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        onClick={() => fileInputRef.current?.click()}
+                        className="px-3 py-1.5 rounded-xl bg-orange-500 hover:bg-orange-600 text-white text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-sm active:scale-95"
+                      >
+                        <Upload className="w-3.5 h-3.5" />
+                        <span>Unggah Foto</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => cameraInputRef.current?.click()}
+                        className="px-3 py-1.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs font-bold transition flex items-center gap-1.5 cursor-pointer border border-zinc-700 active:scale-95"
+                      >
+                        <Camera className="w-3.5 h-3.5 text-orange-400" />
+                        <span>Kamera</span>
+                      </button>
+                    </div>
+                    <p className="text-[10px] text-zinc-400">
+                      Format JPG, PNG, atau WebP dari perangkat / kamera. Otomatis dikompresi &amp; dioptimasi.
+                    </p>
+                    {photoError && (
+                      <p className="text-[10px] text-rose-400 font-bold">{photoError}</p>
+                    )}
+                  </div>
+
+                  {/* Hidden inputs */}
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/*"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) handlePhotoUpload(file);
+                      e.target.value = '';
+                    }}
+                    className="hidden"
+                  />
+                  <input
+                    ref={cameraInputRef}
+                    type="file"
+                    accept="image/*"
+                    capture="environment"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) handlePhotoUpload(file);
+                      e.target.value = '';
+                    }}
+                    className="hidden"
+                  />
+                </div>
+
+                {/* Quick Presets */}
+                <div>
+                  <span className="text-[10px] font-bold text-zinc-400 block mb-1.5">
+                    Atau Pilih Cepat dari Template Gym:
                   </span>
-                  <div className="flex flex-wrap gap-1.5">
+                  <div className="flex flex-wrap gap-1.5 max-h-28 overflow-y-auto p-1 bg-zinc-900/60 rounded-xl border border-zinc-800">
                     {PRESET_PRODUCT_IMAGES.map((preset, idx) => (
                       <button
                         key={idx}
                         type="button"
                         onClick={() => setFormData({ ...formData, img: preset.url })}
-                        className={`text-[10px] px-2 py-1 rounded-lg border transition ${
+                        className={`text-[10px] px-2.5 py-1 rounded-lg border transition flex items-center gap-1.5 cursor-pointer ${
                           formData.img === preset.url
                             ? 'bg-orange-500 text-white border-orange-400 font-bold'
                             : 'bg-zinc-950 text-zinc-400 hover:text-white border-zinc-800'
                         }`}
                       >
-                        {preset.label}
+                        <img src={preset.url} alt={preset.label} className="w-4 h-4 rounded object-cover" />
+                        <span>{preset.label}</span>
                       </button>
                     ))}
                   </div>
+                </div>
+
+                {/* Direct URL Input */}
+                <div>
+                  <input
+                    type="url"
+                    value={formData.img}
+                    onChange={(e) => setFormData({ ...formData, img: e.target.value })}
+                    placeholder="Atau tempel URL gambar langsung (opsional)..."
+                    className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-3 py-1.5 text-[11px] text-zinc-300 outline-none focus:border-orange-500"
+                  />
                 </div>
               </div>
 

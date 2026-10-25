@@ -143,7 +143,7 @@ export const MemberDetailModal: React.FC<MemberDetailModalProps> = ({
                 title="Klik untuk memperbesar foto profil member"
               >
                 <img
-                  src={localPhoto || member.photo}
+                  src={(localPhoto && localPhoto.trim()) || (member.photo && member.photo.trim()) || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=200&auto=format&fit=crop'}
                   alt={member.name}
                   className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300"
                 />
@@ -589,10 +589,10 @@ export const MemberDetailModal: React.FC<MemberDetailModalProps> = ({
                       </p>
                     </div>
 
-                    {member.idPhoto && (
+                    {member.idPhoto && member.idPhoto.trim() && (
                       <div className="flex items-center gap-2 pt-1">
                         <img
-                          src={member.idPhoto}
+                          src={member.idPhoto.trim()}
                           alt="Foto KTP"
                           className="w-16 h-10 object-cover rounded-lg border border-zinc-700 shadow-sm"
                         />
@@ -914,8 +914,8 @@ export const MemberDetailModal: React.FC<MemberDetailModalProps> = ({
               {memberAttendances.length === 0 ? (
                 <p className="text-zinc-500 text-xs text-center py-8">Belum ada riwayat check-in tercatat.</p>
               ) : (
-                <div className="border border-zinc-800 rounded-xl overflow-hidden">
-                  <table className="w-full text-left text-xs">
+                <div className="border border-zinc-800 rounded-xl overflow-hidden overflow-x-auto scrollbar-thin">
+                  <table className="w-full text-left text-xs min-w-[380px]">
                     <thead className="bg-zinc-950 text-zinc-400 border-b border-zinc-800">
                       <tr>
                         <th className="py-2.5 px-3 uppercase text-[10px] font-bold">Tanggal</th>
@@ -950,8 +950,8 @@ export const MemberDetailModal: React.FC<MemberDetailModalProps> = ({
               {memberTransactions.length === 0 ? (
                 <p className="text-zinc-500 text-xs text-center py-8">Belum ada transaksi.</p>
               ) : (
-                <div className="border border-zinc-800 rounded-xl overflow-hidden">
-                  <table className="w-full text-left text-xs">
+                <div className="border border-zinc-800 rounded-xl overflow-hidden overflow-x-auto scrollbar-thin">
+                  <table className="w-full text-left text-xs min-w-[560px]">
                     <thead className="bg-zinc-950 text-zinc-400 border-b border-zinc-800">
                       <tr>
                         <th className="py-2.5 px-3 uppercase text-[10px] font-bold">ID / Tgl</th>

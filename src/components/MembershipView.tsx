@@ -136,6 +136,7 @@ export const MembershipView: React.FC<MembershipViewProps> = ({
   const [editingPkgId, setEditingPkgId] = useState<string | null>(null);
   const [pkgSearch, setPkgSearch] = useState('');
   const [pkgFilterCat, setPkgFilterCat] = useState<'ALL' | 'Membership' | 'PT' | 'Class'>('ALL');
+  const [pkgToDelete, setPkgToDelete] = useState<PackageItem | null>(null);
 
   // Form Fields
   const [newPkgCat, setNewPkgCat] = useState<'Membership' | 'PT' | 'Class'>('Membership');
@@ -906,12 +907,19 @@ export const MembershipView: React.FC<MembershipViewProps> = ({
       showToast('Gagal Menghapus', 'Minimal harus ada 1 paket master dalam sistem.', 'warning');
       return;
     }
-    if (confirm(`Yakin ingin menghapus master paket "${pkg.name}"?`)) {
-      if (onDeletePackage) {
-        onDeletePackage(pkg.id);
-        showToast('Paket Dihapus', `Paket ${pkg.name} berhasil dihapus.`, 'info');
-      }
+    setPkgToDelete(pkg);
+  };
+
+  const handleExecuteDeletePackage = () => {
+    if (!pkgToDelete) return;
+    const targetName = pkgToDelete.name;
+    const targetId = pkgToDelete.id;
+    if (onDeletePackage) {
+      onDeletePackage(targetId);
+      showToast('Paket Dihapus', `Master paket "${targetName}" berhasil dihapus.`, 'success');
     }
+    setSelectedPkgIndex((prev) => Math.max(0, Math.min(prev, packages.length - 2)));
+    setPkgToDelete(null);
   };
 
   return (
@@ -3583,8 +3591,17 @@ export const MembershipView: React.FC<MembershipViewProps> = ({
 
                 {/* Table of Master Packages */}
                 <div className="border border-zinc-800 rounded-2xl overflow-hidden bg-zinc-950/70">
+                  {/* Mobile Swipe Cue */}
+                  <div className="md:hidden bg-zinc-950/90 border-b border-zinc-800/80 px-3.5 py-2 flex items-center justify-between text-[11px] text-zinc-400">
+                    <span className="flex items-center gap-1.5">
+                      <span className="inline-block w-2 h-2 rounded-full bg-orange-500 animate-pulse" />
+                      <span>Geser tabel ke samping untuk melihat seluruh komisi</span>
+                    </span>
+                    <span className="text-zinc-500 font-mono text-[10px]">↔ Scroll</span>
+                  </div>
+
                   <div className="overflow-x-auto max-h-[55vh]">
-                    <table className="w-full text-left text-xs border-collapse">
+                    <table className="w-full text-left text-xs border-collapse min-w-[760px]">
                       <thead className="bg-zinc-900/90 text-zinc-400 font-bold uppercase text-[10px] tracking-wider border-b border-zinc-800 sticky top-0 z-10 backdrop-blur-xs">
                         <tr>
                           <th className="py-3 px-3.5">Paket</th>
@@ -3679,9 +3696,12 @@ export const MembershipView: React.FC<MembershipViewProps> = ({
                                     </button>
                                     <button
                                       type="button"
-                                      onClick={() => handleDeletePackageConfirm(pkg)}
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleDeletePackageConfirm(pkg);
+                                      }}
                                       title="Hapus Master Paket"
-                                      className="p-1.5 bg-zinc-800 hover:bg-red-500 hover:text-white text-zinc-400 rounded-lg transition"
+                                      className="p-1.5 bg-zinc-800 hover:bg-rose-600 hover:text-white text-zinc-400 rounded-lg transition cursor-pointer"
                                     >
                                       <Trash2 className="w-3.5 h-3.5" />
                                     </button>
@@ -3723,6 +3743,57 @@ export const MembershipView: React.FC<MembershipViewProps> = ({
         title="Otorisasi Ganti PIC Member"
         description="Masukkan password otorisasi keamanan untuk membuka kunci dan mengganti staf PIC pada transaksi paket ini."
       />
+
+      {/* MODAL: KONFIRMASI HAPUS MASTER PAKET */}
+      {pkgToDelete && (
+        <div className="fixed inset-0 z-60 flex items-center justify-center bg-black/85 backdrop-blur-xs p-4 animate-in fade-in duration-150">
+          <div className="bg-zinc-900 border border-zinc-800 rounded-3xl shadow-2xl w-full max-w-md p-6 animate-in zoom-in-95 duration-150">
+            <div className="flex items-start gap-4">
+              <div className="w-12 h-12 rounded-2xl bg-rose-500/10 border border-rose-500/30 flex items-center justify-center text-rose-400 shrink-0">
+                <Trash2 className="w-6 h-6" />
+              </div>
+              <div className="flex-1">
+                <h3 className="text-base font-black text-white">Hapus Master Paket?</h3>
+                <p className="text-xs text-zinc-400 mt-1 leading-relaxed">
+                  Apakah Anda yakin ingin menghapus paket <strong className="text-white">"{pkgToDelete.name}"</strong> ({pkgToDelete.id}) dari sistem?
+                </p>
+                <div className="mt-3 p-3 rounded-xl bg-zinc-950 border border-zinc-800 text-[11px] text-zinc-400 space-y-1">
+                  <div className="flex justify-between">
+                    <span>Kategori:</span>
+                    <strong className="text-orange-400">{pkgToDelete.cat}</strong>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Harga Jual:</span>
+                    <strong className="text-white font-mono">{formatRp(pkgToDelete.price)}</strong>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Durasi / Kuota:</span>
+                    <strong className="text-zinc-200">{pkgToDelete.value} {pkgToDelete.cat === 'Membership' ? 'Hari' : 'Sesi'}</strong>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-2.5 mt-6 pt-4 border-t border-zinc-800/80">
+              <button
+                type="button"
+                onClick={() => setPkgToDelete(null)}
+                className="px-4 py-2.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 font-bold text-xs transition cursor-pointer"
+              >
+                Batal
+              </button>
+              <button
+                type="button"
+                onClick={handleExecuteDeletePackage}
+                className="px-4 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs transition flex items-center gap-1.5 shadow-lg shadow-rose-600/30 active:scale-95 cursor-pointer"
+              >
+                <Trash2 className="w-4 h-4" />
+                <span>Ya, Hapus Paket</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

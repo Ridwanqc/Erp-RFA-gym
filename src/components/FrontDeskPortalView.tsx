@@ -1757,11 +1757,17 @@ export const FrontDeskPortalView: React.FC<FrontDeskPortalViewProps> = ({
                     >
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-2 min-w-0">
-                          <img
-                            src={member.photo}
-                            alt={member.name}
-                            className="w-8 h-8 rounded-xl object-cover border border-zinc-700 shrink-0"
-                          />
+                          {member.photo && member.photo.trim() ? (
+                            <img
+                              src={member.photo.trim()}
+                              alt={member.name}
+                              className="w-8 h-8 rounded-xl object-cover border border-zinc-700 shrink-0"
+                            />
+                          ) : (
+                            <div className="w-8 h-8 rounded-xl bg-zinc-800 border border-zinc-700 flex items-center justify-center text-xs font-bold text-orange-400 shrink-0">
+                              {member.name.substring(0, 2).toUpperCase()}
+                            </div>
+                          )}
                           <div className="min-w-0">
                             <span className="font-bold text-white text-xs block truncate">
                               {member.name}
@@ -1835,11 +1841,17 @@ export const FrontDeskPortalView: React.FC<FrontDeskPortalViewProps> = ({
                     >
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-2 min-w-0">
-                          <img
-                            src={member.photo}
-                            alt={member.name}
-                            className="w-8 h-8 rounded-xl object-cover border border-zinc-700 shrink-0"
-                          />
+                          {member.photo && member.photo.trim() ? (
+                            <img
+                              src={member.photo.trim()}
+                              alt={member.name}
+                              className="w-8 h-8 rounded-xl object-cover border border-zinc-700 shrink-0"
+                            />
+                          ) : (
+                            <div className="w-8 h-8 rounded-xl bg-zinc-800 border border-zinc-700 flex items-center justify-center text-xs font-bold text-sky-400 shrink-0">
+                              {member.name.substring(0, 2).toUpperCase()}
+                            </div>
+                          )}
                           <div className="min-w-0">
                             <span className="font-bold text-white text-xs block truncate">
                               {member.name}
@@ -1902,11 +1914,17 @@ export const FrontDeskPortalView: React.FC<FrontDeskPortalViewProps> = ({
                     >
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-2 min-w-0">
-                          <img
-                            src={member.photo}
-                            alt={member.name}
-                            className="w-8 h-8 rounded-xl object-cover border border-zinc-700 shrink-0"
-                          />
+                          {member.photo && member.photo.trim() ? (
+                            <img
+                              src={member.photo.trim()}
+                              alt={member.name}
+                              className="w-8 h-8 rounded-xl object-cover border border-zinc-700 shrink-0"
+                            />
+                          ) : (
+                            <div className="w-8 h-8 rounded-xl bg-zinc-800 border border-zinc-700 flex items-center justify-center text-xs font-bold text-violet-400 shrink-0">
+                              {member.name.substring(0, 2).toUpperCase()}
+                            </div>
+                          )}
                           <div className="min-w-0">
                             <span className="font-bold text-white text-xs block truncate">
                               {member.name}
@@ -2026,11 +2044,17 @@ export const FrontDeskPortalView: React.FC<FrontDeskPortalViewProps> = ({
                       }`}
                     >
                       <div className="flex items-center gap-2.5 min-w-0">
-                        <img
-                          src={member.photo}
-                          alt={member.name}
-                          className="w-9 h-9 rounded-xl object-cover border border-zinc-700 shrink-0"
-                        />
+                        {member.photo && member.photo.trim() ? (
+                          <img
+                            src={member.photo.trim()}
+                            alt={member.name}
+                            className="w-9 h-9 rounded-xl object-cover border border-zinc-700 shrink-0"
+                          />
+                        ) : (
+                          <div className="w-9 h-9 rounded-xl bg-zinc-800 border border-zinc-700 flex items-center justify-center text-xs font-bold text-orange-400 shrink-0">
+                            {member.name.substring(0, 2).toUpperCase()}
+                          </div>
+                        )}
                         <div className="min-w-0">
                           <div className="flex items-center gap-1.5">
                             <span className="font-bold text-white text-xs truncate">
@@ -2304,8 +2328,12 @@ export const FrontDeskPortalView: React.FC<FrontDeskPortalViewProps> = ({
           </div>
 
           {/* Members Table */}
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs">
+          <div className="md:hidden flex items-center justify-between px-3.5 py-1.5 bg-zinc-950/70 border-b border-zinc-800 text-[10px] text-zinc-400 select-none">
+            <span className="text-orange-400 font-semibold flex items-center gap-1">↔ Geser tabel ke samping untuk melihat aksi kasir</span>
+            <span className="font-mono text-zinc-500">{filteredMembers.length} member</span>
+          </div>
+          <div className="overflow-x-auto scrollbar-thin scrollbar-thumb-zinc-800">
+            <table className="w-full text-left text-xs min-w-[700px]">
               <thead>
                 <tr className="text-zinc-400 border-b border-zinc-800 text-[11px] uppercase tracking-wider">
                   <th className="pb-3 font-bold pl-2">Member</th>
@@ -2329,11 +2357,17 @@ export const FrontDeskPortalView: React.FC<FrontDeskPortalViewProps> = ({
                       {/* Member Info */}
                       <td className="py-3 pl-2">
                         <div className="flex items-center gap-3">
-                          <img
-                            src={member.photo}
-                            alt={member.name}
-                            className="w-10 h-10 rounded-xl object-cover border border-zinc-700 shrink-0"
-                          />
+                          {member.photo && member.photo.trim() ? (
+                            <img
+                              src={member.photo.trim()}
+                              alt={member.name}
+                              className="w-10 h-10 rounded-xl object-cover border border-zinc-700 shrink-0"
+                            />
+                          ) : (
+                            <div className="w-10 h-10 rounded-xl bg-zinc-800 border border-zinc-700 flex items-center justify-center text-xs font-bold text-orange-400 shrink-0">
+                              {member.name.substring(0, 2).toUpperCase()}
+                            </div>
+                          )}
                           <div className="min-w-0">
                             <span className="font-bold text-white block truncate leading-tight">
                               {member.name}
@@ -5802,11 +5836,17 @@ export const FrontDeskPortalView: React.FC<FrontDeskPortalViewProps> = ({
                 {/* Member ID Badge Card */}
                 <div className="p-3.5 bg-zinc-950/80 rounded-2xl border border-zinc-800 flex items-center justify-between gap-3">
                   <div className="flex items-center gap-3 min-w-0">
-                    <img
-                      src={m.photo}
-                      alt={m.name}
-                      className="w-12 h-12 rounded-xl object-cover border border-zinc-700 shrink-0"
-                    />
+                    {m.photo && m.photo.trim() ? (
+                      <img
+                        src={m.photo.trim()}
+                        alt={m.name}
+                        className="w-12 h-12 rounded-xl object-cover border border-zinc-700 shrink-0"
+                      />
+                    ) : (
+                      <div className="w-12 h-12 rounded-xl bg-zinc-800 border border-zinc-700 flex items-center justify-center text-sm font-bold text-orange-400 shrink-0">
+                        {m.name.substring(0, 2).toUpperCase()}
+                      </div>
+                    )}
                     <div className="min-w-0">
                       <div className="flex items-center gap-2">
                         <span className="font-black text-white text-sm truncate">{m.name}</span>

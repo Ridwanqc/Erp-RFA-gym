@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 
 export type ThemeMode = 'claymorphism-light' | 'claymorphism' | 'dark' | 'midnight' | 'slate' | 'light';
-export type AccentColor = 'orange' | 'emerald' | 'cyan' | 'violet' | 'red' | 'amber';
+export type AccentColor = 'orange' | 'emerald' | 'cyan' | 'violet' | 'red' | 'amber' | 'blue' | 'rose' | 'teal';
 export type ContentDensity = 'comfortable' | 'compact';
 export type BackgroundPattern = 'none' | 'grid' | 'dots';
 
@@ -31,6 +31,14 @@ export interface ThemeModeOption {
   iconType: 'moon' | 'sparkles' | 'monitor' | 'sun' | 'layers';
   bgPreview: string;
   cardPreview: string;
+}
+
+export interface ThemePreset {
+  id: string;
+  name: string;
+  desc: string;
+  badge: string;
+  config: ThemeConfig;
 }
 
 export const THEME_MODE_OPTIONS: ThemeModeOption[] = [
@@ -97,6 +105,17 @@ export const ACCENT_OPTIONS: AccentOption[] = [
     badgeText: 'text-orange-400'
   },
   {
+    id: 'blue',
+    name: 'Electric Sapphire',
+    label: 'Atletik, Presisi & Sport Modern',
+    hex: '#2563eb',
+    hoverHex: '#1d4ed8',
+    rgb: '37, 99, 235',
+    badgeBg: 'bg-blue-500/20',
+    badgeBorder: 'border-blue-500/30',
+    badgeText: 'text-blue-400'
+  },
+  {
     id: 'emerald',
     name: 'Electric Emerald',
     label: 'Health, Wellness & Vitalitas',
@@ -130,6 +149,17 @@ export const ACCENT_OPTIONS: AccentOption[] = [
     badgeText: 'text-purple-400'
   },
   {
+    id: 'rose',
+    name: 'Neon Rose',
+    label: 'Dinamis, Energik & Bold',
+    hex: '#f43f5e',
+    hoverHex: '#e11d48',
+    rgb: '244, 63, 94',
+    badgeBg: 'bg-rose-500/20',
+    badgeBorder: 'border-rose-500/30',
+    badgeText: 'text-rose-400'
+  },
+  {
     id: 'red',
     name: 'Power Crimson',
     label: 'Intensitas & Powerlifting',
@@ -150,6 +180,62 @@ export const ACCENT_OPTIONS: AccentOption[] = [
     badgeBg: 'bg-amber-500/20',
     badgeBorder: 'border-amber-500/30',
     badgeText: 'text-amber-400'
+  },
+  {
+    id: 'teal',
+    name: 'Oceanic Teal',
+    label: 'Segar, Fokus & Premium Gym',
+    hex: '#0d9488',
+    hoverHex: '#0f766e',
+    rgb: '13, 148, 136',
+    badgeBg: 'bg-teal-500/20',
+    badgeBorder: 'border-teal-500/30',
+    badgeText: 'text-teal-400'
+  }
+];
+
+export const THEME_PRESETS: ThemePreset[] = [
+  {
+    id: 'preset-obsidian-orange',
+    name: 'GymPro Classic Dark',
+    desc: 'Obsidian Dark dengan aksen Gym Orange bawaan.',
+    badge: 'Default',
+    config: { mode: 'dark', accent: 'orange', density: 'comfortable', pattern: 'none' }
+  },
+  {
+    id: 'preset-daylight-clean',
+    name: 'Daylight Kasir POS',
+    desc: 'Tampilan terang bersih & ramah mata, optimal untuk kasir pagi/siang.',
+    badge: 'Kasir',
+    config: { mode: 'light', accent: 'emerald', density: 'compact', pattern: 'grid' }
+  },
+  {
+    id: 'preset-clay-light',
+    name: 'Claymorphism 3D Terang',
+    desc: 'Gaya 3D taktil empuk putih polos dengan teks hitam kontras tinggi.',
+    badge: '3D Light',
+    config: { mode: 'claymorphism-light', accent: 'blue', density: 'comfortable', pattern: 'none' }
+  },
+  {
+    id: 'preset-midnight-cyber',
+    name: 'Midnight OLED Cyber',
+    desc: 'Hitam murni 100% hemat baterai tablet dengan aksen Cyber Cyan.',
+    badge: 'OLED',
+    config: { mode: 'midnight', accent: 'cyan', density: 'compact', pattern: 'dots' }
+  },
+  {
+    id: 'preset-slate-navy',
+    name: 'Cyber Slate Enterprise',
+    desc: 'Nuansa biru navy futuristik khas dashboard ERP enterprise modern.',
+    badge: 'Enterprise',
+    config: { mode: 'slate', accent: 'violet', density: 'comfortable', pattern: 'grid' }
+  },
+  {
+    id: 'preset-clay-dark',
+    name: 'Claymorphism 3D Gelap',
+    desc: 'Efek clay 3D timbul berbayang ganda pada latar gelap modern.',
+    badge: '3D Dark',
+    config: { mode: 'claymorphism', accent: 'amber', density: 'comfortable', pattern: 'none' }
   }
 ];
 
@@ -168,21 +254,42 @@ interface ThemeContextType {
   setAccent: (accent: AccentColor) => void;
   setDensity: (density: ContentDensity) => void;
   setPattern: (pattern: BackgroundPattern) => void;
+  applyPreset: (presetConfig: ThemeConfig) => void;
   resetTheme: () => void;
   isThemeModalOpen: boolean;
   openThemeModal: () => void;
   closeThemeModal: () => void;
   currentAccent: AccentOption;
+  isBackofficeActive: boolean;
+  setBackofficeActive: (active: boolean) => void;
 }
 
 const ThemeContext = createContext<ThemeContextType | null>(null);
 
-function applyThemeToDOM(config: ThemeConfig) {
+export function applyThemeToDOM(config: ThemeConfig, isBackoffice: boolean = true) {
   if (typeof document === 'undefined') return;
   const root = document.documentElement;
   const body = document.body;
   if (!root || !body) return;
 
+  // If viewing Landing Page or Public Guest views, lock to official Gym theme
+  if (!isBackoffice) {
+    root.setAttribute('data-theme', 'dark');
+    root.setAttribute('data-accent', 'orange');
+    root.setAttribute('data-density', 'comfortable');
+    root.setAttribute('data-pattern', 'none');
+    root.classList.add('dark');
+    body.classList.add('dark');
+
+    const defaultAccent = ACCENT_OPTIONS[0]; // Gym Orange
+    root.style.setProperty('--primary-accent', defaultAccent.hex);
+    root.style.setProperty('--primary-accent-hover', defaultAccent.hoverHex);
+    root.style.setProperty('--primary-accent-rgb', defaultAccent.rgb);
+    root.style.setProperty('--primary-accent-soft', `rgba(${defaultAccent.rgb}, 0.15)`);
+    return;
+  }
+
+  // Backoffice ERP: apply user configured theme
   const safeConfig = config || DEFAULT_THEME_CONFIG;
 
   // Set data attributes
@@ -232,17 +339,18 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   });
 
   const [isThemeModalOpen, setIsThemeModalOpen] = useState(false);
+  const [isBackofficeActive, setIsBackofficeActive] = useState<boolean>(false);
 
   // Apply on mount and state change
   useEffect(() => {
-    applyThemeToDOM(theme);
-    console.log(`[GymPro Lifecycle] 2. ThemeProvider active (mode: ${theme.mode}, accent: ${theme.accent})`);
+    applyThemeToDOM(theme, isBackofficeActive);
+    console.log(`[GymPro Lifecycle] Theme updated (isBackoffice: ${isBackofficeActive}, mode: ${theme.mode}, accent: ${theme.accent})`);
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(theme));
     } catch (e) {
       console.warn('Gagal menyimpan tema ke localStorage:', e);
     }
-  }, [theme]);
+  }, [theme, isBackofficeActive]);
 
   const setMode = (mode: ThemeMode) => {
     setTheme((prev) => ({ ...prev, mode }));
@@ -260,6 +368,10 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     setTheme((prev) => ({ ...prev, pattern }));
   };
 
+  const applyPreset = (presetConfig: ThemeConfig) => {
+    setTheme(presetConfig);
+  };
+
   const resetTheme = () => {
     setTheme(DEFAULT_THEME_CONFIG);
   };
@@ -274,11 +386,14 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         setAccent,
         setDensity,
         setPattern,
+        applyPreset,
         resetTheme,
         isThemeModalOpen,
         openThemeModal: () => setIsThemeModalOpen(true),
         closeThemeModal: () => setIsThemeModalOpen(false),
-        currentAccent
+        currentAccent,
+        isBackofficeActive,
+        setBackofficeActive: (active: boolean) => setIsBackofficeActive(active)
       }}
     >
       {children}

@@ -15,10 +15,25 @@ import {
   UserCheck,
   UserX,
   X,
-  FileText
+  FileText,
+  ShieldCheck,
+  CalendarDays
 } from 'lucide-react';
-import { StudioClass, Member, User, PackageItem, Transaction } from '../types';
+import {
+  StudioClass,
+  Member,
+  User,
+  PackageItem,
+  Transaction,
+  Schedule,
+  PTBooking,
+  WorkSchedule,
+  StaffAttendance,
+  LeaveRequest,
+  TrainerWorkingRule
+} from '../types';
 import { APP_TODAY, formatDateIndo } from '../utils/formatters';
+import { getTrainerDutyStatusOnDate, isTimeMatchingStudioClass } from '../data/ptBookingData';
 import { ClassPaymentModal } from './ClassPaymentModal';
 import { useSettings } from '../context/SettingsContext';
 
@@ -28,6 +43,12 @@ interface StudioClassViewProps {
   staffUsers: User[];
   packages?: PackageItem[];
   currentUser?: User | null;
+  schedules?: Schedule[];
+  ptBookings?: PTBooking[];
+  workSchedules?: WorkSchedule[];
+  staffAttendances?: StaffAttendance[];
+  leaveRequests?: LeaveRequest[];
+  trainerWorkingRules?: TrainerWorkingRule[];
   onPurchasePackage?: (trx: Transaction, updatedMembers: Member[]) => void;
   onBookClass: (classId: string, memberId: string) => void;
   onUnbookClass?: (classId: string, memberId: string) => void;
@@ -43,6 +64,12 @@ export const StudioClassView: React.FC<StudioClassViewProps> = ({
   staffUsers,
   packages = [],
   currentUser = null,
+  schedules = [],
+  ptBookings = [],
+  workSchedules = [],
+  staffAttendances = [],
+  leaveRequests = [],
+  trainerWorkingRules = [],
   onPurchasePackage,
   onBookClass,
   onUnbookClass,
@@ -138,12 +165,108 @@ export const StudioClassView: React.FC<StudioClassViewProps> = ({
     setBookingMemberId('');
   };
 
+  // Duty status of instructor selected in Add Class Modal
+  const selectedInstructorUser = useMemo(() => {
+    return staffUsers.find((s) => s.id === trainerId);
+  }, [staffUsers, trainerId]);
+
+  const selectedInstructorDuty = useMemo(() => {
+    if (!trainerId || !date) return null;
+    return getTrainerDutyStatusOnDate({
+      trainerId,
+      trainerName: selectedInstructorUser?.name,
+      date,
+      workSchedules,
+      staffAttendances,
+      leaveRequests,
+      trainerUser: selectedInstructorUser,
+      rules: trainerWorkingRules
+    });
+  }, [trainerId, date, selectedInstructorUser, workSchedules, staffAttendances, leaveRequests, trainerWorkingRules]);
+
   const handleSaveClass = (e: React.FormEvent) => {
     e.preventDefault();
     if (!name.trim() || !trainerId) return;
 
     const tr = staffUsers.find((s) => s.id === trainerId);
     const trainerLabel = tr ? tr.name : 'Instruktur';
+
+    // 1. Cek Duty Status (Day off, Cuti, Presensi tidak hadir)
+    if (selectedInstructorDuty && !selectedInstructorDuty.isAvailableForDate) {
+      showToast(
+        'Instruktur Berhalangan',
+        `Coach ${trainerLabel} sedang ${selectedInstructorDuty.statusLabel} pada ${formatDateIndo(date)}. ${selectedInstructorDuty.reason || 'Tidak dapat dijadwalkan mengajar kelas.'}`,
+        'error'
+      );
+      return;
+    }
+
+    // 2. Cek apakah jam kelas berada di luar jam kerja instruktur
+    const startTimeClass = time.includes('-') ? time.split('-')[0].trim() : time.trim();
+    if (selectedInstructorDuty?.dutyStartTime && selectedInstructorDuty?.dutyEndTime) {
+      if (startTimeClass < selectedInstructorDuty.dutyStartTime || startTimeClass >= selectedInstructorDuty.dutyEndTime) {
+        showToast(
+          'Di Luar Jam Kerja',
+          `Jam kelas ${time} berada di luar jam kerja mengajar Coach ${trainerLabel} (${selectedInstructorDuty.dutyStartTime} - ${selectedInstructorDuty.dutyEndTime}).`,
+          'warning'
+        );
+      }
+    }
+
+    // 3. Cek Bentrok dengan Sesi PT (Schedules & PT Bookings)
+    const clashingPTSchedule = (schedules || []).find((s) => {
+      if (s.date !== date) return false;
+      if (s.status === 'Batal' || s.status === 'Hangus') return false;
+      const isTrainer =
+        (s.trainerId && s.trainerId === trainerId) ||
+        (s.trainer && s.trainer.toLowerCase().trim() === trainerLabel.toLowerCase().trim());
+      if (!isTrainer) return false;
+      return isTimeMatchingStudioClass(time, s.time);
+    });
+
+    const clashingPTBooking = (ptBookings || []).find((b) => {
+      if (b.bookingDate !== date) return false;
+      if (b.status === 'CANCELLED' || b.status === 'EXPIRED') return false;
+      if (b.trainerId !== trainerId) return false;
+      return isTimeMatchingStudioClass(time, b.startTime);
+    });
+
+    if (clashingPTSchedule || clashingPTBooking) {
+      const memberName = clashingPTSchedule?.memberName || clashingPTBooking?.memberName || 'Member PT';
+      showToast(
+        'Instruktur Bentrok PT',
+        `Coach ${trainerLabel} sudah memiliki jadwal sesi PT dengan ${memberName} pada jam ${time}. Silakan pilih instruktur atau jam lain.`,
+        'error'
+      );
+      return;
+    }
+
+    // 4. Cek Bentrok dengan Kelas Studio Lain (Instruktur sama atau Ruangan sama)
+    const clashingClass = studioClasses.find((sc) => {
+      if (sc.date !== date) return false;
+      const isSameTrainer =
+        (sc.trainerId && sc.trainerId === trainerId) ||
+        ((sc.trainerName || sc.trainer) === trainerLabel);
+      const isSameRoom = (sc.room || '').toLowerCase().trim() === (room || '').toLowerCase().trim();
+      if (isSameTrainer && isTimeMatchingStudioClass(time, sc.time)) return true;
+      if (isSameRoom && isTimeMatchingStudioClass(time, sc.time)) return true;
+      return false;
+    });
+
+    if (clashingClass) {
+      const isSameTrainer =
+        (clashingClass.trainerId && clashingClass.trainerId === trainerId) ||
+        ((clashingClass.trainerName || clashingClass.trainer) === trainerLabel);
+      showToast(
+        'Jadwal Bentrok',
+        isSameTrainer
+          ? `Coach ${trainerLabel} sudah dijadwalkan mengajar kelas "${clashingClass.name}" pada jam tersebut.`
+          : `Ruangan "${room}" sudah digunakan untuk kelas "${clashingClass.name}" pada jam tersebut.`,
+        'error'
+      );
+      return;
+    }
+
     const newClass: StudioClass = {
       id: 'CLS-' + Date.now(),
       name: name.trim(),
@@ -624,10 +747,22 @@ export const StudioClassView: React.FC<StudioClassViewProps> = ({
                     <option value="">Pilih...</option>
                     {staffUsers.map((s) => (
                       <option key={s.id} value={s.id}>
-                        {s.name}
+                        {s.name} ({s.shift || 'Pagi'})
                       </option>
                     ))}
                   </select>
+                  {selectedInstructorDuty && (
+                    <div
+                      className={`mt-1.5 p-1.5 rounded-lg border text-[10px] flex items-center gap-1.5 ${
+                        selectedInstructorDuty.isAvailableForDate
+                          ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-300'
+                          : 'bg-rose-500/10 border-rose-500/30 text-rose-300 font-bold'
+                      }`}
+                    >
+                      <ShieldCheck className="w-3 h-3 shrink-0" />
+                      <span>{selectedInstructorDuty.statusLabel}</span>
+                    </div>
+                  )}
                 </div>
               </div>
 

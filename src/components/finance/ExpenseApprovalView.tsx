@@ -64,6 +64,7 @@ export const ExpenseApprovalView: React.FC<ExpenseApprovalViewProps> = ({
   const isAdminOrManager =
     currentUser?.role === 'admin' ||
     currentUser?.role === 'manager' ||
+    currentUser?.role === 'keuangan' ||
     (currentUser as any)?.role === 'ADMIN' ||
     (currentUser as any)?.role === 'LEADER';
 

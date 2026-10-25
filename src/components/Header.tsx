@@ -11,10 +11,11 @@ import {
   Settings,
   Globe,
   Bell,
-  FileSpreadsheet
+  Palette
 } from 'lucide-react';
 import { User, PTBackofficeNotification } from '../types';
 import { RealTimeClock } from './RealTimeClock';
+import { useTheme } from '../context/ThemeContext';
 
 interface HeaderProps {
   currentUser: User | null;
@@ -27,7 +28,7 @@ interface HeaderProps {
   onSwitchUser?: (userId: string) => void;
   onLogout?: () => void;
   firebaseConnected?: boolean;
-  onOpenSettings?: (subTab?: 'printer' | 'theme' | 'roles' | 'profile' | 'branches' | 'finance' | 'templates' | 'backup') => void;
+  onOpenSettings?: (subTab?: 'printer' | 'theme' | 'roles' | 'security' | 'profile' | 'branches' | 'finance' | 'templates' | 'backup' | 'landing') => void;
   onOpenAddBranchModal?: () => void;
   onOpenLandingPage?: () => void;
   ptNotifications?: PTBackofficeNotification[];
@@ -47,6 +48,7 @@ export const Header: React.FC<HeaderProps> = ({
   ptNotifications = [],
   onNavigateTab
 }) => {
+  const { openThemeModal, currentAccent, theme } = useTheme();
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [isNotifOpen, setIsNotifOpen] = useState(false);
   const profileMenuRef = useRef<HTMLDivElement | null>(null);
@@ -95,7 +97,7 @@ export const Header: React.FC<HeaderProps> = ({
         <button
           id="btn-toggle-sidebar-mobile"
           type="button"
-          className="lg:hidden text-zinc-300 hover:text-white p-2 rounded-xl bg-zinc-900/60 hover:bg-zinc-800 border border-zinc-800 active:scale-95 transition flex items-center justify-center min-w-[40px] min-h-[40px] cursor-pointer"
+          className="lg:hidden text-zinc-300 hover:text-white p-2.5 rounded-xl bg-zinc-900/60 hover:bg-zinc-800 border border-zinc-800 active:scale-95 transition flex items-center justify-center min-w-[44px] min-h-[44px] cursor-pointer"
           onClick={onToggleMobileSidebar}
           aria-label="Buka menu navigasi"
         >
@@ -143,24 +145,12 @@ export const Header: React.FC<HeaderProps> = ({
           <button
             type="button"
             onClick={onOpenLandingPage}
-            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border bg-orange-500/10 hover:bg-orange-500/20 border-orange-500/30 text-orange-300 transition active:scale-95 text-xs font-bold min-h-[38px] cursor-pointer"
+            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border bg-orange-500/10 hover:bg-orange-500/20 border-orange-500/30 text-orange-300 transition active:scale-95 text-xs font-bold min-h-[44px] cursor-pointer"
             title="Lihat Landing Page Publik RFA Gym Platform"
+            aria-label="Buka Landing Page Publik"
           >
             <Globe className="w-4 h-4 text-orange-400 shrink-0" />
             <span className="hidden xl:inline">Landing Page</span>
-          </button>
-        )}
-
-        {/* Google Sheets Sync Quick Access */}
-        {onNavigateTab && (
-          <button
-            type="button"
-            onClick={() => onNavigateTab('google-sheets')}
-            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border bg-emerald-500/10 hover:bg-emerald-500/20 border-emerald-500/30 text-emerald-300 transition active:scale-95 text-xs font-bold min-h-[38px] cursor-pointer"
-            title="Sinkronisasi & Integrasi Google Sheets"
-          >
-            <FileSpreadsheet className="w-4 h-4 text-emerald-400 shrink-0" />
-            <span className="hidden xl:inline">Google Sheets</span>
           </button>
         )}
 
@@ -169,8 +159,9 @@ export const Header: React.FC<HeaderProps> = ({
           <button
             type="button"
             onClick={() => setIsNotifOpen(!isNotifOpen)}
-            className="relative p-2 rounded-xl bg-zinc-900/80 hover:bg-zinc-800 border border-zinc-800 text-zinc-300 hover:text-white transition active:scale-95 min-h-[38px] min-w-[38px] flex items-center justify-center cursor-pointer"
+            className="relative p-2 rounded-xl bg-zinc-900/80 hover:bg-zinc-800 border border-zinc-800 text-zinc-300 hover:text-white transition active:scale-95 min-h-[44px] min-w-[44px] flex items-center justify-center cursor-pointer"
             title="Notifikasi Backoffice & Sistem"
+            aria-label="Notifikasi sistem"
           >
             <Bell className="w-4 h-4 text-orange-400" />
             {unreadCount > 0 && (
@@ -181,7 +172,7 @@ export const Header: React.FC<HeaderProps> = ({
           </button>
 
           {isNotifOpen && (
-            <div className="absolute right-0 mt-2 w-80 sm:w-96 rounded-2xl bg-zinc-950 border border-zinc-800 shadow-2xl p-3 space-y-2 z-50 animate-in fade-in slide-in-from-top-2">
+            <div className="absolute right-0 mt-2 w-80 sm:w-96 max-w-[calc(100vw-1.5rem)] rounded-2xl bg-zinc-950 border border-zinc-800 shadow-2xl p-3 space-y-2 z-50 animate-in fade-in slide-in-from-top-2">
               <div className="flex items-center justify-between pb-2 border-b border-zinc-800 px-1">
                 <div className="flex items-center gap-1.5">
                   <Bell className="w-4 h-4 text-orange-400" />
@@ -256,7 +247,7 @@ export const Header: React.FC<HeaderProps> = ({
             aria-expanded={isProfileOpen}
             aria-haspopup="true"
             aria-label="Buka menu pengguna"
-            className="flex items-center gap-2 p-1 sm:px-2.5 sm:py-1 rounded-xl bg-zinc-900/80 hover:bg-zinc-800 border border-zinc-800 transition active:scale-95 text-left min-h-[38px] cursor-pointer"
+            className="flex items-center gap-2 p-1.5 sm:px-2.5 sm:py-1 rounded-xl bg-zinc-900/80 hover:bg-zinc-800 border border-zinc-800 transition active:scale-95 text-left min-h-[44px] cursor-pointer"
           >
             <img
               src={
@@ -273,12 +264,16 @@ export const Header: React.FC<HeaderProps> = ({
               <p className={`text-[10px] uppercase font-bold truncate leading-none mt-0.5 ${
                 currentUser?.role === 'admin'
                   ? 'text-rose-400'
+                  : currentUser?.role === 'keuangan'
+                  ? 'text-emerald-400'
                   : currentUser?.role === 'admin_cabang'
                   ? 'text-teal-400'
                   : 'text-orange-400'
               }`}>
                 {currentUser?.role === 'admin'
                   ? 'Super Admin (HQ)'
+                  : currentUser?.role === 'keuangan'
+                  ? 'Keuangan (HQ)'
                   : currentUser?.role === 'admin_cabang'
                   ? 'Admin Cabang'
                   : currentUser?.roleName || 'Staf'}
@@ -346,6 +341,40 @@ export const Header: React.FC<HeaderProps> = ({
                 </div>
               )}
 
+              {/* Theme Settings Shortcut in Dropdown */}
+              <div className="p-3 border-b border-zinc-800 bg-zinc-950/20">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsProfileOpen(false);
+                    openThemeModal();
+                  }}
+                  className="w-full flex items-center justify-between p-2 rounded-xl hover:bg-zinc-800/80 transition text-left text-zinc-200 cursor-pointer"
+                >
+                  <div className="flex items-center gap-2.5">
+                    <div
+                      className="p-1.5 rounded-lg border"
+                      style={{
+                        backgroundColor: `rgba(${currentAccent.rgb}, 0.15)`,
+                        borderColor: `rgba(${currentAccent.rgb}, 0.35)`,
+                        color: currentAccent.hex
+                      }}
+                    >
+                      <Palette className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <span className="text-xs font-bold block text-white">Tema & Tampilan</span>
+                      <span className="text-[10px] text-zinc-400 block">
+                        {theme.mode.toUpperCase()} • {currentAccent.name}
+                      </span>
+                    </div>
+                  </div>
+                  <span className="text-[10px] font-mono font-bold" style={{ color: currentAccent.hex }}>
+                    Kustomisasi →
+                  </span>
+                </button>
+              </div>
+
               {/* Landing Page Shortcut */}
               {onOpenLandingPage && (
                 <div className="p-3 border-b border-zinc-800 bg-zinc-950/20">
@@ -381,12 +410,16 @@ export const Header: React.FC<HeaderProps> = ({
                   <span className={`font-bold uppercase text-[11px] px-2 py-0.5 rounded ${
                     currentUser?.role === 'admin'
                       ? 'bg-rose-500/20 text-rose-300 border border-rose-500/30'
+                      : currentUser?.role === 'keuangan'
+                      ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
                       : currentUser?.role === 'admin_cabang'
                       ? 'bg-teal-500/20 text-teal-300 border border-teal-500/30'
                       : 'bg-zinc-800 text-zinc-300'
                   }`}>
                     {currentUser?.role === 'admin'
                       ? 'Super Admin (HQ)'
+                      : currentUser?.role === 'keuangan'
+                      ? 'Keuangan & Akuntansi (HQ)'
                       : currentUser?.role === 'admin_cabang'
                       ? 'Admin Unit Cabang'
                       : currentUser?.role}

@@ -24,11 +24,25 @@ import {
   Users,
   ShieldCheck,
   Zap,
-  Globe
+  Globe,
+  Handshake,
+  Tag,
+  DollarSign,
+  Edit3
 } from 'lucide-react';
 import { useSettings } from '../../context/SettingsContext';
-import { LandingGalleryItem, LandingPageConfig } from '../../types';
-import { DEFAULT_LANDING_CONFIG } from '../../data/settingsData';
+import {
+  LandingGalleryItem,
+  LandingPageConfig,
+  LandingPromoPlan,
+  LandingPromoConfig
+} from '../../types';
+import {
+  DEFAULT_LANDING_CONFIG,
+  DEFAULT_PROMO_CONFIG,
+  DEFAULT_PROMO_PLANS
+} from '../../data/settingsData';
+import { formatRp } from '../../utils/formatters';
 
 interface LandingSettingsViewProps {
   onClose?: () => void;
@@ -78,11 +92,20 @@ export const LandingSettingsView: React.FC<LandingSettingsViewProps> = ({
   const { settings, updateLandingConfig, resetLandingConfigToDefault } = useSettings();
   const currentLanding = settings.landing || DEFAULT_LANDING_CONFIG;
 
-  const [activeTab, setActiveTab] = useState<'hero' | 'announcement' | 'about' | 'gallery' | 'social'>('hero');
-  const [formConfig, setFormConfig] = useState<LandingPageConfig>(() => JSON.parse(JSON.stringify(currentLanding)));
+  const [activeTab, setActiveTab] = useState<'hero' | 'announcement' | 'promos' | 'about' | 'gallery' | 'social'>('hero');
+  const [formConfig, setFormConfig] = useState<LandingPageConfig>(() => {
+    const initial = JSON.parse(JSON.stringify(currentLanding));
+    if (!initial.promos) {
+      initial.promos = JSON.parse(JSON.stringify(DEFAULT_PROMO_CONFIG));
+    }
+    return initial;
+  });
   const [isSaved, setIsSaved] = useState(false);
   const [isUploadingHero, setIsUploadingHero] = useState(false);
   const [isUploadingGallery, setIsUploadingGallery] = useState(false);
+
+  // Promo plan management state
+  const [newFeatureInputs, setNewFeatureInputs] = useState<Record<string, string>>({});
 
   // Gallery item add form modal/state
   const [isAddingGallery, setIsAddingGallery] = useState(false);
@@ -295,6 +318,7 @@ export const LandingSettingsView: React.FC<LandingSettingsViewProps> = ({
         {[
           { id: 'hero', label: 'Hero & Visual Utama', icon: Sparkles },
           { id: 'announcement', label: 'Banner Promo & Info', icon: Megaphone },
+          { id: 'promos', label: 'Menu Promo & Paket', icon: Flame },
           { id: 'about', label: 'Tentang Kami & Cerita', icon: Building2 },
           { id: 'gallery', label: 'Galeri Fasilitas (Foto)', icon: ImageIcon },
           { id: 'social', label: 'Kontak & Sosmed', icon: Phone }
@@ -498,15 +522,22 @@ export const LandingSettingsView: React.FC<LandingSettingsViewProps> = ({
 
               {/* Image Preview Box */}
               <div className="relative rounded-2xl overflow-hidden aspect-[4/3] bg-zinc-950 border border-zinc-800 group shadow-inner">
-                <img
-                  src={formConfig.hero.heroImageUrl}
-                  alt={formConfig.hero.heroImageAlt || 'Hero Preview'}
-                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-                  onError={(e) => {
-                    e.currentTarget.src =
-                      'https://images.unsplash.com/photo-1534438327276-14e5300c3a48?q=80&w=1000&auto=format&fit=crop';
-                  }}
-                />
+                {formConfig.hero.heroImageUrl && formConfig.hero.heroImageUrl.trim() ? (
+                  <img
+                    src={formConfig.hero.heroImageUrl.trim()}
+                    alt={formConfig.hero.heroImageAlt || 'Hero Preview'}
+                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                    onError={(e) => {
+                      e.currentTarget.src =
+                        'https://images.unsplash.com/photo-1534438327276-14e5300c3a48?q=80&w=1000&auto=format&fit=crop';
+                    }}
+                  />
+                ) : (
+                  <div className="w-full h-full flex flex-col items-center justify-center bg-zinc-900 text-zinc-500 p-4 text-center">
+                    <ImageIcon className="w-8 h-8 mb-2 text-zinc-600" />
+                    <span className="text-xs">Belum ada foto hero</span>
+                  </div>
+                )}
                 <div className="absolute inset-0 bg-gradient-to-t from-zinc-950/80 via-transparent to-transparent flex items-end p-3 pointer-events-none">
                   <span className="text-[10px] font-bold text-orange-400 bg-zinc-950/90 px-2 py-0.5 rounded-md border border-zinc-700/60">
                     Pratinjau Foto Hero
@@ -827,7 +858,576 @@ export const LandingSettingsView: React.FC<LandingSettingsViewProps> = ({
         </div>
       )}
 
-      {/* TAB 3: TENTANG KAMI & CERITA */}
+      {/* TAB 3: MENU PROMO, PAKET & TAWAR MEMBER */}
+      {activeTab === 'promos' && (
+        <div className="space-y-6 animate-in fade-in duration-200">
+          {/* Section Header & Global Promo Configurations */}
+          <div className="p-6 rounded-3xl bg-zinc-900/80 border border-zinc-800 space-y-5">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-zinc-800">
+              <div className="flex items-center gap-2">
+                <span className="p-2 rounded-xl bg-orange-500/20 text-orange-400 border border-orange-500/30">
+                  <Flame className="w-5 h-5" />
+                </span>
+                <div>
+                  <h3 className="text-sm font-extrabold text-white uppercase tracking-wider">
+                    Header & Konfigurasi Menu Promo
+                  </h3>
+                  <p className="text-xs text-zinc-400 mt-0.5">
+                    Kustomisasi judul section promosi, teks nilai unggulan, dan izin negosiasi (tawar) member.
+                  </p>
+                </div>
+              </div>
+
+              {/* Toggle Allow Member Offer / Tawar */}
+              <div className="flex items-center gap-3 p-3 rounded-2xl bg-zinc-950 border border-zinc-800 self-start sm:self-auto">
+                <Handshake className="w-4 h-4 text-amber-400" />
+                <div>
+                  <span className="text-xs font-bold text-white block">Fitur Tawar / Nego Member</span>
+                  <span className="text-[10px] text-zinc-400">Aktifkan tombol tawar harga di web</span>
+                </div>
+                <label className="relative inline-flex items-center cursor-pointer ml-2">
+                  <input
+                    type="checkbox"
+                    checked={formConfig.promos?.allowMemberOffer ?? true}
+                    onChange={(e) =>
+                      setFormConfig((prev) => ({
+                        ...prev,
+                        promos: {
+                          ...(prev.promos || DEFAULT_PROMO_CONFIG),
+                          allowMemberOffer: e.target.checked
+                        }
+                      }))
+                    }
+                    className="sr-only peer"
+                  />
+                  <div className="w-9 h-5 bg-zinc-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-zinc-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-amber-500"></div>
+                </label>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-xs font-bold text-zinc-300 mb-1">
+                  Badge Section Promo (Pill Kecil)
+                </label>
+                <input
+                  type="text"
+                  value={formConfig.promos?.sectionBadge || ''}
+                  onChange={(e) =>
+                    setFormConfig((prev) => ({
+                      ...prev,
+                      promos: {
+                        ...(prev.promos || DEFAULT_PROMO_CONFIG),
+                        sectionBadge: e.target.value
+                      }
+                    }))
+                  }
+                  placeholder="Pendaftaran Membership & Chat WA Resmi RFA Gym"
+                  className="w-full px-3.5 py-2 rounded-xl bg-zinc-950 border border-zinc-800 text-xs text-white focus:outline-none focus:border-orange-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-zinc-300 mb-1">
+                  Judul Utama Section Promo
+                </label>
+                <input
+                  type="text"
+                  value={formConfig.promos?.sectionTitle || ''}
+                  onChange={(e) =>
+                    setFormConfig((prev) => ({
+                      ...prev,
+                      promos: {
+                        ...(prev.promos || DEFAULT_PROMO_CONFIG),
+                        sectionTitle: e.target.value
+                      }
+                    }))
+                  }
+                  placeholder="SIAP MERAIH GOAL KEBUGARAN ANDA? JOIN NOW DI RFA GYM"
+                  className="w-full px-3.5 py-2 rounded-xl bg-zinc-950 border border-zinc-800 text-xs text-white focus:outline-none focus:border-orange-500 font-bold"
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold text-zinc-300 mb-1">
+                Deskripsi / Subtitle Section Promo
+              </label>
+              <textarea
+                rows={2}
+                value={formConfig.promos?.sectionSubtitle || ''}
+                onChange={(e) =>
+                  setFormConfig((prev) => ({
+                    ...prev,
+                    promos: {
+                      ...(prev.promos || DEFAULT_PROMO_CONFIG),
+                      sectionSubtitle: e.target.value
+                    }
+                  }))
+                }
+                placeholder="Nikmati akses ke 3 cabang strategis, peralatan biometrik berstandar dunia..."
+                className="w-full px-3.5 py-2 rounded-xl bg-zinc-950 border border-zinc-800 text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-orange-500"
+              />
+            </div>
+          </div>
+
+          {/* Manage Promo Plans List */}
+          <div className="p-6 rounded-3xl bg-zinc-900/80 border border-zinc-800 space-y-6">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-zinc-800">
+              <div>
+                <h4 className="text-sm font-extrabold text-white uppercase tracking-wider flex items-center gap-2">
+                  <Tag className="w-4 h-4 text-orange-400" />
+                  <span>Daftar Paket Membership & Promo ({(formConfig.promos?.plans || []).length})</span>
+                </h4>
+                <p className="text-xs text-zinc-400 mt-0.5">
+                  Tambahkan paket baru, atur diskon harga member, keunggulan, serta izinkan opsi tawar harga.
+                </p>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const defaultPlans = JSON.parse(JSON.stringify(DEFAULT_PROMO_PLANS));
+                    setFormConfig((prev) => ({
+                      ...prev,
+                      promos: {
+                        ...(prev.promos || DEFAULT_PROMO_CONFIG),
+                        plans: defaultPlans
+                      }
+                    }));
+                    notify('Reset Paket Berhasil', 'Paket telah dikembalikan ke pengaturan default.', 'info');
+                  }}
+                  className="px-3 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-white text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer"
+                  title="Kembalikan ke paket bawaan"
+                >
+                  <RotateCcw className="w-3.5 h-3.5" />
+                  <span>Reset Bawaan</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    const newPlan: LandingPromoPlan = {
+                      id: `promo-${Date.now()}`,
+                      name: 'Paket Spesial Baru',
+                      tagline: 'Promo Terbatas',
+                      durationMonths: 6,
+                      durationLabel: '6 Bulan',
+                      price: 899000,
+                      billingPeriod: '/bulan',
+                      memberSpecialPrice: 799000,
+                      badge: 'Hemat 30%',
+                      isPopular: false,
+                      features: [
+                        'Akses Penuh Semua Cabang RFA',
+                        'Gratis Loker Digital & Hot Shower',
+                        'Bonus 4 Sesi Personal Trainer'
+                      ],
+                      ctaLabel: 'Ambil Promo Ini • Join Now',
+                      allowNegotiate: true
+                    };
+
+                    setFormConfig((prev) => ({
+                      ...prev,
+                      promos: {
+                        ...(prev.promos || DEFAULT_PROMO_CONFIG),
+                        plans: [...(prev.promos?.plans || []), newPlan]
+                      }
+                    }));
+                    notify('Paket Ditambahkan', 'Paket promo baru telah ditambahkan ke daftar.', 'success');
+                  }}
+                  className="px-4 py-2 rounded-xl bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white text-xs font-extrabold flex items-center gap-1.5 shadow-md shadow-orange-500/20 active:scale-95 transition cursor-pointer"
+                >
+                  <Plus className="w-4 h-4" />
+                  <span>Tambah Paket Baru</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Plan Cards Editor */}
+            <div className="space-y-6">
+              {(formConfig.promos?.plans || []).map((plan, idx) => {
+                const planId = plan.id;
+                const newFeature = newFeatureInputs[planId] || '';
+
+                return (
+                  <div
+                    key={planId}
+                    className={`p-5 rounded-2xl bg-zinc-950 border transition-all space-y-4 ${
+                      plan.isPopular ? 'border-orange-500/60 shadow-lg shadow-orange-500/5' : 'border-zinc-800'
+                    }`}
+                  >
+                    {/* Top Row: Plan Header & Fast Actions */}
+                    <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-zinc-900">
+                      <div className="flex items-center gap-2">
+                        <span className="w-6 h-6 rounded-lg bg-orange-500/20 text-orange-400 text-xs font-black flex items-center justify-center">
+                          {idx + 1}
+                        </span>
+                        <div>
+                          <h5 className="text-sm font-extrabold text-white flex items-center gap-2">
+                            <span>{plan.name || 'Paket Tanpa Nama'}</span>
+                            {plan.isPopular && (
+                              <span className="px-2 py-0.5 rounded-full bg-orange-500 text-white text-[9px] font-black uppercase">
+                                Populer
+                              </span>
+                            )}
+                            {plan.allowNegotiate && (
+                              <span className="px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 text-[9px] font-bold border border-amber-500/30 flex items-center gap-1">
+                                <Handshake className="w-3 h-3" />
+                                <span>Bisa Tawar</span>
+                              </span>
+                            )}
+                          </h5>
+                          <span className="text-[11px] text-zinc-400">
+                            Normal: {formatRp(plan.price)} • Member: <strong className="text-amber-400">{formatRp(plan.memberSpecialPrice || Math.round(plan.price * 0.88))}</strong>
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if ((formConfig.promos?.plans || []).length <= 1) {
+                              notify('Tidak Bisa Dihapus', 'Minimal harus ada 1 paket aktif di landing page.', 'warning');
+                              return;
+                            }
+                            setFormConfig((prev) => ({
+                              ...prev,
+                              promos: {
+                                ...(prev.promos || DEFAULT_PROMO_CONFIG),
+                                plans: (prev.promos?.plans || []).filter((p) => p.id !== planId)
+                              }
+                            }));
+                            notify('Paket Dihapus', `Paket "${plan.name}" telah dihapus.`, 'info');
+                          }}
+                          className="p-1.5 rounded-xl bg-red-500/10 hover:bg-red-500/20 text-red-400 hover:text-red-300 transition cursor-pointer"
+                          title="Hapus paket ini"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Inputs Grid */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                      <div>
+                        <label className="block text-[11px] font-bold text-zinc-300 mb-1">
+                          Nama Paket
+                        </label>
+                        <input
+                          type="text"
+                          value={plan.name}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            setFormConfig((prev) => ({
+                              ...prev,
+                              promos: {
+                                ...(prev.promos || DEFAULT_PROMO_CONFIG),
+                                plans: (prev.promos?.plans || []).map((p) =>
+                                  p.id === planId ? { ...p, name: val } : p
+                                )
+                              }
+                            }));
+                          }}
+                          className="w-full px-3 py-2 rounded-xl bg-zinc-900 border border-zinc-800 text-xs text-white focus:outline-none focus:border-orange-500 font-bold"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-[11px] font-bold text-zinc-300 mb-1">
+                          Tagline / Slogan Ringkas
+                        </label>
+                        <input
+                          type="text"
+                          value={plan.tagline}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            setFormConfig((prev) => ({
+                              ...prev,
+                              promos: {
+                                ...(prev.promos || DEFAULT_PROMO_CONFIG),
+                                plans: (prev.promos?.plans || []).map((p) =>
+                                  p.id === planId ? { ...p, tagline: val } : p
+                                )
+                              }
+                            }));
+                          }}
+                          placeholder="All-Club Access"
+                          className="w-full px-3 py-2 rounded-xl bg-zinc-900 border border-zinc-800 text-xs text-white focus:outline-none focus:border-orange-500"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-[11px] font-bold text-zinc-300 mb-1">
+                          Label Durasi
+                        </label>
+                        <input
+                          type="text"
+                          value={plan.durationLabel}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            setFormConfig((prev) => ({
+                              ...prev,
+                              promos: {
+                                ...(prev.promos || DEFAULT_PROMO_CONFIG),
+                                plans: (prev.promos?.plans || []).map((p) =>
+                                  p.id === planId ? { ...p, durationLabel: val } : p
+                                )
+                              }
+                            }));
+                          }}
+                          placeholder="3 Bulan"
+                          className="w-full px-3 py-2 rounded-xl bg-zinc-900 border border-zinc-800 text-xs text-white focus:outline-none focus:border-orange-500"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-[11px] font-bold text-zinc-300 mb-1">
+                          Harga Normal / Reguler (Rp)
+                        </label>
+                        <input
+                          type="number"
+                          value={plan.price || ''}
+                          onChange={(e) => {
+                            const val = Number(e.target.value);
+                            setFormConfig((prev) => ({
+                              ...prev,
+                              promos: {
+                                ...(prev.promos || DEFAULT_PROMO_CONFIG),
+                                plans: (prev.promos?.plans || []).map((p) =>
+                                  p.id === planId ? { ...p, price: val } : p
+                                )
+                              }
+                            }));
+                          }}
+                          step="10000"
+                          className="w-full px-3 py-2 rounded-xl bg-zinc-900 border border-zinc-800 text-xs text-white focus:outline-none focus:border-orange-500 font-mono"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-[11px] font-bold text-amber-300 mb-1">
+                          Harga Khusus Member (Rp)
+                        </label>
+                        <input
+                          type="number"
+                          value={plan.memberSpecialPrice || ''}
+                          onChange={(e) => {
+                            const val = Number(e.target.value);
+                            setFormConfig((prev) => ({
+                              ...prev,
+                              promos: {
+                                ...(prev.promos || DEFAULT_PROMO_CONFIG),
+                                plans: (prev.promos?.plans || []).map((p) =>
+                                  p.id === planId ? { ...p, memberSpecialPrice: val } : p
+                                )
+                              }
+                            }));
+                          }}
+                          step="10000"
+                          className="w-full px-3 py-2 rounded-xl bg-zinc-900 border border-amber-500/40 text-xs text-amber-300 font-bold font-mono focus:outline-none focus:border-amber-400"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-[11px] font-bold text-zinc-300 mb-1">
+                          Teks Badge Sorotan
+                        </label>
+                        <input
+                          type="text"
+                          value={plan.badge || ''}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            setFormConfig((prev) => ({
+                              ...prev,
+                              promos: {
+                                ...(prev.promos || DEFAULT_PROMO_CONFIG),
+                                plans: (prev.promos?.plans || []).map((p) =>
+                                  p.id === planId ? { ...p, badge: val } : p
+                                )
+                              }
+                            }));
+                          }}
+                          placeholder="Paling Populer & Rekomendasi"
+                          className="w-full px-3 py-2 rounded-xl bg-zinc-900 border border-zinc-800 text-xs text-white focus:outline-none focus:border-orange-500"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-[11px] font-bold text-zinc-300 mb-1">
+                          Label Tombol CTA
+                        </label>
+                        <input
+                          type="text"
+                          value={plan.ctaLabel || ''}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            setFormConfig((prev) => ({
+                              ...prev,
+                              promos: {
+                                ...(prev.promos || DEFAULT_PROMO_CONFIG),
+                                plans: (prev.promos?.plans || []).map((p) =>
+                                  p.id === planId ? { ...p, ctaLabel: val } : p
+                                )
+                              }
+                            }));
+                          }}
+                          placeholder="Daftar All-Access • Join Now"
+                          className="w-full px-3 py-2 rounded-xl bg-zinc-900 border border-zinc-800 text-xs text-white focus:outline-none focus:border-orange-500"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Checkboxes: isPopular & allowNegotiate */}
+                    <div className="flex flex-wrap items-center gap-6 pt-2">
+                      <label className="inline-flex items-center gap-2 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={plan.isPopular}
+                          onChange={(e) => {
+                            const checked = e.target.checked;
+                            setFormConfig((prev) => ({
+                              ...prev,
+                              promos: {
+                                ...(prev.promos || DEFAULT_PROMO_CONFIG),
+                                plans: (prev.promos?.plans || []).map((p) =>
+                                  p.id === planId ? { ...p, isPopular: checked } : p
+                                )
+                              }
+                            }));
+                          }}
+                          className="rounded border-zinc-700 text-orange-500 focus:ring-orange-400 bg-zinc-900"
+                        />
+                        <span className="text-xs font-bold text-orange-400">
+                          Highlight Sebagai Paket Terpopuler (Border Oranye Menonjol)
+                        </span>
+                      </label>
+
+                      <label className="inline-flex items-center gap-2 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={plan.allowNegotiate}
+                          onChange={(e) => {
+                            const checked = e.target.checked;
+                            setFormConfig((prev) => ({
+                              ...prev,
+                              promos: {
+                                ...(prev.promos || DEFAULT_PROMO_CONFIG),
+                                plans: (prev.promos?.plans || []).map((p) =>
+                                  p.id === planId ? { ...p, allowNegotiate: checked } : p
+                                )
+                              }
+                            }));
+                          }}
+                          className="rounded border-zinc-700 text-amber-500 focus:ring-amber-400 bg-zinc-900"
+                        />
+                        <span className="text-xs font-bold text-amber-300">
+                          Izinkan Tawar / Nego Harga Member pada Paket Ini
+                        </span>
+                      </label>
+                    </div>
+
+                    {/* Features Bullet List Manager */}
+                    <div className="pt-2 border-t border-zinc-900 space-y-2">
+                      <label className="block text-[11px] font-bold text-zinc-300">
+                        Keunggulan & Fitur Paket ({plan.features.length} item):
+                      </label>
+
+                      <div className="space-y-1.5">
+                        {plan.features.map((feat, fIdx) => (
+                          <div
+                            key={fIdx}
+                            className="flex items-center justify-between gap-2 p-2 rounded-xl bg-zinc-900 border border-zinc-800 text-xs text-zinc-300"
+                          >
+                            <div className="flex items-center gap-2">
+                              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                              <span>{feat}</span>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setFormConfig((prev) => ({
+                                  ...prev,
+                                  promos: {
+                                    ...(prev.promos || DEFAULT_PROMO_CONFIG),
+                                    plans: (prev.promos?.plans || []).map((p) =>
+                                      p.id === planId
+                                        ? { ...p, features: p.features.filter((_, i) => i !== fIdx) }
+                                        : p
+                                    )
+                                  }
+                                }));
+                              }}
+                              className="text-zinc-500 hover:text-red-400 transition cursor-pointer p-1"
+                              title="Hapus fitur ini"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+
+                      {/* Add new feature input */}
+                      <div className="flex items-center gap-2 pt-1">
+                        <input
+                          type="text"
+                          value={newFeature}
+                          onChange={(e) =>
+                            setNewFeatureInputs((prev) => ({ ...prev, [planId]: e.target.value }))
+                          }
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter' && newFeature.trim()) {
+                              e.preventDefault();
+                              const text = newFeature.trim();
+                              setFormConfig((prev) => ({
+                                ...prev,
+                                promos: {
+                                  ...(prev.promos || DEFAULT_PROMO_CONFIG),
+                                  plans: (prev.promos?.plans || []).map((p) =>
+                                    p.id === planId ? { ...p, features: [...p.features, text] } : p
+                                  )
+                                }
+                              }));
+                              setNewFeatureInputs((prev) => ({ ...prev, [planId]: '' }));
+                            }
+                          }}
+                          placeholder="Ketik benefit/fitur baru dan tekan Enter atau tombol (+)..."
+                          className="flex-1 px-3 py-1.5 rounded-xl bg-zinc-900 border border-zinc-800 text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-orange-500"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (!newFeature.trim()) return;
+                            const text = newFeature.trim();
+                            setFormConfig((prev) => ({
+                              ...prev,
+                              promos: {
+                                ...(prev.promos || DEFAULT_PROMO_CONFIG),
+                                plans: (prev.promos?.plans || []).map((p) =>
+                                  p.id === planId ? { ...p, features: [...p.features, text] } : p
+                                )
+                              }
+                            }));
+                            setNewFeatureInputs((prev) => ({ ...prev, [planId]: '' }));
+                          }}
+                          className="px-3 py-1.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs font-bold transition flex items-center gap-1 cursor-pointer"
+                        >
+                          <Plus className="w-3.5 h-3.5" />
+                          <span>Tambah Fitur</span>
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* TAB 4: TENTANG KAMI & CERITA */}
       {activeTab === 'about' && (
         <div className="p-6 rounded-3xl bg-zinc-900/80 border border-zinc-800 space-y-6 animate-in fade-in duration-200">
           <div className="pb-3 border-b border-zinc-800">
@@ -1086,9 +1686,9 @@ export const LandingSettingsView: React.FC<LandingSettingsViewProps> = ({
                   />
                 </div>
 
-                {newGalleryItem.image && (
+                {newGalleryItem.image && newGalleryItem.image.trim() && (
                   <div className="mt-2 w-32 h-20 rounded-xl overflow-hidden border border-zinc-700">
-                    <img src={newGalleryItem.image} alt="Preview" className="w-full h-full object-cover" />
+                    <img src={newGalleryItem.image.trim()} alt="Preview" className="w-full h-full object-cover" />
                   </div>
                 )}
               </div>
@@ -1131,7 +1731,13 @@ export const LandingSettingsView: React.FC<LandingSettingsViewProps> = ({
                 className="group relative rounded-2xl overflow-hidden bg-zinc-900 border border-zinc-800 hover:border-zinc-700 transition shadow-md flex flex-col"
               >
                 <div className="aspect-[16/10] overflow-hidden relative bg-zinc-950">
-                  <img src={item.image} alt={item.title} className="w-full h-full object-cover group-hover:scale-105 transition duration-300" />
+                  {item.image && item.image.trim() ? (
+                    <img src={item.image.trim()} alt={item.title} className="w-full h-full object-cover group-hover:scale-105 transition duration-300" />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center bg-zinc-900 text-zinc-600 text-xs font-semibold">
+                      Tidak ada foto
+                    </div>
+                  )}
                   <span className="absolute top-2 left-2 px-2 py-0.5 rounded-md bg-black/80 text-[10px] font-bold text-orange-400 uppercase tracking-wider backdrop-blur-md">
                     {item.category}
                   </span>

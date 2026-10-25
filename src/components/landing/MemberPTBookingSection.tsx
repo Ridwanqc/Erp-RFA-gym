@@ -23,7 +23,9 @@ import {
   RefreshCw,
   Info,
   Layers,
-  Award
+  Award,
+  Coffee,
+  CalendarX
 } from 'lucide-react';
 import {
   Member,
@@ -32,11 +34,17 @@ import {
   Schedule,
   User as UserType,
   TrainerChangeRequest,
-  PTBackofficeNotification
+  PTBackofficeNotification,
+  WorkSchedule,
+  StaffAttendance,
+  LeaveRequest,
+  TrainerWorkingRule,
+  StudioClass
 } from '../../types';
 import { APP_TODAY, formatDateIndo } from '../../utils/formatters';
 import {
   DEFAULT_PT_TIME_SLOTS,
+  getTrainerDutyStatusOnDate,
   getTrainerSlotAvailability,
   validatePTDoubleBooking,
   checkRescheduleEligibility,
@@ -51,6 +59,11 @@ interface MemberPTBookingSectionProps {
   schedules: Schedule[];
   trainers: UserType[];
   trainerChangeRequests: TrainerChangeRequest[];
+  trainerWorkingRules?: TrainerWorkingRule[];
+  workSchedules?: WorkSchedule[];
+  staffAttendances?: StaffAttendance[];
+  leaveRequests?: LeaveRequest[];
+  studioClasses?: StudioClass[];
   onAddBooking: (booking: PTBooking, notification: PTBackofficeNotification) => void;
   onRescheduleBooking: (
     bookingId: string,
@@ -72,6 +85,11 @@ export const MemberPTBookingSection: React.FC<MemberPTBookingSectionProps> = ({
   schedules,
   trainers,
   trainerChangeRequests,
+  trainerWorkingRules = [],
+  workSchedules = [],
+  staffAttendances = [],
+  leaveRequests = [],
+  studioClasses = [],
   onAddBooking,
   onRescheduleBooking,
   onCancelBooking,
@@ -203,15 +221,53 @@ export const MemberPTBookingSection: React.FC<MemberPTBookingSectionProps> = ({
   const trainerIdToUse = activeTrainer?.id || ptSummary.assignedTrainer?.id || 'S04';
   const trainerNameToUse = activeTrainer?.name || ptSummary.assignedTrainer?.name || 'Reza Pratama';
 
+  // Real-time duty status of active trainer on selected booking date
+  const selectedDateDutyStatus = useMemo(() => {
+    return getTrainerDutyStatusOnDate({
+      trainerId: trainerIdToUse,
+      trainerName: trainerNameToUse,
+      date: selectedDate,
+      workSchedules,
+      staffAttendances,
+      leaveRequests,
+      trainerUser: activeTrainer || undefined,
+      rules: trainerWorkingRules
+    });
+  }, [trainerIdToUse, trainerNameToUse, selectedDate, workSchedules, staffAttendances, leaveRequests, activeTrainer, trainerWorkingRules]);
+
   // Real-time slot availability for selected date
   const slotAvailabilities = useMemo(() => {
     return getTrainerSlotAvailability(
       trainerIdToUse,
       selectedDate,
       bookings,
-      schedules
+      schedules,
+      undefined,
+      {
+        trainerName: trainerNameToUse,
+        workSchedules,
+        staffAttendances,
+        leaveRequests,
+        trainerUser: activeTrainer || undefined,
+        rules: trainerWorkingRules,
+        studioClasses
+      }
     );
-  }, [trainerIdToUse, selectedDate, bookings, schedules]);
+  }, [trainerIdToUse, trainerNameToUse, selectedDate, bookings, schedules, workSchedules, staffAttendances, leaveRequests, activeTrainer, trainerWorkingRules, studioClasses]);
+
+  // Real-time duty status for reschedule modal
+  const rescheduleDateDutyStatus = useMemo(() => {
+    if (!rescheduleTarget || !rescheduleDate) return null;
+    return getTrainerDutyStatusOnDate({
+      trainerId: rescheduleTarget.trainerId,
+      trainerName: rescheduleTarget.trainerName,
+      date: rescheduleDate,
+      workSchedules,
+      staffAttendances,
+      leaveRequests,
+      rules: trainerWorkingRules
+    });
+  }, [rescheduleTarget, rescheduleDate, workSchedules, staffAttendances, leaveRequests, trainerWorkingRules]);
 
   // Real-time slot availability for reschedule modal
   const rescheduleSlotAvailabilities = useMemo(() => {
@@ -221,9 +277,17 @@ export const MemberPTBookingSection: React.FC<MemberPTBookingSectionProps> = ({
       rescheduleDate,
       bookings,
       schedules,
-      rescheduleTarget.id
+      rescheduleTarget.id,
+      {
+        trainerName: rescheduleTarget.trainerName,
+        workSchedules,
+        staffAttendances,
+        leaveRequests,
+        rules: trainerWorkingRules,
+        studioClasses
+      }
     );
-  }, [rescheduleTarget, rescheduleDate, bookings, schedules]);
+  }, [rescheduleTarget, rescheduleDate, bookings, schedules, workSchedules, staffAttendances, leaveRequests, trainerWorkingRules, studioClasses]);
 
   // Filtered booking list
   const filteredBookings = useMemo(() => {
@@ -303,14 +367,30 @@ export const MemberPTBookingSection: React.FC<MemberPTBookingSectionProps> = ({
       return;
     }
 
-    // 3. Validasi double booking
+    // 3. Validasi status tugas pelatih pada hari tersebut
+    if (!selectedDateDutyStatus.isAvailableForDate) {
+      setBookingError(
+        selectedDateDutyStatus.reason ||
+          `Pelatih ${trainerNameToUse} tidak dapat mengambil jadwal pada ${selectedDate} (${selectedDateDutyStatus.statusLabel}). Silakan pilih tanggal lain.`
+      );
+      return;
+    }
+
+    // 4. Validasi double booking & jam kerja
     const doubleCheck = validatePTDoubleBooking({
       memberId: loggedInMember.id,
       trainerId: trainerIdToUse,
+      trainerName: trainerNameToUse,
       date: selectedDate,
       startTime: slotObj.startTime,
       bookings,
-      schedules
+      schedules,
+      workSchedules,
+      staffAttendances,
+      leaveRequests,
+      trainerUser: activeTrainer || undefined,
+      rules: trainerWorkingRules,
+      studioClasses
     });
 
     if (!doubleCheck.isValid) {
@@ -422,15 +502,30 @@ export const MemberPTBookingSection: React.FC<MemberPTBookingSectionProps> = ({
       return;
     }
 
-    // Double check availability
+    // 1. Validasi duty status trainer pada tanggal reschedule baru
+    if (rescheduleDateDutyStatus && !rescheduleDateDutyStatus.isAvailableForDate) {
+      setRescheduleError(
+        rescheduleDateDutyStatus.reason ||
+          `Coach ${rescheduleTarget.trainerName} tidak bertugas pada tanggal ini (${rescheduleDateDutyStatus.statusLabel}). Silakan pilih tanggal lain.`
+      );
+      return;
+    }
+
+    // 2. Double check availability & shift
     const doubleCheck = validatePTDoubleBooking({
       memberId: loggedInMember.id,
       trainerId: rescheduleTarget.trainerId,
+      trainerName: rescheduleTarget.trainerName,
       date: rescheduleDate,
       startTime: slotObj.startTime,
       currentBookingId: rescheduleTarget.id,
       bookings,
-      schedules
+      schedules,
+      workSchedules,
+      staffAttendances,
+      leaveRequests,
+      rules: trainerWorkingRules,
+      studioClasses
     });
 
     if (!doubleCheck.isValid) {
@@ -1060,6 +1155,41 @@ export const MemberPTBookingSection: React.FC<MemberPTBookingSectionProps> = ({
                 </div>
               </div>
 
+              {/* Trainer Duty Status Alert Banner */}
+              {!selectedDateDutyStatus.isAvailableForDate ? (
+                <div className="p-3.5 rounded-2xl bg-rose-500/15 border border-rose-500/30 text-rose-300 text-xs flex items-start gap-2.5">
+                  <CalendarX className="w-5 h-5 text-rose-400 shrink-0 mt-0.5" />
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="font-black text-white">Pelatih Tidak Tersedia Pada Tanggal Ini</span>
+                      <span className="px-2 py-0.5 rounded-full bg-rose-500/30 text-rose-200 border border-rose-500/40 text-[10px] font-bold">
+                        {selectedDateDutyStatus.statusLabel}
+                      </span>
+                    </div>
+                    <p className="text-zinc-300 text-[11px] leading-relaxed">
+                      {selectedDateDutyStatus.reason || 'Pelatih sedang tidak dapat mengambil jadwal pada tanggal ini.'}
+                    </p>
+                    <p className="text-amber-400 font-bold text-[11px] pt-0.5">
+                      💡 Silakan pilih tanggal lain (gunakan tombol "Besok" atau kalender di atas).
+                    </p>
+                  </div>
+                </div>
+              ) : (
+                <div className="p-3 rounded-2xl bg-emerald-500/10 border border-emerald-500/25 text-emerald-300 text-xs flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                    <span>
+                      Pelatih Bertugas: <strong className="text-white font-bold">{selectedDateDutyStatus.statusLabel}</strong>
+                    </span>
+                  </div>
+                  {selectedDateDutyStatus.breakStartTime && (
+                    <span className="text-[10px] text-zinc-400">
+                      Istirahat: {selectedDateDutyStatus.breakStartTime} - {selectedDateDutyStatus.breakEndTime}
+                    </span>
+                  )}
+                </div>
+              )}
+
               {/* Slot Availability Grid */}
               <div className="space-y-2">
                 <div className="flex items-center justify-between text-xs">
@@ -1074,6 +1204,20 @@ export const MemberPTBookingSection: React.FC<MemberPTBookingSectionProps> = ({
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 max-h-52 overflow-y-auto p-1 border border-zinc-800 rounded-2xl bg-zinc-950/50">
                   {slotAvailabilities.map((slot) => {
                     const isSelected = selectedTimeSlot === slot.startTime && slot.isAvailable;
+                    const statusLabel = slot.isAvailable
+                      ? 'Tersedia'
+                      : slot.statusType === 'DAY_OFF'
+                      ? 'Libur (Day Off)'
+                      : slot.statusType === 'ABSENT'
+                      ? 'Tidak Hadir'
+                      : slot.statusType === 'NOT_TEACHING'
+                      ? 'Tidak Mengajar'
+                      : slot.reasonDisabled?.includes('Luar jam')
+                      ? 'Luar Shift'
+                      : slot.reasonDisabled?.includes('Istirahat')
+                      ? 'Jam Istirahat'
+                      : 'Terisi (Full)';
+
                     return (
                       <button
                         key={slot.startTime}
@@ -1105,7 +1249,7 @@ export const MemberPTBookingSection: React.FC<MemberPTBookingSectionProps> = ({
                               : 'text-rose-400'
                           }`}
                         >
-                          {slot.isAvailable ? 'Tersedia' : 'Terisi (Full)'}
+                          {statusLabel}
                         </span>
                       </button>
                     );
@@ -1156,7 +1300,12 @@ export const MemberPTBookingSection: React.FC<MemberPTBookingSectionProps> = ({
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white text-xs font-extrabold shadow-lg shadow-orange-500/25 active:scale-95 transition"
+                  disabled={!selectedDateDutyStatus.isAvailableForDate || !selectedTimeSlot}
+                  className={`px-5 py-2.5 rounded-xl text-xs font-extrabold shadow-lg transition ${
+                    selectedDateDutyStatus.isAvailableForDate && selectedTimeSlot
+                      ? 'bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white shadow-orange-500/25 active:scale-95 cursor-pointer'
+                      : 'bg-zinc-800 text-zinc-500 cursor-not-allowed border border-zinc-700/50'
+                  }`}
                 >
                   Konfirmasi Booking Jadwal
                 </button>
@@ -1224,11 +1373,43 @@ export const MemberPTBookingSection: React.FC<MemberPTBookingSectionProps> = ({
                 />
               </div>
 
+              {/* Reschedule Trainer Duty Status Banner */}
+              {rescheduleDateDutyStatus && (
+                !rescheduleDateDutyStatus.isAvailableForDate ? (
+                  <div className="p-3 rounded-xl bg-rose-500/15 border border-rose-500/30 text-rose-300 text-xs flex items-start gap-2">
+                    <CalendarX className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
+                    <div>
+                      <span className="font-bold">Coach Tidak Tersedia: {rescheduleDateDutyStatus.statusLabel}</span>
+                      <p className="text-zinc-400 text-[11px] mt-0.5">{rescheduleDateDutyStatus.reason}</p>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="p-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-300 text-xs flex items-center gap-2">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                    <span>Jadwal Tugas: {rescheduleDateDutyStatus.statusLabel}</span>
+                  </div>
+                )
+              )}
+
               <div className="space-y-1.5">
                 <label className="text-xs font-bold text-zinc-300 block">Pilih Jam Slot Baru:</label>
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 max-h-48 overflow-y-auto p-1 border border-zinc-800 rounded-2xl bg-zinc-950/50">
                   {rescheduleSlotAvailabilities.map((slot) => {
                     const isSelected = rescheduleTimeSlot === slot.startTime && slot.isAvailable;
+                    const statusLabel = slot.isAvailable
+                      ? 'Tersedia'
+                      : slot.statusType === 'DAY_OFF'
+                      ? 'Libur'
+                      : slot.statusType === 'ABSENT'
+                      ? 'Tidak Hadir'
+                      : slot.statusType === 'NOT_TEACHING'
+                      ? 'Nonaktif'
+                      : slot.reasonDisabled?.includes('Luar jam')
+                      ? 'Luar Shift'
+                      : slot.reasonDisabled?.includes('Istirahat')
+                      ? 'Istirahat'
+                      : 'Terisi';
+
                     return (
                       <button
                         key={slot.startTime}
@@ -1245,7 +1426,7 @@ export const MemberPTBookingSection: React.FC<MemberPTBookingSectionProps> = ({
                       >
                         <span className="truncate">{slot.label}</span>
                         <span className={`text-[9px] uppercase font-black mt-1 ${slot.isAvailable ? 'text-emerald-400' : 'text-rose-400'}`}>
-                          {slot.isAvailable ? 'Tersedia' : 'Terisi'}
+                          {statusLabel}
                         </span>
                       </button>
                     );
@@ -1274,7 +1455,12 @@ export const MemberPTBookingSection: React.FC<MemberPTBookingSectionProps> = ({
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2.5 rounded-xl bg-sky-500 hover:bg-sky-600 text-white text-xs font-extrabold shadow-lg shadow-sky-500/25 active:scale-95 transition"
+                  disabled={Boolean(rescheduleDateDutyStatus && !rescheduleDateDutyStatus.isAvailableForDate)}
+                  className={`px-5 py-2.5 rounded-xl text-xs font-extrabold shadow-lg transition ${
+                    !rescheduleDateDutyStatus || rescheduleDateDutyStatus.isAvailableForDate
+                      ? 'bg-sky-500 hover:bg-sky-600 text-white shadow-sky-500/25 active:scale-95 cursor-pointer'
+                      : 'bg-zinc-800 text-zinc-500 cursor-not-allowed border border-zinc-700/50'
+                  }`}
                 >
                   Simpan Jadwal Baru
                 </button>

@@ -337,11 +337,17 @@ export const ClassPaymentModal: React.FC<ClassPaymentModalProps> = ({
               {selectedMember && (
                 <div className="mt-2 p-3 rounded-2xl bg-zinc-950/80 border border-zinc-800 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
                   <div className="flex items-center gap-2.5">
-                    <img
-                      src={selectedMember.photo}
-                      alt={selectedMember.name}
-                      className="w-9 h-9 rounded-full object-cover border border-zinc-700"
-                    />
+                    {selectedMember.photo && selectedMember.photo.trim() ? (
+                      <img
+                        src={selectedMember.photo.trim()}
+                        alt={selectedMember.name}
+                        className="w-9 h-9 rounded-full object-cover border border-zinc-700 shrink-0"
+                      />
+                    ) : (
+                      <div className="w-9 h-9 rounded-full bg-zinc-800 border border-zinc-700 flex items-center justify-center text-orange-400 font-bold text-xs shrink-0">
+                        {selectedMember.name.substring(0, 2).toUpperCase()}
+                      </div>
+                    )}
                     <div>
                       <div className="flex items-center gap-2">
                         <strong className="text-white text-xs">{selectedMember.name}</strong>

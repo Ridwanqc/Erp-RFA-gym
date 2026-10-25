@@ -1205,14 +1205,20 @@ export const MemberWorkoutAnalyticsSection: React.FC<MemberWorkoutAnalyticsSecti
 
                       {/* Photo */}
                       <div className="relative shrink-0">
-                        <img
-                          src={stat.avatar}
-                          alt={stat.memberName}
-                          className="w-12 h-12 rounded-2xl object-cover border border-zinc-700 shadow-md"
-                          onError={(e) => {
-                            (e.target as HTMLImageElement).src = 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=200&auto=format&fit=crop';
-                          }}
-                        />
+                        {stat.avatar && stat.avatar.trim() ? (
+                          <img
+                            src={stat.avatar.trim()}
+                            alt={stat.memberName}
+                            className="w-12 h-12 rounded-2xl object-cover border border-zinc-700 shadow-md"
+                            onError={(e) => {
+                              (e.target as HTMLImageElement).src = 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=200&auto=format&fit=crop';
+                            }}
+                          />
+                        ) : (
+                          <div className="w-12 h-12 rounded-2xl bg-zinc-800 border border-zinc-700 flex items-center justify-center font-bold text-orange-400 text-sm shadow-md">
+                            {stat.memberName.substring(0, 2).toUpperCase()}
+                          </div>
+                        )}
                         {stat.isCurrentlyTraining && (
                           <span
                             className="absolute -top-1 -right-1 w-3.5 h-3.5 bg-emerald-500 border-2 border-zinc-950 rounded-full animate-pulse"
@@ -1380,14 +1386,20 @@ export const MemberWorkoutAnalyticsSection: React.FC<MemberWorkoutAnalyticsSecti
             {/* Header Modal */}
             <div className="p-5 sm:p-6 border-b border-zinc-800 flex items-center justify-between bg-zinc-900/60">
               <div className="flex items-center gap-3">
-                <img
-                  src={detailModalStats.avatar}
-                  alt={detailModalStats.memberName}
-                  className="w-12 h-12 rounded-2xl object-cover border border-orange-500/30"
-                  onError={(e) => {
-                    (e.target as HTMLImageElement).src = 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=200&auto=format&fit=crop';
-                  }}
-                />
+                {detailModalStats.avatar && detailModalStats.avatar.trim() ? (
+                  <img
+                    src={detailModalStats.avatar.trim()}
+                    alt={detailModalStats.memberName}
+                    className="w-12 h-12 rounded-2xl object-cover border border-orange-500/30"
+                    onError={(e) => {
+                      (e.target as HTMLImageElement).src = 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=200&auto=format&fit=crop';
+                    }}
+                  />
+                ) : (
+                  <div className="w-12 h-12 rounded-2xl bg-zinc-800 border border-orange-500/30 flex items-center justify-center font-bold text-orange-400 text-base">
+                    {detailModalStats.memberName.substring(0, 2).toUpperCase()}
+                  </div>
+                )}
                 <div>
                   <h3 className="text-base sm:text-lg font-black text-white flex items-center gap-2">
                     <span>{detailModalStats.memberName}</span>

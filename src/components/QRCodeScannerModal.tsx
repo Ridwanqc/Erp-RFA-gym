@@ -18,13 +18,16 @@ import {
   Flame,
   Volume2,
   VolumeX,
-  Smartphone
+  Smartphone,
+  XCircle
 } from 'lucide-react';
 import jsQR from 'jsqr';
 import { Member, Attendance, LockerSlot } from '../types';
 import { getTimestamp, APP_TODAY } from '../utils/formatters';
 import { getMemberPassCode } from './IDCardModal';
 import { getRecommendedLocker } from '../data/lockerData';
+import { speakAccessVoice } from '../utils/audioAlerts';
+import { getMemberStatus } from '../utils/memberStatus';
 
 interface QRCodeScannerModalProps {
   isOpen: boolean;
@@ -245,12 +248,18 @@ export const QRCodeScannerModal: React.FC<QRCodeScannerModalProps> = ({
 
   // Execute check-in or check-out for a member
   const handleExecuteAction = useCallback((member: Member, explicitVisitType?: 'Reguler' | 'PT') => {
-    const isExpired = new Date(member.expired + 'T00:00:00') < new Date(APP_TODAY + 'T00:00:00');
-    if (isExpired) {
-      playBeep(true);
+    const statusInfo = getMemberStatus(member);
+    const isExpired = statusInfo.status === 'EXPIRED';
+    const isGracePeriod = statusInfo.status === 'MASA TENGGANG';
+    const isFrozen = member.isFrozen || statusInfo.status === 'FREEZE';
+
+    if (isExpired || isFrozen) {
+      speakAccessVoice('EXPIRED', soundEnabled);
       showToast(
-        'Akses Ditolak',
-        `Membership ${member.name} telah kadaluarsa (${member.expired}). Silakan lakukan perpanjangan paket terlebih dahulu.`,
+        isFrozen ? 'Akses Ditolak (Member Freeze)' : 'Akses Ditolak (Membership Expired)',
+        isFrozen
+          ? `Status membership ${member.name} sedang dibekukan (freeze). Silakan aktifkan kembali di kasir.`
+          : `Membership ${member.name} telah kadaluarsa (${member.expired}). Silakan lakukan perpanjangan paket terlebih dahulu.`,
         'error'
       );
       setDetectedMember(null);
@@ -259,18 +268,28 @@ export const QRCodeScannerModal: React.FC<QRCodeScannerModalProps> = ({
       return;
     }
 
+    // Voice announcement: "Akses diterima dalam masa tenggang" or "Akses diterima"
+    if (isGracePeriod) {
+      speakAccessVoice('MASA TENGGANG', soundEnabled);
+    } else {
+      speakAccessVoice('AKTIF', soundEnabled);
+    }
+
     const activeSession = getActiveSession(member);
     const chosenType = explicitVisitType || visitType;
 
     if (activeSession) {
       // Check-out logic (2nd scan)
       onCheckoutMember(activeSession.id);
-      playBeep(false);
       if ('vibrate' in navigator) navigator.vibrate?.([50, 50, 50]);
       showToast(
-        'Check-Out Berhasil (Scan ke-2)',
-        `Sampai jumpa lagi, ${member.name}! Sesi latihan selesai & kunci loker dikembalikan otomatis.`,
-        'info'
+        isGracePeriod
+          ? 'Akses Diterima dalam Masa Tenggang (Check-Out)'
+          : 'Akses Diterima (Check-Out Berhasil)',
+        `Sampai jumpa lagi, ${member.name}! Sesi latihan selesai & kunci loker dikembalikan otomatis.${
+          isGracePeriod ? ` (Perhatian: Masa aktif tersisa ${statusInfo.diffDays} hari s.d ${member.expired})` : ''
+        }`,
+        isGracePeriod ? 'warning' : 'info'
       );
 
       setRecentScans((prev) => [
@@ -318,12 +337,21 @@ export const QRCodeScannerModal: React.FC<QRCodeScannerModalProps> = ({
       };
 
       onAddAttendance(newAtt, updatedMember);
-      playBeep(false);
       if ('vibrate' in navigator) navigator.vibrate?.(100);
       showToast(
-        'Check-In Berhasil (Scan ke-1)',
-        `Selamat datang, ${member.name}!${allocatedLockerNum ? ` Kunci Loker #${allocatedLockerNum} (${member.gender === 'P' ? 'Wanita' : 'Pria'}) diserahkan.` : ''}`,
-        'success'
+        isGracePeriod
+          ? 'Akses Diterima dalam Masa Tenggang (Check-In)'
+          : 'Akses Diterima (Check-In Berhasil)',
+        `Selamat datang, ${member.name}!${
+          allocatedLockerNum
+            ? ` Kunci Loker #${allocatedLockerNum} (${member.gender === 'P' ? 'Wanita' : 'Pria'}) diserahkan.`
+            : ''
+        }${
+          isGracePeriod
+            ? ` Masa aktif Anda tersisa ${statusInfo.diffDays} hari (s.d ${member.expired}). Silakan lakukan perpanjangan paket.`
+            : ''
+        }`,
+        isGracePeriod ? 'warning' : 'success'
       );
 
       setRecentScans((prev) => [
@@ -345,7 +373,7 @@ export const QRCodeScannerModal: React.FC<QRCodeScannerModalProps> = ({
       setCountdown(null);
       isProcessingRef.current = false;
     }, 1100);
-  }, [visitType, getActiveSession, onCheckoutMember, onAddAttendance, playBeep, showToast, lockers]);
+  }, [visitType, getActiveSession, onCheckoutMember, onAddAttendance, soundEnabled, playBeep, showToast, lockers]);
 
   // Handle successful QR detection
   const handleQRDetected = useCallback((rawContent: string) => {
@@ -356,8 +384,16 @@ export const QRCodeScannerModal: React.FC<QRCodeScannerModalProps> = ({
     const matched = findMemberFromQR(rawContent, members);
 
     if (matched) {
+      const statusInfo = getMemberStatus(matched);
+
       if (onScanMember) {
-        playBeep(false);
+        if (statusInfo.status === 'EXPIRED' || matched.isFrozen) {
+          speakAccessVoice('EXPIRED', soundEnabled);
+        } else if (statusInfo.status === 'MASA TENGGANG') {
+          speakAccessVoice('MASA TENGGANG', soundEnabled);
+        } else {
+          speakAccessVoice('AKTIF', soundEnabled);
+        }
         onScanMember(matched);
         onClose();
         isProcessingRef.current = false;
@@ -365,14 +401,22 @@ export const QRCodeScannerModal: React.FC<QRCodeScannerModalProps> = ({
       }
 
       setDetectedMember(matched);
-      playBeep(false);
 
       if (autoCheckIn) {
-        // Direct auto-attendance: 1st scan check-in, 2nd scan check-out with 350ms instant feedback
+        // Direct auto-attendance: 1st scan check-in, 2nd scan check-out with 300ms instant feedback
         setCountdown(1);
         countdownTimerRef.current = setTimeout(() => {
           handleExecuteAction(matched);
-        }, 350);
+        }, 300);
+      } else {
+        // In manual mode, announce the status voice immediately upon detection
+        if (statusInfo.status === 'EXPIRED' || matched.isFrozen) {
+          speakAccessVoice('EXPIRED', soundEnabled);
+        } else if (statusInfo.status === 'MASA TENGGANG') {
+          speakAccessVoice('MASA TENGGANG', soundEnabled);
+        } else {
+          speakAccessVoice('AKTIF', soundEnabled);
+        }
       }
     } else {
       playBeep(true);
@@ -382,7 +426,7 @@ export const QRCodeScannerModal: React.FC<QRCodeScannerModalProps> = ({
         isProcessingRef.current = false;
       }, 1500);
     }
-  }, [members, onScanMember, onClose, autoCheckIn, playBeep, showToast, handleExecuteAction]);
+  }, [members, onScanMember, onClose, autoCheckIn, soundEnabled, playBeep, showToast, handleExecuteAction]);
 
   // Continuous frame analysis loop
   const scanLoop = useCallback(() => {
@@ -581,9 +625,9 @@ export const QRCodeScannerModal: React.FC<QRCodeScannerModalProps> = ({
   if (!isOpen) return null;
 
   const activeSessionForDetected = detectedMember ? getActiveSession(detectedMember) : null;
-  const isDetectedExpired = detectedMember
-    ? new Date(detectedMember.expired + 'T00:00:00') < new Date(APP_TODAY + 'T00:00:00')
-    : false;
+  const detectedStatusInfo = detectedMember ? getMemberStatus(detectedMember) : null;
+  const isDetectedExpired = detectedStatusInfo?.status === 'EXPIRED' || detectedMember?.isFrozen;
+  const isDetectedGrace = detectedStatusInfo?.status === 'MASA TENGGANG';
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 backdrop-blur-md p-3 sm:p-4 overflow-y-auto animate-in fade-in duration-200">
@@ -620,11 +664,33 @@ export const QRCodeScannerModal: React.FC<QRCodeScannerModalProps> = ({
           </div>
 
           <div className="flex items-center gap-2">
+            {/* Audio Voice Indicator */}
+            <div
+              className={`hidden sm:inline-flex items-center gap-1.5 px-3 py-1 rounded-full border text-[10px] font-bold transition ${
+                soundEnabled
+                  ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30'
+                  : 'bg-zinc-800 text-zinc-400 border-zinc-700'
+              }`}
+              title="Respon Suara Bahasa Indonesia: 'Akses diterima', 'Akses ditolak', 'Akses diterima dalam masa tenggang'"
+            >
+              <Volume2 className="w-3 h-3 text-orange-400" />
+              <span>Suara: {soundEnabled ? 'Akses Aktif' : 'Mute'}</span>
+            </div>
+
             {/* Audio Toggle */}
             <button
-              onClick={() => setSoundEnabled(!soundEnabled)}
-              title={soundEnabled ? 'Matikan Suara Beep' : 'Aktifkan Suara Beep'}
-              className="p-2 text-zinc-400 hover:text-white rounded-xl hover:bg-zinc-800 transition"
+              onClick={() => {
+                const next = !soundEnabled;
+                setSoundEnabled(next);
+                if (next) {
+                  speakAccessVoice('AKTIF', true);
+                  showToast('Suara ID Card Aktif', 'Respon suara "Akses diterima / Akses ditolak" diaktifkan.', 'info');
+                } else {
+                  showToast('Suara ID Card Nonaktif', 'Respon suara dimatikan.', 'info');
+                }
+              }}
+              title={soundEnabled ? 'Matikan Suara Respon' : 'Aktifkan Suara Respon'}
+              className="p-2 text-zinc-400 hover:text-white rounded-xl hover:bg-zinc-800 transition cursor-pointer"
             >
               {soundEnabled ? <Volume2 className="w-4 h-4 text-orange-400" /> : <VolumeX className="w-4 h-4" />}
             </button>
@@ -632,7 +698,7 @@ export const QRCodeScannerModal: React.FC<QRCodeScannerModalProps> = ({
             {/* Close Button */}
             <button
               onClick={onClose}
-              className="p-2 text-zinc-400 hover:text-white rounded-xl hover:bg-zinc-800 transition"
+              className="p-2 text-zinc-400 hover:text-white rounded-xl hover:bg-zinc-800 transition cursor-pointer"
             >
               <X className="w-5 h-5" />
             </button>
@@ -789,12 +855,19 @@ export const QRCodeScannerModal: React.FC<QRCodeScannerModalProps> = ({
 
                   <div className="flex flex-wrap items-center gap-2 mt-1">
                     {isDetectedExpired ? (
-                      <span className="bg-rose-500/20 text-rose-400 border border-rose-500/30 text-[10px] font-bold px-2 py-0.5 rounded">
-                        Expired: {detectedMember.expired}
+                      <span className="bg-rose-500/20 text-rose-400 border border-rose-500/30 text-[10px] font-bold px-2 py-0.5 rounded flex items-center gap-1">
+                        <XCircle className="w-3 h-3 text-rose-400" />
+                        <span>Akses Ditolak (Expired: {detectedMember.expired})</span>
+                      </span>
+                    ) : isDetectedGrace ? (
+                      <span className="bg-amber-500/20 text-amber-300 border border-amber-500/30 text-[10px] font-bold px-2 py-0.5 rounded flex items-center gap-1 animate-pulse">
+                        <AlertTriangle className="w-3 h-3 text-amber-400" />
+                        <span>Akses Diterima dalam Masa Tenggang (Sisa {detectedStatusInfo?.diffDays} Hari)</span>
                       </span>
                     ) : (
                       <span className="bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 text-[10px] font-bold px-2 py-0.5 rounded flex items-center gap-1">
-                        <CheckCircle2 className="w-3 h-3" /> Aktif s.d {detectedMember.expired}
+                        <CheckCircle2 className="w-3 h-3 text-emerald-400" />
+                        <span>Akses Diterima (Aktif s.d {detectedMember.expired})</span>
                       </span>
                     )}
 

@@ -1,4 +1,4 @@
-export type UserRole = 'admin' | 'admin_cabang' | 'kasir' | 'leader_pt' | 'pt' | 'teknisi' | 'manager';
+export type UserRole = 'admin' | 'admin_cabang' | 'kasir' | 'leader_pt' | 'pt' | 'teknisi' | 'manager' | 'keuangan';
 
 export function isSuperAdmin(roleOrUser?: UserRole | { role?: UserRole } | null): boolean {
   if (!roleOrUser) return false;
@@ -18,12 +18,15 @@ export function canManageBranchOnly(roleOrUser?: UserRole | { role?: UserRole } 
   return role === 'admin_cabang';
 }
 
-export type DivisionType = 'Kasir & Front Desk' | 'Pelatihan' | 'Manajemen' | 'Manajemen Cabang' | 'Teknisi' | string;
+export type DivisionType = 'Kasir & Front Desk' | 'Pelatihan' | 'Manajemen' | 'Manajemen Cabang' | 'Keuangan' | 'Teknisi' | string;
 
 export function getStaffDivision(user?: { role?: string; roleName?: string; division?: string } | null): string {
   if (user?.division) return user.division;
   const role = (user?.role || '').toLowerCase();
   const roleName = (user?.roleName || '').toLowerCase();
+  if (role === 'keuangan' || roleName.includes('keuangan') || roleName.includes('finance') || roleName.includes('accounting') || roleName.includes('akuntan')) {
+    return 'Keuangan';
+  }
   if (role === 'admin_cabang' || roleName.includes('admin cabang') || roleName.includes('admin unit')) {
     return 'Manajemen Cabang';
   }
@@ -67,6 +70,7 @@ export interface User {
   birthDate?: string;
   emergencyContact?: string;
   // HR & Kepegawaian
+  status?: 'Aktif' | 'Nonaktif' | 'Cuti' | string;
   employmentStatus?: 'Tetap' | 'Kontrak' | 'Probation' | 'Part-time';
   joinDate?: string;
   allowance?: number;
@@ -823,6 +827,37 @@ export interface WorkSchedule {
   notes?: string;
   status: 'Scheduled' | 'Completed' | 'Swapped' | 'Off';
   swappedWith?: string;
+}
+
+export interface TrainerWorkingRule {
+  trainerId: string;
+  trainerName: string;
+  isTeachingActive: boolean; // default true (false jika sedang tidak melatih)
+  teachingDays: number[]; // 0: Minggu, 1: Senin, ..., 6: Sabtu
+  defaultShift: ShiftType; // 'Pagi' | 'Siang' | 'Malam' | 'Off'
+  startTime: string; // e.g. "06:00" atau "14:00"
+  endTime: string;   // e.g. "14:00" atau "22:00"
+  maxSessionsPerDay: number; // e.g. 6 atau 8
+  breakStartTime?: string; // e.g. "12:00"
+  breakEndTime?: string;   // e.g. "13:00"
+  notes?: string;
+  updatedAt?: string;
+}
+
+export interface TrainerDutyStatus {
+  isAvailableForDate: boolean;
+  isDayOff: boolean;
+  isAbsent: boolean;
+  isLeave: boolean;
+  isNotTeaching: boolean;
+  shiftName?: string;
+  dutyStartTime?: string;
+  dutyEndTime?: string;
+  statusLabel: string;
+  reason?: string;
+  badgeColor: 'emerald' | 'rose' | 'amber' | 'purple' | 'zinc';
+  breakStartTime?: string;
+  breakEndTime?: string;
 }
 
 export interface StaffAttendance {
@@ -1711,12 +1746,37 @@ export interface LandingGalleryItem {
   description: string;
 }
 
+export interface LandingPromoPlan {
+  id: string;
+  name: string;
+  tagline: string;
+  durationMonths: number;
+  durationLabel: string;
+  price: number;
+  billingPeriod: string; // e.g. "/bulan" atau "/paket"
+  memberSpecialPrice?: number; // Harga tawaran khusus member terdaftar
+  badge?: string; // e.g. "Paling Populer & Rekomendasi"
+  isPopular?: boolean;
+  features: string[];
+  ctaLabel?: string;
+  allowNegotiate?: boolean; // Fitur tawar / ajukan harga nego untuk member
+}
+
+export interface LandingPromoConfig {
+  sectionBadge?: string;
+  sectionTitle?: string;
+  sectionSubtitle?: string;
+  plans: LandingPromoPlan[];
+  allowMemberOffer?: boolean; // Mengaktifkan fitur penawaran / nego harga khusus member
+}
+
 export interface LandingPageConfig {
   hero: LandingHeroConfig;
   announcement: LandingAnnouncementConfig;
   about: LandingAboutConfig;
   social: LandingSocialConfig;
   galleryItems?: LandingGalleryItem[];
+  promos?: LandingPromoConfig;
 }
 
 export interface SystemSettings {
@@ -1728,4 +1788,133 @@ export interface SystemSettings {
   landing?: LandingPageConfig;
   updatedAt?: string;
 }
+
+// -------------------------------------------------------------
+// Otomasi Front Desk & Gate System
+// -------------------------------------------------------------
+export type ScheduledNotificationType = 'EXPIRY_H7' | 'EXPIRY_H1' | 'PT_REMINDER_H2' | 'BIRTHDAY_VOUCHER' | 'CUSTOM';
+export type ScheduledNotificationStatus = 'PENDING' | 'SENT' | 'FAILED' | 'SKIPPED';
+
+export interface ScheduledWhatsAppTask {
+  id: string;
+  type: ScheduledNotificationType;
+  recipientId: string;
+  recipientName: string;
+  recipientPhone: string;
+  scheduledFor: string; // ISO date / timestamp or YYYY-MM-DD
+  message: string;
+  status: ScheduledNotificationStatus;
+  sentAt?: string;
+  metadata?: {
+    daysRemaining?: number;
+    ptSessionTime?: string;
+    ptTrainerName?: string;
+    voucherCode?: string;
+    voucherDiscount?: string;
+  };
+}
+
+export type GateType = 'TRIPOD_TURNSTILE' | 'FLAP_BARRIER' | 'SWING_GATE';
+export type GateAccessDecision = 'GRANTED' | 'DENIED_EXPIRED' | 'DENIED_NOT_FOUND' | 'DENIED_FROZEN' | 'DENIED_ALREADY_INSIDE' | 'MANUAL_OVERRIDE';
+
+export interface TurnstileGateLog {
+  id: string;
+  timestamp: string;
+  memberId?: string;
+  memberName?: string;
+  memberPhoto?: string;
+  barcodeOrCardId: string;
+  gateId: string;
+  gateName: string;
+  direction: 'IN' | 'OUT';
+  decision: GateAccessDecision;
+  notes: string;
+  relayPulseMs: number;
+}
+
+export interface TurnstileGateConfig {
+  id: string;
+  name: string;
+  type: GateType;
+  ipAddress: string;
+  port: number;
+  relayPulseMs: number;
+  direction: 'IN' | 'OUT' | 'BIDIRECTIONAL';
+  enabled: boolean;
+  assignedBranchId?: string;
+}
+
+// -------------------------------------------------------------
+// Smart Churn, Recurring Billing & Tiered Commission
+// -------------------------------------------------------------
+export type ChurnRiskLevel = 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW';
+
+export interface ChurnRiskAnalysis {
+  memberId: string;
+  memberName: string;
+  phone: string;
+  email?: string;
+  photo?: string;
+  membershipPlan: string;
+  expiryDate: string;
+  lastVisitDate: string; // YYYY-MM-DD
+  daysSinceLastVisit: number;
+  totalVisitsPast30Days: number;
+  totalVisitsPast60Days: number;
+  riskScore: number; // 0 - 100
+  riskLevel: ChurnRiskLevel;
+  primaryRiskReason: string;
+  winBackVoucherSuggested: string;
+  lastFollowUpDate?: string;
+  followUpStatus?: 'UNCONTACTED' | 'CONTACTED' | 'OFFER_ACCEPTED' | 'NO_RESPONSE';
+}
+
+export type RecurringFrequency = 'MONTHLY' | 'QUARTERLY' | 'YEARLY';
+export type RecurringPaymentMethod = 'BCA_AUTODEBIT' | 'MANDIRI_AUTODEBIT' | 'GOPAY_AUTOPAY' | 'OVO_AUTOPAY' | 'CREDIT_CARD_VISA_MC' | 'VIRTUAL_ACCOUNT';
+export type RecurringStatus = 'ACTIVE' | 'PAUSED' | 'FAILED_RETRY' | 'CANCELLED';
+
+export interface RecurringBillingPlan {
+  id: string;
+  memberId: string;
+  memberName: string;
+  memberPhone: string;
+  planName: string;
+  amount: number;
+  paymentMethod: RecurringPaymentMethod;
+  frequency: RecurringFrequency;
+  billingDayOfMonth: number; // 1 - 28
+  nextBillingDate: string; // YYYY-MM-DD
+  lastBillingDate?: string;
+  status: RecurringStatus;
+  failedAttempts: number;
+  autoRenew: boolean;
+  cardOrAccountMasked: string; // e.g. "•••• 8912"
+  createdAt: string;
+}
+
+export interface CommissionTier {
+  id: string;
+  minSessions: number;
+  maxSessions: number | null; // null for no upper limit (e.g. > 60)
+  percentage: number; // e.g. 15 for 15%
+  label: string;
+}
+
+export interface TrainerTieredCommissionSummary {
+  trainerId: string;
+  trainerName: string;
+  totalCompletedSessions: number;
+  totalRevenueGenerated: number;
+  currentTier: CommissionTier;
+  nextTier: CommissionTier | null;
+  sessionsToNextTier: number;
+  totalCommissionEarned: number;
+  tierBreakdown: {
+    tierLabel: string;
+    sessionsInTier: number;
+    percentage: number;
+    commissionAmount: number;
+  }[];
+}
+
 

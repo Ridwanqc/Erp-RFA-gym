@@ -21,10 +21,19 @@ import {
   ChevronRight,
   MessageCircle,
   ExternalLink,
-  User
+  User,
+  Handshake,
+  Tag,
+  DollarSign,
+  X,
+  Send,
+  Check
 } from 'lucide-react';
-import { Attendance, Member } from '../../types';
+import { Attendance, Member, LandingPromoPlan } from '../../types';
 import { BRANCH_CONTACTS, getDynamicBranchContacts } from '../../data/landingData';
+import { useSettings } from '../../context/SettingsContext';
+import { DEFAULT_PROMO_CONFIG } from '../../data/settingsData';
+import { formatRp } from '../../utils/formatters';
 
 interface LiveStatisticsSectionProps {
   memberCount: number;
@@ -57,8 +66,65 @@ export const LiveStatisticsSection: React.FC<LiveStatisticsSectionProps> = ({
   const [lastSyncTime, setLastSyncTime] = useState('Baru saja (Real-Time)');
   const [selectedWaBranchId, setSelectedWaBranchId] = useState<string>('BR-001');
 
+  // Dynamic CMS Promo Config synced with Settings
+  const { settings } = useSettings();
+  const promoConfig = settings?.landing?.promos || DEFAULT_PROMO_CONFIG;
+  const promoPlans =
+    promoConfig?.plans && promoConfig.plans.length > 0
+      ? promoConfig.plans
+      : DEFAULT_PROMO_CONFIG.plans;
+
+  // Member Negotiation / Tawar Modal State
+  const [isNegoModalOpen, setIsNegoModalOpen] = useState(false);
+  const [selectedPlanForNego, setSelectedPlanForNego] = useState<LandingPromoPlan | null>(null);
+  const [negoProposedPrice, setNegoProposedPrice] = useState<number>(0);
+  const [negoBranchId, setNegoBranchId] = useState<string>('BR-001');
+  const [negoMemberName, setNegoMemberName] = useState<string>('');
+  const [negoPhone, setNegoPhone] = useState<string>('');
+  const [negoMemberId, setNegoMemberId] = useState<string>('');
+  const [negoNotes, setNegoNotes] = useState<string>('');
+  const [negoSuccessMessage, setNegoSuccessMessage] = useState<string | null>(null);
+
   // Dynamic branch contacts synced with Settings
   const branchContacts = getDynamicBranchContacts();
+
+  const handleOpenNegotiation = (plan: LandingPromoPlan) => {
+    setSelectedPlanForNego(plan);
+    const initialNego = plan.memberSpecialPrice || Math.round(plan.price * 0.9);
+    setNegoProposedPrice(initialNego);
+    setNegoMemberName(loggedInMember?.name || '');
+    setNegoPhone(loggedInMember?.phone || '');
+    setNegoMemberId(loggedInMember?.id || '');
+    setNegoNotes('');
+    setNegoSuccessMessage(null);
+    setIsNegoModalOpen(true);
+  };
+
+  const handleSendNegotiationToWhatsApp = () => {
+    if (!selectedPlanForNego) return;
+    const branch = branchContacts.find((b) => b.id === negoBranchId) || branchContacts[0];
+    const customerIdentifier = loggedInMember
+      ? `Member Resmi: ${loggedInMember.name} (ID: ${loggedInMember.id})`
+      : negoMemberId
+      ? `Member: ${negoMemberName || 'Tamu'} (ID: ${negoMemberId})`
+      : `Calon Member: ${negoMemberName || 'Prospek'}`;
+
+    const text = encodeURIComponent(
+      `*PENGAJUAN TAWAR & NEGO PAKET MEMBER - RFA GYM*\n\n` +
+      `🏢 Cabang Tujuan: *${branch.name}*\n` +
+      `👤 Pemohon: *${customerIdentifier}*\n` +
+      `📱 No. WhatsApp: *${negoPhone || 'Sesuai chat ini'}*\n` +
+      `📦 Paket Dipilih: *${selectedPlanForNego.name} (${selectedPlanForNego.durationLabel || selectedPlanForNego.durationMonths + ' Bulan'})*\n` +
+      `💵 Harga Katalog Normal: *${formatRp(selectedPlanForNego.price)}*\n` +
+      `🏷️ Harga Khusus Member: *${formatRp(selectedPlanForNego.memberSpecialPrice || Math.round(selectedPlanForNego.price * 0.9))}*\n` +
+      `🤝 *HARGA PENAWARAN SAYA*: *${formatRp(negoProposedPrice)}*\n\n` +
+      `📝 Catatan / Rencana Latihan:\n"${negoNotes.trim() || 'Siap komitmen aktif jika pengajuan harga disetujui.'}"\n\n` +
+      `Mohon approval dari Branch Manager / Supervisor Front Desk. Terima kasih!`
+    );
+
+    window.open(`https://wa.me/${branch.whatsapp}?text=${text}`, '_blank');
+    setNegoSuccessMessage(`Penawaran ${formatRp(negoProposedPrice)} berhasil diteruskan ke WhatsApp resmi ${branch.name}. Supervisor unit kami akan segera meninjau proposal Anda!`);
+  };
 
   const handleManualSync = () => {
     setIsSyncing(true);
@@ -193,86 +259,15 @@ export const LiveStatisticsSection: React.FC<LiveStatisticsSectionProps> = ({
         </div>
 
         {/* ========================================================================= */}
-        {/* PROMINENT "JOIN NOW" CALL-TO-ACTION BANNER OR MEMBER STATUS HUB          */}
-        {/* Sembunyikan fitur Join Now jika member sudah login                       */}
+        {/* PROMINENT "JOIN NOW" CALL-TO-ACTION BANNER & DYNAMIC PROMO PLANS         */}
         {/* ========================================================================= */}
         <div id="join-now" className="scroll-mt-28 mb-16 relative">
-
-          {loggedInMember ? (
-            /* MEMBER SUDAH LOGIN: TAMPILKAN HUB STATUS MEMBER RESMI (SEMBUYIKAN JOIN NOW) */
-            <div className="relative rounded-3xl overflow-hidden bg-gradient-to-b from-zinc-900 via-zinc-950 to-black border-2 border-emerald-500/40 p-6 sm:p-10 lg:p-12 shadow-2xl shadow-emerald-500/10">
-              <div className="absolute top-0 right-1/4 w-96 h-96 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none animate-pulse" />
-              <div className="absolute bottom-0 left-10 w-80 h-80 bg-orange-500/10 rounded-full blur-3xl pointer-events-none" />
-
-              <div className="relative z-10 flex flex-wrap items-center justify-between gap-4 pb-6 border-b border-zinc-800/80">
-                <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 text-xs font-bold">
-                  <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-                  <span>Akun Member Terverifikasi & Aktif</span>
-                </div>
-                <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-orange-500/10 border border-orange-500/30 text-orange-400 text-xs font-black tracking-wider uppercase">
-                  <span>ID Member: {loggedInMember.id}</span>
-                </div>
-              </div>
-
-              <div className="relative z-10 my-6">
-                <div className="inline-flex items-center gap-2 text-xs font-black uppercase tracking-widest text-emerald-400 mb-2">
-                  <Sparkles className="w-4 h-4" />
-                  <span>Selamat Datang Kembali</span>
-                </div>
-                <h2 className="text-3xl sm:text-4xl font-black text-white">
-                  Halo, <span className="bg-gradient-to-r from-orange-400 to-amber-300 bg-clip-text text-transparent">{loggedInMember.name}</span>!
-                </h2>
-                <p className="mt-3 text-zinc-300 text-sm sm:text-base leading-relaxed max-w-2xl">
-                  Anda sudah terdaftar sebagai anggota resmi RFA Gym. Pantau sisa masa aktif membership, kuota personal trainer, atau kartu digital Anda langsung melalui portal khusus member.
-                </p>
-                <div className="mt-5 flex flex-wrap gap-2.5 text-xs">
-                  <span className="px-3.5 py-1.5 rounded-xl bg-zinc-900 border border-zinc-800 text-zinc-300 flex items-center gap-1.5">
-                    Status: <strong className="text-emerald-400 font-bold">{loggedInMember.status || 'Aktif'}</strong>
-                  </span>
-                  <span className="px-3.5 py-1.5 rounded-xl bg-zinc-900 border border-zinc-800 text-zinc-300 flex items-center gap-1.5">
-                    Paket: <strong className="text-orange-400 font-bold">{loggedInMember.membershipType || 'All-Access Pro'}</strong>
-                  </span>
-                  {loggedInMember.expired && (
-                    <span className="px-3.5 py-1.5 rounded-xl bg-zinc-900 border border-zinc-800 text-zinc-300 flex items-center gap-1.5">
-                      Berlaku Hingga: <strong className="text-white font-mono">{loggedInMember.expired}</strong>
-                    </span>
-                  )}
-                </div>
-              </div>
-
-              <div className="relative z-10 mt-6 pt-6 border-t border-zinc-800/80 flex flex-wrap items-center gap-3">
-                {onOpenMemberArea && (
-                  <button
-                    type="button"
-                    onClick={onOpenMemberArea}
-                    className="px-6 py-3.5 rounded-2xl bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white font-extrabold text-xs sm:text-sm flex items-center gap-2.5 shadow-xl shadow-orange-500/25 active:scale-95 transition-all cursor-pointer"
-                  >
-                    <User className="w-4 h-4 text-amber-200" />
-                    <span>Buka Portal & Kartu Digital Member</span>
-                    <ArrowRight className="w-4 h-4" />
-                  </button>
-                )}
-                <a
-                  href={`https://wa.me/${branchContacts[0]?.whatsapp || '6281234567890'}?text=${encodeURIComponent(
-                    `Halo Front Desk RFA Gym, saya ${loggedInMember.name} (ID: ${loggedInMember.id}) ingin bertanya mengenai sesi latihan dan fasilitas.`
-                  )}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="px-5 py-3.5 rounded-2xl bg-zinc-900 hover:bg-zinc-800 text-emerald-400 font-bold text-xs sm:text-sm border border-emerald-500/30 flex items-center gap-2 transition-all active:scale-95"
-                >
-                  <MessageCircle className="w-4 h-4 text-emerald-400" />
-                  <span>Chat Front Desk Cabang</span>
-                </a>
-              </div>
-            </div>
-          ) : (
-            /* MEMBER BELUM LOGIN: TAMPILKAN BANNER PROMOSI JOIN NOW */
-            <div className="relative rounded-3xl overflow-hidden bg-gradient-to-b from-zinc-900 via-zinc-950 to-black border-2 border-orange-500/40 p-6 sm:p-10 lg:p-12 shadow-2xl shadow-orange-500/10">
+          <div className="relative rounded-3xl overflow-hidden bg-gradient-to-b from-zinc-900 via-zinc-950 to-black border-2 border-orange-500/40 p-6 sm:p-10 lg:p-12 shadow-2xl shadow-orange-500/10">
             {/* Ambient Background Glows */}
             <div className="absolute top-0 right-1/4 w-96 h-96 bg-orange-500/15 rounded-full blur-3xl pointer-events-none animate-pulse" />
             <div className="absolute bottom-0 left-10 w-80 h-80 bg-amber-500/10 rounded-full blur-3xl pointer-events-none" />
 
-            {/* Top Bar: Standard & Fast Activation Pill */}
+            {/* Top Bar: Standard & Fast Activation Pill or Member Active Status */}
             <div className="relative z-10 flex flex-wrap items-center justify-between gap-4 pb-6 border-b border-zinc-800/80">
               <div className="flex flex-wrap items-center gap-2.5">
                 <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 text-xs font-bold">
@@ -282,177 +277,200 @@ export const LiveStatisticsSection: React.FC<LiveStatisticsSectionProps> = ({
                 <span className="text-xs text-zinc-400 hidden sm:inline">• Suasana Nyaman & Bebas Antre</span>
               </div>
 
-              <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-orange-500/10 border border-orange-500/30 text-orange-400 text-xs font-black tracking-wider uppercase">
-                <Zap className="w-3.5 h-3.5" />
-                <span>Aktivasi Instan & WA Resmi Unit</span>
-              </div>
+              {loggedInMember ? (
+                <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-amber-500/15 border border-amber-500/30 text-amber-300 text-xs font-black">
+                  <CheckCircle2 className="w-3.5 h-3.5 text-amber-400" />
+                  <span>Member Terverifikasi: {loggedInMember.name} ({loggedInMember.id})</span>
+                </div>
+              ) : (
+                <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-orange-500/10 border border-orange-500/30 text-orange-400 text-xs font-black tracking-wider uppercase">
+                  <Zap className="w-3.5 h-3.5" />
+                  <span>Aktivasi Instan & WA Resmi Unit</span>
+                </div>
+              )}
             </div>
 
-            {/* Headline and Value Proposition */}
+            {/* Member Welcome Banner (If Logged In) */}
+            {loggedInMember && (
+              <div className="relative z-10 mt-6 p-4 rounded-2xl bg-amber-500/10 border border-amber-500/25 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-amber-500/20 text-amber-400 flex items-center justify-center font-black">
+                    <Award className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h4 className="text-sm font-bold text-white">
+                      Tarif Spesial & Fitur Tawar Khusus Member Aktif
+                    </h4>
+                    <p className="text-xs text-zinc-300 mt-0.5">
+                      Halo <strong className="text-amber-400">{loggedInMember.name}</strong>, Anda berhak menikmati harga hemat member di bawah ini serta dapat mengajukan tawar / nego langsung ke Supervisor cabang.
+                    </p>
+                  </div>
+                </div>
+
+                {onOpenMemberArea && (
+                  <button
+                    type="button"
+                    onClick={onOpenMemberArea}
+                    className="px-4 py-2 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-amber-400 border border-amber-500/30 text-xs font-bold transition flex items-center gap-1.5 whitespace-nowrap cursor-pointer shrink-0"
+                  >
+                    <User className="w-3.5 h-3.5" />
+                    <span>Kartu Digital Saya</span>
+                  </button>
+                )}
+              </div>
+            )}
+
+            {/* Headline and Value Proposition (Configurable from CMS) */}
             <div className="relative z-10 my-8 text-center lg:text-left max-w-3xl">
               <div className="inline-flex items-center gap-2 text-xs font-black uppercase tracking-widest text-orange-400 mb-3">
                 <Sparkles className="w-4 h-4" />
-                <span>Pendaftaran Membership & Chat WA Resmi RFA Gym</span>
+                <span>{promoConfig.sectionBadge || 'Pendaftaran Membership & Chat WA Resmi RFA Gym'}</span>
               </div>
 
               <h2 className="text-3xl sm:text-4xl lg:text-5xl font-black text-white tracking-tight leading-[1.15]">
-                SIAP MERAIH GOAL KEBUGARAN ANDA?{' '}
-                <span className="bg-gradient-to-r from-orange-400 via-amber-300 to-orange-500 bg-clip-text text-transparent">
-                  JOIN NOW
-                </span>{' '}
-                DI RFA GYM
+                {promoConfig.sectionTitle || 'SIAP MERAIH GOAL KEBUGARAN ANDA? JOIN NOW DI RFA GYM'}
               </h2>
 
               <p className="mt-4 text-zinc-300 text-sm sm:text-base lg:text-lg leading-relaxed max-w-2xl">
-                Nikmati akses ke 3 cabang strategis, peralatan biometrik berstandar dunia, puluhan studio classes, dan
-                bimbingan pelatih bersertifikasi. Saat mendaftar, tiket dan konfirmasi akan langsung terkirim ke{' '}
-                <strong className="text-emerald-400">WhatsApp resmi kantor cabang</strong> pilihan Anda.
+                {promoConfig.sectionSubtitle ||
+                  'Nikmati akses ke 3 cabang strategis, peralatan biometrik berstandar dunia, puluhan studio classes, dan bimbingan pelatih bersertifikasi. Saat mendaftar, tiket dan konfirmasi akan langsung terkirim ke WhatsApp resmi kantor cabang pilihan Anda.'}
               </p>
             </div>
 
-            {/* 3 Featured Membership Plan Cards with Direct CTA */}
+            {/* Dynamic Membership Promo Plan Cards */}
             <div className="relative z-10 grid grid-cols-1 md:grid-cols-3 gap-5 my-8">
-              {/* Plan 1: Starter */}
-              <div className="p-6 rounded-2xl bg-zinc-950/80 border border-zinc-800 hover:border-zinc-700 transition-all flex flex-col justify-between group">
-                <div>
-                  <div className="flex items-center justify-between mb-3">
-                    <span className="text-xs font-bold text-zinc-400 uppercase tracking-wider">Pemula & Fokus</span>
-                    <span className="px-2 py-0.5 rounded-full bg-zinc-800 text-[10px] font-bold text-zinc-300">
-                      1 Bulan
-                    </span>
-                  </div>
-                  <h4 className="text-lg font-black text-white group-hover:text-orange-400 transition-colors">
-                    Starter Pass
-                  </h4>
-                  <div className="mt-2 flex items-baseline gap-1">
-                    <span className="text-2xl sm:text-3xl font-black text-white">Rp 399.000</span>
-                    <span className="text-xs text-zinc-400">/bulan</span>
-                  </div>
-                  <p className="text-xs text-zinc-400 mt-2">Akses penuh area gym di 1 cabang pilihan Anda.</p>
+              {promoPlans.map((plan) => {
+                const memberPrice = plan.memberSpecialPrice || Math.round(plan.price * 0.88);
+                const isPopular = plan.isPopular;
+                const allowNego = plan.allowNegotiate && (promoConfig.allowMemberOffer ?? true);
 
-                  <div className="mt-4 pt-3 border-t border-zinc-800/80 space-y-2 text-xs text-zinc-300">
-                    <div className="flex items-center gap-2">
-                      <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
-                      <span>Akses Gym Cabang Pilihan</span>
+                return (
+                  <div
+                    key={plan.id}
+                    className={`p-6 rounded-2xl transition-all flex flex-col justify-between group relative ${
+                      isPopular
+                        ? 'bg-gradient-to-b from-orange-950/40 via-zinc-950 to-zinc-950 border-2 border-orange-500 shadow-xl shadow-orange-500/10 scale-100 lg:scale-[1.03]'
+                        : 'bg-zinc-950/80 border border-zinc-800 hover:border-zinc-700'
+                    }`}
+                  >
+                    {isPopular && (
+                      <div className="absolute -top-3.5 right-6 px-3 py-1 rounded-full bg-gradient-to-r from-orange-500 to-amber-500 text-white text-[10px] font-black uppercase tracking-wider shadow-md">
+                        {plan.badge || 'Paling Populer & Rekomendasi'}
+                      </div>
+                    )}
+
+                    <div>
+                      <div className="flex items-center justify-between mb-3">
+                        <span
+                          className={`text-xs font-bold uppercase tracking-wider flex items-center gap-1 ${
+                            isPopular ? 'text-orange-400 font-black' : 'text-zinc-400'
+                          }`}
+                        >
+                          {isPopular && <Flame className="w-3.5 h-3.5 text-orange-400" />}
+                          {plan.tagline || 'Pilihan Favorit'}
+                        </span>
+                        <span
+                          className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                            isPopular
+                              ? 'bg-orange-500/20 text-orange-300 border border-orange-500/30'
+                              : 'bg-zinc-800 text-zinc-300'
+                          }`}
+                        >
+                          {plan.durationLabel || `${plan.durationMonths} Bulan`}
+                        </span>
+                      </div>
+
+                      <h4
+                        className={`text-xl font-black transition-colors ${
+                          isPopular ? 'text-white' : 'text-white group-hover:text-orange-400'
+                        }`}
+                      >
+                        {plan.name}
+                      </h4>
+
+                      {/* Pricing Display (With Member Highlight if Logged In or Teaser if Guest) */}
+                      <div className="mt-3">
+                        {loggedInMember ? (
+                          <div>
+                            <div className="flex items-baseline gap-2">
+                              <span className="text-2xl sm:text-3xl font-black text-amber-400">
+                                {formatRp(memberPrice)}
+                              </span>
+                              <span className="text-xs text-zinc-400">{plan.billingPeriod || '/bulan'}</span>
+                            </div>
+                            <div className="flex items-center gap-2 mt-1">
+                              <span className="text-xs text-zinc-500 line-through">
+                                Normal: {formatRp(plan.price)}
+                              </span>
+                              <span className="px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 text-[10px] font-bold border border-amber-500/30">
+                                Tarif Member
+                              </span>
+                            </div>
+                          </div>
+                        ) : (
+                          <div>
+                            <div className="flex items-baseline gap-1">
+                              <span className="text-2xl sm:text-3xl font-black text-white">
+                                {formatRp(plan.price)}
+                              </span>
+                              <span className="text-xs text-zinc-400">{plan.billingPeriod || '/bulan'}</span>
+                            </div>
+                            <div className="mt-1 flex items-center gap-1.5 text-[11px] text-amber-400 font-semibold">
+                              <Tag className="w-3 h-3 text-amber-400" />
+                              <span>Tarif Member: {formatRp(memberPrice)}</span>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Features */}
+                      <div className="mt-4 pt-3 border-t border-zinc-800/80 space-y-2 text-xs text-zinc-300">
+                        {plan.features.map((feat, fIdx) => (
+                          <div key={fIdx} className="flex items-center gap-2">
+                            <CheckCircle2
+                              className={`w-4 h-4 shrink-0 ${
+                                isPopular ? 'text-amber-400' : 'text-emerald-400'
+                              }`}
+                            />
+                            <span>{feat}</span>
+                          </div>
+                        ))}
+                      </div>
                     </div>
-                    <div className="flex items-center gap-2">
-                      <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
-                      <span>Loker Digital & Shower Mewah</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
-                      <span>Gratis 1x Tes Komposisi InBody</span>
+
+                    {/* Card Actions: Join Button + Tawar Button */}
+                    <div className="mt-6 space-y-2.5">
+                      <button
+                        type="button"
+                        onClick={() =>
+                          handleJoinClick(`${plan.name} (${plan.durationLabel || plan.durationMonths + ' Bulan'})`)
+                        }
+                        className={`w-full py-3 px-4 rounded-xl font-bold text-xs flex items-center justify-center gap-2 transition-all cursor-pointer ${
+                          isPopular
+                            ? 'bg-gradient-to-r from-orange-500 via-amber-500 to-orange-600 hover:from-orange-600 hover:to-amber-600 text-white uppercase tracking-wider shadow-lg shadow-orange-500/30 hover:scale-[1.02] active:scale-[0.98]'
+                            : 'bg-zinc-800 hover:bg-zinc-700 text-white border border-zinc-700'
+                        }`}
+                      >
+                        {isPopular && <Sparkles className="w-3.5 h-3.5 text-amber-200" />}
+                        <span>{plan.ctaLabel || 'Pilih Paket • Join Now'}</span>
+                        <ArrowRight className={`w-3.5 h-3.5 ${isPopular ? 'text-white' : 'text-orange-400'}`} />
+                      </button>
+
+                      {/* Tawar / Nego Button */}
+                      {allowNego && (
+                        <button
+                          type="button"
+                          onClick={() => handleOpenNegotiation(plan)}
+                          className="w-full py-2 px-3 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border border-amber-500/30 hover:border-amber-500/60 font-bold text-xs flex items-center justify-center gap-1.5 transition cursor-pointer"
+                        >
+                          <Handshake className="w-3.5 h-3.5 text-amber-400" />
+                          <span>Tawar / Nego Harga Member</span>
+                        </button>
+                      )}
                     </div>
                   </div>
-                </div>
-
-                <button
-                  type="button"
-                  onClick={() => handleJoinClick('Starter Pass (1 Bulan)')}
-                  className="mt-6 w-full py-3 px-4 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-white font-bold text-xs flex items-center justify-center gap-2 transition-all border border-zinc-700"
-                >
-                  <span>Pilih Starter • Join Now</span>
-                  <ArrowRight className="w-3.5 h-3.5 text-orange-400" />
-                </button>
-              </div>
-
-              {/* Plan 2: All-Access Pro (Popular Highlight) */}
-              <div className="p-6 rounded-2xl bg-gradient-to-b from-orange-950/40 via-zinc-950 to-zinc-950 border-2 border-orange-500 shadow-xl shadow-orange-500/10 flex flex-col justify-between relative scale-100 lg:scale-[1.03] transition-all">
-                <div className="absolute -top-3.5 right-6 px-3 py-1 rounded-full bg-gradient-to-r from-orange-500 to-amber-500 text-white text-[10px] font-black uppercase tracking-wider shadow-md">
-                  Paling Populer & Rekomendasi
-                </div>
-
-                <div>
-                  <div className="flex items-center justify-between mb-3">
-                    <span className="text-xs font-black text-orange-400 uppercase tracking-wider flex items-center gap-1">
-                      <Flame className="w-3.5 h-3.5" />
-                      All-Club Access
-                    </span>
-                    <span className="px-2 py-0.5 rounded-full bg-orange-500/20 text-[10px] font-bold text-orange-300 border border-orange-500/30">
-                      3 Bulan
-                    </span>
-                  </div>
-                  <h4 className="text-xl font-black text-white">All-Access Pro</h4>
-                  <div className="mt-2 flex items-baseline gap-1">
-                    <span className="text-3xl sm:text-4xl font-black text-white">Rp 699.000</span>
-                    <span className="text-xs text-zinc-400">/bulan</span>
-                  </div>
-                  <p className="text-xs text-zinc-300 mt-2">Bebas akses seluruh 3 cabang & semua kelas studio.</p>
-
-                  <div className="mt-4 pt-3 border-t border-zinc-800/80 space-y-2 text-xs text-zinc-200">
-                    <div className="flex items-center gap-2">
-                      <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
-                      <strong className="text-white">Akses 3 Cabang:</strong> Sudirman, Senopati & BSD
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
-                      <span>Unlimited Studio Classes (Yoga, HIIT, Combat)</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
-                      <span>Bonus 2 Sesi Privat Personal Trainer</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
-                      <span>Sauna & Luxury Hot Shower Access</span>
-                    </div>
-                  </div>
-                </div>
-
-                <button
-                  type="button"
-                  onClick={() => handleJoinClick('All-Access Pro (3 Bulan)')}
-                  className="mt-6 w-full py-3.5 px-4 rounded-xl bg-gradient-to-r from-orange-500 via-amber-500 to-orange-600 hover:from-orange-600 hover:to-amber-600 text-white font-black text-xs uppercase tracking-wider flex items-center justify-center gap-2 shadow-lg shadow-orange-500/30 hover:scale-[1.02] active:scale-[0.98] transition-all"
-                >
-                  <Sparkles className="w-4 h-4 text-amber-200" />
-                  <span>Daftar All-Access • Join Now</span>
-                  <ArrowRight className="w-4 h-4" />
-                </button>
-              </div>
-
-              {/* Plan 3: VIP Platinum */}
-              <div className="p-6 rounded-2xl bg-zinc-950/80 border border-zinc-800 hover:border-amber-500/50 transition-all flex flex-col justify-between group">
-                <div>
-                  <div className="flex items-center justify-between mb-3">
-                    <span className="text-xs font-bold text-amber-400 uppercase tracking-wider">VIP & Performance</span>
-                    <span className="px-2 py-0.5 rounded-full bg-amber-500/20 text-[10px] font-bold text-amber-300 border border-amber-500/30">
-                      12 Bulan
-                    </span>
-                  </div>
-                  <h4 className="text-lg font-black text-white group-hover:text-amber-400 transition-colors">
-                    VIP Platinum
-                  </h4>
-                  <div className="mt-2 flex items-baseline gap-1">
-                    <span className="text-2xl sm:text-3xl font-black text-white">Rp 1.199.000</span>
-                    <span className="text-xs text-zinc-400">/bulan</span>
-                  </div>
-                  <p className="text-xs text-zinc-400 mt-2">Paket tertinggi dengan 12 sesi PT privat & dedicated kit.</p>
-
-                  <div className="mt-4 pt-3 border-t border-zinc-800/80 space-y-2 text-xs text-zinc-300">
-                    <div className="flex items-center gap-2">
-                      <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
-                      <span>Multi-Club All Access 3 Cabang</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
-                      <strong className="text-white">12 Sesi Personal Trainer Privat</strong>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
-                      <span>Dedicated Locker & Free Merchandise Kit</span>
-                    </div>
-                  </div>
-                </div>
-
-                <button
-                  type="button"
-                  onClick={() => handleJoinClick('VIP Platinum (12 Bulan)')}
-                  className="mt-6 w-full py-3 px-4 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-white font-bold text-xs flex items-center justify-center gap-2 transition-all border border-zinc-700"
-                >
-                  <span>Join VIP • Daftar Sekarang</span>
-                  <ArrowRight className="w-3.5 h-3.5 text-amber-400" />
-                </button>
-              </div>
+                );
+              })}
             </div>
 
             {/* Direct Action Hub Buttons */}
@@ -460,8 +478,8 @@ export const LiveStatisticsSection: React.FC<LiveStatisticsSectionProps> = ({
               <div className="flex flex-wrap items-center justify-center sm:justify-start gap-3 w-full lg:w-auto">
                 <button
                   type="button"
-                  onClick={() => handleJoinClick('All-Access Pro (3 Bulan)')}
-                  className="w-full sm:w-auto px-7 py-3.5 rounded-2xl bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white font-black text-sm uppercase tracking-wider flex items-center justify-center gap-2.5 shadow-xl shadow-orange-500/25 active:scale-95 transition-all"
+                  onClick={() => handleJoinClick(promoPlans[0]?.name || 'All-Access Pro')}
+                  className="w-full sm:w-auto px-7 py-3.5 rounded-2xl bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white font-black text-sm uppercase tracking-wider flex items-center justify-center gap-2.5 shadow-xl shadow-orange-500/25 active:scale-95 transition-all cursor-pointer"
                 >
                   <Flame className="w-5 h-5 text-amber-200" />
                   <span>Join Now • Pendaftaran Member Baru</span>
@@ -471,7 +489,7 @@ export const LiveStatisticsSection: React.FC<LiveStatisticsSectionProps> = ({
                 <button
                   type="button"
                   onClick={() => handleInquiryClick('Klaim Free 1-Day Trial Pass')}
-                  className="w-full sm:w-auto px-6 py-3.5 rounded-2xl bg-zinc-900 hover:bg-zinc-800 text-zinc-200 hover:text-white font-bold text-sm border border-zinc-700 flex items-center justify-center gap-2.5 transition-all active:scale-95"
+                  className="w-full sm:w-auto px-6 py-3.5 rounded-2xl bg-zinc-900 hover:bg-zinc-800 text-zinc-200 hover:text-white font-bold text-sm border border-zinc-700 flex items-center justify-center gap-2.5 transition-all active:scale-95 cursor-pointer"
                 >
                   <HelpCircle className="w-4 h-4 text-orange-400" />
                   <span>Klaim Free Trial & Tanya Info (Inquiry)</span>
@@ -495,7 +513,7 @@ export const LiveStatisticsSection: React.FC<LiveStatisticsSectionProps> = ({
                 <button
                   type="button"
                   onClick={() => handleOpenBranchWhatsApp(selectedWaBranchId)}
-                  className="px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs flex items-center gap-2 transition-all shrink-0 active:scale-95 shadow-md shadow-emerald-600/30"
+                  className="px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs flex items-center gap-2 transition-all shrink-0 active:scale-95 shadow-md shadow-emerald-600/30 cursor-pointer"
                 >
                   <MessageCircle className="w-4 h-4" />
                   <span>Chat WA Resmi Cabang</span>
@@ -523,8 +541,214 @@ export const LiveStatisticsSection: React.FC<LiveStatisticsSectionProps> = ({
               </div>
             </div>
           </div>
-          )}
         </div>
+
+        {/* Modal Tawar / Nego Paket Member */}
+        {isNegoModalOpen && selectedPlanForNego && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
+            <div className="relative w-full max-w-lg rounded-3xl bg-zinc-900 border border-zinc-800 p-6 sm:p-7 shadow-2xl space-y-5 max-h-[90vh] overflow-y-auto">
+              <div className="flex items-center justify-between pb-3 border-b border-zinc-800">
+                <div className="flex items-center gap-2.5">
+                  <span className="p-2 rounded-xl bg-amber-500/20 text-amber-400 border border-amber-500/30">
+                    <Handshake className="w-5 h-5" />
+                  </span>
+                  <div>
+                    <h3 className="text-base font-black text-white">
+                      Tawar / Nego Harga Paket Member
+                    </h3>
+                    <p className="text-xs text-zinc-400">
+                      Ajukan penawaran harga Anda langsung ke General Manager / Front Desk unit
+                    </p>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setIsNegoModalOpen(false)}
+                  className="p-1.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-white transition cursor-pointer"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              {negoSuccessMessage ? (
+                <div className="p-5 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 text-center space-y-4">
+                  <div className="w-12 h-12 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center mx-auto">
+                    <Check className="w-6 h-6" />
+                  </div>
+                  <h4 className="text-base font-bold text-white">Proposal Tawar Berhasil Dikirim!</h4>
+                  <p className="text-xs text-zinc-300 leading-relaxed">{negoSuccessMessage}</p>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsNegoModalOpen(false);
+                      setNegoSuccessMessage(null);
+                    }}
+                    className="w-full py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs transition cursor-pointer"
+                  >
+                    Tutup
+                  </button>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {/* Selected Plan Summary Box */}
+                  <div className="p-4 rounded-2xl bg-zinc-950 border border-zinc-800 flex items-center justify-between">
+                    <div>
+                      <span className="text-[10px] font-bold text-orange-400 uppercase tracking-wider block">
+                        Paket Yang Ditawar
+                      </span>
+                      <h4 className="text-base font-extrabold text-white mt-0.5">
+                        {selectedPlanForNego.name} ({selectedPlanForNego.durationLabel || selectedPlanForNego.durationMonths + ' Bulan'})
+                      </h4>
+                      <p className="text-xs text-zinc-400 mt-1">
+                        Harga Normal: <span className="line-through">{formatRp(selectedPlanForNego.price)}</span> • Member: <span className="text-amber-400 font-bold">{formatRp(selectedPlanForNego.memberSpecialPrice || Math.round(selectedPlanForNego.price * 0.88))}</span>
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Identification inputs */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs font-bold text-zinc-300 mb-1">
+                        Nama Lengkap
+                      </label>
+                      <input
+                        type="text"
+                        value={negoMemberName}
+                        onChange={(e) => setNegoMemberName(e.target.value)}
+                        placeholder="Contoh: Budi Santoso"
+                        className="w-full px-3 py-2 rounded-xl bg-zinc-950 border border-zinc-800 text-xs text-white focus:outline-none focus:border-amber-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-bold text-zinc-300 mb-1">
+                        Nomor WhatsApp
+                      </label>
+                      <input
+                        type="tel"
+                        value={negoPhone}
+                        onChange={(e) => setNegoPhone(e.target.value)}
+                        placeholder="0812xxxxxxx"
+                        className="w-full px-3 py-2 rounded-xl bg-zinc-950 border border-zinc-800 text-xs text-white focus:outline-none focus:border-amber-500"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs font-bold text-zinc-300 mb-1">
+                        ID Member (Opsional jika sudah join)
+                      </label>
+                      <input
+                        type="text"
+                        value={negoMemberId}
+                        onChange={(e) => setNegoMemberId(e.target.value)}
+                        placeholder="MBR-00123"
+                        className="w-full px-3 py-2 rounded-xl bg-zinc-950 border border-zinc-800 text-xs text-white focus:outline-none focus:border-amber-500"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-bold text-zinc-300 mb-1">
+                        Pilih Cabang Unit
+                      </label>
+                      <select
+                        value={negoBranchId}
+                        onChange={(e) => setNegoBranchId(e.target.value)}
+                        className="w-full px-3 py-2 rounded-xl bg-zinc-950 border border-zinc-800 text-xs text-white focus:outline-none focus:border-amber-500 font-medium"
+                      >
+                        {branchContacts.map((b) => (
+                          <option key={b.id} value={b.id}>
+                            {b.name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+
+                  {/* Proposed Price with Quick Percentage Presets */}
+                  <div>
+                    <div className="flex items-center justify-between mb-1.5">
+                      <label className="text-xs font-bold text-zinc-300">
+                        Harga Penawaran Anda (Rp)
+                      </label>
+                      <span className="text-[11px] font-mono font-bold text-amber-400">
+                        {formatRp(negoProposedPrice)}
+                      </span>
+                    </div>
+
+                    <div className="relative">
+                      <span className="absolute left-3 top-2.5 text-xs font-bold text-zinc-500">Rp</span>
+                      <input
+                        type="number"
+                        value={negoProposedPrice || ''}
+                        onChange={(e) => setNegoProposedPrice(Number(e.target.value))}
+                        step="10000"
+                        className="w-full pl-9 pr-3 py-2.5 rounded-xl bg-zinc-950 border border-amber-500/50 text-sm font-black text-white focus:outline-none focus:border-amber-400"
+                      />
+                    </div>
+
+                    {/* Quick percentage adjustment chips */}
+                    <div className="flex items-center gap-1.5 mt-2">
+                      <span className="text-[10px] text-zinc-400 font-semibold mr-1">Rekomendasi Nego:</span>
+                      {[
+                        { label: '-5%', factor: 0.95 },
+                        { label: '-10%', factor: 0.9 },
+                        { label: '-15%', factor: 0.85 },
+                        { label: '-20%', factor: 0.8 }
+                      ].map((item) => {
+                        const target = Math.round((selectedPlanForNego.price * item.factor) / 10000) * 10000;
+                        return (
+                          <button
+                            key={item.label}
+                            type="button"
+                            onClick={() => setNegoProposedPrice(target)}
+                            className="px-2.5 py-1 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-white text-[10px] font-bold transition cursor-pointer"
+                          >
+                            {item.label} ({formatRp(target)})
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {/* Notes / Rencana Latihan */}
+                  <div>
+                    <label className="block text-xs font-bold text-zinc-300 mb-1">
+                      Alasan Penawaran / Komitmen Latihan
+                    </label>
+                    <textarea
+                      rows={2}
+                      value={negoNotes}
+                      onChange={(e) => setNegoNotes(e.target.value)}
+                      placeholder="Contoh: Saya siap bayar langsung 6 bulan di muka, atau bundling dengan sesi PT..."
+                      className="w-full px-3 py-2 rounded-xl bg-zinc-950 border border-zinc-800 text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-amber-500"
+                    />
+                  </div>
+
+                  {/* Action buttons */}
+                  <div className="pt-2 flex items-center justify-end gap-3">
+                    <button
+                      type="button"
+                      onClick={() => setIsNegoModalOpen(false)}
+                      className="px-4 py-2.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs font-semibold cursor-pointer"
+                    >
+                      Batal
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleSendNegotiationToWhatsApp}
+                      className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-zinc-950 font-black text-xs flex items-center gap-1.5 shadow-md shadow-amber-500/20 active:scale-95 transition cursor-pointer"
+                    >
+                      <MessageCircle className="w-4 h-4 text-zinc-950" />
+                      <span>Kirim Penawaran ke WhatsApp Cabang</span>
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
 
         {/* 3 Branch Hubs: Displaying Official WhatsApp & Direct Action */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">

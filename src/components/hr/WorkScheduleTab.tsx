@@ -377,6 +377,10 @@ export const WorkScheduleTab: React.FC<WorkScheduleTabProps> = ({
 
       {/* 3. WEEKLY ROSTER GRID TABLE */}
       <div className="bg-zinc-900/90 border border-zinc-800 rounded-3xl overflow-hidden shadow-sm">
+        <div className="md:hidden flex items-center justify-between px-3.5 py-1.5 bg-zinc-950/70 border-b border-zinc-800 text-[10px] text-zinc-400 select-none">
+          <span className="text-orange-400 font-semibold flex items-center gap-1">↔ Geser tabel ke samping untuk melihat jadwal 7 hari</span>
+          <span className="font-mono text-zinc-500">Nama staf terkunci</span>
+        </div>
         <div className="overflow-x-auto scrollbar-thin scrollbar-thumb-zinc-800">
           <table className="w-full text-left border-collapse min-w-[960px]">
             <thead className="bg-zinc-950 text-zinc-400 border-b border-zinc-800 text-[11px] uppercase font-bold">

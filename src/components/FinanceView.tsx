@@ -159,7 +159,7 @@ export const FinanceView: React.FC<FinanceViewProps> = ({
   const { branches, activeBranchId, activeBranch, isAllBranches } = useSettings();
   const handleToast = (title: string, message: string, type?: 'success' | 'error' | 'warning' | 'info') =>
     showToast(title, message, type || 'info');
-  const isSuperAdmin = currentUser?.role === 'admin';
+  const isSuperAdmin = currentUser?.role === 'admin' || currentUser?.role === 'keuangan';
   const userBranchId = currentUser?.branchId || activeBranchId;
   const [bukuBesarBranchFilter, setBukuBesarBranchFilter] = useState<string>(isSuperAdmin ? 'ALL' : userBranchId);
   const [activeTab, setActiveTab] = useState<FinanceTab>(initialSubTab);

@@ -48,12 +48,16 @@ import {
   TrainerChangeRequest,
   PTBackofficeNotification,
   Attendance,
-  TrainerWorkoutLog
+  TrainerWorkoutLog,
+  WorkSchedule,
+  StaffAttendance,
+  LeaveRequest,
+  StudioClass
 } from '../../types';
 import { OnlineReservation } from '../../types/landingTypes';
 import { APP_TODAY, formatDateIndo } from '../../utils/formatters';
 import { calculateBMI, getBMICategory, calculateEstimatedBMR } from '../../data/bodyCompositionData';
-import { calculateMemberPTSummary } from '../../data/ptBookingData';
+import { calculateMemberPTSummary, TrainerWorkingRule } from '../../data/ptBookingData';
 import { loadWorkoutLogsFromStorage } from '../../data/workoutLogData';
 import { MemberPTBookingSection } from './MemberPTBookingSection';
 
@@ -87,6 +91,11 @@ interface MemberPortalModalProps {
   attendances?: Attendance[];
   workoutLogs?: TrainerWorkoutLog[];
   onSaveWorkoutLog?: (log: TrainerWorkoutLog) => void;
+  trainerWorkingRules?: TrainerWorkingRule[];
+  workSchedules?: WorkSchedule[];
+  staffAttendances?: StaffAttendance[];
+  leaveRequests?: LeaveRequest[];
+  studioClasses?: StudioClass[];
   showToast?: (title: string, message: string, type: 'success' | 'error' | 'warning' | 'info') => void;
 }
 
@@ -114,6 +123,11 @@ export const MemberPortalModal: React.FC<MemberPortalModalProps> = ({
   attendances = [],
   workoutLogs = [],
   onSaveWorkoutLog,
+  trainerWorkingRules = [],
+  workSchedules = [],
+  staffAttendances = [],
+  leaveRequests = [],
+  studioClasses = [],
   showToast
 }) => {
   // Real synchronized member record from master members list
@@ -489,7 +503,10 @@ export const MemberPortalModal: React.FC<MemberPortalModalProps> = ({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto bg-black/80 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 animate-in fade-in duration-200">
+    <div
+      data-landing-page="true"
+      className="fixed inset-0 z-50 overflow-y-auto bg-black/80 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 animate-in fade-in duration-200"
+    >
       <div className="bg-zinc-950 border border-zinc-800 rounded-3xl max-w-2xl w-full overflow-hidden shadow-2xl flex flex-col max-h-[92vh]">
         {/* Header Modal */}
         <div className="p-5 sm:p-6 bg-zinc-900/90 border-b border-zinc-800 flex items-center justify-between">
@@ -859,6 +876,11 @@ export const MemberPortalModal: React.FC<MemberPortalModalProps> = ({
                   schedules={schedules}
                   trainers={trainers}
                   trainerChangeRequests={trainerChangeRequests}
+                  trainerWorkingRules={trainerWorkingRules}
+                  workSchedules={workSchedules}
+                  staffAttendances={staffAttendances}
+                  leaveRequests={leaveRequests}
+                  studioClasses={studioClasses}
                   onAddBooking={onAddBooking || (() => {})}
                   onRescheduleBooking={onRescheduleBooking || (() => {})}
                   onCancelBooking={onCancelBooking || (() => {})}

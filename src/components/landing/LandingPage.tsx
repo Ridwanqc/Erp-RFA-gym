@@ -10,8 +10,12 @@ import {
   Schedule,
   TrainerChangeRequest,
   PTBackofficeNotification,
-  TrainerWorkoutLog
+  TrainerWorkoutLog,
+  WorkSchedule,
+  StaffAttendance,
+  LeaveRequest
 } from '../../types';
+import { TrainerWorkingRule } from '../../data/ptBookingData';
 import { LandingProgram, OnlineReservation } from '../../types/landingTypes';
 import { INITIAL_ONLINE_RESERVATIONS } from '../../data/landingData';
 import { LandingHeader } from './LandingHeader';
@@ -28,6 +32,7 @@ import { FAQSection } from './FAQSection';
 import { ContactLocationSection } from './ContactLocationSection';
 import { ReservationFlowModal, FlowModalMode } from './ReservationFlowModal';
 import { MemberPortalModal } from './MemberPortalModal';
+import { useTheme } from '../../context/ThemeContext';
 
 interface LandingPageProps {
   members: Member[];
@@ -59,6 +64,10 @@ interface LandingPageProps {
   onRequestChangeTrainer?: (request: TrainerChangeRequest) => void;
   workoutLogs?: TrainerWorkoutLog[];
   onSaveWorkoutLog?: (log: TrainerWorkoutLog) => void;
+  trainerWorkingRules?: TrainerWorkingRule[];
+  workSchedules?: WorkSchedule[];
+  staffAttendances?: StaffAttendance[];
+  leaveRequests?: LeaveRequest[];
   showToast?: (title: string, message: string, type: 'success' | 'error' | 'warning' | 'info') => void;
 }
 
@@ -86,8 +95,19 @@ export const LandingPage: React.FC<LandingPageProps> = ({
   onRequestChangeTrainer,
   workoutLogs = [],
   onSaveWorkoutLog,
+  trainerWorkingRules,
+  workSchedules,
+  staffAttendances,
+  leaveRequests,
   showToast
 }) => {
+  const { setBackofficeActive } = useTheme();
+
+  // Landing Page is strictly locked to official Gym dark & orange brand theme
+  useEffect(() => {
+    setBackofficeActive(false);
+  }, [setBackofficeActive]);
+
   const [activeSection, setActiveSection] = useState<string>('hero');
 
   // Reservation & Flow Modal State
@@ -223,10 +243,14 @@ export const LandingPage: React.FC<LandingPageProps> = ({
     ? members.find((m) => m.id === loggedInMember.id) || loggedInMember
     : null;
 
-  const trainerCount = staffUsers.filter((u) => u.role === 'pt').length || 4;
+  const trainerCount =
+    staffUsers.filter((u) => u.role === 'pt' || u.role === 'leader_pt').length || 4;
 
   return (
-    <div className="min-h-screen bg-zinc-950 text-zinc-100 font-sans selection:bg-orange-500 selection:text-white relative">
+    <div
+      data-landing-page="true"
+      className="min-h-screen bg-zinc-950 text-zinc-100 font-sans selection:bg-orange-500 selection:text-white relative landing-page-root"
+    >
       {/* 1. Global Sticky Header & Navigation */}
       <LandingHeader
         activeSection={activeSection}
@@ -273,6 +297,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
 
         {/* 3. About Us (Profil, Sejarah, Galeri Fasilitas & Trainer) */}
         <AboutUsSection
+          staffUsers={staffUsers}
           onSelectTrainerForBooking={(trainerName) =>
             handleOpenReservation(undefined, undefined, trainerName)
           }
@@ -359,6 +384,11 @@ export const LandingPage: React.FC<LandingPageProps> = ({
         attendances={attendances}
         workoutLogs={workoutLogs}
         onSaveWorkoutLog={onSaveWorkoutLog}
+        trainerWorkingRules={trainerWorkingRules}
+        workSchedules={workSchedules}
+        staffAttendances={staffAttendances}
+        leaveRequests={leaveRequests}
+        studioClasses={studioClasses}
         showToast={showToast}
       />
     </div>

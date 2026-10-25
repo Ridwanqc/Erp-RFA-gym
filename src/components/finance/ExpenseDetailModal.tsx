@@ -224,7 +224,7 @@ export const ExpenseDetailModal: React.FC<ExpenseDetailModalProps> = ({
             </div>
 
             {/* Bukti Lampiran / Attachment */}
-            {expense.attachmentUrl && (
+            {expense.attachmentUrl && expense.attachmentUrl.trim() && (
               <div className="p-4 bg-zinc-950/60 border border-zinc-800/80 rounded-xl space-y-3 text-xs">
                 <span className="text-zinc-300 font-bold flex items-center justify-between">
                   <span>Lampiran Bukti Transaksi (Struk / Invoice / Nota)</span>
@@ -234,7 +234,7 @@ export const ExpenseDetailModal: React.FC<ExpenseDetailModalProps> = ({
                 </span>
                 <div className="rounded-xl overflow-hidden border border-zinc-800 bg-zinc-900 flex items-center justify-center p-2 max-h-72">
                   <img
-                    src={expense.attachmentUrl}
+                    src={expense.attachmentUrl.trim()}
                     alt="Bukti Lampiran Pengeluaran"
                     className="max-h-64 object-contain rounded-lg"
                   />

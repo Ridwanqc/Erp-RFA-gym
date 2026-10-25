@@ -568,15 +568,15 @@ export const TrainerMobileFocusPortal: React.FC<TrainerMobileFocusPortalProps> =
   };
 
   return (
-    <div className="w-full min-h-screen bg-[#0b0f17] text-zinc-100 flex items-center justify-center p-0 sm:p-4 select-none font-sans">
+    <div className="w-full h-[100dvh] max-h-[100dvh] bg-[#0b0f17] text-zinc-100 flex items-center justify-center p-0 sm:p-3 select-none font-sans overflow-hidden">
       {/* ========================================================================= */}
       {/* SMARTPHONE DEVICE WRAPPER (max-w-md mx-auto)                                */}
       {/* Aesthetic: Clay 3D Gelap (#111827 / #1f2937, Aksen #f97316)              */}
       {/* ========================================================================= */}
-      <div className="w-full max-w-md mx-auto min-h-screen sm:min-h-[844px] bg-[#111827] sm:rounded-[40px] border-0 sm:border-4 border-zinc-800/90 shadow-[0_25px_60px_-15px_rgba(0,0,0,0.8),inset_0_1px_1px_rgba(255,255,255,0.08)] flex flex-col relative overflow-hidden">
+      <div className="w-full max-w-md mx-auto h-[100dvh] max-h-[100dvh] sm:h-[844px] sm:max-h-[92vh] bg-[#111827] sm:rounded-[36px] border-0 sm:border-4 border-zinc-800/90 shadow-[0_25px_60px_-15px_rgba(0,0,0,0.8),inset_0_1px_1px_rgba(255,255,255,0.08)] flex flex-col relative overflow-hidden">
         
-        {/* Dynamic Island / Top Phone Accent Bar (Cosmetic native phone top) */}
-        <div className="w-full pt-2 pb-1 px-6 flex items-center justify-between text-[11px] text-zinc-400 font-semibold bg-[#111827] shrink-0 border-b border-zinc-800/50">
+        {/* Dynamic Island / Top Phone Accent Bar (Cosmetic native phone top - hidden on smartphone view to prevent wasted vertical space) */}
+        <div className="hidden sm:flex w-full pt-2 pb-1 px-6 items-center justify-between text-[11px] text-zinc-400 font-semibold bg-[#111827] shrink-0 border-b border-zinc-800/50">
           <span className="font-mono text-zinc-300">14:02</span>
           <div className="w-20 h-4 bg-zinc-950 rounded-full border border-zinc-800 flex items-center justify-center gap-1.5 shadow-inner">
             <span className="w-1.5 h-1.5 rounded-full bg-orange-500 animate-pulse"></span>
@@ -593,42 +593,42 @@ export const TrainerMobileFocusPortal: React.FC<TrainerMobileFocusPortalProps> =
         {/* Nama: "GymPro" + Logo Kecil | Profil Trainer: Avatar, "Reza Pratama",      */}
         {/* Status chip hijau "Aktif Bertugas", Subtitle "Shift Siang"               */}
         {/* ========================================================================= */}
-        <header className="px-4 py-3.5 bg-gradient-to-b from-[#182133] to-[#111827] border-b border-zinc-800/80 shrink-0">
+        <header className="px-3.5 py-2.5 sm:px-4 sm:py-3 bg-gradient-to-b from-[#182133] to-[#111827] border-b border-zinc-800/80 shrink-0">
           <div className="flex items-center justify-between">
             {/* App Branding */}
-            <div className="flex items-center gap-2.5">
-              <div className="w-9 h-9 rounded-2xl bg-gradient-to-tr from-orange-600 via-orange-500 to-amber-400 p-0.5 shadow-[inset_0_1px_2px_rgba(255,255,255,0.4),0_4px_12px_rgba(249,115,22,0.35)] flex items-center justify-center">
-                <div className="w-full h-full bg-[#111827] rounded-[14px] flex items-center justify-center">
-                  <Dumbbell className="w-4 h-4 text-orange-500 transform -rotate-45" />
+            <div className="flex items-center gap-2">
+              <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-orange-600 via-orange-500 to-amber-400 p-0.5 shadow-[inset_0_1px_2px_rgba(255,255,255,0.4),0_4px_12px_rgba(249,115,22,0.35)] flex items-center justify-center shrink-0">
+                <div className="w-full h-full bg-[#111827] rounded-[10px] flex items-center justify-center">
+                  <Dumbbell className="w-3.5 h-3.5 text-orange-500 transform -rotate-45" />
                 </div>
               </div>
               <div>
-                <div className="flex items-center gap-1.5">
-                  <h1 className="text-base font-black tracking-tight text-white flex items-center">
+                <div className="flex items-center gap-1">
+                  <h1 className="text-sm sm:text-base font-black tracking-tight text-white flex items-center">
                     Gym<span className="text-orange-500">Pro</span>
                   </h1>
-                  <span className="text-[9px] px-1.5 py-0.2 rounded bg-orange-500/20 text-orange-400 border border-orange-500/30 font-bold uppercase tracking-wider">
+                  <span className="text-[8.5px] px-1.5 py-0.2 rounded bg-orange-500/20 text-orange-400 border border-orange-500/30 font-bold uppercase tracking-wider">
                     ERP
                   </span>
                 </div>
-                <p className="text-[10px] text-zinc-400 font-medium">Portal Fokus Trainer</p>
+                <p className="text-[9.5px] text-zinc-400 font-medium">Portal Fokus Trainer</p>
               </div>
             </div>
 
             {/* Trainer Profile (Right Corner) */}
-            <div className="flex items-center gap-2.5 bg-[#1f2937]/90 px-2.5 py-1.5 rounded-2xl border border-zinc-700/60 shadow-[inset_0_1px_1px_rgba(255,255,255,0.06),0_4px_10px_rgba(0,0,0,0.25)]">
-              <div className="text-right">
-                <div className="flex items-center justify-end gap-1.5">
-                  <span className="text-xs font-bold text-white leading-tight">{trainerDisplayName}</span>
+            <div className="flex items-center gap-2 bg-[#1f2937]/90 px-2.5 py-1 rounded-xl border border-zinc-700/60 shadow-[inset_0_1px_1px_rgba(255,255,255,0.06),0_4px_10px_rgba(0,0,0,0.25)] min-w-0">
+              <div className="text-right min-w-0">
+                <div className="flex items-center justify-end gap-1">
+                  <span className="text-[11px] sm:text-xs font-bold text-white leading-tight truncate max-w-[100px] sm:max-w-none">{trainerDisplayName}</span>
                 </div>
                 <div className="flex items-center justify-end gap-1 mt-0.5">
                   {/* Status chip hijau "Aktif Bertugas" */}
-                  <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 text-[9px] font-bold leading-none">
+                  <span className="inline-flex items-center gap-1 px-1.5 py-0.2 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 text-[8.5px] font-bold leading-none shrink-0">
                     <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping"></span>
-                    Aktif Bertugas
+                    Aktif
                   </span>
                   {/* Subtitle Shift Siang */}
-                  <span className="text-[9px] text-zinc-400 font-medium leading-none">
+                  <span className="text-[8.5px] text-zinc-400 font-medium leading-none truncate">
                     • {trainerShift}
                   </span>
                 </div>
@@ -636,12 +636,18 @@ export const TrainerMobileFocusPortal: React.FC<TrainerMobileFocusPortalProps> =
 
               {/* Avatar bulat */}
               <div className="relative shrink-0">
-                <img
-                  src={trainerAvatar}
-                  alt={trainerDisplayName}
-                  className="w-9 h-9 rounded-full object-cover ring-2 ring-orange-500/70 shadow-md"
-                />
-                <span className="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full bg-emerald-500 ring-1 ring-zinc-900"></span>
+                {trainerAvatar && trainerAvatar.trim() ? (
+                  <img
+                    src={trainerAvatar.trim()}
+                    alt={trainerDisplayName}
+                    className="w-8 h-8 rounded-full object-cover ring-2 ring-orange-500/70 shadow-md"
+                  />
+                ) : (
+                  <div className="w-8 h-8 rounded-full bg-zinc-800 ring-2 ring-orange-500/70 flex items-center justify-center text-xs font-bold text-orange-400">
+                    {trainerDisplayName.substring(0, 2).toUpperCase()}
+                  </div>
+                )}
+                <span className="absolute bottom-0 right-0 w-2 h-2 rounded-full bg-emerald-500 ring-1 ring-zinc-900"></span>
               </div>
             </div>
           </div>
@@ -649,10 +655,10 @@ export const TrainerMobileFocusPortal: React.FC<TrainerMobileFocusPortalProps> =
 
         {/* Back to desktop switch button (if mounted within main ERP) */}
         {onBackToDesktop && (
-          <div className="bg-zinc-950/90 px-4 py-1.5 flex items-center justify-between text-xs border-b border-zinc-800 text-zinc-400">
-            <span className="flex items-center gap-1.5 text-[11px]">
+          <div className="bg-zinc-950/90 px-3.5 py-1 flex items-center justify-between text-xs border-b border-zinc-800 text-zinc-400 shrink-0">
+            <span className="flex items-center gap-1 text-[10.5px]">
               <Sparkles className="w-3 h-3 text-orange-400" />
-              Tampilan Mobile Web Smartphone
+              Mode Web Smartphone
             </span>
             <button
               onClick={onBackToDesktop}
@@ -665,13 +671,13 @@ export const TrainerMobileFocusPortal: React.FC<TrainerMobileFocusPortalProps> =
         )}
 
         {/* ========================================================================= */}
-        {/* MAIN SCROLLABLE CONTENT BODY (With padding-bottom for fixed bottom bar)     */}
+        {/* MAIN SCROLLABLE CONTENT BODY (With padding-bottom for elevated navbar)      */}
         {/* ========================================================================= */}
-        <main className="flex-1 overflow-y-auto px-4 py-4 space-y-4 pb-28 scrollbar-thin scrollbar-thumb-zinc-800">
+        <main className="flex-1 overflow-y-auto px-3.5 py-3 space-y-3 pb-[calc(6.75rem+env(safe-area-inset-bottom,0px))] scrollbar-thin scrollbar-thumb-zinc-800/80 overscroll-contain">
           
           {/* TAB 1: JADWAL (Default & Primary Focus View) */}
           {activeTab === 'jadwal' && (
-            <div className="space-y-4 animate-fadeIn">
+            <div className="space-y-3 animate-fadeIn">
               
               {/* =================================================================== */}
               {/* 3. STATUS RINGKAS HARIAN                                            */}
@@ -875,25 +881,25 @@ export const TrainerMobileFocusPortal: React.FC<TrainerMobileFocusPortalProps> =
                   </button>
                 </div>
 
-                <div className="space-y-2.5">
+                <div className="max-h-[385px] sm:max-h-[420px] overflow-y-auto pr-1 space-y-2 scrollbar-thin scrollbar-thumb-zinc-700/60 overscroll-contain rounded-2xl touch-pan-y">
                   {filteredSessions.map((item) => {
                     const isCompleted = item.status === 'Selesai';
                     return (
                       <div
                         key={item.id}
                         onClick={() => handleOpenStartSession(item)}
-                        className={`rounded-2xl p-3.5 border transition-all cursor-pointer relative overflow-hidden active:scale-[0.99] ${
+                        className={`rounded-2xl p-2.5 sm:p-3 border transition-all cursor-pointer relative overflow-hidden active:scale-[0.99] ${
                           isCompleted
                             ? 'bg-[#141b27]/80 border-emerald-500/30 shadow-[inset_0_1px_1px_rgba(255,255,255,0.03)]'
                             : 'bg-[#1f2937]/90 hover:bg-[#253245] border-zinc-700/80 shadow-[inset_0_1px_1px_rgba(255,255,255,0.06),0_4px_12px_rgba(0,0,0,0.3)]'
                         }`}
                       >
-                        <div className="flex items-center justify-between gap-3">
+                        <div className="flex items-center justify-between gap-2.5">
                           {/* Time & Client Summary */}
-                          <div className="flex items-center gap-3 min-w-0">
+                          <div className="flex items-center gap-2.5 min-w-0">
                             {/* Time Pill */}
-                            <div className="w-13 text-center shrink-0">
-                              <span className="text-xs font-mono font-black text-orange-400 bg-[#111827] px-2 py-1 rounded-xl border border-orange-500/30 block">
+                            <div className="w-12 text-center shrink-0">
+                              <span className="text-[11px] font-mono font-black text-orange-400 bg-[#111827] px-1.5 py-0.5 rounded-lg border border-orange-500/30 block">
                                 {item.time}
                               </span>
                             </div>
@@ -901,18 +907,18 @@ export const TrainerMobileFocusPortal: React.FC<TrainerMobileFocusPortalProps> =
                             {/* Client Name & Sub info */}
                             <div className="min-w-0">
                               <div className="flex items-center gap-1.5">
-                                <h4 className="text-sm font-bold text-white truncate leading-tight">
+                                <h4 className="text-xs sm:text-sm font-bold text-white truncate leading-tight">
                                   {item.memberName}
                                 </h4>
                               </div>
-                              <p className="text-[11px] text-zinc-400 truncate mt-0.5">
+                              <p className="text-[10px] text-zinc-400 truncate mt-0.5">
                                 {item.sessionInfo}
                               </p>
                             </div>
                           </div>
 
                           {/* Badge Status with Quick Toggle */}
-                          <div className="shrink-0 flex items-center gap-2">
+                          <div className="shrink-0 flex items-center gap-1.5">
                             <button
                               type="button"
                               onClick={(e) => handleToggleSessionStatus(item.id, e)}
@@ -920,25 +926,25 @@ export const TrainerMobileFocusPortal: React.FC<TrainerMobileFocusPortalProps> =
                               className="cursor-pointer transition-transform active:scale-95"
                             >
                               {isCompleted ? (
-                                <span className="px-2.5 py-1 rounded-full bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-400 border border-emerald-500/40 text-[10px] font-bold flex items-center gap-1">
-                                  <CheckCircle2 className="w-3 h-3" />
+                                <span className="px-2 py-0.5 rounded-full bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-400 border border-emerald-500/40 text-[9.5px] font-bold flex items-center gap-1">
+                                  <CheckCircle2 className="w-2.5 h-2.5" />
                                   Selesai
                                 </span>
                               ) : (
                                 /* Badge: Menunggu - warna oranye/kuning */
-                                <span className="px-2.5 py-1 rounded-full bg-amber-500/20 hover:bg-amber-500/30 text-amber-400 border border-amber-500/40 text-[10px] font-bold flex items-center gap-1">
+                                <span className="px-2 py-0.5 rounded-full bg-amber-500/20 hover:bg-amber-500/30 text-amber-400 border border-amber-500/40 text-[9.5px] font-bold flex items-center gap-1">
                                   <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse"></span>
                                   Menunggu
                                 </span>
                               )}
                             </button>
-                            <ChevronRight className="w-4 h-4 text-zinc-500" />
+                            <ChevronRight className="w-3.5 h-3.5 text-zinc-500" />
                           </div>
                         </div>
 
                         {/* Extra Mini Details (Focus & Note) */}
-                        <div className="mt-2.5 pt-2 border-t border-zinc-800/80 flex items-center justify-between text-[10px] text-zinc-400">
-                          <span className="truncate max-w-[210px] text-zinc-300">
+                        <div className="mt-2 pt-1.5 border-t border-zinc-800/80 flex items-center justify-between text-[9.5px] text-zinc-400">
+                          <span className="truncate max-w-[190px] text-zinc-300">
                             🎯 {item.focusArea}
                           </span>
                           <button
@@ -949,7 +955,7 @@ export const TrainerMobileFocusPortal: React.FC<TrainerMobileFocusPortalProps> =
                             }}
                             className="text-emerald-400 hover:text-emerald-300 flex items-center gap-1 font-semibold cursor-pointer"
                           >
-                            <MessageCircle className="w-3 h-3" />
+                            <MessageCircle className="w-2.5 h-2.5" />
                             Ingatkan WA
                           </button>
                         </div>
@@ -957,6 +963,15 @@ export const TrainerMobileFocusPortal: React.FC<TrainerMobileFocusPortalProps> =
                     );
                   })}
                 </div>
+                {filteredSessions.length > 5 && (
+                  <div className="flex items-center justify-between text-[10px] text-zinc-400 px-1 pt-0.5">
+                    <span>Menampilkan 5 sesi awal dari {filteredSessions.length} total</span>
+                    <span className="flex items-center gap-1 text-orange-400/90 font-medium">
+                      <span>Gulir daftar untuk sesi lainnya</span>
+                      <ChevronDown className="w-3 h-3 animate-bounce" />
+                    </span>
+                  </div>
+                )}
               </section>
             </div>
           )}
@@ -998,7 +1013,7 @@ export const TrainerMobileFocusPortal: React.FC<TrainerMobileFocusPortalProps> =
                 )}
               </div>
 
-              <div className="space-y-2.5">
+              <div className="max-h-[460px] sm:max-h-[500px] overflow-y-auto pr-1 space-y-2.5 scrollbar-thin scrollbar-thumb-zinc-700/60 overscroll-contain rounded-2xl touch-pan-y">
                 {filteredClients.map((c) => {
                   const quotaLeft = c.totalSessions - c.completedSessions;
                   const isExpiring = quotaLeft <= 2;
@@ -1006,19 +1021,25 @@ export const TrainerMobileFocusPortal: React.FC<TrainerMobileFocusPortalProps> =
                     <div
                       key={c.id}
                       onClick={() => setSelectedClientDetail(c)}
-                      className="bg-[#1f2937]/90 rounded-2xl p-3.5 border border-zinc-700/80 shadow-[inset_0_1px_1px_rgba(255,255,255,0.06),0_4px_12px_rgba(0,0,0,0.3)] hover:border-orange-500/50 transition cursor-pointer active:scale-[0.99]"
+                      className="bg-[#1f2937]/90 rounded-2xl p-3 border border-zinc-700/80 shadow-[inset_0_1px_1px_rgba(255,255,255,0.06),0_4px_12px_rgba(0,0,0,0.3)] hover:border-orange-500/50 transition cursor-pointer active:scale-[0.99]"
                     >
-                      <div className="flex items-start gap-3">
-                        <img
-                          src={c.avatar}
-                          alt={c.name}
-                          className="w-12 h-12 rounded-2xl object-cover border border-zinc-700 shrink-0"
-                        />
+                      <div className="flex items-start gap-2.5">
+                        {c.avatar && c.avatar.trim() ? (
+                          <img
+                            src={c.avatar.trim()}
+                            alt={c.name}
+                            className="w-11 h-11 rounded-2xl object-cover border border-zinc-700 shrink-0"
+                          />
+                        ) : (
+                          <div className="w-11 h-11 rounded-2xl bg-zinc-800 border border-zinc-700 flex items-center justify-center font-bold text-orange-400 text-xs shrink-0">
+                            {c.name.substring(0, 2).toUpperCase()}
+                          </div>
+                        )}
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center justify-between gap-1">
-                            <h4 className="text-sm font-bold text-white truncate">{c.name}</h4>
+                            <h4 className="text-xs sm:text-sm font-bold text-white truncate">{c.name}</h4>
                             <span
-                              className={`text-[9px] px-2 py-0.5 rounded-full font-bold ${
+                              className={`text-[9px] px-2 py-0.5 rounded-full font-bold shrink-0 ${
                                 isExpiring
                                   ? 'bg-rose-500/20 text-rose-400 border border-rose-500/30'
                                   : 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
@@ -1030,14 +1051,14 @@ export const TrainerMobileFocusPortal: React.FC<TrainerMobileFocusPortalProps> =
                           <p className="text-[10px] text-orange-400 font-medium truncate mt-0.5">
                             {c.packageTitle}
                           </p>
-                          <p className="text-[10px] text-zinc-400 line-clamp-1 mt-1">
+                          <p className="text-[10px] text-zinc-400 line-clamp-1 mt-0.5">
                             🎯 {c.targetGoal}
                           </p>
                         </div>
                       </div>
 
-                      <div className="mt-3 pt-2.5 border-t border-zinc-800 flex items-center justify-between text-[11px]">
-                        <span className="text-zinc-500 text-[10px]">Aktif terakhir: {c.lastActive}</span>
+                      <div className="mt-2.5 pt-2 border-t border-zinc-800 flex items-center justify-between text-[10px]">
+                        <span className="text-zinc-500 text-[9.5px]">Aktif terakhir: {c.lastActive}</span>
                         <div className="flex items-center gap-2">
                           <button
                             type="button"
@@ -1045,12 +1066,12 @@ export const TrainerMobileFocusPortal: React.FC<TrainerMobileFocusPortalProps> =
                               e.stopPropagation();
                               handleOpenWhatsApp(c.phone, c.name, 'Jadwal Reguler');
                             }}
-                            className="px-2.5 py-1 rounded-xl bg-emerald-500/20 text-emerald-400 font-bold text-[10px] flex items-center gap-1 border border-emerald-500/30 hover:bg-emerald-500/30 cursor-pointer"
+                            className="px-2 py-0.5 rounded-lg bg-emerald-500/20 text-emerald-400 font-bold text-[9.5px] flex items-center gap-1 border border-emerald-500/30 hover:bg-emerald-500/30 cursor-pointer"
                           >
-                            <MessageCircle className="w-3 h-3" />
+                            <MessageCircle className="w-2.5 h-2.5" />
                             Chat WA
                           </button>
-                          <span className="text-orange-400 text-[11px] font-bold flex items-center gap-0.5">
+                          <span className="text-orange-400 text-[10px] font-bold flex items-center gap-0.5">
                             Detail <ChevronRight className="w-3 h-3" />
                           </span>
                         </div>
@@ -1059,6 +1080,15 @@ export const TrainerMobileFocusPortal: React.FC<TrainerMobileFocusPortalProps> =
                   );
                 })}
               </div>
+              {filteredClients.length > 5 && (
+                <div className="flex items-center justify-between text-[10px] text-zinc-400 px-1 pt-0.5">
+                  <span>Menampilkan 5 awal dari {filteredClients.length} klien binaan</span>
+                  <span className="flex items-center gap-1 text-orange-400/90 font-medium">
+                    <span>Gulir untuk {filteredClients.length - 5} klien lainnya</span>
+                    <ChevronDown className="w-3 h-3 animate-bounce" />
+                  </span>
+                </div>
+              )}
             </div>
           )}
 
@@ -1104,56 +1134,65 @@ export const TrainerMobileFocusPortal: React.FC<TrainerMobileFocusPortalProps> =
                 )}
               </div>
 
-              <div className="space-y-2.5">
+              <div className="max-h-[500px] sm:max-h-[540px] overflow-y-auto pr-1 space-y-2.5 scrollbar-thin scrollbar-thumb-zinc-700/60 overscroll-contain rounded-2xl touch-pan-y">
                 {filteredWorkoutLogs.map((log) => (
                   <div
                     key={log.id}
-                    className="bg-[#1f2937]/90 rounded-2xl p-3.5 border border-zinc-700/80 shadow-[inset_0_1px_1px_rgba(255,255,255,0.06),0_4px_12px_rgba(0,0,0,0.3)] space-y-2.5"
+                    className="bg-[#1f2937]/90 rounded-2xl p-3 border border-zinc-700/80 shadow-[inset_0_1px_1px_rgba(255,255,255,0.06),0_4px_12px_rgba(0,0,0,0.3)] space-y-2"
                   >
                     <div className="flex items-center justify-between">
                       <div>
-                        <div className="flex items-center gap-2">
-                          <h4 className="text-sm font-bold text-white">{log.memberName}</h4>
-                          <span className="text-[10px] px-2 py-0.2 bg-zinc-800 text-orange-400 rounded-md font-mono font-bold">
+                        <div className="flex items-center gap-1.5">
+                          <h4 className="text-xs sm:text-sm font-bold text-white truncate max-w-[170px] sm:max-w-none">{log.memberName}</h4>
+                          <span className="text-[9.5px] px-1.5 py-0.2 bg-zinc-800 text-orange-400 rounded-md font-mono font-bold shrink-0">
                             Sesi {log.sessionNo}/{log.totalSession}
                           </span>
                         </div>
-                        <p className="text-[10px] text-zinc-400 mt-0.5">
+                        <p className="text-[9.5px] text-zinc-400 mt-0.5">
                           {log.date} • {log.time} WIB ({log.duration})
                         </p>
                       </div>
-                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-orange-500/20 text-orange-400 border border-orange-500/30">
+                      <span className="text-[9.5px] font-bold px-2 py-0.5 rounded-full bg-orange-500/20 text-orange-400 border border-orange-500/30 shrink-0">
                         RPE {log.rpe}/10
                       </span>
                     </div>
 
-                    <div className="bg-[#111827] rounded-xl p-2.5 border border-zinc-800 text-[11px] space-y-1">
-                      <div className="flex items-center gap-1.5 text-zinc-300 font-semibold">
-                        <Dumbbell className="w-3.5 h-3.5 text-orange-400" />
+                    <div className="bg-[#111827] rounded-xl p-2 border border-zinc-800 text-[10.5px] space-y-1">
+                      <div className="flex items-center gap-1.5 text-zinc-300 font-semibold text-[10px]">
+                        <Dumbbell className="w-3 h-3 text-orange-400" />
                         <span>Fokus: {log.focusMuscle}</span>
                       </div>
-                      <p className="text-zinc-400 text-[10px] pl-5 leading-relaxed">
+                      <p className="text-zinc-400 text-[9.5px] pl-4 leading-relaxed">
                         {log.coachNotes}
                       </p>
                     </div>
 
-                    <div className="flex items-center justify-between text-[10px] pt-1">
-                      <span className="text-amber-400 font-medium">🎯 Target: {log.nextTarget}</span>
+                    <div className="flex items-center justify-between text-[9.5px] pt-0.5">
+                      <span className="text-amber-400 font-medium truncate max-w-[210px]">🎯 Target: {log.nextTarget}</span>
                       <button
                         type="button"
                         onClick={() => {
                           const client = clients.find((c) => c.name === log.memberName);
                           handleOpenWhatsApp(client?.phone || '081234567890', log.memberName, log.time);
                         }}
-                        className="text-zinc-400 hover:text-white flex items-center gap-1 font-bold cursor-pointer"
+                        className="text-zinc-400 hover:text-white flex items-center gap-1 font-bold cursor-pointer shrink-0"
                       >
-                        <Share2 className="w-3 h-3 text-orange-400" />
+                        <Share2 className="w-2.5 h-2.5 text-orange-400" />
                         Kirim WA
                       </button>
                     </div>
                   </div>
                 ))}
               </div>
+              {filteredWorkoutLogs.length > 5 && (
+                <div className="flex items-center justify-between text-[10px] text-zinc-400 px-1 pt-0.5">
+                  <span>Menampilkan 5 awal dari {filteredWorkoutLogs.length} riwayat log</span>
+                  <span className="flex items-center gap-1 text-orange-400/90 font-medium">
+                    <span>Gulir untuk melihat semua</span>
+                    <ChevronDown className="w-3 h-3 animate-bounce" />
+                  </span>
+                </div>
+              )}
             </div>
           )}
 
@@ -1232,44 +1271,47 @@ export const TrainerMobileFocusPortal: React.FC<TrainerMobileFocusPortalProps> =
 
         {/* ========================================================================= */}
         {/* 6. FLOATING ACTION AREA (FAB)                                            */}
-        {/* Tombol FAB bulat oranye di kanan bawah dengan ikon plus (+) berlabel       */}
-        {/* "Jadwalkan Sesi Baru / Tambah Kegiatan"                                  */}
+        {/* Tombol FAB bulat oranye di kanan bawah dengan jarak ergonomis di atas navbar */}
         {/* ========================================================================= */}
-        <div className="absolute bottom-20 right-4 z-40">
+        <div
+          style={{ bottom: 'calc(5.25rem + env(safe-area-inset-bottom, 0px))' }}
+          className="absolute right-3.5 sm:right-4 z-30"
+        >
           <button
             type="button"
             onClick={() => setIsFabModalOpen(true)}
             aria-label="Jadwalkan Sesi Baru / Tambah Kegiatan"
-            className="group flex items-center gap-2 pl-3.5 pr-4 py-3 rounded-full bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-400 hover:to-amber-400 text-zinc-950 font-black text-xs shadow-[0_8px_25px_rgba(249,115,22,0.5),inset_0_1px_1px_rgba(255,255,255,0.4)] active:scale-95 transition-all cursor-pointer"
+            className="group flex items-center gap-2 pl-3.5 pr-4 py-2.5 rounded-full bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-400 hover:to-amber-400 text-zinc-950 font-black text-xs shadow-[0_8px_25px_rgba(249,115,22,0.45),inset_0_1px_1px_rgba(255,255,255,0.4)] active:scale-95 transition-all cursor-pointer"
           >
             <div className="w-5 h-5 rounded-full bg-zinc-950 flex items-center justify-center text-orange-400">
               <Plus className="w-3.5 h-3.5 stroke-[3]" />
             </div>
-            <span className="tracking-tight">Jadwalkan Sesi Baru</span>
+            <span className="tracking-tight whitespace-nowrap">Jadwalkan Sesi</span>
           </button>
         </div>
 
         {/* ========================================================================= */}
-        {/* 7. BOTTOM NAVIGATION BAR (FIXED DI BAGIAN BAWAH)                         */}
-        {/* 4 tab navigasi dengan ikon dan label:                                     */}
-        {/* - Jadwal (Active state: warna teks oranye dengan underline / indikator)  */}
-        {/* - Klien                                                                  */}
-        {/* - Log Latihan                                                            */}
-        {/* - Profil & Fee                                                           */}
+        {/* 7. BOTTOM NAVIGATION BAR (PROFESSIONAL ELEVATED FLOATING DOCK)            */}
+        {/* Ditinggikan di atas tepi bawah (14px + safe area), nyaman untuk satu tangan */}
         {/* ========================================================================= */}
-        <nav className="absolute bottom-0 left-0 right-0 h-18 bg-[#111827]/95 backdrop-blur-md border-t border-zinc-800/90 px-3 flex items-center justify-around z-30 shadow-[0_-10px_25px_rgba(0,0,0,0.5)]">
+        <nav
+          style={{ bottom: 'calc(0.875rem + env(safe-area-inset-bottom, 0px))' }}
+          className="absolute left-3 right-3 sm:left-4 sm:right-4 h-[58px] bg-[#111827]/96 backdrop-blur-2xl border border-zinc-700/80 rounded-2xl sm:rounded-3xl px-2 sm:px-3 flex items-center justify-around z-30 shadow-[0_12px_36px_rgba(0,0,0,0.85),inset_0_1px_1px_rgba(255,255,255,0.08)] ring-1 ring-white/10"
+        >
           {/* Tab 1: Jadwal */}
           <button
             type="button"
             onClick={() => setActiveTab('jadwal')}
-            className={`flex flex-col items-center justify-center gap-1 flex-1 py-1 relative transition cursor-pointer ${
-              activeTab === 'jadwal' ? 'text-orange-500 font-bold' : 'text-zinc-400 hover:text-zinc-200'
+            className={`flex flex-col items-center justify-center gap-0.5 flex-1 py-1 min-h-[44px] rounded-xl relative transition-all active:scale-95 cursor-pointer ${
+              activeTab === 'jadwal'
+                ? 'text-orange-400 font-bold bg-orange-500/10'
+                : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/40'
             }`}
           >
-            <Calendar className={`w-5 h-5 ${activeTab === 'jadwal' ? 'text-orange-500 scale-110' : ''}`} />
-            <span className="text-[10px] tracking-tight">Jadwal</span>
+            <Calendar className={`w-4.5 h-4.5 transition-transform duration-200 ${activeTab === 'jadwal' ? 'text-orange-500 scale-110' : ''}`} />
+            <span className="text-[9.5px] tracking-tight leading-none font-medium truncate">Jadwal</span>
             {activeTab === 'jadwal' && (
-              <span className="absolute -bottom-1 w-6 h-0.5 rounded-full bg-orange-500 shadow-[0_0_8px_#f97316]"></span>
+              <span className="w-3.5 h-0.5 rounded-full bg-orange-500 shadow-[0_0_8px_#f97316] animate-in fade-in"></span>
             )}
           </button>
 
@@ -1277,14 +1319,16 @@ export const TrainerMobileFocusPortal: React.FC<TrainerMobileFocusPortalProps> =
           <button
             type="button"
             onClick={() => setActiveTab('klien')}
-            className={`flex flex-col items-center justify-center gap-1 flex-1 py-1 relative transition cursor-pointer ${
-              activeTab === 'klien' ? 'text-orange-500 font-bold' : 'text-zinc-400 hover:text-zinc-200'
+            className={`flex flex-col items-center justify-center gap-0.5 flex-1 py-1 min-h-[44px] rounded-xl relative transition-all active:scale-95 cursor-pointer ${
+              activeTab === 'klien'
+                ? 'text-orange-400 font-bold bg-orange-500/10'
+                : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/40'
             }`}
           >
-            <Users className={`w-5 h-5 ${activeTab === 'klien' ? 'text-orange-500 scale-110' : ''}`} />
-            <span className="text-[10px] tracking-tight">Klien</span>
+            <Users className={`w-4.5 h-4.5 transition-transform duration-200 ${activeTab === 'klien' ? 'text-orange-500 scale-110' : ''}`} />
+            <span className="text-[9.5px] tracking-tight leading-none font-medium truncate">Klien</span>
             {activeTab === 'klien' && (
-              <span className="absolute -bottom-1 w-6 h-0.5 rounded-full bg-orange-500 shadow-[0_0_8px_#f97316]"></span>
+              <span className="w-3.5 h-0.5 rounded-full bg-orange-500 shadow-[0_0_8px_#f97316] animate-in fade-in"></span>
             )}
           </button>
 
@@ -1292,14 +1336,16 @@ export const TrainerMobileFocusPortal: React.FC<TrainerMobileFocusPortalProps> =
           <button
             type="button"
             onClick={() => setActiveTab('log')}
-            className={`flex flex-col items-center justify-center gap-1 flex-1 py-1 relative transition cursor-pointer ${
-              activeTab === 'log' ? 'text-orange-500 font-bold' : 'text-zinc-400 hover:text-zinc-200'
+            className={`flex flex-col items-center justify-center gap-0.5 flex-1 py-1 min-h-[44px] rounded-xl relative transition-all active:scale-95 cursor-pointer ${
+              activeTab === 'log'
+                ? 'text-orange-400 font-bold bg-orange-500/10'
+                : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/40'
             }`}
           >
-            <FileEdit className={`w-5 h-5 ${activeTab === 'log' ? 'text-orange-500 scale-110' : ''}`} />
-            <span className="text-[10px] tracking-tight">Log Latihan</span>
+            <FileEdit className={`w-4.5 h-4.5 transition-transform duration-200 ${activeTab === 'log' ? 'text-orange-500 scale-110' : ''}`} />
+            <span className="text-[9.5px] tracking-tight leading-none font-medium truncate">Log</span>
             {activeTab === 'log' && (
-              <span className="absolute -bottom-1 w-6 h-0.5 rounded-full bg-orange-500 shadow-[0_0_8px_#f97316]"></span>
+              <span className="w-3.5 h-0.5 rounded-full bg-orange-500 shadow-[0_0_8px_#f97316] animate-in fade-in"></span>
             )}
           </button>
 
@@ -1307,14 +1353,16 @@ export const TrainerMobileFocusPortal: React.FC<TrainerMobileFocusPortalProps> =
           <button
             type="button"
             onClick={() => setActiveTab('profil')}
-            className={`flex flex-col items-center justify-center gap-1 flex-1 py-1 relative transition cursor-pointer ${
-              activeTab === 'profil' ? 'text-orange-500 font-bold' : 'text-zinc-400 hover:text-zinc-200'
+            className={`flex flex-col items-center justify-center gap-0.5 flex-1 py-1 min-h-[44px] rounded-xl relative transition-all active:scale-95 cursor-pointer ${
+              activeTab === 'profil'
+                ? 'text-orange-400 font-bold bg-orange-500/10'
+                : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/40'
             }`}
           >
-            <Wallet className={`w-5 h-5 ${activeTab === 'profil' ? 'text-orange-500 scale-110' : ''}`} />
-            <span className="text-[10px] tracking-tight">Profil & Fee</span>
+            <Wallet className={`w-4.5 h-4.5 transition-transform duration-200 ${activeTab === 'profil' ? 'text-orange-500 scale-110' : ''}`} />
+            <span className="text-[9.5px] tracking-tight leading-none font-medium truncate">Profil & Fee</span>
             {activeTab === 'profil' && (
-              <span className="absolute -bottom-1 w-6 h-0.5 rounded-full bg-orange-500 shadow-[0_0_8px_#f97316]"></span>
+              <span className="w-3.5 h-0.5 rounded-full bg-orange-500 shadow-[0_0_8px_#f97316] animate-in fade-in"></span>
             )}
           </button>
         </nav>
@@ -1341,11 +1389,17 @@ export const TrainerMobileFocusPortal: React.FC<TrainerMobileFocusPortalProps> =
 
               {/* Client Info Banner */}
               <div className="flex items-center gap-3 bg-[#111827] p-3 rounded-2xl border border-zinc-800">
-                <img
-                  src={activeSessionModal.avatar}
-                  alt={activeSessionModal.memberName}
-                  className="w-12 h-12 rounded-xl object-cover border border-orange-500 shrink-0"
-                />
+                {activeSessionModal.avatar && activeSessionModal.avatar.trim() ? (
+                  <img
+                    src={activeSessionModal.avatar.trim()}
+                    alt={activeSessionModal.memberName}
+                    className="w-12 h-12 rounded-xl object-cover border border-orange-500 shrink-0"
+                  />
+                ) : (
+                  <div className="w-12 h-12 rounded-xl bg-zinc-800 border border-orange-500 flex items-center justify-center font-bold text-orange-400 text-sm shrink-0">
+                    {activeSessionModal.memberName.substring(0, 2).toUpperCase()}
+                  </div>
+                )}
                 <div>
                   <h4 className="text-sm font-bold text-white">{activeSessionModal.memberName}</h4>
                   <p className="text-xs text-orange-400">{activeSessionModal.sessionInfo}</p>
@@ -1590,11 +1644,17 @@ export const TrainerMobileFocusPortal: React.FC<TrainerMobileFocusPortalProps> =
               </div>
 
               <div className="flex items-center gap-3">
-                <img
-                  src={selectedClientDetail.avatar}
-                  alt={selectedClientDetail.name}
-                  className="w-14 h-14 rounded-2xl object-cover border-2 border-orange-500"
-                />
+                {selectedClientDetail.avatar && selectedClientDetail.avatar.trim() ? (
+                  <img
+                    src={selectedClientDetail.avatar.trim()}
+                    alt={selectedClientDetail.name}
+                    className="w-14 h-14 rounded-2xl object-cover border-2 border-orange-500 shrink-0"
+                  />
+                ) : (
+                  <div className="w-14 h-14 rounded-2xl bg-zinc-800 border-2 border-orange-500 flex items-center justify-center font-bold text-orange-400 text-base shrink-0">
+                    {selectedClientDetail.name.substring(0, 2).toUpperCase()}
+                  </div>
+                )}
                 <div>
                   <h4 className="text-base font-bold text-white">{selectedClientDetail.name}</h4>
                   <p className="text-xs text-orange-400">{selectedClientDetail.packageTitle}</p>

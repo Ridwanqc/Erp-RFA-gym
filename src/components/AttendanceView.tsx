@@ -61,6 +61,7 @@ interface AttendanceViewProps {
   onStaffClock: (record: StaffAttendance) => void;
   transactions?: Transaction[];
   showToast: (title: string, message: string, type: 'success' | 'error' | 'warning' | 'info') => void;
+  onTabChange?: (tab: 'member' | 'out' | 'staff' | 'analytics') => void;
 }
 
 export const AttendanceView: React.FC<AttendanceViewProps> = ({
@@ -77,7 +78,8 @@ export const AttendanceView: React.FC<AttendanceViewProps> = ({
   onCheckoutMember,
   onStaffClock,
   transactions = [],
-  showToast
+  showToast,
+  onTabChange
 }) => {
   const { settings, activeBranch, isAllBranches, branches } = useSettings();
   const [activeTab, setActiveTab] = useState<'member' | 'out' | 'staff' | 'analytics'>(initialTab || 'member');
@@ -88,8 +90,17 @@ export const AttendanceView: React.FC<AttendanceViewProps> = ({
   useEffect(() => {
     if (initialTab) {
       setActiveTab(initialTab);
+    } else {
+      setActiveTab('member');
     }
   }, [initialTab]);
+
+  const handleSelectTab = (tab: 'member' | 'out' | 'staff' | 'analytics') => {
+    setActiveTab(tab);
+    if (onTabChange) {
+      onTabChange(tab);
+    }
+  };
 
   // Total unique members who have completed valid workouts / attendances
   const totalMembersTrainedCount = useMemo(() => {
@@ -569,7 +580,7 @@ export const AttendanceView: React.FC<AttendanceViewProps> = ({
       <div className="flex bg-zinc-900/90 p-1.5 rounded-2xl border border-zinc-800 overflow-x-auto max-w-full scrollbar-none items-center gap-1.5 shadow-sm">
         <button
           type="button"
-          onClick={() => setActiveTab('out')}
+          onClick={() => handleSelectTab('out')}
           className={`px-3.5 sm:px-4 py-2 rounded-xl text-xs font-bold transition whitespace-nowrap flex items-center gap-1.5 cursor-pointer ${
             activeTab === 'out'
               ? 'bg-orange-500 text-zinc-950 font-black shadow-md'
@@ -582,7 +593,7 @@ export const AttendanceView: React.FC<AttendanceViewProps> = ({
 
         <button
           type="button"
-          onClick={() => setActiveTab('member')}
+          onClick={() => handleSelectTab('member')}
           className={`px-3.5 sm:px-4 py-2 rounded-xl text-xs font-bold transition whitespace-nowrap flex items-center gap-1.5 cursor-pointer ${
             activeTab === 'member'
               ? 'bg-orange-500 text-zinc-950 font-black shadow-md'
@@ -595,7 +606,7 @@ export const AttendanceView: React.FC<AttendanceViewProps> = ({
 
         <button
           type="button"
-          onClick={() => setActiveTab('analytics')}
+          onClick={() => handleSelectTab('analytics')}
           className={`px-3.5 sm:px-4 py-2 rounded-xl text-xs font-bold transition whitespace-nowrap flex items-center gap-1.5 cursor-pointer ${
             activeTab === 'analytics'
               ? 'bg-orange-500 text-zinc-950 font-black shadow-md'
@@ -608,7 +619,7 @@ export const AttendanceView: React.FC<AttendanceViewProps> = ({
 
         <button
           type="button"
-          onClick={() => setActiveTab('staff')}
+          onClick={() => handleSelectTab('staff')}
           className={`px-3.5 sm:px-4 py-2 rounded-xl text-xs font-bold transition whitespace-nowrap flex items-center gap-1.5 cursor-pointer ${
             activeTab === 'staff'
               ? 'bg-orange-500 text-zinc-950 font-black shadow-md'

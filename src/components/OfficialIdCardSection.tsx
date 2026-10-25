@@ -438,11 +438,17 @@ export const OfficialIdCardSection: React.FC<OfficialIdCardSectionProps> = ({
             </div>
 
             <div className="max-h-[70vh] overflow-auto flex items-center justify-center bg-black/50 rounded-2xl p-2 border border-zinc-800">
-              <img
-                src={value.fotoIdentitas}
-                alt="Kartu Identitas"
-                className="max-h-[65vh] w-auto object-contain rounded-xl"
-              />
+              {value.fotoIdentitas && value.fotoIdentitas.trim() ? (
+                <img
+                  src={value.fotoIdentitas.trim()}
+                  alt="Kartu Identitas"
+                  className="max-h-[65vh] w-auto object-contain rounded-xl"
+                />
+              ) : (
+                <div className="py-12 text-center text-xs text-zinc-500 font-medium">
+                  Berkas foto identitas tidak tersedia
+                </div>
+              )}
             </div>
 
             <div className="mt-3 flex items-center justify-between text-xs text-zinc-400">

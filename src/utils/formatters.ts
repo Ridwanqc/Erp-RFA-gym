@@ -30,7 +30,8 @@ export function getSystemTimezoneLabel(): string {
 }
 
 export function formatRp(n: number | string | undefined | null): string {
-  const val = typeof n === 'string' ? parseFloat(n) : (n || 0);
+  const parsed = typeof n === 'string' ? parseFloat(n) : n;
+  const val = typeof parsed === 'number' && !isNaN(parsed) && isFinite(parsed) ? parsed : 0;
   return 'Rp ' + Math.round(val).toLocaleString('id-ID');
 }
 
@@ -82,4 +83,12 @@ export function getDayDiff(targetDateStr: string, baseDateStr: string = APP_TODA
   const b = new Date(cleanBase + 'T00:00:00').getTime();
   if (isNaN(t) || isNaN(b)) return 0;
   return Math.ceil((t - b) / (1000 * 60 * 60 * 24));
+}
+
+/**
+ * Sanitasi string input untuk mencegah injeksi script / tag HTML berbahaya (XSS prevention)
+ */
+export function sanitizeText(input: string | undefined | null): string {
+  if (!input) return '';
+  return String(input).replace(/[<>]/g, '').trim();
 }

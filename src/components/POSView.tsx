@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import {
   ShoppingBag,
   Plus,
@@ -16,17 +16,25 @@ import {
   AlertCircle,
   Printer,
   History,
-  X
+  X,
+  Camera,
+  Upload,
+  Image as ImageIcon,
+  Sparkles,
+  RefreshCw,
+  Check
 } from 'lucide-react';
 import { Product, CartItem, Transaction, User } from '../types';
 import { formatRp, getTimestamp, APP_TODAY } from '../utils/formatters';
 import { TransactionActions } from './transaction/TransactionActions';
+import { resizeImageFile, PRESET_PRODUCT_IMAGES } from '../utils/imageUtils';
 
 interface POSViewProps {
   products: Product[];
   currentUser: User | null;
   onProcessCheckout: (trx: Transaction, updatedProducts: Product[]) => void;
   onAddProduct: (prod: Product) => void;
+  onUpdateProduct?: (prod: Product) => void;
   onAddStock: (prodId: string, qtyToAdd: number) => void;
   onNavigateTab?: (tab: any) => void;
   isStoreClosed?: boolean;
@@ -40,6 +48,7 @@ export const POSView: React.FC<POSViewProps> = ({
   currentUser,
   onProcessCheckout,
   onAddProduct,
+  onUpdateProduct,
   onAddStock,
   onNavigateTab,
   isStoreClosed,
@@ -74,6 +83,10 @@ export const POSView: React.FC<POSViewProps> = ({
   const [npCost, setNpCost] = useState('');
   const [npPrice, setNpPrice] = useState('');
   const [npStock, setNpStock] = useState('');
+  const [npImg, setNpImg] = useState<string>(PRESET_PRODUCT_IMAGES[0].url);
+  const [isProcessingImg, setIsProcessingImg] = useState(false);
+  const npFileInputRef = useRef<HTMLInputElement>(null);
+  const npCameraInputRef = useRef<HTMLInputElement>(null);
 
   // Stock modal form
   const [stockProdId, setStockProdId] = useState('');
@@ -213,6 +226,19 @@ export const POSView: React.FC<POSViewProps> = ({
     setPaymentMethod('Tunai');
   };
 
+  const handlePhotoUpload = async (file: File) => {
+    try {
+      setIsProcessingImg(true);
+      const optimizedDataUrl = await resizeImageFile(file, 500, 0.82);
+      setNpImg(optimizedDataUrl);
+      showToast('Foto Diproses', 'Foto produk berhasil dimuat & dioptimalkan.', 'info');
+    } catch (err: any) {
+      showToast('Gagal Memproses Foto', err?.message || 'Gagal memproses foto gambar.', 'error');
+    } finally {
+      setIsProcessingImg(false);
+    }
+  };
+
   const handleSaveProduct = (e: React.FormEvent) => {
     e.preventDefault();
     if (!npName || !npCost || !npPrice || !npStock) return;
@@ -224,7 +250,7 @@ export const POSView: React.FC<POSViewProps> = ({
       cost: Number(npCost),
       price: Number(npPrice),
       stock: Number(npStock),
-      img: 'https://images.unsplash.com/photo-1548839140-29a749e1bc4e?q=80&w=200&auto=format&fit=crop'
+      img: npImg.trim() || PRESET_PRODUCT_IMAGES[0].url
     };
 
     onAddProduct(newProduct);
@@ -234,6 +260,7 @@ export const POSView: React.FC<POSViewProps> = ({
     setNpCost('');
     setNpPrice('');
     setNpStock('');
+    setNpImg(PRESET_PRODUCT_IMAGES[0].url);
   };
 
   const handleSaveStock = (e: React.FormEvent) => {
@@ -254,10 +281,10 @@ export const POSView: React.FC<POSViewProps> = ({
   });
 
   return (
-    <div className="max-w-7xl mx-auto h-[calc(100vh-140px)] flex flex-col">
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 h-full">
+    <div className="max-w-7xl mx-auto min-h-[calc(100vh-140px)] lg:h-[calc(100vh-140px)] flex flex-col pb-8">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 lg:h-full">
         {/* Left Column: Product Catalog */}
-        <div className="lg:col-span-2 flex flex-col h-full space-y-3.5">
+        <div className="lg:col-span-2 flex flex-col lg:h-full space-y-3.5">
           {/* Search & Filter Bar */}
           <div className="flex flex-wrap sm:flex-nowrap gap-2.5 shrink-0">
             <div className="relative flex-1">
@@ -371,7 +398,13 @@ export const POSView: React.FC<POSViewProps> = ({
                       className="bg-zinc-950/80 border border-zinc-800 hover:border-amber-500/40 rounded-xl p-2 flex items-center justify-between gap-2"
                     >
                       <div className="flex items-center gap-2 min-w-0">
-                        <img src={lp.img} alt={lp.name} className="w-8 h-8 rounded-lg object-cover bg-zinc-900 shrink-0" />
+                        {lp.img && lp.img.trim() ? (
+                          <img src={lp.img.trim()} alt={lp.name} className="w-8 h-8 rounded-lg object-cover bg-zinc-900 shrink-0" />
+                        ) : (
+                          <div className="w-8 h-8 rounded-lg bg-zinc-900 border border-zinc-800 flex items-center justify-center text-[10px] text-zinc-500 font-bold shrink-0">
+                            POS
+                          </div>
+                        )}
                         <div className="min-w-0">
                           <p className="text-xs font-bold text-white truncate">{lp.name}</p>
                           <span
@@ -451,14 +484,23 @@ export const POSView: React.FC<POSViewProps> = ({
                         </span>
                       )}
 
-                      <div
-                        onClick={() => !isOutOfStock && addToCart(p)}
-                        className={isOutOfStock ? 'opacity-50 grayscale cursor-not-allowed' : 'cursor-pointer'}
-                      >
-                        <div className="w-16 h-16 rounded-xl mx-auto mb-2.5 overflow-hidden bg-zinc-900">
-                          <img src={p.img} alt={p.name} className="w-full h-full object-cover" />
+                      <div className="relative">
+                        <div
+                          onClick={() => !isOutOfStock && addToCart(p)}
+                          className={isOutOfStock ? 'opacity-50 grayscale cursor-not-allowed' : 'cursor-pointer'}
+                        >
+                          <div className="w-16 h-16 sm:w-18 sm:h-18 rounded-2xl mx-auto mb-2.5 overflow-hidden bg-zinc-900 border border-zinc-800 relative shadow-inner group/img">
+                            <img
+                              src={p.img || PRESET_PRODUCT_IMAGES[0].url}
+                              alt={p.name}
+                              className="w-full h-full object-cover group-hover/img:scale-105 transition duration-300"
+                              onError={(e) => {
+                                (e.target as HTMLImageElement).src = PRESET_PRODUCT_IMAGES[0].url;
+                              }}
+                            />
+                          </div>
+                          <h4 className="font-bold text-xs text-white line-clamp-2 leading-tight">{p.name}</h4>
                         </div>
-                        <h4 className="font-bold text-xs text-white line-clamp-2 leading-tight">{p.name}</h4>
                       </div>
 
                       <div className="mt-3 pt-2 border-t border-zinc-800/80 space-y-2">
@@ -500,7 +542,7 @@ export const POSView: React.FC<POSViewProps> = ({
         </div>
 
         {/* Right Column: Checkout Cart & Payment */}
-        <div className="bg-zinc-900/90 border border-zinc-800 rounded-3xl flex flex-col h-full overflow-hidden shadow-sm">
+        <div className="bg-zinc-900/90 border border-zinc-800 rounded-3xl flex flex-col lg:h-full overflow-hidden shadow-sm">
           {/* Cart Header */}
           <div className="p-4 border-b border-zinc-800 flex justify-between items-center bg-zinc-950/40 shrink-0">
             <h3 className="font-bold text-sm text-white flex items-center gap-2">
@@ -512,7 +554,7 @@ export const POSView: React.FC<POSViewProps> = ({
           </div>
 
           {/* Cart Items List */}
-          <div className="flex-1 overflow-y-auto p-4 space-y-2.5 scrollbar-thin scrollbar-thumb-zinc-800">
+          <div className="overflow-y-auto p-4 space-y-2.5 scrollbar-thin scrollbar-thumb-zinc-800 max-h-60 sm:max-h-80 lg:max-h-none lg:flex-1">
             {cart.length === 0 ? (
               <div className="h-full flex flex-col items-center justify-center text-zinc-500 text-xs py-12">
                 <ShoppingBag className="w-10 h-10 opacity-20 mb-2" />
@@ -786,9 +828,27 @@ export const POSView: React.FC<POSViewProps> = ({
       {/* MODAL: TAMBAH PRODUK BARU */}
       {isAddProdOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-xs p-3 sm:p-4 overflow-y-auto">
-          <div className="bg-zinc-900 border border-zinc-800 rounded-2xl shadow-2xl w-full max-w-sm p-4 sm:p-6 my-auto max-h-[92vh] overflow-y-auto animate-in fade-in zoom-in-95">
-            <h3 className="text-base font-bold text-white mb-4">Tambah Produk Baru</h3>
-            <form onSubmit={handleSaveProduct} className="space-y-4">
+          <div className="bg-zinc-900 border border-zinc-800 rounded-3xl shadow-2xl w-full max-w-md p-4 sm:p-6 my-auto max-h-[92vh] overflow-y-auto animate-in fade-in zoom-in-95 space-y-4">
+            <div className="flex items-center justify-between pb-3 border-b border-zinc-800">
+              <div className="flex items-center gap-2.5">
+                <div className="w-10 h-10 rounded-2xl bg-orange-500/20 text-orange-400 border border-orange-500/30 flex items-center justify-center">
+                  <Boxes className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-white">Tambah Produk Baru</h3>
+                  <p className="text-xs text-zinc-400">Daftarkan item FnB / Suplemen ke katalog kasir</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsAddProdOpen(false)}
+                className="p-1.5 rounded-xl text-zinc-400 hover:text-white hover:bg-zinc-800 transition"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveProduct} className="space-y-3.5">
               <div>
                 <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-wider mb-1.5">
                   Nama Barang
@@ -799,8 +859,120 @@ export const POSView: React.FC<POSViewProps> = ({
                   onChange={(e) => setNpName(e.target.value)}
                   required
                   placeholder="Cth: Pocari Sweat 500ml"
-                  className="w-full bg-zinc-950 border border-zinc-700 rounded-xl px-3 py-2.5 text-xs text-white outline-none focus:border-orange-500"
+                  className="w-full bg-zinc-950 border border-zinc-700 rounded-xl px-3 py-2 text-xs text-white outline-none focus:border-orange-500"
                 />
+              </div>
+
+              {/* Input Foto Produk */}
+              <div className="bg-zinc-950 p-3 rounded-2xl border border-zinc-800 space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <label className="block text-[10px] font-bold text-zinc-300 uppercase tracking-wider flex items-center gap-1.5">
+                    <Camera className="w-3.5 h-3.5 text-orange-400" />
+                    <span>Foto Produk</span>
+                  </label>
+                  {isProcessingImg && (
+                    <span className="text-[10px] text-orange-400 flex items-center gap-1 font-bold animate-pulse">
+                      <RefreshCw className="w-3 h-3 animate-spin" /> Memproses Foto...
+                    </span>
+                  )}
+                </div>
+
+                <div className="flex items-center gap-3">
+                  <div className="w-16 h-16 rounded-2xl bg-zinc-900 border border-zinc-700/80 overflow-hidden shrink-0 relative group shadow-inner">
+                    <img
+                      src={npImg || PRESET_PRODUCT_IMAGES[0].url}
+                      alt="Pratinjau Foto"
+                      className="w-full h-full object-cover"
+                      onError={(e) => {
+                        (e.target as HTMLImageElement).src = PRESET_PRODUCT_IMAGES[0].url;
+                      }}
+                    />
+                  </div>
+                  <div className="flex-1 space-y-1.5">
+                    <div className="flex flex-wrap gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() => npFileInputRef.current?.click()}
+                        className="px-2.5 py-1.5 rounded-xl bg-orange-500 hover:bg-orange-600 text-white text-[11px] font-bold transition flex items-center gap-1 cursor-pointer shadow-sm active:scale-95"
+                      >
+                        <Upload className="w-3.5 h-3.5" />
+                        <span>Pilih Foto</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => npCameraInputRef.current?.click()}
+                        className="px-2.5 py-1.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-[11px] font-bold transition flex items-center gap-1 cursor-pointer border border-zinc-700 active:scale-95"
+                      >
+                        <Camera className="w-3.5 h-3.5 text-orange-400" />
+                        <span>Kamera</span>
+                      </button>
+                    </div>
+                    <p className="text-[10px] text-zinc-400">
+                      Format JPG, PNG, atau WebP dari perangkat / kamera.
+                    </p>
+                  </div>
+
+                  {/* Hidden inputs */}
+                  <input
+                    ref={npFileInputRef}
+                    type="file"
+                    accept="image/*"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) handlePhotoUpload(file);
+                      e.target.value = '';
+                    }}
+                    className="hidden"
+                  />
+                  <input
+                    ref={npCameraInputRef}
+                    type="file"
+                    accept="image/*"
+                    capture="environment"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) handlePhotoUpload(file);
+                      e.target.value = '';
+                    }}
+                    className="hidden"
+                  />
+                </div>
+
+                {/* Preset Thumbnails */}
+                <div>
+                  <span className="text-[10px] font-bold text-zinc-500 block mb-1">
+                    Atau Pilih Preset Gambar Cepat (1-Klik):
+                  </span>
+                  <div className="flex gap-1.5 overflow-x-auto pb-1 scrollbar-none">
+                    {PRESET_PRODUCT_IMAGES.map((preset, idx) => (
+                      <button
+                        key={idx}
+                        type="button"
+                        onClick={() => setNpImg(preset.url)}
+                        title={preset.label}
+                        className={`p-1 rounded-xl border transition shrink-0 relative flex items-center gap-1 text-[10px] cursor-pointer ${
+                          npImg === preset.url
+                            ? 'bg-orange-500/20 border-orange-500 text-orange-300 font-bold'
+                            : 'bg-zinc-900 border-zinc-800 text-zinc-400 hover:text-white hover:border-zinc-700'
+                        }`}
+                      >
+                        <img src={preset.url} alt={preset.label} className="w-6 h-6 rounded-lg object-cover" />
+                        <span className="max-w-[75px] truncate">{preset.label.split(' ')[0]}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Optional Custom URL */}
+                <div>
+                  <input
+                    type="url"
+                    value={npImg}
+                    onChange={(e) => setNpImg(e.target.value)}
+                    placeholder="Tautan URL gambar langsung (opsional)..."
+                    className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-2.5 py-1.5 text-[11px] text-zinc-300 outline-none focus:border-orange-500"
+                  />
+                </div>
               </div>
 
               <div className="grid grid-cols-2 gap-3">
@@ -811,7 +983,7 @@ export const POSView: React.FC<POSViewProps> = ({
                   <select
                     value={npCat}
                     onChange={(e) => setNpCat(e.target.value as any)}
-                    className="w-full bg-zinc-950 border border-zinc-700 rounded-xl px-3 py-2.5 text-xs text-white outline-none focus:border-orange-500"
+                    className="w-full bg-zinc-950 border border-zinc-700 rounded-xl px-3 py-2 text-xs text-white outline-none focus:border-orange-500"
                   >
                     <option value="Mineral">Minuman</option>
                     <option value="Supplement">Suplemen</option>
@@ -828,7 +1000,7 @@ export const POSView: React.FC<POSViewProps> = ({
                     onChange={(e) => setNpStock(e.target.value)}
                     required
                     min="0"
-                    className="w-full bg-zinc-950 border border-zinc-700 rounded-xl px-3 py-2.5 text-xs text-white outline-none focus:border-orange-500"
+                    className="w-full bg-zinc-950 border border-zinc-700 rounded-xl px-3 py-2 text-xs text-white outline-none focus:border-orange-500"
                   />
                 </div>
               </div>
@@ -844,7 +1016,7 @@ export const POSView: React.FC<POSViewProps> = ({
                     onChange={(e) => setNpCost(e.target.value)}
                     required
                     min="0"
-                    className="w-full bg-zinc-950 border border-zinc-700 rounded-xl px-3 py-2.5 text-xs text-white outline-none focus:border-orange-500"
+                    className="w-full bg-zinc-950 border border-zinc-700 rounded-xl px-3 py-2 text-xs text-white outline-none focus:border-orange-500"
                   />
                 </div>
                 <div>
@@ -857,7 +1029,7 @@ export const POSView: React.FC<POSViewProps> = ({
                     onChange={(e) => setNpPrice(e.target.value)}
                     required
                     min="0"
-                    className="w-full bg-zinc-950 border border-zinc-700 rounded-xl px-3 py-2.5 text-xs text-white outline-none focus:border-orange-500"
+                    className="w-full bg-zinc-950 border border-zinc-700 rounded-xl px-3 py-2 text-xs text-white outline-none focus:border-orange-500"
                   />
                 </div>
               </div>
@@ -866,13 +1038,14 @@ export const POSView: React.FC<POSViewProps> = ({
                 <button
                   type="button"
                   onClick={() => setIsAddProdOpen(false)}
-                  className="flex-1 py-2.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-xl text-xs font-bold transition"
+                  className="flex-1 py-2.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-xl text-xs font-bold transition cursor-pointer"
                 >
                   Batal
                 </button>
                 <button
                   type="submit"
-                  className="flex-1 py-2.5 bg-orange-500 hover:bg-orange-600 text-white rounded-xl text-xs font-bold shadow-md transition"
+                  disabled={isProcessingImg}
+                  className="flex-1 py-2.5 bg-gradient-to-r from-orange-600 to-orange-500 hover:from-orange-500 hover:to-orange-400 text-white rounded-xl text-xs font-bold shadow-md transition disabled:opacity-50 cursor-pointer"
                 >
                   Simpan Produk
                 </button>
@@ -881,6 +1054,8 @@ export const POSView: React.FC<POSViewProps> = ({
           </div>
         </div>
       )}
+
+
 
       {/* MODAL: TAMBAH STOK MASUK */}
       {isStockOpen && (
@@ -976,82 +1151,140 @@ export const POSView: React.FC<POSViewProps> = ({
               </div>
             </div>
 
-            {/* Table */}
-            <div className="overflow-y-auto flex-1 border border-zinc-800 rounded-xl">
-              <table className="w-full text-left text-xs">
-                <thead className="bg-zinc-950 text-zinc-400 text-[11px] uppercase tracking-wider font-semibold sticky top-0 border-b border-zinc-800">
-                  <tr>
-                    <th className="py-2.5 px-3">No. Transaksi</th>
-                    <th className="py-2.5 px-3">Waktu</th>
-                    <th className="py-2.5 px-3">Pelanggan</th>
-                    <th className="py-2.5 px-3">Deskripsi Barang</th>
-                    <th className="py-2.5 px-3">Metode</th>
-                    <th className="py-2.5 px-3 text-right">Total</th>
-                    <th className="py-2.5 px-3 text-center">Status</th>
-                    <th className="py-2.5 px-3 text-center">Aksi (Cetak/PDF)</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-zinc-800/60 bg-zinc-900/50">
-                  {transactions
-                    .filter((t) => t.type === 'POS' || t.desc.toLowerCase().includes('pos'))
-                    .filter((t) => {
-                      if (!historySearch.trim()) return true;
-                      const q = historySearch.toLowerCase();
-                      return (
-                        t.id.toLowerCase().includes(q) ||
-                        t.customer.toLowerCase().includes(q) ||
-                        (t.cashier && t.cashier.toLowerCase().includes(q)) ||
-                        t.desc.toLowerCase().includes(q)
-                      );
-                    })
-                    .map((t) => (
-                      <tr key={t.id} className="hover:bg-zinc-800/40 transition">
-                        <td className="py-2.5 px-3 font-mono font-bold text-white whitespace-nowrap">
-                          {t.id}
-                        </td>
-                        <td className="py-2.5 px-3 text-zinc-400 whitespace-nowrap">
-                          <div>{t.date}</div>
-                          <div className="text-[10px] text-zinc-500">{t.time || ''}</div>
-                        </td>
-                        <td className="py-2.5 px-3 font-semibold text-zinc-200">
-                          {t.customer}
-                        </td>
-                        <td className="py-2.5 px-3 text-zinc-300 max-w-xs truncate" title={t.desc}>
-                          {t.desc}
-                        </td>
-                        <td className="py-2.5 px-3 whitespace-nowrap">
+            {/* Responsive Table / Card View */}
+            <div className="overflow-y-auto flex-1 border border-zinc-800 rounded-xl bg-zinc-950/40">
+              {/* Mobile Card View (< 768px) */}
+              <div className="md:hidden divide-y divide-zinc-800/80 p-2 space-y-2">
+                {transactions
+                  .filter((t) => t.type === 'POS' || t.desc.toLowerCase().includes('pos'))
+                  .filter((t) => {
+                    if (!historySearch.trim()) return true;
+                    const q = historySearch.toLowerCase();
+                    return (
+                      t.id.toLowerCase().includes(q) ||
+                      t.customer.toLowerCase().includes(q) ||
+                      (t.cashier && t.cashier.toLowerCase().includes(q)) ||
+                      t.desc.toLowerCase().includes(q)
+                    );
+                  })
+                  .map((t) => (
+                    <div key={`mob-${t.id}`} className="p-3 bg-zinc-900 border border-zinc-800 rounded-xl space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="font-mono font-bold text-white text-xs">{t.id}</span>
+                        <span
+                          className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                            t.status === 'Paid'
+                              ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
+                              : t.status === 'VOID'
+                              ? 'bg-rose-500/10 text-rose-400 border border-rose-500/20'
+                              : 'bg-amber-500/10 text-amber-400 border border-amber-500/20'
+                          }`}
+                        >
+                          {t.status}
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="font-semibold text-zinc-200">{t.customer}</span>
+                        <span className="text-[10px] text-zinc-400 font-mono">{t.date} {t.time || ''}</span>
+                      </div>
+                      <p className="text-[11px] text-zinc-400 line-clamp-2">{t.desc}</p>
+                      <div className="flex items-center justify-between pt-1 border-t border-zinc-800/80">
+                        <span className="text-xs font-black text-emerald-400 font-mono">
+                          {formatRp(t.amountPaid || t.amount)}
+                        </span>
+                        <div className="flex items-center gap-1.5">
                           <span className="px-2 py-0.5 rounded bg-zinc-800 text-[10px] text-zinc-300 border border-zinc-700">
                             {t.method}
                           </span>
-                        </td>
-                        <td className="py-2.5 px-3 text-right font-bold text-emerald-400 font-mono whitespace-nowrap">
-                          {formatRp(t.amountPaid || t.amount)}
-                        </td>
-                        <td className="py-2.5 px-3 text-center whitespace-nowrap">
-                          <span
-                            className={`px-2 py-0.5 rounded text-[10px] font-bold ${
-                              t.status === 'Paid'
-                                ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
-                                : t.status === 'VOID'
-                                ? 'bg-rose-500/10 text-rose-400 border border-rose-500/20'
-                                : 'bg-amber-500/10 text-amber-400 border border-amber-500/20'
-                            }`}
-                          >
-                            {t.status}
-                          </span>
-                        </td>
-                        <td className="py-2.5 px-3 text-center whitespace-nowrap">
                           <TransactionActions
                             transaction={t}
                             onView={onReprintReceipt}
                             onPrint={onReprintReceipt}
                             size="sm"
                           />
-                        </td>
-                      </tr>
-                    ))}
-                </tbody>
-              </table>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+              </div>
+
+              {/* Desktop / Tablet Full Table (>= 768px) */}
+              <div className="hidden md:block overflow-x-auto">
+                <table className="w-full text-left text-xs min-w-[760px]">
+                  <thead className="bg-zinc-950 text-zinc-400 text-[11px] uppercase tracking-wider font-semibold sticky top-0 border-b border-zinc-800">
+                    <tr>
+                      <th className="py-2.5 px-3">No. Transaksi</th>
+                      <th className="py-2.5 px-3">Waktu</th>
+                      <th className="py-2.5 px-3">Pelanggan</th>
+                      <th className="py-2.5 px-3">Deskripsi Barang</th>
+                      <th className="py-2.5 px-3">Metode</th>
+                      <th className="py-2.5 px-3 text-right">Total</th>
+                      <th className="py-2.5 px-3 text-center">Status</th>
+                      <th className="py-2.5 px-3 text-center">Aksi (Cetak/PDF)</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-zinc-800/60 bg-zinc-900/50">
+                    {transactions
+                      .filter((t) => t.type === 'POS' || t.desc.toLowerCase().includes('pos'))
+                      .filter((t) => {
+                        if (!historySearch.trim()) return true;
+                        const q = historySearch.toLowerCase();
+                        return (
+                          t.id.toLowerCase().includes(q) ||
+                          t.customer.toLowerCase().includes(q) ||
+                          (t.cashier && t.cashier.toLowerCase().includes(q)) ||
+                          t.desc.toLowerCase().includes(q)
+                        );
+                      })
+                      .map((t) => (
+                        <tr key={t.id} className="hover:bg-zinc-800/40 transition">
+                          <td className="py-2.5 px-3 font-mono font-bold text-white whitespace-nowrap">
+                            {t.id}
+                          </td>
+                          <td className="py-2.5 px-3 text-zinc-400 whitespace-nowrap">
+                            <div>{t.date}</div>
+                            <div className="text-[10px] text-zinc-500">{t.time || ''}</div>
+                          </td>
+                          <td className="py-2.5 px-3 font-semibold text-zinc-200">
+                            {t.customer}
+                          </td>
+                          <td className="py-2.5 px-3 text-zinc-300 max-w-xs truncate" title={t.desc}>
+                            {t.desc}
+                          </td>
+                          <td className="py-2.5 px-3 whitespace-nowrap">
+                            <span className="px-2 py-0.5 rounded bg-zinc-800 text-[10px] text-zinc-300 border border-zinc-700">
+                              {t.method}
+                            </span>
+                          </td>
+                          <td className="py-2.5 px-3 text-right font-bold text-emerald-400 font-mono whitespace-nowrap">
+                            {formatRp(t.amountPaid || t.amount)}
+                          </td>
+                          <td className="py-2.5 px-3 text-center whitespace-nowrap">
+                            <span
+                              className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                                t.status === 'Paid'
+                                  ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
+                                  : t.status === 'VOID'
+                                  ? 'bg-rose-500/10 text-rose-400 border border-rose-500/20'
+                                  : 'bg-amber-500/10 text-amber-400 border border-amber-500/20'
+                              }`}
+                            >
+                              {t.status}
+                            </span>
+                          </td>
+                          <td className="py-2.5 px-3 text-center whitespace-nowrap">
+                            <TransactionActions
+                              transaction={t}
+                              onView={onReprintReceipt}
+                              onPrint={onReprintReceipt}
+                              size="sm"
+                            />
+                          </td>
+                        </tr>
+                      ))}
+                  </tbody>
+                </table>
+              </div>
 
               {transactions.filter((t) => t.type === 'POS' || t.desc.toLowerCase().includes('pos')).length === 0 && (
                 <div className="p-8 text-center text-zinc-500 text-xs">

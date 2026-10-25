@@ -191,11 +191,17 @@ export const MemberQRCodeModal: React.FC<MemberQRCodeModalProps> = ({
 
             {/* Member Quick Summary */}
             <div className="flex items-center justify-center gap-3 py-1">
-              <img
-                src={member.photo}
-                alt={member.name}
-                className="w-12 h-12 rounded-2xl object-cover border-2 border-orange-500/50 shadow-md shrink-0"
-              />
+              {member.photo && member.photo.trim() ? (
+                <img
+                  src={member.photo.trim()}
+                  alt={member.name}
+                  className="w-12 h-12 rounded-2xl object-cover border-2 border-orange-500/50 shadow-md shrink-0"
+                />
+              ) : (
+                <div className="w-12 h-12 rounded-2xl bg-zinc-800 border-2 border-orange-500/50 flex items-center justify-center text-orange-400 font-bold text-sm shrink-0">
+                  {member.name.substring(0, 2).toUpperCase()}
+                </div>
+              )}
               <div className="text-left min-w-0">
                 <h4 className="text-base font-black text-white tracking-tight truncate max-w-[200px]">
                   {member.name}

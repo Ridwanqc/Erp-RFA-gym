@@ -31,7 +31,10 @@ import {
   Settings,
   FileSpreadsheet,
   Globe,
-  Ticket
+  Ticket,
+  Zap,
+  TrendingUp,
+  Cpu
 } from 'lucide-react';
 import { User, UserRole } from '../types';
 import { PWAInstallButton } from './PWAInstallButton';
@@ -41,8 +44,10 @@ import { useSettings } from '../context/SettingsContext';
 export type ActiveTab =
   | 'dashboard'
   | 'front-desk-portal'
+  | 'front-desk-automation'
   | 'guest-pass'
   | 'leader-pt'
+  | 'leader-pt-rules'
   | 'pt-package-performance'
   | 'trainer-portal'
   | 'absen'
@@ -56,6 +61,7 @@ export type ActiveTab =
   | 'membership'
   | 'bundling-reports'
   | 'crm'
+  | 'smart-crm-billing'
   | 'master-data'
   | 'inventaris'
   | 'lockers'
@@ -81,6 +87,7 @@ export type ActiveTab =
   | 'settings-profile'
   | 'settings-finance'
   | 'settings-backup'
+  | 'settings-security'
   | 'settings-landing';
 
 interface SubItem {
@@ -142,6 +149,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     'dashboard': 'dashboard',
     'absen': 'absen',
     'front-desk-portal': 'front-desk-portal',
+    'front-desk-automation': 'front-desk-portal',
     'guest-pass': 'guest-pass',
     'membership': 'membership',
     'freeze': 'freeze',
@@ -150,6 +158,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     'body-composition': 'body-composition',
     'quick-out': 'absen',
     'crm': 'crm',
+    'smart-crm-billing': 'crm',
     'leader-pt': 'leader-pt',
     'jadwal-pt': 'pt-sessions',
     'studio-class': 'studio-class',
@@ -181,7 +190,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
     'settings-profile': 'settings',
     'settings-landing': 'settings',
     'settings-finance': 'settings',
-    'settings-backup': 'settings'
+    'settings-backup': 'settings',
+    'settings-security': 'settings'
   };
 
   const canAccess = (requiredRoles: UserRole[], itemId?: string) => {
@@ -228,21 +238,27 @@ export const Sidebar: React.FC<SidebarProps> = ({
       items: [
         {
           id: 'dashboard' as ActiveTab,
-          label: role === 'admin_cabang' ? 'Dashboard Unit Cabang' : 'Dashboard Admin',
+          label: role === 'admin_cabang' ? 'Dashboard Unit Cabang' : role === 'keuangan' ? 'Dashboard Ringkasan' : 'Dashboard Admin',
           icon: LayoutDashboard,
-          roles: ['admin', 'admin_cabang'] as UserRole[]
+          roles: ['admin', 'admin_cabang', 'keuangan'] as UserRole[]
         },
         {
           id: 'absen' as ActiveTab,
           label: 'Absensi & Presensi',
           icon: UserCheck,
-          roles: ['admin', 'admin_cabang', 'kasir', 'leader_pt', 'pt'] as UserRole[]
+          roles: ['admin', 'admin_cabang', 'kasir', 'leader_pt', 'pt', 'keuangan'] as UserRole[]
         },
         {
           id: 'quick-out' as ActiveTab,
           label: 'Quick OUT Member',
           icon: LogOut,
           roles: ['admin', 'admin_cabang', 'kasir', 'leader_pt', 'pt'] as UserRole[]
+        },
+        {
+          id: 'front-desk-automation' as ActiveTab,
+          label: 'Otomasi & Kios Front Desk',
+          icon: Zap,
+          roles: ['admin', 'admin_cabang', 'kasir', 'leader_pt'] as UserRole[]
         }
       ]
     },
@@ -253,7 +269,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           id: 'membership-group',
           label: 'Keanggotaan',
           icon: Crown,
-          roles: ['admin', 'admin_cabang', 'kasir', 'leader_pt'] as UserRole[],
+          roles: ['admin', 'admin_cabang', 'kasir', 'leader_pt', 'keuangan'] as UserRole[],
           badge: freezeCount > 0 ? freezeCount : undefined,
           subItems: [
             {
@@ -280,12 +296,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
             {
               id: 'master-data',
               label: 'Direktori Member 360',
-              roles: ['admin', 'admin_cabang', 'leader_pt', 'kasir']
+              roles: ['admin', 'admin_cabang', 'leader_pt', 'kasir', 'keuangan']
             },
             {
               id: 'bundling-reports',
               label: 'Paket Bundling & Komisi',
-              roles: ['admin', 'admin_cabang', 'leader_pt', 'kasir']
+              roles: ['admin', 'admin_cabang', 'leader_pt', 'kasir', 'keuangan']
             },
             {
               id: 'body-composition',
@@ -295,6 +311,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
             {
               id: 'crm',
               label: 'CRM & Leads Kanban',
+              roles: ['admin', 'admin_cabang', 'leader_pt', 'kasir']
+            },
+            {
+              id: 'smart-crm-billing',
+              label: 'Smart Churn & Billing Recurring',
               roles: ['admin', 'admin_cabang', 'leader_pt', 'kasir']
             }
           ]
@@ -321,6 +342,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
               id: 'jadwal-pt',
               label: 'Jadwal & Sesi PT',
               roles: ['admin', 'admin_cabang', 'leader_pt', 'pt']
+            },
+            {
+              id: 'leader-pt-rules',
+              label: 'Aturan Kerja & Jam Pelatih',
+              roles: ['admin', 'admin_cabang', 'leader_pt']
             },
             {
               id: 'studio-class',
@@ -398,75 +424,75 @@ export const Sidebar: React.FC<SidebarProps> = ({
           id: 'keuangan-group',
           label: 'Keuangan & Akuntansi',
           icon: CircleDollarSign,
-          roles: ['admin', 'admin_cabang', 'kasir'] as UserRole[],
+          roles: ['admin', 'admin_cabang', 'kasir', 'keuangan'] as UserRole[],
           badge: piutangCount > 0 ? piutangCount : undefined,
           subItems: [
             {
               id: 'dashboard-keuangan',
               label: 'Dashboard Keuangan',
-              roles: ['admin', 'admin_cabang', 'kasir', 'manager']
+              roles: ['admin', 'admin_cabang', 'kasir', 'manager', 'keuangan']
             },
             {
               id: 'laba-rugi',
               label: 'Laba Perusahaan (P&L)',
-              roles: ['admin', 'admin_cabang', 'kasir', 'manager']
+              roles: ['admin', 'admin_cabang', 'kasir', 'manager', 'keuangan']
             },
             {
               id: 'input-pengeluaran',
               label: 'Input Pengeluaran',
-              roles: ['admin', 'admin_cabang', 'kasir', 'manager']
+              roles: ['admin', 'admin_cabang', 'kasir', 'manager', 'keuangan']
             },
             {
               id: 'riwayat-pengeluaran',
               label: 'Riwayat Pengeluaran',
-              roles: ['admin', 'admin_cabang', 'kasir', 'manager']
+              roles: ['admin', 'admin_cabang', 'kasir', 'manager', 'keuangan']
             },
             {
               id: 'kategori-pengeluaran',
               label: 'Kategori Pengeluaran',
-              roles: ['admin', 'admin_cabang', 'manager']
+              roles: ['admin', 'admin_cabang', 'manager', 'keuangan']
             },
             {
               id: 'persetujuan-pengeluaran',
               label: 'Persetujuan Pengeluaran',
               badge: pendingExpensesCount > 0 ? pendingExpensesCount : undefined,
-              roles: ['admin', 'admin_cabang', 'manager']
+              roles: ['admin', 'admin_cabang', 'manager', 'keuangan']
             },
             {
               id: 'laporan-pengeluaran',
               label: 'Laporan Pengeluaran',
-              roles: ['admin', 'admin_cabang', 'kasir', 'manager']
+              roles: ['admin', 'admin_cabang', 'kasir', 'manager', 'keuangan']
             },
             {
               id: 'piutang',
               label: 'Buku Piutang & Cicilan',
               badge: piutangCount > 0 ? piutangCount : undefined,
-              roles: ['admin', 'admin_cabang', 'kasir']
+              roles: ['admin', 'admin_cabang', 'kasir', 'keuangan']
             },
             {
               id: 'laporan',
               label: 'Buku Besar Transaksi',
-              roles: ['admin', 'admin_cabang', 'kasir']
+              roles: ['admin', 'admin_cabang', 'kasir', 'keuangan']
             },
             {
               id: 'laporan-harian',
               label: 'Laporan Penjualan Harian',
-              roles: ['admin', 'admin_cabang', 'kasir', 'manager', 'leader_pt']
+              roles: ['admin', 'admin_cabang', 'kasir', 'manager', 'leader_pt', 'keuangan']
             },
             {
               id: 'laporan-bulanan',
               label: 'Laporan Penjualan Bulanan',
-              roles: ['admin', 'admin_cabang', 'kasir', 'manager', 'leader_pt']
+              roles: ['admin', 'admin_cabang', 'kasir', 'manager', 'leader_pt', 'keuangan']
             },
             {
               id: 'tutup-toko',
               label: 'Daily Closing Kas',
-              roles: ['admin', 'admin_cabang', 'kasir']
+              roles: ['admin', 'admin_cabang', 'kasir', 'keuangan']
             },
             {
               id: 'google-sheets',
               label: 'Google Sheets Sync',
-              roles: ['admin', 'manager', 'kasir']
+              roles: ['admin', 'manager', 'kasir', 'keuangan']
             }
           ]
         }
@@ -479,7 +505,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           id: 'hr-payroll' as ActiveTab,
           label: 'HR, Jadwal & Presensi',
           icon: UsersRound,
-          roles: ['admin', 'admin_cabang', 'manager', 'leader_pt'] as UserRole[]
+          roles: ['admin', 'admin_cabang', 'manager', 'leader_pt', 'keuangan'] as UserRole[]
         }
       ]
     },
@@ -490,7 +516,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           id: 'google-sheets' as ActiveTab,
           label: 'Google Sheets & Drive',
           icon: FileSpreadsheet,
-          roles: ['admin', 'manager', 'kasir'] as UserRole[]
+          roles: ['admin', 'manager', 'kasir', 'keuangan'] as UserRole[]
         },
         {
           id: 'settings-group',
@@ -500,12 +526,17 @@ export const Sidebar: React.FC<SidebarProps> = ({
           subItems: [
             {
               id: 'settings-printer',
-              label: 'Setting Printer & Struk',
+              label: 'Printer & Struk POS',
               roles: ['admin', 'admin_cabang', 'manager', 'kasir']
             },
             {
+              id: 'settings-landing',
+              label: 'Landing Page (CMS)',
+              roles: ['admin', 'manager']
+            },
+            {
               id: 'settings-theme',
-              label: 'Setting Tema & Tampilan',
+              label: 'Tema & Tampilan',
               roles: ['admin', 'admin_cabang', 'manager', 'kasir']
             },
             {
@@ -514,19 +545,19 @@ export const Sidebar: React.FC<SidebarProps> = ({
               roles: ['admin']
             },
             {
+              id: 'settings-security',
+              label: 'Keamanan & Password',
+              roles: ['admin', 'admin_cabang', 'manager']
+            },
+            {
               id: 'settings-branches',
               label: 'Kelola Cabang & Outlet',
               roles: ['admin', 'admin_cabang']
             },
             {
               id: 'settings-profile',
-              label: 'Profil Usaha',
+              label: 'Profil Usaha HQ',
               roles: ['admin']
-            },
-            {
-              id: 'settings-landing',
-              label: 'Landing Page (CMS)',
-              roles: ['admin', 'manager']
             },
             {
               id: 'settings-finance',
@@ -625,7 +656,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           {/* Close button on mobile */}
           <button
             type="button"
-            className="lg:hidden text-zinc-400 hover:text-white p-2 rounded-xl hover:bg-zinc-800 transition min-w-[40px] min-h-[40px] flex items-center justify-center"
+            className="lg:hidden text-zinc-400 hover:text-white p-2 rounded-xl hover:bg-zinc-800 transition min-w-[44px] min-h-[44px] flex items-center justify-center cursor-pointer"
             onClick={onCloseMobile}
             aria-label="Tutup sidebar"
           >
@@ -686,59 +717,122 @@ export const Sidebar: React.FC<SidebarProps> = ({
                       onMouseEnter={() => handleMouseEnter(item.id)}
                       onMouseLeave={handleMouseLeave}
                     >
-                      {/* Parent Item Button */}
-                      <button
-                        type="button"
-                        id={`nav-${item.id}`}
-                        aria-label={item.label}
-                        onClick={() => {
-                          if (hasSubItems) {
-                            if (isCollapsed && window.innerWidth >= 1024) {
-                              setActiveFlyout(activeFlyout === item.id ? null : item.id);
-                            } else {
-                              toggleSubmenu(item.id);
-                            }
-                          } else {
-                            handleSelectTab(item.id as ActiveTab);
-                          }
-                        }}
-                        className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-semibold transition-all min-h-[44px] group ${
-                          isItemActive && !hasSubItems
-                            ? 'bg-orange-500 text-white shadow-lg shadow-orange-500/25 font-bold'
-                            : isItemActive && hasSubItems
-                            ? 'bg-zinc-800/90 text-orange-400 font-bold border border-zinc-700/60'
-                            : 'text-zinc-400 hover:bg-zinc-800/60 hover:text-zinc-200'
-                        } ${isCollapsed ? 'lg:justify-center lg:px-2' : ''}`}
-                      >
-                        <div className="flex items-center gap-3 min-w-0">
-                          <Icon
-                            className={`w-5 h-5 shrink-0 transition-transform group-hover:scale-105 ${
-                              isItemActive && !hasSubItems
-                                ? 'text-white'
-                                : isItemActive && hasSubItems
-                                ? 'text-orange-400'
-                                : 'text-zinc-400 group-hover:text-zinc-200'
-                            }`}
-                          />
-                          <span
-                            className={`truncate text-left ${
-                              isCollapsed ? 'lg:hidden' : 'block'
+                      {/* Parent Item */}
+                      {hasSubItems ? (
+                        <div
+                          className={`w-full flex items-center justify-between px-3 rounded-xl text-xs font-semibold transition-all min-h-[44px] group ${
+                            isItemActive
+                              ? 'bg-zinc-800/90 text-orange-400 font-bold border border-orange-500/40 shadow-xs'
+                              : 'text-zinc-400 hover:bg-zinc-800/60 hover:text-zinc-200'
+                          } ${isCollapsed ? 'lg:justify-center lg:px-2' : ''}`}
+                        >
+                          <button
+                            type="button"
+                            id={`nav-${item.id}`}
+                            aria-label={item.label}
+                            onClick={() => {
+                              if (isCollapsed && window.innerWidth >= 1024) {
+                                setActiveFlyout(activeFlyout === item.id ? null : item.id);
+                              } else {
+                                // Ensure submenu is opened when navigating to parent group
+                                setOpenSubmenus((prev) => ({ ...prev, [item.id]: true }));
+                                const defaultTab =
+                                  item.id === 'membership-group'
+                                    ? 'front-desk-portal'
+                                    : item.id === 'pt-group'
+                                    ? (role === 'pt' ? 'trainer-portal' : 'leader-pt')
+                                    : item.id === 'pos-group'
+                                    ? 'pos'
+                                    : item.id === 'keuangan-group'
+                                    ? 'dashboard-keuangan'
+                                    : item.id === 'settings-group'
+                                    ? 'settings-printer'
+                                    : (item.id as ActiveTab);
+                                handleSelectTab(defaultTab);
+                              }
+                            }}
+                            className="flex-1 flex items-center gap-3 min-w-0 py-2.5 cursor-pointer text-left"
+                          >
+                            <Icon
+                              className={`w-5 h-5 shrink-0 transition-transform group-hover:scale-105 ${
+                                isItemActive
+                                  ? 'text-orange-400'
+                                  : 'text-zinc-400 group-hover:text-zinc-200'
+                              }`}
+                            />
+                            <span
+                              className={`truncate text-left ${
+                                isCollapsed ? 'lg:hidden' : 'block'
+                              }`}
+                            >
+                              {item.label}
+                            </span>
+                          </button>
+
+                          {/* Badges and Dedicated Submenu Toggle Button */}
+                          <div
+                            className={`flex items-center gap-1 shrink-0 ${
+                              isCollapsed ? 'lg:hidden' : 'flex'
                             }`}
                           >
-                            {item.label}
-                          </span>
+                            {item.badge !== undefined && (
+                              <span className="text-[10px] px-2 py-0.5 rounded-full font-bold bg-rose-500/20 text-rose-400 border border-rose-500/30">
+                                {item.badge}
+                              </span>
+                            )}
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                toggleSubmenu(item.id);
+                              }}
+                              className="p-1.5 rounded-md text-zinc-400 hover:text-white hover:bg-zinc-700/70 transition cursor-pointer"
+                              title={isSubOpen ? 'Tutup submenu' : 'Buka submenu'}
+                              aria-label={isSubOpen ? `Tutup submenu ${item.label}` : `Buka submenu ${item.label}`}
+                            >
+                              <ChevronDown
+                                className={`w-3.5 h-3.5 transition-transform duration-200 ${
+                                  isSubOpen ? 'rotate-180 text-orange-400' : ''
+                                }`}
+                              />
+                            </button>
+                          </div>
                         </div>
-
-                        {/* Badges and Submenu Chevron */}
-                        <div
-                          className={`flex items-center gap-1.5 shrink-0 ${
-                            isCollapsed ? 'lg:hidden' : 'flex'
-                          }`}
+                      ) : (
+                        <button
+                          type="button"
+                          id={`nav-${item.id}`}
+                          aria-label={item.label}
+                          onClick={() => handleSelectTab(item.id as ActiveTab)}
+                          className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-semibold transition-all min-h-[44px] group cursor-pointer ${
+                            isItemActive
+                              ? 'bg-orange-500 text-white shadow-lg shadow-orange-500/25 font-bold'
+                              : 'text-zinc-400 hover:bg-zinc-800/60 hover:text-zinc-200'
+                          } ${isCollapsed ? 'lg:justify-center lg:px-2' : ''}`}
                         >
+                          <div className="flex items-center gap-3 min-w-0">
+                            <Icon
+                              className={`w-5 h-5 shrink-0 transition-transform group-hover:scale-105 ${
+                                isItemActive
+                                  ? 'text-white'
+                                  : 'text-zinc-400 group-hover:text-zinc-200'
+                              }`}
+                            />
+                            <span
+                              className={`truncate text-left ${
+                                isCollapsed ? 'lg:hidden' : 'block'
+                              }`}
+                            >
+                              {item.label}
+                            </span>
+                          </div>
+
                           {item.badge !== undefined && (
                             <span
                               className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${
-                                isItemActive && !hasSubItems
+                                isCollapsed ? 'lg:hidden' : ''
+                              } ${
+                                isItemActive
                                   ? 'bg-white text-orange-600'
                                   : 'bg-rose-500/20 text-rose-400 border border-rose-500/30'
                               }`}
@@ -746,15 +840,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
                               {item.badge}
                             </span>
                           )}
-                          {hasSubItems && (
-                            <ChevronDown
-                              className={`w-3.5 h-3.5 text-zinc-500 transition-transform duration-200 ${
-                                isSubOpen ? 'rotate-180 text-orange-400' : ''
-                              }`}
-                            />
-                          )}
-                        </div>
-                      </button>
+                        </button>
+                      )}
 
                       {/* Expanded Submenu Accordion (Desktop Expanded & Mobile) */}
                       {hasSubItems && (
@@ -773,10 +860,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
                                   type="button"
                                   id={`nav-sub-${sub.id}`}
                                   onClick={() => handleSelectTab(sub.id)}
-                                  className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs font-medium transition min-h-[38px] ${
+                                  className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-semibold transition min-h-[38px] cursor-pointer ${
                                     isSubActive
-                                      ? 'bg-orange-500/20 text-orange-300 font-bold border border-orange-500/30'
-                                      : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/40'
+                                      ? 'bg-orange-500 text-white font-bold shadow-md shadow-orange-500/20'
+                                      : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/50'
                                   }`}
                                 >
                                   <span className="truncate text-left">{sub.label}</span>

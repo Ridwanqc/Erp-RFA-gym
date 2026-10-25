@@ -269,6 +269,29 @@ export const INITIAL_USERS: User[] = [
     birthDate: '1992-09-19',
     address: 'The Icon Cluster Eternity Blok C-5, BSD City',
     emergencyContact: 'Sari (Istri) - 081755667788'
+  },
+  {
+    id: 'S13',
+    accId: 'keuangan',
+    name: 'Rina Oktaviani, S.Ak',
+    email: 'keuangan@rfagym.com',
+    role: 'keuangan',
+    roleName: 'Staf Keuangan & Akuntansi (HQ)',
+    division: 'Keuangan',
+    shift: 'Pagi',
+    baseSalary: 4800000,
+    password: '123',
+    photo: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?q=80&w=200&auto=format&fit=crop',
+    gender: 'P',
+    phone: '081288776655',
+    branchId: 'BR-001',
+    branchName: 'RFA GYM Cibubur, Bekasi (Flagship HQ)',
+    allowedBranchIds: ['BR-001', 'BR-002', 'BR-003'],
+    idType: 'KTP',
+    idNumber: '3174055208930006',
+    birthDate: '1993-08-12',
+    address: 'Jl. Boulevard Timur Raya No. 42, Kelapa Gading, Jakarta Utara',
+    emergencyContact: 'Bpk. Hendra (Suami) - 081299881122'
   }
 ];
 

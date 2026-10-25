@@ -105,11 +105,17 @@ export const UnfreezeMemberModal: React.FC<UnfreezeMemberModalProps> = ({
         <form onSubmit={handleSubmit} className="p-4 sm:p-6 space-y-4 overflow-y-auto flex-1">
           {/* Member Card */}
           <div className="bg-zinc-950 border border-zinc-800 rounded-2xl p-3.5 flex items-center gap-3">
-            <img
-              src={member.photo}
-              alt={member.name}
-              className="w-12 h-12 rounded-xl object-cover border border-zinc-700"
-            />
+            {member.photo && member.photo.trim() ? (
+              <img
+                src={member.photo.trim()}
+                alt={member.name}
+                className="w-12 h-12 rounded-xl object-cover border border-zinc-700 shrink-0"
+              />
+            ) : (
+              <div className="w-12 h-12 rounded-xl bg-zinc-800 border border-zinc-700 flex items-center justify-center text-orange-400 font-bold text-sm shrink-0">
+                {member.name.substring(0, 2).toUpperCase()}
+              </div>
+            )}
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2">
                 <h4 className="text-sm font-bold text-white truncate">{member.name}</h4>

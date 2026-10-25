@@ -358,7 +358,7 @@ export const MasterDataView: React.FC<MasterDataViewProps> = ({
             Manajemen Member 360, pencarian cepat, cetak digital ID pass card, dan database karyawan internal
           </p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex flex-col sm:flex-row flex-wrap sm:items-center gap-2.5 w-full sm:w-auto">
           <div className="flex bg-zinc-900 p-1.5 rounded-2xl border border-zinc-800">
             <button
               onClick={() => setActiveTab('member')}
@@ -880,8 +880,12 @@ export const MasterDataView: React.FC<MasterDataViewProps> = ({
           </div>
 
           <div className="bg-zinc-900/90 border border-zinc-800 rounded-3xl overflow-hidden shadow-sm">
-          <div className="overflow-x-auto scrollbar-thin scrollbar-thumb-zinc-800">
-            <table className="w-full text-left whitespace-nowrap min-w-[760px]">
+            <div className="md:hidden flex items-center justify-between px-3.5 py-1.5 bg-zinc-950/70 border-b border-zinc-800 text-[10px] text-zinc-400 select-none">
+              <span className="text-orange-400 font-semibold flex items-center gap-1">↔ Geser tabel ke samping untuk melihat kolom shift & aksi</span>
+              <span className="font-mono text-zinc-500">{filteredStaff.length} staf</span>
+            </div>
+            <div className="overflow-x-auto scrollbar-thin scrollbar-thumb-zinc-800">
+              <table className="w-full text-left whitespace-nowrap min-w-[760px]">
               <thead className="bg-zinc-950 text-zinc-400 border-b border-zinc-800 text-[10px] uppercase font-bold">
                 <tr>
                   <th className="py-3 px-4 w-16 text-center">Foto</th>

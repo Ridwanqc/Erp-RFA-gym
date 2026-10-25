@@ -21,9 +21,38 @@ body, #root, header, aside, main, div, button, input, select {
   transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease;
 }
 
+/* Mobile-First Layout & Touch Optimization Guardrails */
+html, body {
+  max-width: 100vw;
+  overflow-x: hidden;
+  -webkit-text-size-adjust: 100%;
+  -webkit-tap-highlight-color: transparent;
+}
+
+#root {
+  min-height: 100dvh;
+  max-width: 100vw;
+  overflow-x: hidden;
+}
+
+/* Ensure smooth momentum touch scrolling on mobile tables and pill lists */
+.overflow-x-auto {
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Prevent iOS Safari 16px font-size auto-zoom while maintaining crisp layout */
+@media (max-width: 640px) {
+  input:not([type="checkbox"]):not([type="radio"]),
+  select,
+  textarea {
+    font-size: 14px !important;
+  }
+}
+
 /* --------------------------------------------------------------------------
    1. ACCENT COLOR OVERRIDES (Applies to all accent classes in the app)
    -------------------------------------------------------------------------- */
+[data-accent]:not([data-accent="orange"]) .text-orange-600,
 [data-accent]:not([data-accent="orange"]) .text-orange-500,
 [data-accent]:not([data-accent="orange"]) .text-orange-400,
 [data-accent]:not([data-accent="orange"]) .text-orange-300 {
@@ -40,8 +69,16 @@ body, #root, header, aside, main, div, button, input, select {
   background-color: var(--primary-accent-hover) !important;
 }
 
+[data-accent]:not([data-accent="orange"]) .active\:bg-orange-700:active {
+  background-color: var(--primary-accent-hover) !important;
+}
+
 [data-accent]:not([data-accent="orange"]) .border-orange-500 {
   border-color: var(--primary-accent) !important;
+}
+
+[data-accent]:not([data-accent="orange"]) .border-orange-500\/10 {
+  border-color: rgba(var(--primary-accent-rgb), 0.1) !important;
 }
 
 [data-accent]:not([data-accent="orange"]) .border-orange-500\/20 {
@@ -60,6 +97,11 @@ body, #root, header, aside, main, div, button, input, select {
   border-color: rgba(var(--primary-accent-rgb), 0.5) !important;
 }
 
+[data-accent]:not([data-accent="orange"]) .border-orange-500\/60,
+[data-accent]:not([data-accent="orange"]) .border-orange-500\/80 {
+  border-color: rgba(var(--primary-accent-rgb), 0.7) !important;
+}
+
 [data-accent]:not([data-accent="orange"]) .bg-orange-500\/5 {
   background-color: rgba(var(--primary-accent-rgb), 0.05) !important;
 }
@@ -76,12 +118,150 @@ body, #root, header, aside, main, div, button, input, select {
   background-color: rgba(var(--primary-accent-rgb), 0.2) !important;
 }
 
+[data-accent]:not([data-accent="orange"]) .bg-orange-500\/25,
+[data-accent]:not([data-accent="orange"]) .bg-orange-500\/30 {
+  background-color: rgba(var(--primary-accent-rgb), 0.25) !important;
+}
+
+[data-accent]:not([data-accent="orange"]) .shadow-orange-500\/20,
+[data-accent]:not([data-accent="orange"]) .shadow-orange-500\/25,
+[data-accent]:not([data-accent="orange"]) .shadow-orange-500\/30 {
+  --tw-shadow-color: rgba(var(--primary-accent-rgb), 0.3) !important;
+}
+
+[data-accent]:not([data-accent="orange"]) .ring-orange-500,
+[data-accent]:not([data-accent="orange"]) .ring-orange-500\/30,
+[data-accent]:not([data-accent="orange"]) .ring-orange-500\/40 {
+  --tw-ring-color: rgba(var(--primary-accent-rgb), 0.4) !important;
+}
+
 [data-accent]:not([data-accent="orange"]) .focus\:border-orange-500:focus {
   border-color: var(--primary-accent) !important;
 }
 
 [data-accent]:not([data-accent="orange"]) .focus\:ring-orange-500:focus {
   --tw-ring-color: var(--primary-accent) !important;
+}
+
+[data-accent]:not([data-accent="orange"]) .fill-orange-400,
+[data-accent]:not([data-accent="orange"]) .fill-orange-500 {
+  fill: var(--primary-accent) !important;
+}
+
+[data-accent]:not([data-accent="orange"]) .stroke-orange-400,
+[data-accent]:not([data-accent="orange"]) .stroke-orange-500 {
+  stroke: var(--primary-accent) !important;
+}
+
+[data-accent]:not([data-accent="orange"]) input[type="checkbox"]:checked,
+[data-accent]:not([data-accent="orange"]) input[type="radio"]:checked {
+  accent-color: var(--primary-accent) !important;
+}
+
+/* --------------------------------------------------------------------------
+   1b. LANDING PAGE IMMUNITY (Landing page is strictly immune to backoffice theme)
+   Preserves official RFA Gym Brand Orange & Dark aesthetic unconditionally.
+   -------------------------------------------------------------------------- */
+[data-landing-page],
+[data-landing-page] * {
+  --primary-accent: #f97316 !important;
+  --primary-accent-hover: #ea580c !important;
+  --primary-accent-rgb: 249, 115, 22 !important;
+  --primary-accent-soft: rgba(249, 115, 22, 0.15) !important;
+}
+
+[data-landing-page] .text-orange-500,
+[data-landing-page] .text-orange-400,
+[data-landing-page] .text-orange-300 {
+  color: #f97316 !important;
+}
+
+[data-landing-page] .bg-orange-500 {
+  background-color: #f97316 !important;
+}
+
+[data-landing-page] .bg-orange-600,
+[data-landing-page] .hover\:bg-orange-600:hover,
+[data-landing-page] .hover\:bg-orange-500:hover {
+  background-color: #ea580c !important;
+}
+
+[data-landing-page] .border-orange-500 {
+  border-color: #f97316 !important;
+}
+
+[data-landing-page] .border-orange-500\/20 {
+  border-color: rgba(249, 115, 22, 0.2) !important;
+}
+
+[data-landing-page] .border-orange-500\/30 {
+  border-color: rgba(249, 115, 22, 0.3) !important;
+}
+
+[data-landing-page] .border-orange-500\/40 {
+  border-color: rgba(249, 115, 22, 0.4) !important;
+}
+
+[data-landing-page] .border-orange-500\/50 {
+  border-color: rgba(249, 115, 22, 0.5) !important;
+}
+
+[data-landing-page] .bg-orange-500\/5 {
+  background-color: rgba(249, 115, 22, 0.05) !important;
+}
+
+[data-landing-page] .bg-orange-500\/10 {
+  background-color: rgba(249, 115, 22, 0.1) !important;
+}
+
+[data-landing-page] .bg-orange-500\/15 {
+  background-color: rgba(249, 115, 22, 0.15) !important;
+}
+
+[data-landing-page] .bg-orange-500\/20 {
+  background-color: rgba(249, 115, 22, 0.2) !important;
+}
+
+/* Landing Page Dark Background & Text Protection against light modes */
+[data-landing-page] {
+  background-color: #09090b !important;
+  color: #f4f4f5 !important;
+}
+
+[data-landing-page] .bg-zinc-950 {
+  background-color: #09090b !important;
+}
+
+[data-landing-page] .bg-zinc-900 {
+  background-color: #18181b !important;
+}
+
+[data-landing-page] .border-zinc-800 {
+  border-color: #27272a !important;
+}
+
+[data-landing-page] .text-white {
+  color: #ffffff !important;
+}
+
+[data-landing-page] .text-zinc-100 {
+  color: #f4f4f5 !important;
+}
+
+[data-landing-page] .text-zinc-200 {
+  color: #e4e4e7 !important;
+}
+
+[data-landing-page] .text-zinc-300 {
+  color: #d4d4d8 !important;
+}
+
+[data-landing-page] .text-zinc-400 {
+  color: #a1a1aa !important;
+}
+
+[data-landing-page] .text-zinc-500 {
+  color: #71717a !important;
 }
 
 /* --------------------------------------------------------------------------
@@ -415,6 +595,95 @@ body, #root, header, aside, main, div, button, input, select {
 }
 
 /* ========================================================================= */
+/* QUICK OUT MEMBER MENU IN CLAYMORPHISM 3D TERANG (SOLID WHITE TACTILE CLAY) */
+/* ========================================================================= */
+[data-theme="claymorphism-light"] .quick-out-card,
+[data-theme="claymorphism-light"] .quick-out-header,
+[data-theme="claymorphism-light"] .quick-out-panel,
+[data-theme="claymorphism-light"] .quick-out-empty,
+[data-theme="claymorphism-light"] .bg-\[\#18181b\],
+[data-theme="claymorphism-light"] .hover\:bg-\[\#202024\]:hover,
+[data-theme="claymorphism-light"] div#root > div#backoffice-root > div > main > div > div:nth-of-type(3) > div:nth-of-type(1),
+[data-theme="claymorphism-light"] div#root > div#backoffice-root > div > main > div > div:nth-of-type(3) > div:nth-of-type(3) > div {
+  background-color: #ffffff !important;
+  background-image: none !important;
+  border-color: #e2e8f0 !important;
+  box-shadow: 4px 4px 14px rgba(148, 163, 184, 0.22),
+              -3px -3px 10px rgba(255, 255, 255, 1),
+              inset 1px 1px 2px rgba(255, 255, 255, 1) !important;
+  color: #0f172a !important;
+  border-radius: 1rem !important;
+}
+
+[data-theme="claymorphism-light"] .quick-out-card:hover {
+  background-color: #ffffff !important;
+  box-shadow: 6px 6px 18px rgba(148, 163, 184, 0.3),
+              -4px -4px 12px rgba(255, 255, 255, 1),
+              inset 1px 1px 2px rgba(255, 255, 255, 1) !important;
+  border-color: #cbd5e1 !important;
+}
+
+/* Quick Out Text Colors in Claymorphism 3D Terang */
+[data-theme="claymorphism-light"] .quick-out-header h2,
+[data-theme="claymorphism-light"] .quick-out-header .text-white,
+[data-theme="claymorphism-light"] .quick-out-card h4,
+[data-theme="claymorphism-light"] .quick-out-card .text-white {
+  color: #000000 !important;
+  font-weight: 800 !important;
+}
+
+[data-theme="claymorphism-light"] .quick-out-header .text-zinc-400,
+[data-theme="claymorphism-light"] .quick-out-card .text-zinc-400 {
+  color: #475569 !important;
+  font-weight: 600 !important;
+}
+
+/* Quick Out Photo Thumbnail in Claymorphism 3D Terang */
+[data-theme="claymorphism-light"] .quick-out-photo,
+[data-theme="claymorphism-light"] .quick-out-card .bg-zinc-950 {
+  background-color: #f1f5f9 !important;
+  border-color: #e2e8f0 !important;
+  box-shadow: inset 2px 2px 4px rgba(148, 163, 184, 0.2) !important;
+}
+
+/* Quick Out Checkout Button in Claymorphism 3D Terang */
+[data-theme="claymorphism-light"] .quick-out-card button {
+  background-color: #eff6ff !important;
+  border: 1.5px solid #3b82f6 !important;
+  color: #1d4ed8 !important;
+  box-shadow: 2px 2px 6px rgba(59, 130, 246, 0.2),
+              -2px -2px 4px #ffffff,
+              inset 1px 1px 2px #ffffff !important;
+  border-radius: 0.75rem !important;
+}
+
+[data-theme="claymorphism-light"] .quick-out-card button svg {
+  color: #1d4ed8 !important;
+  stroke: #1d4ed8 !important;
+}
+
+[data-theme="claymorphism-light"] .quick-out-card button:hover {
+  background-color: #2563eb !important;
+  background-image: linear-gradient(135deg, #3b82f6, #1d4ed8) !important;
+  border-color: #1e40af !important;
+  color: #ffffff !important;
+  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.4) !important;
+}
+
+[data-theme="claymorphism-light"] .quick-out-card button:hover svg {
+  color: #ffffff !important;
+  stroke: #ffffff !important;
+}
+
+/* Subheader Active Badge in Claymorphism 3D Terang */
+[data-theme="claymorphism-light"] .quick-out-badge {
+  background-color: #ffffff !important;
+  border-color: #cbd5e1 !important;
+  color: #0f172a !important;
+  box-shadow: 2px 2px 6px rgba(148, 163, 184, 0.2), inset 1px 1px 2px #ffffff !important;
+}
+
+/* ========================================================================= */
 /* CRITICAL TEXT CONTRAST: TEKS PUTIH DIUBAH MENJADI HITAM PEKAT             */
 /* ========================================================================= */
 [data-theme="claymorphism-light"] .text-white:not(button):not(button *):not(.btn-primary-clay):not(.btn-primary-clay *),
@@ -737,38 +1006,61 @@ body, #root, header, aside, main, div, button, input, select {
   background-image: none !important;
 }
 
-/* Mode: Daylight Clean (Modern Light) */
+/* Mode: Daylight Clean (Modern Light Enterprise) */
+[data-theme="light"],
 [data-theme="light"] body,
 [data-theme="light"] #root,
+[data-theme="light"] main,
+[data-theme="light"] header,
+[data-theme="light"] aside,
+[data-theme="light"] aside#app-sidebar,
 [data-theme="light"] .bg-zinc-950,
-[data-theme="light"] .bg-\[\#09090b\] {
+[data-theme="light"] .bg-\[\#09090b\],
+[data-theme="light"] .bg-zinc-950\/95,
+[data-theme="light"] .bg-zinc-950\/90,
+[data-theme="light"] .bg-zinc-950\/80,
+[data-theme="light"] .bg-zinc-950\/70 {
   background-color: #f8fafc !important;
   color: #0f172a !important;
 }
 
+[data-theme="light"] header,
+[data-theme="light"] aside#app-sidebar,
 [data-theme="light"] .bg-zinc-900,
-[data-theme="light"] .bg-zinc-900\/90,
 [data-theme="light"] .bg-zinc-900\/95,
+[data-theme="light"] .bg-zinc-900\/90,
+[data-theme="light"] .bg-zinc-900\/80,
+[data-theme="light"] .bg-zinc-900\/60,
 [data-theme="light"] .bg-zinc-900\/40,
-[data-theme="light"] .bg-zinc-900\/60 {
+[data-theme="light"] div[role="menu"],
+[data-theme="light"] div[role="dialog"] > div,
+[data-theme="light"] .modal-content {
   background-color: #ffffff !important;
   color: #0f172a !important;
+  border-color: #e2e8f0 !important;
+  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.05), 0 1px 2px -1px rgba(0, 0, 0, 0.05);
 }
 
+/* Recessed wells & filters in Daylight mode */
 [data-theme="light"] .bg-zinc-950\/60,
+[data-theme="light"] .bg-zinc-950\/40,
 [data-theme="light"] .bg-zinc-950\/30,
-[data-theme="light"] .bg-zinc-950\/40 {
+[data-theme="light"] .bg-zinc-950\/20,
+[data-theme="light"] .bg-zinc-950\/10 {
   background-color: #f1f5f9 !important;
+  border-color: #e2e8f0 !important;
 }
 
 [data-theme="light"] .border-zinc-800,
 [data-theme="light"] .border-zinc-800\/80,
 [data-theme="light"] .border-zinc-800\/90,
-[data-theme="light"] .border-zinc-700 {
+[data-theme="light"] .border-zinc-700,
+[data-theme="light"] .border-zinc-700\/80 {
   border-color: #e2e8f0 !important;
 }
 
-[data-theme="light"] .text-white {
+/* High-contrast crisp typography in Daylight Clean */
+[data-theme="light"] .text-white:not(button.bg-orange-500):not(button.bg-orange-500 *):not(button.bg-blue-600):not(.text-white-force) {
   color: #0f172a !important;
 }
 
@@ -786,6 +1078,7 @@ body, #root, header, aside, main, div, button, input, select {
   color: #64748b !important;
 }
 
+/* Daylight Form Inputs & Controls */
 [data-theme="light"] input,
 [data-theme="light"] select,
 [data-theme="light"] textarea {
@@ -794,11 +1087,67 @@ body, #root, header, aside, main, div, button, input, select {
   border-color: #cbd5e1 !important;
 }
 
+[data-theme="light"] input::placeholder,
+[data-theme="light"] textarea::placeholder {
+  color: #94a3b8 !important;
+}
+
+[data-theme="light"] input:focus,
+[data-theme="light"] select:focus,
+[data-theme="light"] textarea:focus {
+  border-color: var(--primary-accent) !important;
+  box-shadow: 0 0 0 2px var(--primary-accent-soft) !important;
+}
+
+/* Secondary & Dark Buttons converted to crisp modern light buttons */
+[data-theme="light"] button.bg-zinc-800,
+[data-theme="light"] button.bg-zinc-800\/80,
+[data-theme="light"] button.bg-zinc-900,
+[data-theme="light"] button.bg-zinc-900\/80,
+[data-theme="light"] button.bg-zinc-950 {
+  background-color: #ffffff !important;
+  color: #1e293b !important;
+  border: 1px solid #cbd5e1 !important;
+  box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+}
+
+[data-theme="light"] button.bg-zinc-800:hover,
+[data-theme="light"] button.bg-zinc-800\/80:hover,
+[data-theme="light"] button.bg-zinc-900:hover,
+[data-theme="light"] button.bg-zinc-950:hover,
 [data-theme="light"] .hover\:bg-zinc-800:hover,
 [data-theme="light"] .hover\:bg-zinc-800\/30:hover,
 [data-theme="light"] .hover\:bg-zinc-800\/50:hover,
 [data-theme="light"] .hover\:bg-zinc-800\/70:hover {
+  background-color: #f1f5f9 !important;
+  color: #0f172a !important;
+}
+
+/* Tables in Daylight mode */
+[data-theme="light"] table thead th {
+  background-color: #f8fafc !important;
+  color: #0f172a !important;
+  border-bottom: 2px solid #e2e8f0 !important;
+}
+
+[data-theme="light"] table tbody tr {
+  background-color: #ffffff !important;
+  border-bottom: 1px solid #f1f5f9 !important;
+}
+
+[data-theme="light"] table tbody tr:hover {
+  background-color: #f8fafc !important;
+}
+
+[data-theme="light"] table tbody td {
+  color: #1e293b !important;
+}
+
+/* Subtle badge contrast in Daylight */
+[data-theme="light"] span.bg-zinc-800,
+[data-theme="light"] span.bg-zinc-900 {
   background-color: #e2e8f0 !important;
+  color: #1e293b !important;
 }
 
 /* --------------------------------------------------------------------------
@@ -883,7 +1232,8 @@ body, #root, header, aside, main, div, button, input, select {
   }
 
   /* When printing, make the report container fill the entire page */
-  #printable-report-content {
+  #printable-report-content,
+  #printable-report-sheet {
     display: block !important;
     position: static !important;
     width: 100% !important;
@@ -897,18 +1247,22 @@ body, #root, header, aside, main, div, button, input, select {
   }
 
   /* Table styling for print */
-  #printable-report-content table {
+  #printable-report-content table,
+  #printable-report-sheet table {
     width: 100% !important;
     border-collapse: collapse !important;
   }
 
   #printable-report-content th,
-  #printable-report-content td {
+  #printable-report-content td,
+  #printable-report-sheet th,
+  #printable-report-sheet td {
     border: 1px solid #d4d4d8 !important;
     color: #18181b !important;
   }
 
-  #printable-report-content thead th {
+  #printable-report-content thead th,
+  #printable-report-sheet thead th {
     background-color: #f4f4f5 !important;
     color: #09090b !important;
     font-weight: 800 !important;
@@ -1051,3 +1405,22 @@ body, #root, header, aside, main, div, button, input, select {
     print-color-adjust: exact !important;
   }
 }
+
+/* ========================================================================= */
+/* MODE MOBILE WEB SMARTPHONE: PORTAL FOKUS TRAINER                          */
+/* Sembunyikan Header Backoffice, MultiBranch Bar & Navigasi Saat Mode Mobile */
+/* ========================================================================= */
+[data-trainer-mobile="true"] {
+  height: 100dvh !important;
+  max-height: 100dvh !important;
+  overflow: hidden !important;
+}
+
+[data-trainer-mobile="true"] > header,
+[data-trainer-mobile="true"] > div:first-of-type:not(.flex-1),
+[data-trainer-mobile="true"] header > div:first-of-type,
+[data-trainer-mobile="true"] header > div:last-of-type {
+  display: none !important;
+}
+
+

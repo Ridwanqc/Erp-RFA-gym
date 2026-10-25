@@ -72,7 +72,9 @@ import {
 import {
   INITIAL_PT_BOOKINGS,
   INITIAL_TRAINER_CHANGE_REQUESTS,
-  INITIAL_PT_NOTIFICATIONS
+  INITIAL_PT_NOTIFICATIONS,
+  TrainerWorkingRule,
+  DEFAULT_TRAINER_WORKING_RULES
 } from './data/ptBookingData';
 import {
   loadWorkoutLogsFromStorage,
@@ -114,6 +116,8 @@ import { TrainerPackagePerformanceView } from './components/TrainerPackagePerfor
 import { TrainerPortalView } from './components/TrainerPortalView';
 import { BundlingReportsView } from './components/BundlingReportsView';
 import { FrontDeskPortalView } from './components/FrontDeskPortalView';
+import { FrontDeskAutomationView } from './components/automation/FrontDeskAutomationView';
+import { SmartCrmBillingView } from './components/crm/SmartCrmBillingView';
 import { InventoryView } from './components/InventoryView';
 import { LockerManagementView } from './components/LockerManagementView';
 import { MembershipFreezeView } from './components/MembershipFreezeView';
@@ -155,12 +159,79 @@ import {
   subscribeReservations,
   seedInitialFirestoreData
 } from './lib/firestoreService';
+import {
+  getRouteFromLocation,
+  navigateToTab,
+  navigateToPage,
+  TAB_PAGE_TITLES
+} from './utils/router';
+import { AlertTriangle } from 'lucide-react';
+
+const KNOWN_TABS = new Set([
+  'dashboard',
+  'front-desk-portal',
+  'front-desk-automation',
+  'guest-pass',
+  'leader-pt',
+  'leader-pt-rules',
+  'pt-package-performance',
+  'trainer-portal',
+  'absen',
+  'quick-out',
+  'jadwal-pt',
+  'studio-class',
+  'body-composition',
+  'freeze',
+  'pos',
+  'products',
+  'membership',
+  'bundling-reports',
+  'crm',
+  'smart-crm-billing',
+  'master-data',
+  'inventaris',
+  'lockers',
+  'hr-payroll',
+  'dashboard-keuangan',
+  'laba-rugi',
+  'input-pengeluaran',
+  'riwayat-pengeluaran',
+  'kategori-pengeluaran',
+  'persetujuan-pengeluaran',
+  'laporan-pengeluaran',
+  'piutang',
+  'laporan',
+  'laporan-harian',
+  'laporan-bulanan',
+  'tutup-toko',
+  'google-sheets',
+  'settings',
+  'settings-printer',
+  'settings-theme',
+  'settings-roles',
+  'settings-branches',
+  'settings-profile',
+  'settings-finance',
+  'settings-backup',
+  'settings-security',
+  'settings-landing'
+]);
 
 export default function App() {
+  const initialRoute = useMemo(() => getRouteFromLocation(), []);
+
   // Navigation & Platform View State
-  const [guestView, setGuestView] = useState<'landing' | 'staff-login'>('landing');
-  const [staffViewMode, setStaffViewMode] = useState<'erp' | 'landing'>('erp');
-  const [activeTab, setActiveTab] = useState<ActiveTab>('dashboard');
+  const [guestView, setGuestView] = useState<'landing' | 'staff-login'>(() => {
+    if (initialRoute.viewMode === 'staff-login') return 'staff-login';
+    return 'landing';
+  });
+  const [staffViewMode, setStaffViewMode] = useState<'erp' | 'landing'>(() => {
+    if (initialRoute.viewMode === 'landing') return 'landing';
+    return 'erp';
+  });
+  const [activeTab, setActiveTabState] = useState<ActiveTab>(() => {
+    return initialRoute.tab || 'dashboard';
+  });
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isDesktopCollapsed, setIsDesktopCollapsed] = useState<boolean>(() => {
     try {
@@ -170,7 +241,7 @@ export default function App() {
     }
   });
   const [firebaseConnected, setFirebaseConnected] = useState(true);
-  const { isThemeModalOpen, closeThemeModal } = useTheme();
+  const { isThemeModalOpen, closeThemeModal, setBackofficeActive } = useTheme();
   const {
     branches,
     activeBranchId,
@@ -185,6 +256,13 @@ export default function App() {
   } = useSettings();
   const [isAddBranchModalOpen, setIsAddBranchModalOpen] = useState(false);
   const [isStockTransferModalOpen, setIsStockTransferModalOpen] = useState(false);
+  const [isTrainerMobileMode, setIsTrainerMobileMode] = useState(false);
+
+  useEffect(() => {
+    if (activeTab !== 'trainer-portal' && isTrainerMobileMode) {
+      setIsTrainerMobileMode(false);
+    }
+  }, [activeTab, isTrainerMobileMode]);
 
   const handleToggleDesktopSidebar = () => {
     setIsDesktopCollapsed((prev) => {
@@ -219,7 +297,7 @@ export default function App() {
         const pool = saved ? JSON.parse(saved) : INITIAL_USERS;
         if (Array.isArray(pool)) {
           const found = pool.find((u: User) => u && u.id === savedUserId);
-          if (found) return found;
+          if (found && (found as any).status !== 'Nonaktif' && (found as any).status !== 'Suspended') return found;
         }
       }
     } catch (e) {
@@ -228,6 +306,46 @@ export default function App() {
     // Default to null so user lands on the newly created Login Page
     return null;
   });
+
+  const setActiveTab = (tab: ActiveTab, replace = false) => {
+    setActiveTabState(tab);
+    if (currentUser && staffViewMode === 'erp') {
+      navigateToTab(tab, replace);
+    }
+  };
+
+  // Theme Scope: Backoffice ERP receives customized theme; Landing Page & Login remain strictly in default Gym theme
+  useEffect(() => {
+    const isBackoffice = Boolean(currentUser && staffViewMode === 'erp');
+    setBackofficeActive(isBackoffice);
+  }, [currentUser, staffViewMode, setBackofficeActive]);
+
+  // Browser Back & Forward URL History Navigation
+  useEffect(() => {
+    const handlePopState = () => {
+      const route = getRouteFromLocation();
+      if (route.tab) {
+        setActiveTabState(route.tab);
+      }
+      if (route.viewMode === 'landing') {
+        setStaffViewMode('landing');
+        setGuestView('landing');
+      } else if (route.viewMode === 'staff-login') {
+        setGuestView('staff-login');
+      } else if (route.viewMode === 'erp') {
+        setStaffViewMode('erp');
+      }
+    };
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
+
+  // Synchronize URL on activeTab / view change
+  useEffect(() => {
+    if (currentUser && staffViewMode === 'erp') {
+      navigateToTab(activeTab, true);
+    }
+  }, [currentUser, staffViewMode, activeTab]);
 
   const [members, setMembers] = useState<Member[]>(() => {
     const saved = localStorage.getItem('rfa_members');
@@ -255,14 +373,23 @@ export default function App() {
     }
   });
 
+  useEffect(() => {
+    try {
+      localStorage.setItem('rfa_products', JSON.stringify(products));
+    } catch (e) {
+      console.error('Gagal menyimpan produk ke storage:', e);
+    }
+  }, [products]);
+
   const [packages, setPackages] = useState<PackageItem[]>(() => {
     const saved = localStorage.getItem('rfa_packages');
     if (!saved) return INITIAL_PACKAGES;
     try {
       const parsed: PackageItem[] = JSON.parse(saved);
-      const existingIds = new Set(parsed.map((p) => p.id));
-      const missing = INITIAL_PACKAGES.filter((p) => !existingIds.has(p.id));
-      return missing.length > 0 ? [...parsed, ...missing] : parsed;
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        return parsed;
+      }
+      return INITIAL_PACKAGES;
     } catch {
       return INITIAL_PACKAGES;
     }
@@ -782,6 +909,45 @@ export default function App() {
   useEffect(() => {
     saveWorkoutLogsToStorage(workoutLogs);
   }, [workoutLogs]);
+
+  // Trainer Working Rules State (Roster Melatih & Aturan Jam Kerja Trainer)
+  const [trainerWorkingRules, setTrainerWorkingRules] = useState<TrainerWorkingRule[]>(() => {
+    const saved = localStorage.getItem('rfa_trainer_working_rules');
+    if (!saved) return DEFAULT_TRAINER_WORKING_RULES;
+    try {
+      const parsed: TrainerWorkingRule[] = JSON.parse(saved);
+      const existingIds = new Set(parsed.map((r) => r.trainerId));
+      const missing = DEFAULT_TRAINER_WORKING_RULES.filter((r) => !existingIds.has(r.trainerId));
+      return missing.length > 0 ? [...parsed, ...missing] : parsed;
+    } catch {
+      return DEFAULT_TRAINER_WORKING_RULES;
+    }
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('rfa_trainer_working_rules', JSON.stringify(trainerWorkingRules));
+    } catch (e) {
+      console.error(e);
+    }
+  }, [trainerWorkingRules]);
+
+  const handleSaveTrainerWorkingRule = (rule: TrainerWorkingRule) => {
+    setTrainerWorkingRules((prev) => {
+      const idx = prev.findIndex((r) => r.trainerId === rule.trainerId);
+      if (idx >= 0) {
+        const next = [...prev];
+        next[idx] = rule;
+        return next;
+      }
+      return [rule, ...prev];
+    });
+    showToast(
+      'Aturan Jam Kerja Disimpan',
+      `Aturan kerja & jadwal mengajar pelatih ${rule.trainerName} berhasil diperbarui.`,
+      'success'
+    );
+  };
 
   // ==================== MEMBERSHIP FREEZE / UNFREEZE STATE ====================
   const [freezeRecords, setFreezeRecords] = useState<MemberFreezeRecord[]>(() => {
@@ -1803,7 +1969,7 @@ export default function App() {
     setCurrentUser(user);
     if (user.role === 'admin_cabang' && user.branchId) {
       setActiveBranchId(user.branchId);
-    } else if (user.branchId && user.role !== 'admin' && user.role !== 'manager') {
+    } else if (user.branchId && user.role !== 'admin' && user.role !== 'manager' && user.role !== 'keuangan') {
       setActiveBranchId(user.branchId);
     }
     if (user.role === 'leader_pt') {
@@ -1812,6 +1978,8 @@ export default function App() {
       setActiveTab('trainer-portal');
     } else if (user.role === 'kasir') {
       setActiveTab('front-desk-portal');
+    } else if (user.role === 'keuangan') {
+      setActiveTab('dashboard-keuangan');
     } else {
       setActiveTab('dashboard');
     }
@@ -3633,7 +3801,10 @@ export default function App() {
   // If user is not logged in as staff, render Landing Page or Staff Login Page
   if (!currentUser) {
     return (
-      <div className="min-h-screen bg-zinc-950 font-sans selection:bg-orange-500 selection:text-white">
+      <div
+        data-landing-page={guestView === 'landing' ? 'true' : undefined}
+        className="min-h-screen bg-zinc-950 font-sans selection:bg-orange-500 selection:text-white"
+      >
         {guestView === 'landing' ? (
           <LandingPage
             members={members}
@@ -3658,6 +3829,10 @@ export default function App() {
             onRequestChangeTrainer={handleRequestChangeTrainerFromPortal}
             workoutLogs={workoutLogs}
             onSaveWorkoutLog={handleSaveWorkoutLog}
+            trainerWorkingRules={trainerWorkingRules}
+            workSchedules={workSchedules}
+            staffAttendances={staffAttendances}
+            leaveRequests={leaveRequests}
             showToast={showToast}
           />
         ) : (
@@ -3696,7 +3871,10 @@ export default function App() {
   // If staff user is in Landing Page preview mode
   if (staffViewMode === 'landing') {
     return (
-      <div className="min-h-screen bg-zinc-950 font-sans selection:bg-orange-500 selection:text-white flex flex-col">
+      <div
+        data-landing-page="true"
+        className="min-h-screen bg-zinc-950 font-sans selection:bg-orange-500 selection:text-white flex flex-col"
+      >
         {/* Top ERP Staff Navigation Bar */}
         <div className="bg-gradient-to-r from-orange-600 via-amber-600 to-orange-600 px-4 py-2 text-white text-xs font-bold flex items-center justify-between shadow-xl sticky top-0 z-60">
           <div className="flex items-center gap-2">
@@ -3736,6 +3914,10 @@ export default function App() {
           onRequestChangeTrainer={handleRequestChangeTrainerFromPortal}
           workoutLogs={workoutLogs}
           onSaveWorkoutLog={handleSaveWorkoutLog}
+          trainerWorkingRules={trainerWorkingRules}
+          workSchedules={workSchedules}
+          staffAttendances={staffAttendances}
+          leaveRequests={leaveRequests}
           showToast={showToast}
         />
       </div>
@@ -3743,65 +3925,77 @@ export default function App() {
   }
 
   return (
-    <div className="min-h-screen bg-zinc-950 text-zinc-100 flex flex-col font-sans selection:bg-orange-500 selection:text-white">
+    <div
+      id="backoffice-root"
+      data-backoffice="true"
+      data-trainer-mobile={isTrainerMobileMode ? 'true' : undefined}
+      className={`${isTrainerMobileMode ? 'h-[100dvh] max-h-[100dvh] overflow-hidden' : 'min-h-screen'} bg-zinc-950 text-zinc-100 flex flex-col font-sans selection:bg-orange-500 selection:text-white`}
+    >
       {/* Top Header */}
-      <Header
-        currentUser={currentUser}
-        staffUsers={staffUsers}
-        onSwitchUser={handleSwitchUser}
-        onLogout={handleLogout}
-        isStoreClosed={isStoreClosed}
-        firebaseConnected={firebaseConnected}
-        onToggleSidebar={handleToggleDesktopSidebar}
-        onToggleMobileSidebar={() => setIsSidebarOpen(!isSidebarOpen)}
-        isSidebarCollapsed={isDesktopCollapsed}
-        onOpenAddBranchModal={() => setIsAddBranchModalOpen(true)}
-        onOpenLandingPage={() => setStaffViewMode('landing')}
-        ptNotifications={ptNotifications}
-        onNavigateTab={(tab) => setActiveTab(tab)}
-        onOpenSettings={(subTab) => {
-          if (subTab) {
-            setActiveTab(`settings-${subTab}` as any);
-          } else {
-            setActiveTab('settings');
-          }
-        }}
-      />
+      {!isTrainerMobileMode && (
+        <Header
+          currentUser={currentUser}
+          pageTitle={TAB_PAGE_TITLES[activeTab] || 'RFA Gym ERP'}
+          staffUsers={staffUsers}
+          onSwitchUser={handleSwitchUser}
+          onLogout={handleLogout}
+          isStoreClosed={isStoreClosed}
+          firebaseConnected={firebaseConnected}
+          onToggleSidebar={handleToggleDesktopSidebar}
+          onToggleMobileSidebar={() => setIsSidebarOpen(!isSidebarOpen)}
+          isSidebarCollapsed={isDesktopCollapsed}
+          onOpenAddBranchModal={() => setIsAddBranchModalOpen(true)}
+          onOpenLandingPage={() => setStaffViewMode('landing')}
+          ptNotifications={ptNotifications}
+          onNavigateTab={(tab) => setActiveTab(tab)}
+          onOpenSettings={(subTab) => {
+            if (subTab) {
+              setActiveTab(`settings-${subTab}` as any);
+            } else {
+              setActiveTab('settings');
+            }
+          }}
+        />
+      )}
 
       {/* Multi-Branch ERP Status Bar */}
-      <MultiBranchBar
-        memberCount={activeBranchFilteredMembers.length}
-        transactionCount={activeBranchFilteredTransactions.filter((t) => t.date === APP_TODAY).length}
-        staffCount={activeBranchFilteredStaffUsers.length}
-        currentUser={currentUser}
-        onOpenBranchManager={() => {
-          setActiveTab('settings-branches' as any);
-        }}
-        onOpenStockTransfer={() => setIsStockTransferModalOpen(true)}
-      />
+      {!isTrainerMobileMode && (
+        <MultiBranchBar
+          memberCount={activeBranchFilteredMembers.length}
+          transactionCount={activeBranchFilteredTransactions.filter((t) => t.date === APP_TODAY).length}
+          staffCount={activeBranchFilteredStaffUsers.length}
+          currentUser={currentUser}
+          onOpenBranchManager={() => {
+            setActiveTab('settings-branches' as any);
+          }}
+          onOpenStockTransfer={() => setIsStockTransferModalOpen(true)}
+        />
+      )}
 
       <div className="flex flex-1 overflow-hidden relative">
         {/* Navigation Sidebar */}
-        <Sidebar
-          activeTab={activeTab}
-          setActiveTab={(tab) => {
-            setActiveTab(tab);
-            setIsSidebarOpen(false);
-          }}
-          currentUser={currentUser}
-          isCollapsed={isDesktopCollapsed}
-          onToggleCollapse={handleToggleDesktopSidebar}
-          isOpenMobile={isSidebarOpen}
-          onCloseMobile={() => setIsSidebarOpen(false)}
-          piutangCount={piutangCount}
-          freezeCount={freezeCount}
-          ptWaitingCount={ptWaitingCount}
-          pendingExpensesCount={pendingExpensesCount}
-          onLogout={handleLogout}
-        />
+        {!isTrainerMobileMode && (
+          <Sidebar
+            activeTab={activeTab}
+            setActiveTab={(tab) => {
+              setActiveTab(tab);
+              setIsSidebarOpen(false);
+            }}
+            currentUser={currentUser}
+            isCollapsed={isDesktopCollapsed}
+            onToggleCollapse={handleToggleDesktopSidebar}
+            isOpenMobile={isSidebarOpen}
+            onCloseMobile={() => setIsSidebarOpen(false)}
+            piutangCount={piutangCount}
+            freezeCount={freezeCount}
+            ptWaitingCount={ptWaitingCount}
+            pendingExpensesCount={pendingExpensesCount}
+            onLogout={handleLogout}
+          />
+        )}
 
         {/* Main Content Area */}
-        <main className="flex-1 overflow-y-auto overflow-x-hidden p-3 sm:p-5 md:p-6 lg:p-8 bg-zinc-950/50 scrollbar-thin scrollbar-thumb-zinc-800 w-full min-w-0">
+        <main className={`flex-1 overflow-y-auto overflow-x-hidden ${isTrainerMobileMode ? 'p-0 bg-[#0b0f17] h-full' : 'p-3 sm:p-5 md:p-6 lg:p-8 bg-zinc-950/50'} scrollbar-thin scrollbar-thumb-zinc-800 w-full min-w-0`}>
           {activeTab === 'dashboard' && (
             <DashboardView
               transactions={activeBranchFilteredTransactions}
@@ -3834,6 +4028,55 @@ export default function App() {
               bundlePackages={bundlePackages}
               transactions={activeBranchFilteredTransactions}
               trainerCommissions={activeBranchFilteredTrainerCommissions}
+              ptBookings={ptBookings}
+              trainerChangeRequests={trainerChangeRequests}
+              trainerWorkingRules={trainerWorkingRules}
+              onSaveTrainerWorkingRule={handleSaveTrainerWorkingRule}
+              workSchedules={workSchedules}
+              onSaveWorkSchedule={handleSaveWorkSchedule}
+              leaveRequests={leaveRequests}
+              studioClasses={studioClasses}
+              onUpdateMember={(upMem) => {
+                setMembers((prev) => prev.map((m) => (m.id === upMem.id ? upMem : m)));
+                saveMemberToFirestore(upMem).catch(console.error);
+              }}
+              onUpdatePTPurchase={(upP) => {
+                setPtPurchases((prev) => prev.map((p) => (p.id === upP.id ? upP : p)));
+              }}
+              onAssignPTTrainer={handleAssignPTTrainer}
+              onAddPTAssignment={(newAsg) => setPtAssignments((prev) => [newAsg, ...prev])}
+              onNavigateTab={(tab) => setActiveTab(tab)}
+              onOpenMemberDetail={(m) => setActiveDetailMember(m)}
+              onUpdateSchedule={(upSch) =>
+                setSchedules(schedules.map((s) => (s.id === upSch.id ? upSch : s)))
+              }
+              onAddSchedule={(newSch) => setSchedules([...schedules, newSch])}
+              showToast={showToast}
+            />
+          )}
+
+          {activeTab === 'leader-pt-rules' && (
+            <LeaderPTDashboardView
+              initialTab="aturan_kerja"
+              members={activeBranchFilteredMembers}
+              schedules={activeBranchFilteredSchedules}
+              staffUsers={activeBranchFilteredStaffUsers}
+              staffAttendances={activeBranchFilteredStaffAttendances}
+              attendances={activeBranchFilteredAttendances}
+              currentUser={currentUser}
+              ptPurchases={activeBranchFilteredPTPurchases}
+              ptAssignments={activeBranchFilteredPtAssignments}
+              bundlePackages={bundlePackages}
+              transactions={activeBranchFilteredTransactions}
+              trainerCommissions={activeBranchFilteredTrainerCommissions}
+              ptBookings={ptBookings}
+              trainerChangeRequests={trainerChangeRequests}
+              trainerWorkingRules={trainerWorkingRules}
+              onSaveTrainerWorkingRule={handleSaveTrainerWorkingRule}
+              workSchedules={workSchedules}
+              onSaveWorkSchedule={handleSaveWorkSchedule}
+              leaveRequests={leaveRequests}
+              studioClasses={studioClasses}
               onUpdateMember={(upMem) => {
                 setMembers((prev) => prev.map((m) => (m.id === upMem.id ? upMem : m)));
                 saveMemberToFirestore(upMem).catch(console.error);
@@ -3883,6 +4126,14 @@ export default function App() {
               onOpenSignature={handleOpenSignature}
               showToast={showToast}
               onNavigateTab={(tab) => setActiveTab(tab)}
+              ptBookings={ptBookings}
+              studioClasses={studioClasses}
+              trainerWorkingRules={trainerWorkingRules}
+              workSchedules={workSchedules}
+              staffAttendances={activeBranchFilteredStaffAttendances}
+              leaveRequests={leaveRequests}
+              isMobileMode={isTrainerMobileMode}
+              onToggleMobileMode={(val) => setIsTrainerMobileMode(val)}
             />
           )}
 
@@ -3966,6 +4217,17 @@ export default function App() {
             />
           )}
 
+          {activeTab === 'front-desk-automation' && (
+            <FrontDeskAutomationView
+              members={activeBranchFilteredMembers}
+              schedules={activeBranchFilteredSchedules}
+              lockers={lockers}
+              onAddAttendance={handleAddAttendance}
+              onUpdateLockers={setLockers}
+              showToast={showToast}
+            />
+          )}
+
           {activeTab === 'membership' && (
             <MembershipView
               packages={packages}
@@ -4017,6 +4279,9 @@ export default function App() {
               currentUser={currentUser}
               onProcessCheckout={handleProcessCheckout}
               onAddProduct={(prod) => setProducts([...products, prod])}
+              onUpdateProduct={(updated) =>
+                setProducts(products.map((p) => (p.id === updated.id ? updated : p)))
+              }
               onAddStock={(id, qty) =>
                 setProducts(products.map((p) => (p.id === id ? { ...p, stock: p.stock + qty } : p)))
               }
@@ -4057,7 +4322,14 @@ export default function App() {
 
           {(activeTab === 'absen' || activeTab === 'quick-out') && (
             <AttendanceView
-              initialTab={activeTab === 'quick-out' ? 'out' : undefined}
+              initialTab={activeTab === 'quick-out' ? 'out' : 'member'}
+              onTabChange={(attTab) => {
+                if (attTab === 'out') {
+                  setActiveTab('quick-out');
+                } else if (attTab === 'member') {
+                  setActiveTab('absen');
+                }
+              }}
               members={activeBranchFilteredMembers}
               staffUsers={activeBranchFilteredStaffUsers}
               attendances={activeBranchFilteredAttendances}
@@ -4083,6 +4355,10 @@ export default function App() {
               currentUser={currentUser}
               packages={packages}
               staffUsers={activeBranchFilteredStaffUsers}
+              trainerWorkingRules={trainerWorkingRules}
+              workSchedules={workSchedules}
+              staffAttendances={activeBranchFilteredStaffAttendances}
+              leaveRequests={leaveRequests}
               onPurchasePackage={handlePurchasePackage}
               onAddSchedule={(newSch) => setSchedules([...schedules, newSch])}
               onUpdateSchedule={(upSch) =>
@@ -4103,6 +4379,12 @@ export default function App() {
               staffUsers={activeBranchFilteredStaffUsers}
               packages={packages}
               currentUser={currentUser}
+              schedules={activeBranchFilteredSchedules}
+              ptBookings={ptBookings}
+              workSchedules={workSchedules}
+              staffAttendances={activeBranchFilteredStaffAttendances}
+              leaveRequests={leaveRequests}
+              trainerWorkingRules={trainerWorkingRules}
               onPurchasePackage={handlePurchasePackage}
               onBookClass={handleBookStudioClass}
               onUnbookClass={handleUnbookStudioClass}
@@ -4181,6 +4463,16 @@ export default function App() {
                 );
               }}
               onConvertLeadToMember={handleConvertLeadToMember}
+              showToast={showToast}
+            />
+          )}
+
+          {activeTab === 'smart-crm-billing' && (
+            <SmartCrmBillingView
+              members={activeBranchFilteredMembers}
+              attendances={activeBranchFilteredAttendances}
+              schedules={activeBranchFilteredSchedules}
+              staffUsers={activeBranchFilteredStaffUsers}
               showToast={showToast}
             />
           )}
@@ -4405,6 +4697,7 @@ export default function App() {
             activeTab === 'settings-printer' ||
             activeTab === 'settings-theme' ||
             activeTab === 'settings-roles' ||
+            activeTab === 'settings-security' ||
             activeTab === 'settings-branches' ||
             activeTab === 'settings-profile' ||
             activeTab === 'settings-finance' ||
@@ -4444,6 +4737,10 @@ export default function App() {
               showToast={showToast}
               onNavigateToGoogleSheets={() => setActiveTab('google-sheets')}
               onPreviewLanding={() => setStaffViewMode('landing')}
+              onSubTabChange={(subTab) => {
+                const target = `settings-${subTab}` as ActiveTab;
+                setActiveTab(target);
+              }}
               initialSubTab={
                 activeTab === 'settings-printer'
                   ? 'printer'
@@ -4451,6 +4748,8 @@ export default function App() {
                   ? 'theme'
                   : activeTab === 'settings-roles'
                   ? 'roles'
+                  : activeTab === 'settings-security'
+                  ? 'security'
                   : activeTab === 'settings-branches'
                   ? 'branches'
                   : activeTab === 'settings-profile'
@@ -4464,6 +4763,28 @@ export default function App() {
                   : 'printer'
               }
             />
+          )}
+
+          {/* Fallback View jika tab tidak dikenali (mencegah blank screen) */}
+          {!KNOWN_TABS.has(activeTab) && (
+            <div className="flex flex-col items-center justify-center min-h-[60vh] text-center p-6 space-y-4">
+              <div className="w-16 h-16 rounded-3xl bg-orange-500/10 border border-orange-500/20 text-orange-400 flex items-center justify-center">
+                <AlertTriangle className="w-8 h-8" />
+              </div>
+              <div>
+                <h3 className="text-lg font-black text-white">Halaman Tidak Ditemukan</h3>
+                <p className="text-xs text-zinc-400 mt-1 max-w-sm">
+                  Tab "{String(activeTab)}" tidak tersedia atau telah dipindahkan.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setActiveTab('dashboard')}
+                className="px-5 py-2.5 rounded-xl bg-orange-500 hover:bg-orange-600 text-white font-bold text-xs shadow-lg shadow-orange-500/20 cursor-pointer active:scale-95 transition"
+              >
+                Kembali ke Dashboard Utama
+              </button>
+            </div>
           )}
         </main>
       </div>

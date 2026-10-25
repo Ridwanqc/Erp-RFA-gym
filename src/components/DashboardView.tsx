@@ -726,11 +726,17 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                         }`}
                       >
                         <div className="flex items-start gap-3">
-                          <img
-                            src={p.img}
-                            alt={p.name}
-                            className="w-12 h-12 rounded-xl object-cover bg-zinc-900 border border-zinc-800 shrink-0"
-                          />
+                          {p.img && p.img.trim() ? (
+                            <img
+                              src={p.img.trim()}
+                              alt={p.name}
+                              className="w-12 h-12 rounded-xl object-cover bg-zinc-900 border border-zinc-800 shrink-0"
+                            />
+                          ) : (
+                            <div className="w-12 h-12 rounded-xl bg-zinc-900 border border-zinc-800 flex items-center justify-center text-zinc-500 font-bold text-xs shrink-0">
+                              PROD
+                            </div>
+                          )}
                           <div className="min-w-0 flex-1">
                             <div className="flex items-center justify-between gap-1.5">
                               <span className="text-[10px] font-bold text-zinc-400 bg-zinc-900 px-2 py-0.5 rounded-md">
@@ -1099,53 +1105,53 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
       {/* ========================================================================= */}
       {/* 4 CORE METRIC CARDS                                                       */}
       {/* ========================================================================= */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
         {/* Omset Card */}
-        <div className="bg-zinc-900/90 border border-zinc-800 rounded-3xl p-5 shadow-sm relative overflow-hidden group hover:border-orange-500/40 transition">
+        <div className="bg-zinc-900/90 border border-zinc-800 rounded-3xl p-4 sm:p-5 shadow-sm relative overflow-hidden group hover:border-orange-500/40 transition">
           <div className="flex justify-between items-start">
             <p className="text-[10px] font-extrabold text-zinc-400 uppercase tracking-wider">Omset Masuk Hari Ini</p>
-            <div className="w-8 h-8 rounded-xl bg-orange-500/10 text-orange-400 flex items-center justify-center">
+            <div className="w-8 h-8 rounded-xl bg-orange-500/10 text-orange-400 flex items-center justify-center shrink-0">
               <DollarSign className="w-4 h-4" />
             </div>
           </div>
-          <h3 className="text-2xl sm:text-3xl font-black text-orange-400 mt-2 tracking-tight">
+          <h3 className="text-xl sm:text-2xl lg:text-3xl font-black text-orange-400 mt-2 tracking-tight truncate">
             {formatRp(todayRevenue)}
           </h3>
-          <div className="flex items-center gap-1.5 text-[11px] font-semibold text-emerald-400 mt-2">
-            <TrendingUp className="w-3.5 h-3.5" />
+          <div className="flex items-center gap-1.5 text-[11px] font-semibold text-emerald-400 mt-2 truncate">
+            <TrendingUp className="w-3.5 h-3.5 shrink-0" />
             <span>{todayTransactions.length} Transaksi terproses</span>
           </div>
         </div>
 
         {/* Visit Member Card */}
-        <div className="bg-zinc-900/90 border border-zinc-800 rounded-3xl p-5 shadow-sm relative overflow-hidden group hover:border-blue-500/40 transition">
+        <div className="bg-zinc-900/90 border border-zinc-800 rounded-3xl p-4 sm:p-5 shadow-sm relative overflow-hidden group hover:border-blue-500/40 transition">
           <div className="flex justify-between items-start">
             <p className="text-[10px] font-extrabold text-zinc-400 uppercase tracking-wider">Visit Member</p>
-            <div className="w-8 h-8 rounded-xl bg-blue-500/10 text-blue-400 flex items-center justify-center">
+            <div className="w-8 h-8 rounded-xl bg-blue-500/10 text-blue-400 flex items-center justify-center shrink-0">
               <UserCheck className="w-4 h-4" />
             </div>
           </div>
-          <h3 className="text-2xl sm:text-3xl font-black text-white mt-2 tracking-tight">
+          <h3 className="text-xl sm:text-2xl lg:text-3xl font-black text-white mt-2 tracking-tight truncate">
             {todayVisits} <span className="text-sm font-semibold text-zinc-400">Orang</span>
           </h3>
-          <p className="text-[11px] text-zinc-400 mt-2">Check-in fasilitas gym hari ini</p>
+          <p className="text-[11px] text-zinc-400 mt-2 truncate">Check-in fasilitas gym hari ini</p>
         </div>
 
         {/* Sesi PT Card */}
         <div
           onClick={() => onNavigateTab('leader-pt')}
-          className="bg-zinc-900/90 border border-zinc-800 rounded-3xl p-5 shadow-sm relative overflow-hidden group hover:border-purple-500/40 transition cursor-pointer"
+          className="bg-zinc-900/90 border border-zinc-800 rounded-3xl p-4 sm:p-5 shadow-sm relative overflow-hidden group hover:border-purple-500/40 transition cursor-pointer"
         >
           <div className="flex justify-between items-start">
             <p className="text-[10px] font-extrabold text-zinc-400 uppercase tracking-wider">Sesi PT Aktif</p>
-            <div className="w-8 h-8 rounded-xl bg-purple-500/10 text-purple-400 flex items-center justify-center">
+            <div className="w-8 h-8 rounded-xl bg-purple-500/10 text-purple-400 flex items-center justify-center shrink-0">
               <Dumbbell className="w-4 h-4" />
             </div>
           </div>
-          <h3 className="text-2xl sm:text-3xl font-black text-white mt-2 tracking-tight">
+          <h3 className="text-xl sm:text-2xl lg:text-3xl font-black text-white mt-2 tracking-tight truncate">
             {activePTSessions} <span className="text-sm font-semibold text-zinc-400">Jadwal</span>
           </h3>
-          <p className="text-[11px] text-purple-400 font-semibold mt-2 flex items-center gap-1">
+          <p className="text-[11px] text-purple-400 font-semibold mt-2 flex items-center gap-1 truncate">
             <span>Buka Dashboard Leader PT &rarr;</span>
           </p>
         </div>
@@ -1153,18 +1159,18 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         {/* Piutang Mengendap Card */}
         <div
           onClick={() => onNavigateTab('piutang')}
-          className="bg-zinc-900/90 border border-zinc-800 rounded-3xl p-5 shadow-sm relative overflow-hidden group hover:border-rose-500/40 transition cursor-pointer"
+          className="bg-zinc-900/90 border border-zinc-800 rounded-3xl p-4 sm:p-5 shadow-sm relative overflow-hidden group hover:border-rose-500/40 transition cursor-pointer"
         >
           <div className="flex justify-between items-start">
             <p className="text-[10px] font-extrabold text-zinc-400 uppercase tracking-wider">Piutang Mengendap</p>
-            <div className="w-8 h-8 rounded-xl bg-rose-500/10 text-rose-400 flex items-center justify-center">
+            <div className="w-8 h-8 rounded-xl bg-rose-500/10 text-rose-400 flex items-center justify-center shrink-0">
               <BookOpen className="w-4 h-4" />
             </div>
           </div>
-          <h3 className="text-2xl sm:text-3xl font-black text-rose-400 mt-2 tracking-tight">
+          <h3 className="text-xl sm:text-2xl lg:text-3xl font-black text-rose-400 mt-2 tracking-tight truncate">
             {formatRp(totalPiutang)}
           </h3>
-          <div className="flex items-center gap-1 text-[11px] font-bold text-rose-400/90 mt-2">
+          <div className="flex items-center gap-1 text-[11px] font-bold text-rose-400/90 mt-2 truncate">
             <span>Lihat Buku Piutang &rarr;</span>
           </div>
         </div>
@@ -1915,11 +1921,17 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             </div>
 
             <div className="flex items-center gap-3 p-3 bg-zinc-950 rounded-2xl border border-zinc-800/80">
-              <img
-                src={restockModal.product.img}
-                alt={restockModal.product.name}
-                className="w-12 h-12 rounded-xl object-cover bg-zinc-900 border border-zinc-800 shrink-0"
-              />
+              {restockModal.product.img && restockModal.product.img.trim() ? (
+                <img
+                  src={restockModal.product.img.trim()}
+                  alt={restockModal.product.name}
+                  className="w-12 h-12 rounded-xl object-cover bg-zinc-900 border border-zinc-800 shrink-0"
+                />
+              ) : (
+                <div className="w-12 h-12 rounded-xl bg-zinc-900 border border-zinc-800 flex items-center justify-center text-zinc-500 font-bold text-xs shrink-0">
+                  PROD
+                </div>
+              )}
               <div className="min-w-0 flex-1">
                 <div className="flex items-center justify-between">
                   <span className="text-[10px] font-bold text-zinc-400 bg-zinc-900 px-2 py-0.5 rounded-md">

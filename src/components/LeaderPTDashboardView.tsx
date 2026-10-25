@@ -57,19 +57,23 @@ import {
   Line,
   CartesianGrid
 } from 'recharts';
-import { Member, Schedule, User, StaffAttendance, Attendance, PTPurchaseRecord, PTTrainerAssignment, BundlePackage, Transaction, TrainerCommissionRecord, PTBooking, TrainerChangeRequest } from '../types';
+import { Member, Schedule, User, StaffAttendance, Attendance, PTPurchaseRecord, PTTrainerAssignment, BundlePackage, Transaction, TrainerCommissionRecord, PTBooking, TrainerChangeRequest, WorkSchedule, LeaveRequest, TrainerWorkingRule, StudioClass } from '../types';
 import { APP_TODAY, formatDateIndo, getDayDiff, formatRp, getTimestamp } from '../utils/formatters';
+import { DEFAULT_TRAINER_WORKING_RULES, getTrainerDutyStatusOnDate, isTimeMatchingStudioClass, calculateTrainerTeachingHours } from '../data/ptBookingData';
 import { TrainerCommissionPieChart } from './TrainerCommissionPieChart';
 import { LeaderPTBookingsTab } from './LeaderPTBookingsTab';
 import { LeaderPTTrainerChangeTab } from './LeaderPTTrainerChangeTab';
+import { LeaderPTTrainerWorkingRulesTab } from './LeaderPTTrainerWorkingRulesTab';
 
 interface LeaderPTDashboardViewProps {
+  initialTab?: 'penugasan' | 'jadwal' | 'pelatih' | 'retensi' | 'analitik' | 'aturan_kerja';
   members: Member[];
   schedules: Schedule[];
   staffUsers: User[];
   staffAttendances: StaffAttendance[];
   attendances: Attendance[];
   currentUser: User | null;
+  studioClasses?: StudioClass[];
   ptPurchases?: PTPurchaseRecord[];
   ptAssignments?: PTTrainerAssignment[];
   bundlePackages?: BundlePackage[];
@@ -77,6 +81,11 @@ interface LeaderPTDashboardViewProps {
   trainerCommissions?: TrainerCommissionRecord[];
   ptBookings?: PTBooking[];
   trainerChangeRequests?: TrainerChangeRequest[];
+  trainerWorkingRules?: TrainerWorkingRule[];
+  onSaveTrainerWorkingRule?: (rule: TrainerWorkingRule) => void;
+  workSchedules?: WorkSchedule[];
+  onSaveWorkSchedule?: (schedule: WorkSchedule, isNew: boolean) => void;
+  leaveRequests?: LeaveRequest[];
   onApproveTrainerChange?: (requestId: string, newTrainerId: string, newTrainerName: string, notes?: string) => void;
   onRejectTrainerChange?: (requestId: string, notes?: string) => void;
   onUpdatePTBookingStatus?: (bookingId: string, newStatus: any, notes?: string) => void;
@@ -100,12 +109,14 @@ interface LeaderPTDashboardViewProps {
 }
 
 export const LeaderPTDashboardView: React.FC<LeaderPTDashboardViewProps> = ({
+  initialTab,
   members,
   schedules,
   staffUsers,
   staffAttendances,
   attendances,
   currentUser,
+  studioClasses = [],
   ptPurchases = [],
   ptAssignments = [],
   bundlePackages = [],
@@ -113,6 +124,11 @@ export const LeaderPTDashboardView: React.FC<LeaderPTDashboardViewProps> = ({
   trainerCommissions = [],
   ptBookings = [],
   trainerChangeRequests = [],
+  trainerWorkingRules = [],
+  onSaveTrainerWorkingRule,
+  workSchedules = [],
+  onSaveWorkSchedule,
+  leaveRequests = [],
   onApproveTrainerChange,
   onRejectTrainerChange,
   onUpdatePTBookingStatus,
@@ -134,7 +150,9 @@ export const LeaderPTDashboardView: React.FC<LeaderPTDashboardViewProps> = ({
   const canAssign = isAdmin || isLeaderPT;
 
   // Unified Master Tab state
-  const [mainTab, setMainTab] = useState<'penugasan' | 'jadwal' | 'pelatih' | 'retensi' | 'analitik'>('penugasan');
+  const [mainTab, setMainTab] = useState<'penugasan' | 'jadwal' | 'pelatih' | 'retensi' | 'analitik' | 'aturan_kerja'>(
+    initialTab || 'penugasan'
+  );
 
   // Sub-filter states for each master tab
   const [scheduleSubFilter, setScheduleSubFilter] = useState<'today' | 'tomorrow' | 'week' | 'clash' | 'unconfirmed' | 'bookings' | 'all'>('today');
@@ -155,6 +173,7 @@ export const LeaderPTDashboardView: React.FC<LeaderPTDashboardViewProps> = ({
     | 'analytics'
     | 'bookings'
     | 'change_requests'
+    | 'working_rules'
   >('waiting');
 
   // Active Filter / Tab state (legacy & sub-tables)
@@ -240,6 +259,22 @@ export const LeaderPTDashboardView: React.FC<LeaderPTDashboardViewProps> = ({
   const trainers = useMemo(() => {
     return staffUsers.filter((u) => u.role === 'pt' || u.role === 'leader_pt');
   }, [staffUsers]);
+
+  // Real-time trainer duty status for Quick Add Schedule Modal
+  const quickTrainerDuty = useMemo(() => {
+    if (!quickTrainer || !quickDate) return null;
+    const chosen = trainers.find((t) => t.name === quickTrainer || t.id === quickTrainer);
+    return getTrainerDutyStatusOnDate({
+      trainerId: chosen?.id || quickTrainer,
+      trainerName: chosen?.name || quickTrainer,
+      date: quickDate,
+      workSchedules,
+      staffAttendances,
+      leaveRequests,
+      trainerUser: chosen,
+      rules: trainerWorkingRules
+    });
+  }, [quickTrainer, quickDate, trainers, workSchedules, staffAttendances, leaveRequests, trainerWorkingRules]);
 
   // Tomorrow calculation
   const tomorrowDate = useMemo(() => {
@@ -400,7 +435,7 @@ export const LeaderPTDashboardView: React.FC<LeaderPTDashboardViewProps> = ({
     // 20. Jadwal minggu ini
     const mingguIni = schedules.filter((s) => currentWeekDays.includes(s.date));
 
-    // 21. Jadwal bentrok (same trainer, same date, same time, status not Batal)
+    // 21. Jadwal bentrok (Bentrok PT ganda, Bentrok Kelas Studio, Bentrok Shift/Day Off HR)
     const clashGroups: { [key: string]: Schedule[] } = {};
     schedules.forEach((s) => {
       if (s.status === 'Batal') return;
@@ -410,17 +445,104 @@ export const LeaderPTDashboardView: React.FC<LeaderPTDashboardViewProps> = ({
     });
 
     const bentrokSchedules: Schedule[] = [];
-    const bentrokDetails: { trainer: string; date: string; time: string; schedules: Schedule[] }[] = [];
+    const bentrokDetails: {
+      trainer: string;
+      date: string;
+      time: string;
+      schedules: Schedule[];
+      clashType?: 'PT_DOUBLE' | 'STUDIO_CLASS' | 'OFF_DUTY';
+      clashLabel?: string;
+    }[] = [];
 
+    // 1. Bentrok PT Ganda
     Object.entries(clashGroups).forEach(([key, list]) => {
       if (list.length > 1) {
         const [trainer, date, time] = key.split('___');
-        bentrokDetails.push({ trainer, date, time, schedules: list });
+        bentrokDetails.push({
+          trainer,
+          date,
+          time,
+          schedules: list,
+          clashType: 'PT_DOUBLE',
+          clashLabel: 'Bentrok Sesi PT Ganda'
+        });
         list.forEach((item) => {
           if (!bentrokSchedules.some((x) => x.id === item.id)) {
             bentrokSchedules.push(item);
           }
         });
+      }
+    });
+
+    // 2. Bentrok PT vs Kelas Studio
+    schedules.forEach((s) => {
+      if (s.status === 'Batal') return;
+      const trainerUser = trainers.find((t) => t.name === s.trainer || t.id === s.trainerId);
+      const clashingStudio = studioClasses.find((sc) => {
+        if (sc.date !== s.date) return false;
+        const isInstructor =
+          (sc.trainerId && sc.trainerId === trainerUser?.id) ||
+          ((sc.trainerName || sc.trainer || '').toLowerCase().trim() === s.trainer.toLowerCase().trim());
+        if (!isInstructor) return false;
+        return isTimeMatchingStudioClass(sc.time, s.time);
+      });
+
+      if (clashingStudio) {
+        if (!bentrokSchedules.some((x) => x.id === s.id)) {
+          bentrokSchedules.push(s);
+          bentrokDetails.push({
+            trainer: s.trainer,
+            date: s.date,
+            time: s.time,
+            schedules: [s],
+            clashType: 'STUDIO_CLASS',
+            clashLabel: `Bentrok Kelas Studio (${clashingStudio.name})`
+          });
+        }
+      }
+    });
+
+    // 3. Bentrok PT vs Shift / Cuti / Day Off HR
+    schedules.forEach((s) => {
+      if (s.status === 'Batal' || s.status === 'Selesai') return;
+      const trainerUser = trainers.find((t) => t.name === s.trainer || t.id === s.trainerId);
+      const duty = getTrainerDutyStatusOnDate({
+        trainerId: s.trainerId || trainerUser?.id || s.trainer,
+        trainerName: s.trainer,
+        date: s.date,
+        workSchedules,
+        staffAttendances,
+        leaveRequests,
+        trainerUser,
+        rules: trainerWorkingRules
+      });
+
+      if (!duty.isAvailableForDate) {
+        if (!bentrokSchedules.some((x) => x.id === s.id)) {
+          bentrokSchedules.push(s);
+          bentrokDetails.push({
+            trainer: s.trainer,
+            date: s.date,
+            time: s.time,
+            schedules: [s],
+            clashType: 'OFF_DUTY',
+            clashLabel: `Jadwal Saat Pelatih ${duty.statusLabel}`
+          });
+        }
+      } else if (duty.dutyStartTime && duty.dutyEndTime) {
+        if (s.time < duty.dutyStartTime || s.time >= duty.dutyEndTime) {
+          if (!bentrokSchedules.some((x) => x.id === s.id)) {
+            bentrokSchedules.push(s);
+            bentrokDetails.push({
+              trainer: s.trainer,
+              date: s.date,
+              time: s.time,
+              schedules: [s],
+              clashType: 'OFF_DUTY',
+              clashLabel: `Di Luar Jam Shift HR (${duty.dutyStartTime} - ${duty.dutyEndTime})`
+            });
+          }
+        }
       }
     });
 
@@ -455,7 +577,7 @@ export const LeaderPTDashboardView: React.FC<LeaderPTDashboardViewProps> = ({
         selesai
       }
     };
-  }, [schedules, tomorrowDate, currentWeekDays]);
+  }, [schedules, tomorrowDate, currentWeekDays, studioClasses, trainers, workSchedules, staffAttendances, leaveRequests, trainerWorkingRules]);
 
   // --------------------------------------------------------------------------
   // 3. TRAINER METRICS (8 METRICS)
@@ -486,6 +608,20 @@ export const LeaderPTDashboardView: React.FC<LeaderPTDashboardViewProps> = ({
 
       const isClockedIn = staffAttendances.some((sa) => sa.staffId === t.id && sa.date === APP_TODAY);
 
+      const teachingData = calculateTrainerTeachingHours({
+        trainerId: t.id,
+        trainerName: t.name,
+        date: APP_TODAY,
+        schedules,
+        ptBookings,
+        studioClasses,
+        workSchedules,
+        staffAttendances,
+        leaveRequests,
+        rules: trainerWorkingRules,
+        trainerUser: t
+      });
+
       return {
         ...t,
         todayCount: todaySchedules.length,
@@ -493,7 +629,12 @@ export const LeaderPTDashboardView: React.FC<LeaderPTDashboardViewProps> = ({
         memberCount: assignedMembers.length,
         totalSesiTersisa,
         isClockedIn,
-        todaySchedules
+        todaySchedules,
+        teachingHoursMonth: teachingData.totalCompletedHoursMonth,
+        teachingHoursToday: teachingData.totalCompletedHoursToday,
+        studioClassesMonth: teachingData.studioMonthCount,
+        maxSessionsPerDay: teachingData.maxSessionsPerDay,
+        dutyToday: teachingData.dutyToday
       };
     });
 
@@ -1128,21 +1269,40 @@ export const LeaderPTDashboardView: React.FC<LeaderPTDashboardViewProps> = ({
       }
 
       if (scheduleFirstSession) {
-        const newSch: Schedule = {
-          id: 'SCH-' + Date.now(),
-          memberName: item.memberName,
-          memberId: item.memberId,
-          trainer: chosenTrainer.name,
+        const firstSessionDuty = getTrainerDutyStatusOnDate({
           trainerId: chosenTrainer.id,
+          trainerName: chosenTrainer.name,
           date: firstDate,
-          time: firstTime,
-          status: 'Menunggu',
-          valStaf: false,
-          valTrainer: false,
-          valMember: false,
-          note: `Sesi Perdana Paket ${item.packageName}${notes ? ' - ' + notes : ''}`
-        };
-        onAddSchedule(newSch);
+          workSchedules,
+          staffAttendances,
+          leaveRequests,
+          trainerUser: trainers.find((t) => t.id === chosenTrainer.id),
+          rules: trainerWorkingRules
+        });
+
+        if (!firstSessionDuty.isAvailableForDate) {
+          showToast(
+            'Peringatan Sesi Perdana',
+            `Coach ${chosenTrainer.name} sedang ${firstSessionDuty.statusLabel} pada ${formatDateIndo(firstDate)}. Sesi perdana dibatalkan otomatis; silakan jadwalkan terpisah setelah konfirmasi penugasan.`,
+            'warning'
+          );
+        } else {
+          const newSch: Schedule = {
+            id: 'SCH-' + Date.now(),
+            memberName: item.memberName,
+            memberId: item.memberId,
+            trainer: chosenTrainer.name,
+            trainerId: chosenTrainer.id,
+            date: firstDate,
+            time: firstTime,
+            status: 'Menunggu',
+            valStaf: false,
+            valTrainer: false,
+            valMember: false,
+            note: `Sesi Perdana Paket ${item.packageName}${notes ? ' - ' + notes : ''}`
+          };
+          onAddSchedule(newSch);
+        }
       }
 
       showToast(
@@ -1239,6 +1399,27 @@ export const LeaderPTDashboardView: React.FC<LeaderPTDashboardViewProps> = ({
     const mem = members.find((m) => m.id === quickMemberId);
     if (!mem || !quickTrainer) {
       showToast('Form Tidak Lengkap', 'Pilih member dan pelatih PT.', 'warning');
+      return;
+    }
+
+    const chosenTrainerUser = trainers.find((t) => t.name === quickTrainer || t.id === quickTrainer);
+    const trainerDuty = getTrainerDutyStatusOnDate({
+      trainerId: chosenTrainerUser?.id || quickTrainer,
+      trainerName: chosenTrainerUser?.name || quickTrainer,
+      date: quickDate,
+      workSchedules,
+      staffAttendances,
+      leaveRequests,
+      trainerUser: chosenTrainerUser,
+      rules: trainerWorkingRules
+    });
+
+    if (!trainerDuty.isAvailableForDate) {
+      showToast(
+        'Pelatih Tidak Tersedia',
+        `Coach ${quickTrainer} sedang ${trainerDuty.statusLabel} pada ${formatDateIndo(quickDate)}. ${trainerDuty.reason || 'Tidak dapat mengambil jadwal melatih.'}`,
+        'error'
+      );
       return;
     }
 
@@ -1609,6 +1790,19 @@ export const LeaderPTDashboardView: React.FC<LeaderPTDashboardViewProps> = ({
               {memberMetrics.tidakLatihan7H + memberMetrics.sesiHampirHabis}
             </span>
           )}
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setMainTab('aturan_kerja')}
+          className={`flex-1 min-w-[150px] py-3 px-4 rounded-xl text-xs font-bold transition flex items-center justify-center gap-2 cursor-pointer ${
+            mainTab === 'aturan_kerja'
+              ? 'bg-gradient-to-r from-orange-500 to-amber-600 text-white shadow-lg shadow-orange-500/20 font-black'
+              : 'text-zinc-400 hover:text-white hover:bg-zinc-800/60'
+          }`}
+        >
+          <Clock className="w-4 h-4 shrink-0" />
+          <span>Aturan Jam & Presensi Pelatih</span>
         </button>
 
         <button
@@ -4538,6 +4732,20 @@ export const LeaderPTDashboardView: React.FC<LeaderPTDashboardViewProps> = ({
         </div>
       )}
 
+      {/* ATURAN JAM & JADWAL KERJA TRAINER */}
+      {mainTab === 'aturan_kerja' && (
+        <LeaderPTTrainerWorkingRulesTab
+          trainers={trainers}
+          trainerWorkingRules={trainerWorkingRules || []}
+          onSaveTrainerWorkingRule={onSaveTrainerWorkingRule || (() => {})}
+          workSchedules={workSchedules || []}
+          onSaveWorkSchedule={onSaveWorkSchedule || (() => {})}
+          staffAttendances={staffAttendances || []}
+          leaveRequests={leaveRequests || []}
+          showToast={showToast}
+        />
+      )}
+
       {/* 7. MODAL: QUICK ADD SCHEDULE */}
       {isQuickAddOpen && (
         <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-xs flex items-center justify-center p-4">
@@ -4681,6 +4889,34 @@ export const LeaderPTDashboardView: React.FC<LeaderPTDashboardViewProps> = ({
                 </div>
               </div>
 
+              {/* Trainer Duty Status Preview */}
+              {quickTrainerDuty && (
+                <div className={`p-2.5 rounded-xl border text-xs space-y-1 ${
+                  quickTrainerDuty.isAvailableForDate
+                    ? 'bg-emerald-950/30 border-emerald-500/40 text-emerald-300'
+                    : 'bg-rose-950/40 border-rose-500/50 text-rose-300'
+                }`}>
+                  <div className="flex items-center justify-between font-bold">
+                    <span>Status Pelatih:</span>
+                    <span className={`px-2 py-0.5 rounded text-[10px] font-bold border ${
+                      quickTrainerDuty.isAvailableForDate
+                        ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/40'
+                        : 'bg-rose-500/20 text-rose-400 border-rose-500/40'
+                    }`}>
+                      {quickTrainerDuty.statusLabel}
+                    </span>
+                  </div>
+                  {quickTrainerDuty.reason && (
+                    <p className="text-[11px] text-zinc-300">{quickTrainerDuty.reason}</p>
+                  )}
+                  {quickTrainerDuty.isAvailableForDate && quickTrainerDuty.dutyStartTime && (
+                    <p className="text-[10px] text-emerald-400/90">
+                      Jam Kerja: {quickTrainerDuty.dutyStartTime} - {quickTrainerDuty.dutyEndTime} WIB
+                    </p>
+                  )}
+                </div>
+              )}
+
               <div>
                 <label className="text-xs font-semibold text-zinc-300 block mb-1">Catatan Fokus Latihan</label>
                 <input
@@ -4702,7 +4938,12 @@ export const LeaderPTDashboardView: React.FC<LeaderPTDashboardViewProps> = ({
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 rounded-xl bg-orange-600 hover:bg-orange-500 text-white text-xs font-bold shadow-md shadow-orange-600/30"
+                  disabled={Boolean(quickTrainerDuty && !quickTrainerDuty.isAvailableForDate)}
+                  className={`px-4 py-2 rounded-xl text-white text-xs font-bold shadow-md ${
+                    !quickTrainerDuty || quickTrainerDuty.isAvailableForDate
+                      ? 'bg-orange-600 hover:bg-orange-500 shadow-orange-600/30 cursor-pointer active:scale-95'
+                      : 'bg-zinc-800 text-zinc-500 cursor-not-allowed border border-zinc-700/50'
+                  }`}
                 >
                   Jadwalkan Sesi PT
                 </button>

@@ -67,6 +67,7 @@ import {
   useTheme,
   THEME_MODE_OPTIONS,
   ACCENT_OPTIONS,
+  THEME_PRESETS,
   ThemeMode,
   AccentColor,
   ContentDensity,
@@ -91,6 +92,7 @@ interface SettingsViewProps {
   initialSubTab?: 'printer' | 'theme' | 'roles' | 'security' | 'profile' | 'branches' | 'finance' | 'templates' | 'backup' | 'landing';
   onNavigateToGoogleSheets?: () => void;
   onPreviewLanding?: () => void;
+  onSubTabChange?: (subTab: SettingsSubTab) => void;
 }
 
 type SettingsSubTab = 'printer' | 'theme' | 'roles' | 'security' | 'profile' | 'branches' | 'finance' | 'templates' | 'backup' | 'landing';
@@ -104,7 +106,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   showToast,
   initialSubTab = 'printer',
   onNavigateToGoogleSheets,
-  onPreviewLanding
+  onPreviewLanding,
+  onSubTabChange
 }) => {
   const {
     settings,
@@ -132,12 +135,27 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
     setAccent,
     setDensity,
     setPattern,
+    applyPreset,
     resetTheme,
     currentAccent,
     openThemeModal
   } = useTheme();
 
   const [activeTab, setActiveTab] = useState<SettingsSubTab>(initialSubTab);
+
+  React.useEffect(() => {
+    if (initialSubTab) {
+      setActiveTab(initialSubTab);
+    }
+  }, [initialSubTab]);
+
+  const handleSelectTab = (tabId: SettingsSubTab) => {
+    setActiveTab(tabId);
+    if (onSubTabChange) {
+      onSubTabChange(tabId);
+    }
+  };
+
   const [isBranchWaModalOpen, setIsBranchWaModalOpen] = useState(false);
   const [testReceiptTrx, setTestReceiptTrx] = useState<Transaction | null>(null);
 
@@ -637,7 +655,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
               <button
                 key={tab.id}
                 type="button"
-                onClick={() => setActiveTab(tab.id as SettingsSubTab)}
+                id={`btn-settings-subtab-${tab.id}`}
+                onClick={() => handleSelectTab(tab.id as SettingsSubTab)}
                 className={`px-4 py-2.5 rounded-2xl text-xs font-bold transition flex items-center gap-2.5 shrink-0 cursor-pointer ${
                   isActive
                     ? 'bg-orange-500 text-white shadow-md shadow-orange-500/20'
@@ -1302,8 +1321,12 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                     />
                   </h3>
                   <p className="text-xs text-zinc-400">
-                    Kustomisasi suasana mode gelap/terang, palet warna brand GymPro, kepadatan layout, dan pola latar.
+                    Kustomisasi suasana mode gelap/terang, palet warna brand GymPro, kepadatan layout, dan pola latar khusus ruang kerja Backoffice ERP.
                   </p>
+                  <div className="mt-2 inline-flex items-center gap-2 px-2.5 py-1 rounded-xl bg-orange-500/10 border border-orange-500/20 text-[11px] text-orange-300 font-semibold">
+                    <ShieldCheck className="w-3.5 h-3.5 text-orange-400 shrink-0" />
+                    <span>Tema ini diterapkan khusus pada Backoffice ERP. Halaman publik Landing Page tetap terjaga dalam desain resmi RFA Gym.</span>
+                  </div>
                 </div>
               </div>
 
@@ -1334,6 +1357,59 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
             {/* Left Column: Theme Modes & Accents */}
             <div className="lg:col-span-8 space-y-6">
+              {/* 0. Preset Instan Cepat */}
+              <div className="bg-zinc-900 border border-zinc-800 rounded-3xl p-5 sm:p-6 space-y-3">
+                <div className="flex items-center justify-between">
+                  <h4 className="text-xs font-bold uppercase tracking-wider text-zinc-300 flex items-center gap-2">
+                    <Sparkles className="w-4 h-4" style={{ color: currentAccent.hex }} />
+                    <span>Preset Desain Siap Pakai (1-Klik)</span>
+                  </h4>
+                  <span className="text-[11px] text-zinc-500">Kombinasi tema & aksen instan</span>
+                </div>
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
+                  {THEME_PRESETS.map((p) => {
+                    const isPresetActive =
+                      theme.mode === p.config.mode &&
+                      theme.accent === p.config.accent &&
+                      theme.density === p.config.density &&
+                      theme.pattern === p.config.pattern;
+                    return (
+                      <button
+                        key={p.id}
+                        type="button"
+                        onClick={() => {
+                          applyPreset(p.config);
+                          notifySuccess('Preset Tema Diterapkan', `Preset ${p.name} berhasil diaktifkan.`);
+                        }}
+                        className={`p-3 rounded-2xl border text-left transition cursor-pointer relative ${
+                          isPresetActive
+                            ? 'bg-zinc-800/90 shadow-md ring-1'
+                            : 'bg-zinc-950/60 border-zinc-800 hover:border-zinc-700 hover:bg-zinc-900/60'
+                        }`}
+                        style={{
+                          borderColor: isPresetActive ? currentAccent.hex : undefined,
+                          boxShadow: isPresetActive ? `0 0 12px rgba(${currentAccent.rgb}, 0.25)` : undefined
+                        }}
+                      >
+                        <div className="flex items-center justify-between gap-1 mb-1">
+                          <span className="text-xs font-bold text-white truncate">{p.name}</span>
+                          <span
+                            className="text-[9px] font-bold px-1.5 py-0.2 rounded uppercase shrink-0"
+                            style={{
+                              backgroundColor: isPresetActive ? currentAccent.hex : '#27272a',
+                              color: isPresetActive ? '#ffffff' : '#a1a1aa'
+                            }}
+                          >
+                            {p.badge}
+                          </span>
+                        </div>
+                        <p className="text-[10px] text-zinc-400 line-clamp-1">{p.desc}</p>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
               {/* 1. Mode Tampilan */}
               <div className="bg-zinc-900 border border-zinc-800 rounded-3xl p-5 sm:p-6 space-y-4">
                 <div className="flex items-center justify-between">
@@ -2620,9 +2696,9 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                       <div className="flex items-center justify-between z-10">
                         <div className="flex items-center gap-2">
                           <div className="w-10 h-10 rounded-xl bg-zinc-900/90 border border-zinc-700/80 p-1 flex items-center justify-center shadow-md overflow-hidden">
-                            {settings.profile.logoUrl ? (
+                            {settings.profile.logoUrl && settings.profile.logoUrl.trim() ? (
                               <img
-                                src={settings.profile.logoUrl}
+                                src={settings.profile.logoUrl.trim()}
                                 alt="Logo Gym"
                                 className="w-full h-full object-contain"
                               />
@@ -2680,9 +2756,9 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                     <div className="w-full bg-zinc-950/95 border border-zinc-800 rounded-xl p-3 flex items-center justify-between shadow-lg">
                       <div className="flex items-center gap-2.5">
                         <div className="w-8 h-8 rounded-lg bg-zinc-900 border border-zinc-700 p-0.5 flex items-center justify-center overflow-hidden">
-                          {settings.profile.logoUrl ? (
+                          {settings.profile.logoUrl && settings.profile.logoUrl.trim() ? (
                             <img
-                              src={settings.profile.logoUrl}
+                              src={settings.profile.logoUrl.trim()}
                               alt="Logo"
                               className="w-full h-full object-contain"
                             />
@@ -2721,10 +2797,10 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                 {logoPreviewTab === 'receipt' && (
                   <div className="flex flex-col items-center justify-center p-3 bg-zinc-900/60 rounded-xl border border-zinc-800/80">
                     <div className="w-[230px] bg-white text-zinc-950 rounded-lg p-3 shadow-md font-mono text-[10px] leading-tight space-y-1.5 text-center">
-                      {settings.profile.logoUrl ? (
+                      {settings.profile.logoUrl && settings.profile.logoUrl.trim() ? (
                         <div className="w-8 h-8 mx-auto overflow-hidden rounded">
                           <img
-                            src={settings.profile.logoUrl}
+                            src={settings.profile.logoUrl.trim()}
                             alt="Logo"
                             className="w-full h-full object-contain mx-auto filter grayscale contrast-125"
                           />

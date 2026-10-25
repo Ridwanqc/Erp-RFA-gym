@@ -16,11 +16,28 @@ import {
   RotateCcw,
   Sparkles,
   AlertCircle,
+  AlertTriangle,
+  CalendarX,
   Crown,
   Printer
 } from 'lucide-react';
-import { Schedule, StudioClass, Member, User as UserType, PackageItem, Transaction } from '../types';
+import {
+  Schedule,
+  StudioClass,
+  Member,
+  User as UserType,
+  PackageItem,
+  Transaction,
+  WorkSchedule,
+  StaffAttendance,
+  LeaveRequest
+} from '../types';
 import { APP_TODAY, formatDateIndo } from '../utils/formatters';
+import {
+  getTrainerDutyStatusOnDate,
+  TrainerWorkingRule,
+  isTimeMatchingStudioClass
+} from '../data/ptBookingData';
 import { ClassPaymentModal } from './ClassPaymentModal';
 import { PTCalendarView } from './PTCalendarView';
 import { PTSchedulePrintModal } from './PTSchedulePrintModal';
@@ -34,6 +51,10 @@ interface JadwalPTViewProps {
   currentUser: UserType | null;
   packages?: PackageItem[];
   staffUsers?: UserType[];
+  trainerWorkingRules?: TrainerWorkingRule[];
+  workSchedules?: WorkSchedule[];
+  staffAttendances?: StaffAttendance[];
+  leaveRequests?: LeaveRequest[];
   onPurchasePackage?: (trx: Transaction, updatedMembers: Member[]) => void;
   onAddSchedule: (schedule: Schedule) => void;
   onUpdateSchedule: (schedule: Schedule) => void;
@@ -52,6 +73,10 @@ export const JadwalPTView: React.FC<JadwalPTViewProps> = ({
   currentUser,
   packages = [],
   staffUsers = [],
+  trainerWorkingRules = [],
+  workSchedules = [],
+  staffAttendances = [],
+  leaveRequests = [],
   onPurchasePackage,
   onAddSchedule,
   onUpdateSchedule,
@@ -304,6 +329,41 @@ export const JadwalPTView: React.FC<JadwalPTViewProps> = ({
     return true;
   });
 
+  // Duty status of trainer selected in Add Schedule Modal
+  const selectedTrainerUser = useMemo(() => {
+    return trainers.find((t) => t.name === schTrainer || t.id === schTrainer);
+  }, [trainers, schTrainer]);
+
+  const selectedTrainerDuty = useMemo(() => {
+    if (!schTrainer || !schDate) return null;
+    return getTrainerDutyStatusOnDate({
+      trainerId: selectedTrainerUser?.id || schTrainer,
+      trainerName: selectedTrainerUser?.name || schTrainer,
+      date: schDate,
+      workSchedules,
+      staffAttendances,
+      leaveRequests,
+      trainerUser: selectedTrainerUser,
+      rules: trainerWorkingRules
+    });
+  }, [schTrainer, schDate, selectedTrainerUser, workSchedules, staffAttendances, leaveRequests, trainerWorkingRules]);
+
+  // Duty status of trainer in Reschedule Modal
+  const rescheduleTrainerDuty = useMemo(() => {
+    if (!rescheduleTarget || !newDate) return null;
+    const targetTrainerUser = trainers.find((t) => t.name === rescheduleTarget.trainer || t.id === rescheduleTarget.trainerId);
+    return getTrainerDutyStatusOnDate({
+      trainerId: rescheduleTarget.trainerId || targetTrainerUser?.id || rescheduleTarget.trainer,
+      trainerName: rescheduleTarget.trainer,
+      date: newDate,
+      workSchedules,
+      staffAttendances,
+      leaveRequests,
+      trainerUser: targetTrainerUser,
+      rules: trainerWorkingRules
+    });
+  }, [rescheduleTarget, newDate, trainers, workSchedules, staffAttendances, leaveRequests, trainerWorkingRules]);
+
   const handleCreateSchedule = (e: React.FormEvent) => {
     e.preventDefault();
     const member = members.find((m) => m.id === schMemberId);
@@ -312,11 +372,69 @@ export const JadwalPTView: React.FC<JadwalPTViewProps> = ({
       return;
     }
 
+    if (selectedTrainerDuty && !selectedTrainerDuty.isAvailableForDate) {
+      showToast(
+        'Pelatih Tidak Tersedia',
+        `Pelatih ${schTrainer} sedang ${selectedTrainerDuty.statusLabel} pada ${formatDateIndo(schDate)}. ${selectedTrainerDuty.reason || 'Tidak dapat mengambil jadwal melatih.'}`,
+        'error'
+      );
+      return;
+    }
+
+    // Cek apakah jam sesi berada di luar jam kerja mengajar pelatih
+    if (selectedTrainerDuty?.dutyStartTime && selectedTrainerDuty?.dutyEndTime) {
+      if (schTime < selectedTrainerDuty.dutyStartTime || schTime >= selectedTrainerDuty.dutyEndTime) {
+        showToast(
+          'Di Luar Jam Kerja',
+          `Jam ${schTime} berada di luar jam kerja mengajar Coach ${schTrainer} (${selectedTrainerDuty.dutyStartTime} - ${selectedTrainerDuty.dutyEndTime}).`,
+          'error'
+        );
+        return;
+      }
+    }
+
+    // Check double booking conflict for this trainer on that date & time
+    const clashingSchedule = schedules.find(
+      (s) =>
+        s.trainer === schTrainer &&
+        s.date === schDate &&
+        s.time === schTime &&
+        s.status !== 'Batal' &&
+        s.status !== 'Hangus'
+    );
+    if (clashingSchedule) {
+      showToast(
+        'Jadwal Bentrok',
+        `Pelatih ${schTrainer} sudah memiliki sesi pada ${formatDateIndo(schDate)} pukul ${schTime} bersama member ${clashingSchedule.memberName}. Silakan pilih jam lain.`,
+        'error'
+      );
+      return;
+    }
+
+    // Check conflict with Studio Class taught by this trainer
+    const clashingStudio = studioClasses.find((sc) => {
+      if (sc.date !== schDate) return false;
+      const isInstructor =
+        (sc.trainerId && sc.trainerId === selectedTrainerUser?.id) ||
+        ((sc.trainerName || sc.trainer || '').toLowerCase().trim() === schTrainer.toLowerCase().trim());
+      if (!isInstructor) return false;
+      return isTimeMatchingStudioClass(sc.time, schTime);
+    });
+    if (clashingStudio) {
+      showToast(
+        'Jadwal Bentrok Kelas Studio',
+        `Pelatih ${schTrainer} sudah terjadwal mengajar kelas studio "${clashingStudio.name}" pada ${formatDateIndo(schDate)} pukul ${clashingStudio.time}. Silakan pilih jam lain.`,
+        'error'
+      );
+      return;
+    }
+
     const newSch: Schedule = {
       id: 'SCH-' + Date.now(),
       memberName: member.name,
       memberId: member.id,
       trainer: schTrainer,
+      trainerId: selectedTrainerUser?.id,
       date: schDate,
       time: schTime,
       status: 'Menunggu',
@@ -337,6 +455,64 @@ export const JadwalPTView: React.FC<JadwalPTViewProps> = ({
     e.preventDefault();
     if (!rescheduleTarget || !newDate || !newTime) return;
 
+    if (rescheduleTrainerDuty && !rescheduleTrainerDuty.isAvailableForDate) {
+      showToast(
+        'Pelatih Tidak Tersedia',
+        `Coach ${rescheduleTarget.trainer} sedang ${rescheduleTrainerDuty.statusLabel} pada ${formatDateIndo(newDate)}. ${rescheduleTrainerDuty.reason || 'Pilih tanggal lain.'}`,
+        'error'
+      );
+      return;
+    }
+
+    // Cek jam kerja shift pelatih
+    if (rescheduleTrainerDuty?.dutyStartTime && rescheduleTrainerDuty?.dutyEndTime) {
+      if (newTime < rescheduleTrainerDuty.dutyStartTime || newTime >= rescheduleTrainerDuty.dutyEndTime) {
+        showToast(
+          'Di Luar Jam Kerja',
+          `Jam ${newTime} berada di luar jam kerja mengajar Coach ${rescheduleTarget.trainer} (${rescheduleTrainerDuty.dutyStartTime} - ${rescheduleTrainerDuty.dutyEndTime}).`,
+          'error'
+        );
+        return;
+      }
+    }
+
+    // Check conflict with other PT schedule
+    const clashing = schedules.find(
+      (s) =>
+        s.id !== rescheduleTarget.id &&
+        s.trainer === rescheduleTarget.trainer &&
+        s.date === newDate &&
+        s.time === newTime &&
+        s.status !== 'Batal' &&
+        s.status !== 'Hangus'
+    );
+    if (clashing) {
+      showToast(
+        'Jadwal Bentrok',
+        `Coach ${rescheduleTarget.trainer} sudah memiliki jadwal sesi lain pada tanggal & jam tersebut bersama member ${clashing.memberName}.`,
+        'error'
+      );
+      return;
+    }
+
+    // Check conflict with Studio Class
+    const clashingStudio = studioClasses.find((sc) => {
+      if (sc.date !== newDate) return false;
+      const isInstructor =
+        (sc.trainerId && sc.trainerId === rescheduleTarget.trainerId) ||
+        ((sc.trainerName || sc.trainer || '').toLowerCase().trim() === rescheduleTarget.trainer.toLowerCase().trim());
+      if (!isInstructor) return false;
+      return isTimeMatchingStudioClass(sc.time, newTime);
+    });
+    if (clashingStudio) {
+      showToast(
+        'Jadwal Bentrok Kelas Studio',
+        `Coach ${rescheduleTarget.trainer} sudah terjadwal mengajar kelas studio "${clashingStudio.name}" pada tanggal & jam tersebut (${clashingStudio.time}).`,
+        'error'
+      );
+      return;
+    }
+
     const updated: Schedule = {
       ...rescheduleTarget,
       date: newDate,
@@ -345,7 +521,7 @@ export const JadwalPTView: React.FC<JadwalPTViewProps> = ({
     };
 
     onUpdateSchedule(updated);
-    showToast('Reschedule Berhasil', `Jadwal diubah ke ${newDate} jam ${newTime} WIB.`, 'info');
+    showToast('Reschedule Berhasil', `Jadwal diubah ke ${formatDateIndo(newDate)} jam ${newTime} WIB.`, 'info');
     setRescheduleTarget(null);
   };
 
@@ -1273,6 +1449,44 @@ export const JadwalPTView: React.FC<JadwalPTViewProps> = ({
                 </div>
               </div>
 
+              {/* Status Tugas Pelatih & Kelayakan Jam Kerja */}
+              {selectedTrainerDuty && (
+                <div className={`p-3 rounded-xl border text-xs space-y-1 transition ${
+                  selectedTrainerDuty.isAvailableForDate
+                    ? 'bg-emerald-950/30 border-emerald-500/40 text-emerald-300'
+                    : 'bg-rose-950/40 border-rose-500/50 text-rose-300'
+                }`}>
+                  <div className="flex items-center justify-between font-bold">
+                    <span className="flex items-center gap-1.5">
+                      {selectedTrainerDuty.isAvailableForDate ? (
+                        <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                      ) : (
+                        <AlertTriangle className="w-4 h-4 text-rose-400 shrink-0" />
+                      )}
+                      <span>Status Coach {schTrainer}:</span>
+                    </span>
+                    <span className={`px-2 py-0.5 rounded text-[10px] font-bold border ${
+                      selectedTrainerDuty.isAvailableForDate
+                        ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/40'
+                        : 'bg-rose-500/20 text-rose-400 border-rose-500/40'
+                    }`}>
+                      {selectedTrainerDuty.statusLabel}
+                    </span>
+                  </div>
+                  {selectedTrainerDuty.reason && (
+                    <p className="text-[11px] text-zinc-300 leading-relaxed">{selectedTrainerDuty.reason}</p>
+                  )}
+                  {selectedTrainerDuty.isAvailableForDate && selectedTrainerDuty.dutyStartTime && selectedTrainerDuty.dutyEndTime && (
+                    <div className="flex items-center justify-between text-[11px] text-emerald-400/90 pt-0.5">
+                      <span>Jam Kerja: {selectedTrainerDuty.dutyStartTime} - {selectedTrainerDuty.dutyEndTime} WIB</span>
+                      {selectedTrainerDuty.breakStartTime && (
+                        <span className="text-zinc-400">Istirahat: {selectedTrainerDuty.breakStartTime} - {selectedTrainerDuty.breakEndTime}</span>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
+
               <div className="flex gap-2 pt-2">
                 <button
                   type="button"
@@ -1288,11 +1502,11 @@ export const JadwalPTView: React.FC<JadwalPTViewProps> = ({
                 </button>
                 <button
                   type="submit"
-                  disabled={!schMemberId}
+                  disabled={!schMemberId || !schTrainer || Boolean(selectedTrainerDuty && !selectedTrainerDuty.isAvailableForDate)}
                   className={`flex-1 py-2.5 rounded-xl text-xs font-bold shadow-md transition flex items-center justify-center gap-1.5 ${
-                    schMemberId
+                    schMemberId && schTrainer && (!selectedTrainerDuty || selectedTrainerDuty.isAvailableForDate)
                       ? 'bg-orange-500 hover:bg-orange-600 text-white cursor-pointer active:scale-95'
-                      : 'bg-zinc-800 text-zinc-500 cursor-not-allowed'
+                      : 'bg-zinc-800 text-zinc-500 cursor-not-allowed border border-zinc-700/50'
                   }`}
                 >
                   Simpan Jadwal
@@ -1540,6 +1754,41 @@ export const JadwalPTView: React.FC<JadwalPTViewProps> = ({
                 </div>
               </div>
 
+              {/* Status Pelatih pada Tanggal Reschedule Baru */}
+              {rescheduleTrainerDuty && (
+                <div className={`p-3 rounded-xl border text-xs space-y-1 transition ${
+                  rescheduleTrainerDuty.isAvailableForDate
+                    ? 'bg-emerald-950/30 border-emerald-500/40 text-emerald-300'
+                    : 'bg-rose-950/40 border-rose-500/50 text-rose-300'
+                }`}>
+                  <div className="flex items-center justify-between font-bold">
+                    <span className="flex items-center gap-1.5">
+                      {rescheduleTrainerDuty.isAvailableForDate ? (
+                        <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                      ) : (
+                        <AlertTriangle className="w-4 h-4 text-rose-400 shrink-0" />
+                      )}
+                      <span>Status Coach {rescheduleTarget.trainer}:</span>
+                    </span>
+                    <span className={`px-2 py-0.5 rounded text-[10px] font-bold border ${
+                      rescheduleTrainerDuty.isAvailableForDate
+                        ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/40'
+                        : 'bg-rose-500/20 text-rose-400 border-rose-500/40'
+                    }`}>
+                      {rescheduleTrainerDuty.statusLabel}
+                    </span>
+                  </div>
+                  {rescheduleTrainerDuty.reason && (
+                    <p className="text-[11px] text-zinc-300 leading-relaxed">{rescheduleTrainerDuty.reason}</p>
+                  )}
+                  {rescheduleTrainerDuty.isAvailableForDate && rescheduleTrainerDuty.dutyStartTime && rescheduleTrainerDuty.dutyEndTime && (
+                    <p className="text-[11px] text-emerald-400/90 pt-0.5">
+                      Jam Kerja: {rescheduleTrainerDuty.dutyStartTime} - {rescheduleTrainerDuty.dutyEndTime} WIB
+                    </p>
+                  )}
+                </div>
+              )}
+
               <div className="flex gap-2 pt-2">
                 <button
                   type="button"
@@ -1550,7 +1799,12 @@ export const JadwalPTView: React.FC<JadwalPTViewProps> = ({
                 </button>
                 <button
                   type="submit"
-                  className="flex-1 py-2.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-bold shadow-md transition"
+                  disabled={Boolean(rescheduleTrainerDuty && !rescheduleTrainerDuty.isAvailableForDate)}
+                  className={`flex-1 py-2.5 rounded-xl text-xs font-bold shadow-md transition ${
+                    !rescheduleTrainerDuty || rescheduleTrainerDuty.isAvailableForDate
+                      ? 'bg-blue-600 hover:bg-blue-500 text-white cursor-pointer active:scale-95'
+                      : 'bg-zinc-800 text-zinc-500 cursor-not-allowed border border-zinc-700/50'
+                  }`}
                 >
                   Simpan Jadwal Baru
                 </button>
