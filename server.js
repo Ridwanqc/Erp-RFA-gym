@@ -2040,6 +2040,9 @@ if (process.env.DATABASE_URL) {
     console.warn("[PostgreSQL] Pool initialization error:", err?.message);
   }
 }
+app.all(["/__aistudio_internal_control_plane/dev/status", "/__aistudio_internal_control_plane/*"], (_req, res) => {
+  return res.status(200).json({ status: "ok", ready: true });
+});
 app.get(["/health", "/healthz", "/_healthz", "/api/health"], async (_req, res) => {
   let dbStatus = "not_configured";
   if (pgPool) {

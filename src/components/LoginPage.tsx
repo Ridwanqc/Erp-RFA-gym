@@ -283,11 +283,6 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin, staffUsers, onBac
             </button>
           )}
 
-          <div className="hidden md:flex items-center gap-1.5 text-xs text-amber-300 bg-amber-500/10 px-2.5 py-1.5 rounded-xl border border-amber-500/25">
-            <Flame className="w-3.5 h-3.5 text-amber-400 shrink-0" />
-            <span className="font-semibold text-[11px]">Firebase Cloud</span>
-          </div>
-
           <div className="hidden lg:flex items-center gap-1.5 text-xs text-zinc-400 bg-zinc-900/80 px-3 py-1.5 rounded-xl border border-zinc-800">
             <Calendar className="w-3.5 h-3.5 text-orange-500 shrink-0" />
             <span>{formatDateIndo(APP_TODAY)}</span>
