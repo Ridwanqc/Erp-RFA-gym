@@ -614,6 +614,30 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin, staffUsers, onBac
                     >
                       🎨 Konten Kreator
                     </button>
+                    <button
+                      type="button"
+                      disabled={lockoutTimer > 0 || isLoading}
+                      onClick={() => {
+                        setUsername('keamanan');
+                        setPassword('123');
+                        if (errorMsg) setErrorMsg(null);
+                      }}
+                      className="text-[11px] font-mono px-2 py-1.5 rounded-xl bg-zinc-950 border border-indigo-500/30 text-indigo-300 hover:bg-indigo-500/10 transition text-center disabled:opacity-40 font-bold"
+                    >
+                      🛡️ Keamanan
+                    </button>
+                    <button
+                      type="button"
+                      disabled={lockoutTimer > 0 || isLoading}
+                      onClick={() => {
+                        setUsername('kebersihan');
+                        setPassword('123');
+                        if (errorMsg) setErrorMsg(null);
+                      }}
+                      className="text-[11px] font-mono px-2 py-1.5 rounded-xl bg-zinc-950 border border-teal-500/30 text-teal-300 hover:bg-teal-500/10 transition text-center disabled:opacity-40 font-bold"
+                    >
+                      🧹 Kebersihan
+                    </button>
                   </div>
                 </div>
 

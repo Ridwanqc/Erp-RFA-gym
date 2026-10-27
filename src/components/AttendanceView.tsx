@@ -84,7 +84,8 @@ export const AttendanceView: React.FC<AttendanceViewProps> = ({
   onTabChange
 }) => {
   const { settings, activeBranch, isAllBranches, branches } = useSettings();
-  const defaultTab = initialTab || (currentUser?.role === 'konten_kreator' ? 'staff' : 'member');
+  const isStaffOnlyRole = currentUser?.role && ['konten_kreator', 'keamanan', 'kebersihan', 'teknisi', 'staff_umum'].includes(currentUser.role);
+  const defaultTab = initialTab || (isStaffOnlyRole ? 'staff' : 'member');
   const [activeTab, setActiveTab] = useState<'member' | 'out' | 'staff' | 'analytics'>(defaultTab);
   const [activeMemberSubTab, setActiveMemberSubTab] = useState<'attendance-list' | 'locker-board'>('attendance-list');
   const [isScannerOpen, setIsScannerOpen] = useState(false);
@@ -94,9 +95,9 @@ export const AttendanceView: React.FC<AttendanceViewProps> = ({
     if (initialTab) {
       setActiveTab(initialTab);
     } else {
-      setActiveTab(currentUser?.role === 'konten_kreator' ? 'staff' : 'member');
+      setActiveTab(isStaffOnlyRole ? 'staff' : 'member');
     }
-  }, [initialTab, currentUser?.role]);
+  }, [initialTab, currentUser?.role, isStaffOnlyRole]);
 
   const handleSelectTab = (tab: 'member' | 'out' | 'staff' | 'analytics') => {
     setActiveTab(tab);
@@ -134,13 +135,13 @@ export const AttendanceView: React.FC<AttendanceViewProps> = ({
   const [hasTowel, setHasTowel] = useState(true);
 
   // Staff form state
-  const [selectedStaffId, setSelectedStaffId] = useState(() => (currentUser?.role === 'konten_kreator' ? currentUser.id : ''));
+  const [selectedStaffId, setSelectedStaffId] = useState(() => (isStaffOnlyRole && currentUser?.id ? currentUser.id : ''));
 
   useEffect(() => {
-    if (currentUser?.role === 'konten_kreator' && currentUser.id) {
+    if (isStaffOnlyRole && currentUser?.id) {
       setSelectedStaffId(currentUser.id);
     }
-  }, [currentUser]);
+  }, [currentUser, isStaffOnlyRole]);
 
   // Modals state
   const [isCheckInModalOpen, setIsCheckInModalOpen] = useState(false);
@@ -1249,17 +1250,55 @@ export const AttendanceView: React.FC<AttendanceViewProps> = ({
             {/* Live Real-Time Precision Clock */}
             <RealTimeClock variant="card" className="mb-4" />
 
-            {currentUser?.role === 'konten_kreator' && (
-              <div className="mb-4 p-3 rounded-2xl bg-fuchsia-500/10 border border-fuchsia-500/30 flex items-center gap-3">
-                <span className="p-2 rounded-xl bg-fuchsia-500/20 text-fuchsia-300 font-bold text-xs shrink-0">
-                  🎨
+            {isStaffOnlyRole && currentUser && (
+              <div className={`mb-4 p-3 rounded-2xl border flex items-center gap-3 ${
+                currentUser.role === 'keamanan'
+                  ? 'bg-indigo-500/10 border-indigo-500/30'
+                  : currentUser.role === 'kebersihan'
+                  ? 'bg-teal-500/10 border-teal-500/30'
+                  : currentUser.role === 'teknisi'
+                  ? 'bg-cyan-500/10 border-cyan-500/30'
+                  : currentUser.role === 'staff_umum'
+                  ? 'bg-violet-500/10 border-violet-500/30'
+                  : 'bg-fuchsia-500/10 border-fuchsia-500/30'
+              }`}>
+                <span className={`p-2 rounded-xl font-bold text-xs shrink-0 ${
+                  currentUser.role === 'keamanan'
+                    ? 'bg-indigo-500/20 text-indigo-300'
+                    : currentUser.role === 'kebersihan'
+                    ? 'bg-teal-500/20 text-teal-300'
+                    : currentUser.role === 'teknisi'
+                    ? 'bg-cyan-500/20 text-cyan-300'
+                    : currentUser.role === 'staff_umum'
+                    ? 'bg-violet-500/20 text-violet-300'
+                    : 'bg-fuchsia-500/20 text-fuchsia-300'
+                }`}>
+                  {currentUser.role === 'keamanan'
+                    ? '🛡️'
+                    : currentUser.role === 'kebersihan'
+                    ? '🧹'
+                    : currentUser.role === 'teknisi'
+                    ? '🔧'
+                    : currentUser.role === 'staff_umum'
+                    ? '💼'
+                    : '🎨'}
                 </span>
                 <div className="min-w-0 flex-1">
                   <p className="text-xs font-bold text-white truncate">
                     Halo, {currentUser.name}
                   </p>
-                  <p className="text-[11px] text-fuchsia-300/90 truncate">
-                    Akun Staf Konten Kreator & CMS — Presensi Shift Anda
+                  <p className={`text-[11px] truncate font-medium ${
+                    currentUser.role === 'keamanan'
+                      ? 'text-indigo-300/90'
+                      : currentUser.role === 'kebersihan'
+                      ? 'text-teal-300/90'
+                      : currentUser.role === 'teknisi'
+                      ? 'text-cyan-300/90'
+                      : currentUser.role === 'staff_umum'
+                      ? 'text-violet-300/90'
+                      : 'text-fuchsia-300/90'
+                  }`}>
+                    {currentUser.roleName || (currentUser.role === 'keamanan' ? 'Petugas Keamanan' : currentUser.role === 'kebersihan' ? 'Petugas Kebersihan' : 'Staf Internal')} — Presensi Shift Anda
                   </p>
                 </div>
               </div>

@@ -56,15 +56,87 @@ app.use(xssSanitizeMiddleware);
 // 7. General API Rate Limiting
 app.use('/api', generalApiRateLimiter);
 
-// 7. Cloud Run & Kubernetes Health Check Probes
-app.get(['/health', '/healthz', '/_healthz', '/api/health'], (_req: Request, res: Response) => {
+import pg from 'pg';
+
+// Initialize PostgreSQL Connection Pool if DATABASE_URL is provided (Dokploy / Production)
+export let pgPool: pg.Pool | null = null;
+if (process.env.DATABASE_URL) {
+  try {
+    const isSsl = process.env.DATABASE_URL.includes('sslmode=require') || process.env.DB_SSL === 'true';
+    pgPool = new pg.Pool({
+      connectionString: process.env.DATABASE_URL,
+      connectionTimeoutMillis: 5000,
+      ssl: isSsl ? { rejectUnauthorized: false } : undefined
+    });
+
+    pgPool.query('SELECT 1').then(() => {
+      console.log('[PostgreSQL] Connected successfully to database');
+    }).catch((err) => {
+      console.warn('[PostgreSQL] Database initial ping failed (will retry on requests):', err.message);
+    });
+  } catch (err: any) {
+    console.warn('[PostgreSQL] Pool initialization error:', err?.message);
+  }
+}
+
+// 7. Cloud Run, Dokploy & Kubernetes Health Check Probes
+app.get(['/health', '/healthz', '/_healthz', '/api/health'], async (_req: Request, res: Response) => {
+  let dbStatus = 'not_configured';
+  if (pgPool) {
+    try {
+      await pgPool.query('SELECT 1');
+      dbStatus = 'connected';
+    } catch (e: any) {
+      dbStatus = `disconnected (${e.message})`;
+    }
+  } else {
+    dbStatus = 'in_memory_fallback';
+  }
+
   res.status(200).json({
     status: 'ok',
-    service: 'GymPro ERP Enterprise Security Shield',
+    service: 'RFA GYM ERP Enterprise',
     environment: process.env.NODE_ENV || 'development',
-    uptime: process.uptime(),
+    database: {
+      status: dbStatus,
+      configured: Boolean(process.env.DATABASE_URL)
+    },
+    uptime: Math.floor(process.uptime()),
     timestamp: new Date().toISOString()
   });
+});
+
+// Dedicated DB probe for Dokploy / DevOps verification
+app.get('/api/health/db', async (_req: Request, res: Response) => {
+  if (!pgPool) {
+    return res.status(200).json({
+      success: true,
+      mode: 'in_memory_fallback',
+      message: 'DATABASE_URL belum dikonfigurasi. Server berjalan dengan in-memory store.'
+    });
+  }
+
+  try {
+    const start = Date.now();
+    const result = await pgPool.query('SELECT current_database(), current_user, version()');
+    const latencyMs = Date.now() - start;
+
+    return res.status(200).json({
+      success: true,
+      connected: true,
+      latencyMs,
+      database: result.rows[0]?.current_database,
+      user: result.rows[0]?.current_user,
+      postgresVersion: result.rows[0]?.version?.split(' ')?.[0] + ' ' + result.rows[0]?.version?.split(' ')?.[1]
+    });
+  } catch (error: any) {
+    return res.status(500).json({
+      success: false,
+      connected: false,
+      error: error.message,
+      hint: 'Periksa DATABASE_URL di Environment Variables Dokploy. Pastikan host dan password benar.'
+    });
+  }
 });
 
 // 8. Mount Secure REST API Routes

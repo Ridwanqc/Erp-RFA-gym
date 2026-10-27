@@ -1954,6 +1954,8 @@ export default function App() {
         setActiveTab('trainer-portal');
       } else if (found.role === 'kasir') {
         setActiveTab('front-desk-portal');
+      } else if (['keamanan', 'kebersihan', 'teknisi', 'staff_umum'].includes(found.role)) {
+        setActiveTab('absen');
       }
       showToast('Ganti Pengguna', `Beralih ke akun ${found.name} (${found.roleName}).`, 'info');
     }
@@ -1984,6 +1986,8 @@ export default function App() {
       setActiveTab('front-desk-portal');
     } else if (user.role === 'keuangan') {
       setActiveTab('dashboard-keuangan');
+    } else if (['keamanan', 'kebersihan', 'teknisi', 'staff_umum'].includes(user.role)) {
+      setActiveTab('absen');
     } else {
       setActiveTab('dashboard');
     }
@@ -4327,7 +4331,7 @@ export default function App() {
           {(activeTab === 'absen' || activeTab === 'quick-out') && (
             <AttendanceView
               currentUser={currentUser}
-              initialTab={activeTab === 'quick-out' ? 'out' : currentUser?.role === 'konten_kreator' ? 'staff' : 'member'}
+              initialTab={activeTab === 'quick-out' ? 'out' : (currentUser?.role && ['konten_kreator', 'keamanan', 'kebersihan', 'teknisi', 'staff_umum'].includes(currentUser.role)) ? 'staff' : 'member'}
               onTabChange={(attTab) => {
                 if (attTab === 'out') {
                   setActiveTab('quick-out');
