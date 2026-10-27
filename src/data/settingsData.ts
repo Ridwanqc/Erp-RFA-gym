@@ -185,7 +185,8 @@ export const SYSTEM_MODULES: { id: string; name: string; category: string; desc:
   { id: 'hr-payroll', name: 'HR, Jadwal & Penggajian', category: 'SDM', desc: 'Manajemen karyawan, jadwal shift kerja, slip gaji, dan potongan BPJS' },
   { id: 'google-sheets', name: 'Google Sheets & Drive Sync', category: 'Integrasi', desc: 'Sinkronisasi cloud data member & transaksi ke spreadsheet Google Drive' },
 
-  // 8. Konfigurasi Sistem
+  // 8. Konfigurasi Sistem & CMS
+  { id: 'settings-landing', name: 'CMS & Landing Page', category: 'CMS / Media', desc: 'Pengelolaan visual hero, banner promo, galeri foto fasilitas, pengumuman, dan media digital' },
   { id: 'settings', name: 'Pengaturan Sistem & Printer', category: 'Konfigurasi', desc: 'Konfigurasi printer thermal, matriks hak akses role, outlet cabang, dan profil HQ' }
 ];
 
@@ -393,6 +394,86 @@ export const DEFAULT_ROLE_DEFINITIONS: Record<UserRole, RoleDefinition> = {
         delete: m.id === 'pengeluaran' || m.id === 'piutang',
         voidRefund: true,
         export: canAccess
+      };
+      return acc;
+    }, {} as Record<string, { view: boolean; create: boolean; edit: boolean; delete: boolean; voidRefund?: boolean; export?: boolean }>)
+  },
+  konten_kreator: {
+    role: 'konten_kreator',
+    roleName: 'Konten Kreator & Digital CMS',
+    description: 'Pengelolaan visual hero, banner promo, galeri foto fasilitas, pengumuman landing page, serta pencatatan absensi shift staf harian.',
+    badgeColor: 'bg-fuchsia-500/20 text-fuchsia-300 border-fuchsia-500/30',
+    isSystemRole: true,
+    permissions: SYSTEM_MODULES.reduce((acc, m) => {
+      const allowed = ['absen', 'settings-landing', 'settings'];
+      const canAccess = allowed.includes(m.id);
+      acc[m.id] = {
+        view: canAccess,
+        create: canAccess,
+        edit: canAccess,
+        delete: false,
+        voidRefund: false,
+        export: canAccess
+      };
+      return acc;
+    }, {} as Record<string, { view: boolean; create: boolean; edit: boolean; delete: boolean; voidRefund?: boolean; export?: boolean }>)
+  },
+  keamanan: {
+    role: 'keamanan',
+    roleName: 'Petugas Keamanan (Security)',
+    description: 'Petugas keamanan dan ketertiban area gym, pengawasan fasilitas, dan pencatatan absensi shift kerja.',
+    badgeColor: 'bg-indigo-500/20 text-indigo-300 border-indigo-500/30',
+    isSystemRole: true,
+    permissions: SYSTEM_MODULES.reduce((acc, m) => {
+      const allowed = ['absen'];
+      const canAccess = allowed.includes(m.id);
+      acc[m.id] = {
+        view: canAccess,
+        create: canAccess,
+        edit: false,
+        delete: false,
+        voidRefund: false,
+        export: false
+      };
+      return acc;
+    }, {} as Record<string, { view: boolean; create: boolean; edit: boolean; delete: boolean; voidRefund?: boolean; export?: boolean }>)
+  },
+  kebersihan: {
+    role: 'kebersihan',
+    roleName: 'Petugas Kebersihan (Cleaning Service / OB)',
+    description: 'Petugas kebersihan, sanitasi fasilitas gym, loker, dan pencatatan absensi shift kerja harian.',
+    badgeColor: 'bg-teal-500/20 text-teal-300 border-teal-500/30',
+    isSystemRole: true,
+    permissions: SYSTEM_MODULES.reduce((acc, m) => {
+      const allowed = ['absen'];
+      const canAccess = allowed.includes(m.id);
+      acc[m.id] = {
+        view: canAccess,
+        create: canAccess,
+        edit: false,
+        delete: false,
+        voidRefund: false,
+        export: false
+      };
+      return acc;
+    }, {} as Record<string, { view: boolean; create: boolean; edit: boolean; delete: boolean; voidRefund?: boolean; export?: boolean }>)
+  },
+  staff_umum: {
+    role: 'staff_umum',
+    roleName: 'Staf Operasional / Jabatan Lainnya',
+    description: 'Staf pendukung operasional gym (Driver, Barista Gym Cafe, Logistik/Gudang, Helper) dengan akses presensi shift kerja.',
+    badgeColor: 'bg-violet-500/20 text-violet-300 border-violet-500/30',
+    isSystemRole: true,
+    permissions: SYSTEM_MODULES.reduce((acc, m) => {
+      const allowed = ['absen'];
+      const canAccess = allowed.includes(m.id);
+      acc[m.id] = {
+        view: canAccess,
+        create: canAccess,
+        edit: false,
+        delete: false,
+        voidRefund: false,
+        export: false
       };
       return acc;
     }, {} as Record<string, { view: boolean; create: boolean; edit: boolean; delete: boolean; voidRefund?: boolean; export?: boolean }>)

@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import crypto from 'crypto';
 import { authMiddleware } from '../middleware/auth';
+import { sensitiveActionRateLimiter } from '../middleware/rateLimiter';
 import { AuditService } from '../services/auditService';
 
 export const uploadRouter = Router();
@@ -8,7 +9,7 @@ export const uploadRouter = Router();
 const ALLOWED_MIME_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
 const MAX_FILE_SIZE_BYTES = 5 * 1024 * 1024; // 5MB
 
-uploadRouter.post('/', authMiddleware, (req: Request, res: Response) => {
+uploadRouter.post('/', authMiddleware, sensitiveActionRateLimiter, (req: Request, res: Response) => {
   try {
     const { base64Data, originalFilename, mimeType } = req.body;
 
@@ -74,6 +75,9 @@ uploadRouter.post('/', authMiddleware, (req: Request, res: Response) => {
     // 4. Safe Randomized Filename Generation (Anti-Path-Traversal)
     const ext = mimeType.split('/')[1] === 'jpeg' ? 'jpg' : mimeType.split('/')[1];
     const safeFileId = 'DOC-' + crypto.randomUUID() + `.${ext}`;
+    const cleanOriginalName = typeof originalFilename === 'string'
+      ? originalFilename.replace(/[^a-zA-Z0-9._-]/g, '_').slice(0, 50)
+      : 'upload';
 
     AuditService.log({
       userId: req.user?.userId,
@@ -81,7 +85,7 @@ uploadRouter.post('/', authMiddleware, (req: Request, res: Response) => {
       module: 'UPLOAD',
       recordId: safeFileId,
       newValue: {
-        originalName: originalFilename ? originalFilename.slice(0, 50) : 'upload',
+        originalName: cleanOriginalName,
         safeFileId,
         sizeBytes: rawBuffer.length,
         mimeType

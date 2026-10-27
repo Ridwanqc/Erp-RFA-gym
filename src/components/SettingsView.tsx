@@ -197,6 +197,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   );
 
   const isSuperAdmin = currentUser?.role === 'admin';
+  const isContentCreator = currentUser?.role === 'konten_kreator';
 
   // Logo Settings Form State & File Upload
   const [logoInputUrl, setLogoInputUrl] = useState(settings.profile.logoUrl || '');
@@ -637,18 +638,24 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
 
         {/* Navigation Sub-Tabs */}
         <div className="flex items-center gap-2 mt-6 pt-5 border-t border-zinc-800/80 overflow-x-auto no-scrollbar">
-          {[
-            { id: 'printer', label: 'Printer & Struk POS', icon: Printer, badge: settings.printer.paperWidth },
-            { id: 'landing', label: 'Landing Page (CMS)', icon: Globe, badge: 'Visual & Foto' },
-            { id: 'theme', label: 'Tema & Tampilan', icon: Palette, badge: `${theme.mode}` },
-            ...(!isSuperAdmin ? [] : [{ id: 'roles', label: 'Manajemen Role & Akses', icon: ShieldCheck, badge: 'RBAC' }]),
-            { id: 'security', label: 'Keamanan & Password PIC', icon: KeyRound, badge: picProtection.requirePasswordToChangePic ? 'Aktif 🔒' : 'Off' },
-            { id: 'branches', label: currentUser?.role === 'admin_cabang' ? 'Profil Unit Cabang' : 'Kelola Cabang & Outlet', icon: Building2, badge: currentUser?.role === 'admin_cabang' ? 'Unit Anda' : `${branches.length} Outlet` },
-            ...(!isSuperAdmin ? [] : [{ id: 'profile', label: 'Profil Usaha HQ', icon: Sliders }]),
-            { id: 'finance', label: 'Pajak & Rekening Kas', icon: CreditCard },
-            { id: 'templates', label: 'Template Pesan WA', icon: MessageSquare },
-            ...(!isSuperAdmin ? [] : [{ id: 'backup', label: 'Backup & Database', icon: Database }])
-          ].map((tab) => {
+          {(isContentCreator
+            ? [
+                { id: 'landing', label: 'Landing Page (CMS)', icon: Globe, badge: 'Visual & Foto' },
+                { id: 'theme', label: 'Tema & Tampilan', icon: Palette, badge: `${theme.mode}` }
+              ]
+            : [
+                { id: 'printer', label: 'Printer & Struk POS', icon: Printer, badge: settings.printer.paperWidth },
+                { id: 'landing', label: 'Landing Page (CMS)', icon: Globe, badge: 'Visual & Foto' },
+                { id: 'theme', label: 'Tema & Tampilan', icon: Palette, badge: `${theme.mode}` },
+                ...(!isSuperAdmin ? [] : [{ id: 'roles', label: 'Manajemen Role & Akses', icon: ShieldCheck, badge: 'RBAC' }]),
+                { id: 'security', label: 'Keamanan & Password PIC', icon: KeyRound, badge: picProtection.requirePasswordToChangePic ? 'Aktif 🔒' : 'Off' },
+                { id: 'branches', label: currentUser?.role === 'admin_cabang' ? 'Profil Unit Cabang' : 'Kelola Cabang & Outlet', icon: Building2, badge: currentUser?.role === 'admin_cabang' ? 'Unit Anda' : `${branches.length} Outlet` },
+                ...(!isSuperAdmin ? [] : [{ id: 'profile', label: 'Profil Usaha HQ', icon: Sliders }]),
+                { id: 'finance', label: 'Pajak & Rekening Kas', icon: CreditCard },
+                { id: 'templates', label: 'Template Pesan WA', icon: MessageSquare },
+                ...(!isSuperAdmin ? [] : [{ id: 'backup', label: 'Backup & Database', icon: Database }])
+              ]
+          ).map((tab) => {
             const Icon = tab.icon;
             const isActive = activeTab === tab.id;
             return (

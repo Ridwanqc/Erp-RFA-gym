@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { db } from '../database/db';
 import { authMiddleware } from '../middleware/auth';
 import { requireRoles } from '../middleware/rbac';
+import { sensitiveActionRateLimiter } from '../middleware/rateLimiter';
 import { validateRequest } from '../middleware/validator';
 import { PriceService } from '../services/priceService';
 import { TransactionService } from '../services/transactionService';
@@ -90,10 +91,11 @@ transactionRouter.post(
   }
 );
 
-// 3. POST /api/transactions/:id/void (Protected by ADMIN or LEADER)
+// 3. POST /api/transactions/:id/void (Protected by ADMIN or LEADER & Rate Limited)
 transactionRouter.post(
   '/:id/void',
   authMiddleware,
+  sensitiveActionRateLimiter,
   requireRoles(['ADMIN', 'LEADER']),
   validateRequest({ body: voidSchema }),
   async (req: Request, res: Response) => {

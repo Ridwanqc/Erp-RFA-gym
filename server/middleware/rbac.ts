@@ -26,8 +26,8 @@ export const requireRoles = (allowedRoles: UserEntity['role'][]) => {
       AuditService.recordSecurityEvent({
         eventType: 'UNAUTHORIZED_ROLE_ACCESS',
         severity: 'HIGH',
-        ipAddress: req.ip || req.socket.remoteAddress,
-        userAgent: req.headers['user-agent'],
+        ipAddress: req.ip || req.socket?.remoteAddress,
+        userAgent: req.headers?.['user-agent'],
         userId: req.user.userId,
         details: `User '${req.user.username}' dengan role '${userRole}' mencoba mengakses endpoint terlarang: ${req.method} ${req.originalUrl}`
       });
@@ -90,8 +90,8 @@ export const requireMemberOwnershipOrStaff = (req: Request, res: Response, next:
       AuditService.recordSecurityEvent({
         eventType: 'IDOR_MEMBER_BREACH_ATTEMPT',
         severity: 'CRITICAL',
-        ipAddress: req.ip,
-        userAgent: req.headers['user-agent'],
+        ipAddress: req.ip || req.socket?.remoteAddress,
+        userAgent: req.headers?.['user-agent'],
         userId: user.userId,
         details: `Member '${user.username}' (ID: ${user.userId}) mencoba mengakses data member lain: ${requestedMemberId}`
       });

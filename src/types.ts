@@ -1,4 +1,16 @@
-export type UserRole = 'admin' | 'admin_cabang' | 'kasir' | 'leader_pt' | 'pt' | 'teknisi' | 'manager' | 'keuangan';
+export type UserRole =
+  | 'admin'
+  | 'admin_cabang'
+  | 'kasir'
+  | 'leader_pt'
+  | 'pt'
+  | 'teknisi'
+  | 'manager'
+  | 'keuangan'
+  | 'konten_kreator'
+  | 'keamanan'
+  | 'kebersihan'
+  | 'staff_umum';
 
 export function isSuperAdmin(roleOrUser?: UserRole | { role?: UserRole } | null): boolean {
   if (!roleOrUser) return false;
@@ -18,12 +30,35 @@ export function canManageBranchOnly(roleOrUser?: UserRole | { role?: UserRole } 
   return role === 'admin_cabang';
 }
 
-export type DivisionType = 'Kasir & Front Desk' | 'Pelatihan' | 'Manajemen' | 'Manajemen Cabang' | 'Keuangan' | 'Teknisi' | string;
+export type DivisionType =
+  | 'Kasir & Front Desk'
+  | 'Pelatihan'
+  | 'Manajemen'
+  | 'Manajemen Cabang'
+  | 'Keuangan'
+  | 'Teknisi'
+  | 'Kreatif & Konten'
+  | 'Keamanan & Operasional'
+  | 'Kebersihan & Fasilitas'
+  | 'Operasional Umum'
+  | string;
 
 export function getStaffDivision(user?: { role?: string; roleName?: string; division?: string } | null): string {
   if (user?.division) return user.division;
   const role = (user?.role || '').toLowerCase();
   const roleName = (user?.roleName || '').toLowerCase();
+  if (role === 'keamanan' || roleName.includes('keamanan') || roleName.includes('security') || roleName.includes('satpam') || roleName.includes('gard')) {
+    return 'Keamanan & Operasional';
+  }
+  if (role === 'kebersihan' || roleName.includes('kebersihan') || roleName.includes('cleaning') || roleName.includes('ob') || roleName.includes('housekeeping') || roleName.includes('janitor')) {
+    return 'Kebersihan & Fasilitas';
+  }
+  if (role === 'teknisi' || roleName.includes('teknisi') || roleName.includes('maintenance')) {
+    return 'Teknisi';
+  }
+  if (role === 'konten_kreator' || roleName.includes('konten') || roleName.includes('kreator') || roleName.includes('creative') || roleName.includes('cms')) {
+    return 'Kreatif & Konten';
+  }
   if (role === 'keuangan' || roleName.includes('keuangan') || roleName.includes('finance') || roleName.includes('accounting') || roleName.includes('akuntan')) {
     return 'Keuangan';
   }
@@ -36,8 +71,8 @@ export function getStaffDivision(user?: { role?: string; roleName?: string; divi
   if (role === 'pt' || role === 'leader_pt' || roleName.includes('pt') || roleName.includes('pelatih') || roleName.includes('coach') || roleName.includes('instruktur')) {
     return 'Pelatihan';
   }
-  if (role === 'teknisi' || roleName.includes('teknisi') || roleName.includes('maintenance')) {
-    return 'Teknisi';
+  if (role === 'staff_umum' || roleName.includes('driver') || roleName.includes('supir') || roleName.includes('barista') || roleName.includes('cafe') || roleName.includes('gudang') || roleName.includes('logistik')) {
+    return 'Operasional Umum';
   }
   return 'Manajemen';
 }

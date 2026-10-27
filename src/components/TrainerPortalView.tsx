@@ -901,6 +901,14 @@ export const TrainerPortalView: React.FC<TrainerPortalViewProps> = ({
         ptPurchases={ptPurchases}
         onAddSchedule={onAddSchedule}
         onUpdateSchedule={onUpdateSchedule}
+        onUpdateMember={onUpdateMember}
+        onSaveWorkoutLog={(newOrUpdatedLog) => {
+          const exists = workoutLogs.some((l) => l.id === newOrUpdatedLog.id);
+          const updatedLogs = exists
+            ? workoutLogs.map((l) => (l.id === newOrUpdatedLog.id ? newOrUpdatedLog : l))
+            : [newOrUpdatedLog, ...workoutLogs];
+          saveWorkoutLogs(updatedLogs);
+        }}
         showToast={showToast}
       />
     );

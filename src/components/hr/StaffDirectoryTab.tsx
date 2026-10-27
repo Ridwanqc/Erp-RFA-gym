@@ -20,7 +20,7 @@ import {
   Upload,
   ZoomIn
 } from 'lucide-react';
-import { User, ShiftType, getStaffDivision } from '../../types';
+import { User, UserRole, ShiftType, getStaffDivision } from '../../types';
 import { formatRp, APP_TODAY } from '../../utils/formatters';
 import { DataImportModal } from '../DataImportModal';
 import { DataExportModal } from '../DataExportModal';
@@ -59,7 +59,7 @@ export const StaffDirectoryTab: React.FC<StaffDirectoryTabProps> = ({
   const [formAccId, setFormAccId] = useState('');
   const [formPassword, setFormPassword] = useState('123');
   const [formName, setFormName] = useState('');
-  const [formRole, setFormRole] = useState<'admin' | 'kasir' | 'pt' | 'leader_pt' | 'keuangan'>('pt');
+  const [formRole, setFormRole] = useState<UserRole>('pt');
   const [formRoleName, setFormRoleName] = useState('Pelatih PT');
   const [formDivision, setFormDivision] = useState('Pelatihan');
   const [formShift, setFormShift] = useState<ShiftType>('Pagi');
@@ -157,9 +157,34 @@ export const StaffDirectoryTab: React.FC<StaffDirectoryTabProps> = ({
     setIsModalOpen(true);
   };
 
-  const handleRoleSelect = (role: 'admin' | 'kasir' | 'pt' | 'leader_pt' | 'keuangan') => {
+  const handleRoleSelect = (role: UserRole) => {
     setFormRole(role);
     switch (role) {
+      case 'keamanan':
+        setFormRoleName('Petugas Keamanan (Security)');
+        setFormDivision('Keamanan & Operasional');
+        setFormBaseSalary(3600000);
+        break;
+      case 'kebersihan':
+        setFormRoleName('Petugas Kebersihan (Cleaning Service / OB)');
+        setFormDivision('Kebersihan & Fasilitas');
+        setFormBaseSalary(3300000);
+        break;
+      case 'teknisi':
+        setFormRoleName('Teknisi Fasilitas & Alat Gym');
+        setFormDivision('Teknisi');
+        setFormBaseSalary(3800000);
+        break;
+      case 'staff_umum':
+        setFormRoleName('Staf Operasional / Umum');
+        setFormDivision('Operasional Umum');
+        setFormBaseSalary(3500000);
+        break;
+      case 'konten_kreator':
+        setFormRoleName('Konten Kreator & Digital CMS');
+        setFormDivision('Kreatif & Konten');
+        setFormBaseSalary(4200000);
+        break;
       case 'admin':
         setFormRoleName('System Admin / Manager');
         setFormDivision('Manajemen');
@@ -260,9 +285,15 @@ export const StaffDirectoryTab: React.FC<StaffDirectoryTabProps> = ({
           >
             <option value="all">Semua Posisi ({staffUsers.length})</option>
             <option value="admin">Admin / Manager</option>
+            <option value="konten_kreator">Konten Kreator & CMS</option>
             <option value="kasir">Kasir & Front Desk</option>
+            <option value="keuangan">Keuangan & Akuntansi</option>
             <option value="leader_pt">Leader PT</option>
             <option value="pt">Pelatih PT</option>
+            <option value="keamanan">Petugas Keamanan (Security)</option>
+            <option value="kebersihan">Petugas Kebersihan (Cleaning / OB)</option>
+            <option value="teknisi">Teknisi Gym & Fasilitas</option>
+            <option value="staff_umum">Staf Operasional / Jabatan Lainnya</option>
           </select>
 
           <select
@@ -271,10 +302,15 @@ export const StaffDirectoryTab: React.FC<StaffDirectoryTabProps> = ({
             className="bg-zinc-950 border border-zinc-800 text-white rounded-xl px-3 py-2 text-xs focus:outline-none focus:border-orange-500 font-medium"
           >
             <option value="all">Semua Devisi</option>
+            <option value="Keamanan & Operasional">Devisi Keamanan & Operasional</option>
+            <option value="Kebersihan & Fasilitas">Devisi Kebersihan & Fasilitas</option>
+            <option value="Teknisi">Devisi Teknisi</option>
+            <option value="Kreatif & Konten">Devisi Kreatif & Konten (CMS & Media)</option>
             <option value="Kasir & Front Desk">Devisi Kasir & Front Desk</option>
             <option value="Pelatihan">Devisi Pelatihan (PT & Coach)</option>
+            <option value="Keuangan">Devisi Keuangan</option>
             <option value="Manajemen">Devisi Manajemen</option>
-            <option value="Teknisi">Devisi Teknisi</option>
+            <option value="Operasional Umum">Devisi Operasional Umum</option>
           </select>
 
           <select
@@ -326,9 +362,9 @@ export const StaffDirectoryTab: React.FC<StaffDirectoryTabProps> = ({
 
           <button
             onClick={handleOpenAdd}
-            className="px-3.5 py-2 bg-orange-500 hover:bg-orange-600 text-zinc-950 font-black rounded-xl text-xs shadow-md transition flex items-center gap-1.5"
+            className="px-3.5 py-2 bg-orange-500 hover:bg-orange-600 text-zinc-950 font-black rounded-xl text-xs shadow-md transition flex items-center gap-1.5 cursor-pointer active:scale-95"
           >
-            <Plus className="w-3.5 h-3.5" /> Tambah Karyawan Baru
+            <Plus className="w-3.5 h-3.5" /> Registrasi Staf Baru
           </button>
         </div>
       </div>
@@ -362,15 +398,41 @@ export const StaffDirectoryTab: React.FC<StaffDirectoryTabProps> = ({
                     </span>
                   </div>
                   <div className="text-right space-y-1">
-                    <span className="inline-block bg-orange-500/10 text-orange-400 border border-orange-500/20 text-[10px] font-bold px-2 py-0.5 rounded-full">
+                    <span className={`inline-block text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                      staff.role === 'keamanan'
+                        ? 'bg-indigo-500/15 text-indigo-300 border border-indigo-500/30'
+                        : staff.role === 'kebersihan'
+                        ? 'bg-teal-500/15 text-teal-300 border border-teal-500/30'
+                        : staff.role === 'teknisi'
+                        ? 'bg-amber-500/15 text-amber-300 border border-amber-500/30'
+                        : staff.role === 'staff_umum'
+                        ? 'bg-violet-500/15 text-violet-300 border border-violet-500/30'
+                        : staff.role === 'konten_kreator'
+                        ? 'bg-fuchsia-500/15 text-fuchsia-300 border border-fuchsia-500/30'
+                        : staff.role === 'admin'
+                        ? 'bg-rose-500/15 text-rose-300 border border-rose-500/30'
+                        : staff.role === 'keuangan'
+                        ? 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/30'
+                        : 'bg-orange-500/10 text-orange-400 border border-orange-500/20'
+                    }`}>
                       {staff.roleName}
                     </span>
                     <div>
                       <span className={`inline-block text-[9px] font-bold px-2 py-0.5 rounded-md ${
-                        getStaffDivision(staff) === 'Kasir & Front Desk'
+                        getStaffDivision(staff) === 'Keamanan & Operasional'
+                          ? 'bg-indigo-500/15 text-indigo-300 border border-indigo-500/30'
+                          : getStaffDivision(staff) === 'Kebersihan & Fasilitas'
+                          ? 'bg-teal-500/15 text-teal-300 border border-teal-500/30'
+                          : getStaffDivision(staff) === 'Teknisi'
+                          ? 'bg-amber-500/15 text-amber-300 border border-amber-500/30'
+                          : getStaffDivision(staff) === 'Kasir & Front Desk'
                           ? 'bg-blue-500/15 text-blue-300 border border-blue-500/30'
                           : getStaffDivision(staff) === 'Pelatihan'
                           ? 'bg-amber-500/15 text-amber-300 border border-amber-500/30'
+                          : getStaffDivision(staff) === 'Kreatif & Konten'
+                          ? 'bg-fuchsia-500/15 text-fuchsia-300 border border-fuchsia-500/30'
+                          : getStaffDivision(staff) === 'Keuangan'
+                          ? 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/30'
                           : 'bg-purple-500/15 text-purple-300 border border-purple-500/30'
                       }`}>
                         Devisi: {getStaffDivision(staff)}
@@ -497,10 +559,20 @@ export const StaffDirectoryTab: React.FC<StaffDirectoryTabProps> = ({
                     <td className="py-3 px-4">
                       <p className="font-semibold text-zinc-200">{staff.roleName}</p>
                       <span className={`inline-block text-[9px] font-bold px-1.5 py-0.2 rounded mt-0.5 ${
-                        getStaffDivision(staff) === 'Kasir & Front Desk'
+                        getStaffDivision(staff) === 'Keamanan & Operasional'
+                          ? 'bg-indigo-500/15 text-indigo-300 border border-indigo-500/30'
+                          : getStaffDivision(staff) === 'Kebersihan & Fasilitas'
+                          ? 'bg-teal-500/15 text-teal-300 border border-teal-500/30'
+                          : getStaffDivision(staff) === 'Teknisi'
+                          ? 'bg-amber-500/15 text-amber-300 border border-amber-500/30'
+                          : getStaffDivision(staff) === 'Kasir & Front Desk'
                           ? 'bg-blue-500/15 text-blue-300 border border-blue-500/30'
                           : getStaffDivision(staff) === 'Pelatihan'
                           ? 'bg-amber-500/15 text-amber-300 border border-amber-500/30'
+                          : getStaffDivision(staff) === 'Kreatif & Konten'
+                          ? 'bg-fuchsia-500/15 text-fuchsia-300 border border-fuchsia-500/30'
+                          : getStaffDivision(staff) === 'Keuangan'
+                          ? 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/30'
                           : 'bg-purple-500/15 text-purple-300 border border-purple-500/30'
                       }`}>
                         {getStaffDivision(staff)}
@@ -560,7 +632,7 @@ export const StaffDirectoryTab: React.FC<StaffDirectoryTabProps> = ({
             <div className="flex justify-between items-center pb-4 border-b border-zinc-800">
               <h3 className="text-base font-black text-white flex items-center gap-2">
                 <Users className="w-5 h-5 text-orange-500" />
-                {editingStaff ? `Edit Profil Karyawan: ${editingStaff.name}` : 'Tambah Karyawan Baru'}
+                {editingStaff ? `Edit Profil Staf: ${editingStaff.name}` : 'Registrasi Staf Internal Baru'}
               </h3>
               <button
                 onClick={() => setIsModalOpen(false)}
@@ -613,7 +685,7 @@ export const StaffDirectoryTab: React.FC<StaffDirectoryTabProps> = ({
                     type="text"
                     value={formName}
                     onChange={(e) => setFormName(e.target.value)}
-                    placeholder="Contoh: Budi Santoso"
+                    placeholder="Contoh: Budi Santoso / Rahmat Hidayat"
                     className="w-full bg-zinc-950 border border-zinc-800 text-white rounded-xl p-2.5 text-xs focus:outline-none focus:border-orange-500 font-bold"
                     required
                   />
@@ -640,11 +712,16 @@ export const StaffDirectoryTab: React.FC<StaffDirectoryTabProps> = ({
                     onChange={(e) => handleRoleSelect(e.target.value as any)}
                     className="w-full bg-zinc-950 border border-zinc-800 text-white rounded-xl p-2.5 text-xs font-bold"
                   >
-                    <option value="kasir">Kasir & Front Desk</option>
-                    <option value="keuangan">Keuangan & Akuntansi (HQ)</option>
-                    <option value="pt">Pelatih PT</option>
-                    <option value="leader_pt">Leader PT</option>
-                    <option value="admin">System Admin / Manager</option>
+                    <option value="keamanan">🛡️ Petugas Keamanan (Security / Satpam)</option>
+                    <option value="kebersihan">🧹 Petugas Kebersihan (Cleaning Service / OB)</option>
+                    <option value="teknisi">🔧 Teknisi Fasilitas & Alat Gym</option>
+                    <option value="staff_umum">📋 Staf Operasional / Jabatan Lainnya</option>
+                    <option value="konten_kreator">🎨 Konten Kreator & Digital CMS</option>
+                    <option value="kasir">🖥️ Kasir & Front Desk (Layanan & POS)</option>
+                    <option value="keuangan">💰 Keuangan & Akuntansi (HQ)</option>
+                    <option value="pt">🏋️ Pelatih PT (Personal Trainer)</option>
+                    <option value="leader_pt">🏆 Leader PT (Head Coach)</option>
+                    <option value="admin">👑 System Admin / Manager</option>
                   </select>
                 </div>
                 <div>
@@ -653,26 +730,113 @@ export const StaffDirectoryTab: React.FC<StaffDirectoryTabProps> = ({
                     <span className="text-[9px] text-orange-400 font-normal">Tupoksi Resmi</span>
                   </label>
                   <select
-                    value={formDivision}
-                    onChange={(e) => setFormDivision(e.target.value)}
+                    value={
+                      [
+                        'Keamanan & Operasional',
+                        'Kebersihan & Fasilitas',
+                        'Teknisi',
+                        'Kreatif & Konten',
+                        'Kasir & Front Desk',
+                        'Keuangan',
+                        'Pelatihan',
+                        'Manajemen',
+                        'Operasional Umum'
+                      ].includes(formDivision)
+                        ? formDivision
+                        : 'custom'
+                    }
+                    onChange={(e) => {
+                      if (e.target.value === 'custom') {
+                        setFormDivision('Operasional Khusus');
+                      } else {
+                        setFormDivision(e.target.value);
+                      }
+                    }}
                     className="w-full bg-zinc-950 border border-zinc-800 text-white rounded-xl p-2.5 text-xs font-bold"
                   >
-                    <option value="Kasir & Front Desk">Devisi Kasir & Front Desk (Layanan & POS)</option>
-                    <option value="Keuangan">Devisi Keuangan & Akuntansi</option>
-                    <option value="Pelatihan">Devisi Pelatihan (PT & Coach)</option>
-                    <option value="Manajemen">Devisi Manajemen & Operasional</option>
-                    <option value="Teknisi">Devisi Teknisi</option>
+                    <option value="Keamanan & Operasional">🛡️ Devisi Keamanan & Operasional</option>
+                    <option value="Kebersihan & Fasilitas">🧹 Devisi Kebersihan & Fasilitas</option>
+                    <option value="Teknisi">🔧 Devisi Teknisi (Maintenance Alat & Gedung)</option>
+                    <option value="Kreatif & Konten">🎨 Devisi Kreatif & Konten (CMS & Media)</option>
+                    <option value="Kasir & Front Desk">🖥️ Devisi Kasir & Front Desk (Layanan & POS)</option>
+                    <option value="Keuangan">💰 Devisi Keuangan & Akuntansi</option>
+                    <option value="Pelatihan">🏋️ Devisi Pelatihan (PT & Coach)</option>
+                    <option value="Manajemen">👑 Devisi Manajemen & Operasional</option>
+                    <option value="Operasional Umum">📋 Devisi Operasional Umum</option>
+                    <option value="custom">✍️ + Devisi Kustom / Lainnya (Ketik Manual)...</option>
                   </select>
+                  {![
+                    'Keamanan & Operasional',
+                    'Kebersihan & Fasilitas',
+                    'Teknisi',
+                    'Kreatif & Konten',
+                    'Kasir & Front Desk',
+                    'Keuangan',
+                    'Pelatihan',
+                    'Manajemen',
+                    'Operasional Umum'
+                  ].includes(formDivision) && (
+                    <input
+                      type="text"
+                      value={formDivision}
+                      onChange={(e) => setFormDivision(e.target.value)}
+                      placeholder="Ketik nama devisi kustom..."
+                      className="mt-1.5 w-full bg-zinc-950 border border-orange-500/50 text-white rounded-xl p-2 text-xs focus:outline-none focus:border-orange-500"
+                      required
+                    />
+                  )}
                 </div>
                 <div>
-                  <label className="block text-zinc-400 font-bold mb-1.5">Nama Jabatan Resmi</label>
+                  <label className="block text-zinc-400 font-bold mb-1.5 flex items-center justify-between">
+                    <span>Nama Jabatan Resmi</span>
+                    <span className="text-[9px] text-zinc-500 font-normal">Bisa diketik bebas</span>
+                  </label>
                   <input
                     type="text"
                     value={formRoleName}
                     onChange={(e) => setFormRoleName(e.target.value)}
-                    className="w-full bg-zinc-950 border border-zinc-800 text-white rounded-xl p-2.5 text-xs"
+                    placeholder="Contoh: Petugas Keamanan, Cleaning Service, Barista..."
+                    className="w-full bg-zinc-950 border border-zinc-800 text-white rounded-xl p-2.5 text-xs font-bold focus:outline-none focus:border-orange-500"
                     required
                   />
+                </div>
+              </div>
+
+              {/* Quick Preset Jabatan Recommendations */}
+              <div className="bg-zinc-950/70 p-3 rounded-2xl border border-zinc-800/80">
+                <p className="text-[10px] text-zinc-400 font-bold mb-1.5 flex items-center gap-1.5">
+                  <span className="text-orange-400">💡</span>
+                  <span>Rekomendasi Cepat Jabatan (Klik untuk mengisi otomatis):</span>
+                </p>
+                <div className="flex flex-wrap gap-1.5">
+                  {[
+                    { label: '🛡️ Petugas Keamanan (Satpam)', role: 'keamanan', div: 'Keamanan & Operasional', title: 'Petugas Keamanan (Security)', salary: 3600000 },
+                    { label: '🛡️ Chief / Koordinator Security', role: 'keamanan', div: 'Keamanan & Operasional', title: 'Chief Security Officer', salary: 4300000 },
+                    { label: '🧹 Petugas Kebersihan (Cleaning)', role: 'kebersihan', div: 'Kebersihan & Fasilitas', title: 'Petugas Kebersihan (Cleaning Service)', salary: 3300000 },
+                    { label: '🧹 Office Boy / Housekeeping', role: 'kebersihan', div: 'Kebersihan & Fasilitas', title: 'Office Boy & Sanitasi', salary: 3200000 },
+                    { label: '🔧 Teknisi Alat & Mesin Gym', role: 'teknisi', div: 'Teknisi', title: 'Teknisi Mesin & Fasilitas Gym', salary: 3800000 },
+                    { label: '🔧 Teknisi Listrik & AC', role: 'teknisi', div: 'Teknisi', title: 'Teknisi MEP & Kelistrikan', salary: 3900000 },
+                    { label: '☕ Barista Gym Cafe', role: 'staff_umum', div: 'Operasional Umum', title: 'Barista Gym Cafe & Protein Bar', salary: 3300000 },
+                    { label: '🚗 Driver Operasional Gym', role: 'staff_umum', div: 'Operasional Umum', title: 'Driver Operasional Gym', salary: 3400000 },
+                    { label: '📦 Staf Gudang & Logistik', role: 'staff_umum', div: 'Operasional Umum', title: 'Staf Gudang & Logistik Suplemen', salary: 3400000 },
+                    { label: '🎨 Konten Kreator & CMS', role: 'konten_kreator', div: 'Kreatif & Konten', title: 'Konten Kreator & Digital CMS', salary: 4200000 },
+                    { label: '🖥️ Kasir & Front Desk', role: 'kasir', div: 'Kasir & Front Desk', title: 'Kasir & Front Desk', salary: 3500000 },
+                    { label: '🏋️ Pelatih PT (Trainer)', role: 'pt', div: 'Pelatihan', title: 'Pelatih PT (Personal Trainer)', salary: 3000000 }
+                  ].map((preset, idx) => (
+                    <button
+                      key={idx}
+                      type="button"
+                      onClick={() => {
+                        setFormRole(preset.role as UserRole);
+                        setFormDivision(preset.div);
+                        setFormRoleName(preset.title);
+                        setFormBaseSalary(preset.salary);
+                      }}
+                      className="px-2 py-1 rounded-lg bg-zinc-900 border border-zinc-800 hover:border-orange-500/50 hover:bg-zinc-800 text-[10px] text-zinc-300 hover:text-white transition cursor-pointer"
+                    >
+                      {preset.label}
+                    </button>
+                  ))}
                 </div>
               </div>
 

@@ -602,6 +602,18 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin, staffUsers, onBac
                     >
                       🏋️ Leader PT
                     </button>
+                    <button
+                      type="button"
+                      disabled={lockoutTimer > 0 || isLoading}
+                      onClick={() => {
+                        setUsername('kreator');
+                        setPassword('123');
+                        if (errorMsg) setErrorMsg(null);
+                      }}
+                      className="text-[11px] font-mono px-2 py-1.5 rounded-xl bg-zinc-950 border border-fuchsia-500/30 text-fuchsia-300 hover:bg-fuchsia-500/10 transition text-center disabled:opacity-40 font-bold"
+                    >
+                      🎨 Konten Kreator
+                    </button>
                   </div>
                 </div>
 
@@ -727,6 +739,10 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin, staffUsers, onBac
                     <div className="flex justify-between">
                       <span className="text-amber-300">Head Coach / Leader PT</span>
                       <span>Username: <strong className="text-white">leader_pt</strong></span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-fuchsia-300 font-bold">Konten Kreator & CMS</span>
+                      <span>Username: <strong className="text-white">kreator</strong></span>
                     </div>
                   </div>
                 </div>

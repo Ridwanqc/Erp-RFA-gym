@@ -51,11 +51,14 @@ var allowedOrigins = [
   "http://localhost:3000",
   "http://127.0.0.1:3000"
 ].filter(Boolean);
+var isProd = process.env.NODE_ENV === "production";
 var corsOptions = {
   origin: (origin, callback) => {
     if (!origin) return callback(null, true);
-    const isAllowed = allowedOrigins.includes(origin) || /\.run\.app$/i.test(origin) || /\.google\.com$/i.test(origin) || origin.startsWith("http://localhost:");
-    if (isAllowed) {
+    const isExplicit = allowedOrigins.includes(origin);
+    const isGoogleCloudRun = /\.run\.app$/i.test(origin) || /\.google\.com$/i.test(origin);
+    const isLocalDev = !isProd && origin.startsWith("http://localhost:");
+    if (isExplicit || isGoogleCloudRun || isLocalDev) {
       callback(null, true);
     } else {
       callback(new Error(`CORS Error: Origin '${origin}' is not authorized by GymPro security policy.`));
@@ -81,14 +84,64 @@ var allowedMethodsMiddleware = (req, res, next) => {
 };
 var antiPathTraversalMiddleware = (req, res, next) => {
   const checkValue = (val) => {
-    return val.includes("../") || val.includes("..\\") || val.includes("%2e%2e%2f") || val.includes("%2e%2e/");
+    if (!val) return false;
+    if (val.indexOf("\0") !== -1 || val.includes("%00") || val.includes("\\0")) {
+      return true;
+    }
+    let decoded = val;
+    for (let i = 0; i < 3; i++) {
+      try {
+        const nextDecoded = decodeURIComponent(decoded);
+        if (nextDecoded === decoded) break;
+        decoded = nextDecoded;
+      } catch {
+        return true;
+      }
+    }
+    const lower = decoded.toLowerCase();
+    if (lower.includes("../") || lower.includes("..\\") || lower.includes("..%2f") || lower.includes("..%5c") || /\.\.[/\\]/.test(decoded)) {
+      return true;
+    }
+    return false;
   };
-  const urlDangerous = checkValue(req.url) || checkValue(req.path);
+  const urlDangerous = checkValue(req.url) || checkValue(req.path) || req.originalUrl && checkValue(req.originalUrl);
   if (urlDangerous) {
     return res.status(400).json({
       success: false,
-      message: "Akses ditolak: Terdeteksi pola path traversal ilegal."
+      message: "Akses ditolak: Terdeteksi pola path traversal atau manipulasi encoding ilegal."
     });
+  }
+  next();
+};
+function sanitizeString(val) {
+  if (typeof val !== "string") return val;
+  return val.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, "").replace(/on\w+\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]+)/gi, "").replace(/javascript\s*:/gi, "").replace(/data\s*:\s*text\/html/gi, "");
+}
+function sanitizeObject(obj) {
+  if (typeof obj === "string") return sanitizeString(obj);
+  if (!obj || typeof obj !== "object") return obj;
+  if (Array.isArray(obj)) {
+    return obj.map(sanitizeObject);
+  }
+  const result = {};
+  for (const key of Object.keys(obj)) {
+    const val = obj[key];
+    if (typeof val === "string") {
+      result[key] = sanitizeString(val);
+    } else if (typeof val === "object" && val !== null) {
+      result[key] = sanitizeObject(val);
+    } else {
+      result[key] = val;
+    }
+  }
+  return result;
+}
+var xssSanitizeMiddleware = (req, _res, next) => {
+  if (req.body && typeof req.body === "object") {
+    req.body = sanitizeObject(req.body);
+  }
+  if (req.query && typeof req.query === "object") {
+    req.query = sanitizeObject(req.query);
   }
   next();
 };
@@ -926,8 +979,8 @@ var requireRoles = (allowedRoles) => {
       AuditService.recordSecurityEvent({
         eventType: "UNAUTHORIZED_ROLE_ACCESS",
         severity: "HIGH",
-        ipAddress: req.ip || req.socket.remoteAddress,
-        userAgent: req.headers["user-agent"],
+        ipAddress: req.ip || req.socket?.remoteAddress,
+        userAgent: req.headers?.["user-agent"],
         userId: req.user.userId,
         details: `User '${req.user.username}' dengan role '${userRole}' mencoba mengakses endpoint terlarang: ${req.method} ${req.originalUrl}`
       });
@@ -972,8 +1025,8 @@ var requireMemberOwnershipOrStaff = (req, res, next) => {
       AuditService.recordSecurityEvent({
         eventType: "IDOR_MEMBER_BREACH_ATTEMPT",
         severity: "CRITICAL",
-        ipAddress: req.ip,
-        userAgent: req.headers["user-agent"],
+        ipAddress: req.ip || req.socket?.remoteAddress,
+        userAgent: req.headers?.["user-agent"],
         userId: user.userId,
         details: `Member '${user.username}' (ID: ${user.userId}) mencoba mengakses data member lain: ${requestedMemberId}`
       });
@@ -990,9 +1043,9 @@ var requireMemberOwnershipOrStaff = (req, res, next) => {
 // server/routes/memberRoutes.ts
 var memberRouter = Router2();
 var updateMemberSchema = z2.object({
-  phone: z2.string().min(8).max(20).optional(),
-  email: z2.string().email().optional(),
-  name: z2.string().min(2).max(100).optional()
+  phone: z2.string().min(8).max(20).regex(/^[0-9+-\s]+$/, "Format nomor telepon tidak valid.").optional(),
+  email: z2.string().email("Format email tidak valid.").max(100).optional(),
+  name: z2.string().min(2, "Nama minimal 2 karakter.").max(100).optional()
 }).strict();
 memberRouter.get(
   "/",
@@ -1031,6 +1084,7 @@ memberRouter.get(
 memberRouter.put(
   "/:id",
   authMiddleware,
+  sensitiveActionRateLimiter,
   requireMemberOwnershipOrStaff,
   validateRequest({ body: updateMemberSchema }),
   (req, res) => {
@@ -1323,6 +1377,7 @@ transactionRouter.post(
 transactionRouter.post(
   "/:id/void",
   authMiddleware,
+  sensitiveActionRateLimiter,
   requireRoles(["ADMIN", "LEADER"]),
   validateRequest({ body: voidSchema }),
   async (req, res) => {
@@ -1586,7 +1641,7 @@ import crypto2 from "crypto";
 var uploadRouter = Router5();
 var ALLOWED_MIME_TYPES = ["image/jpeg", "image/png", "image/webp"];
 var MAX_FILE_SIZE_BYTES = 5 * 1024 * 1024;
-uploadRouter.post("/", authMiddleware, (req, res) => {
+uploadRouter.post("/", authMiddleware, sensitiveActionRateLimiter, (req, res) => {
   try {
     const { base64Data, originalFilename, mimeType } = req.body;
     if (!base64Data || typeof base64Data !== "string") {
@@ -1639,13 +1694,14 @@ uploadRouter.post("/", authMiddleware, (req, res) => {
     }
     const ext = mimeType.split("/")[1] === "jpeg" ? "jpg" : mimeType.split("/")[1];
     const safeFileId = "DOC-" + crypto2.randomUUID() + `.${ext}`;
+    const cleanOriginalName = typeof originalFilename === "string" ? originalFilename.replace(/[^a-zA-Z0-9._-]/g, "_").slice(0, 50) : "upload";
     AuditService.log({
       userId: req.user?.userId,
       action: "FILE_UPLOAD",
       module: "UPLOAD",
       recordId: safeFileId,
       newValue: {
-        originalName: originalFilename ? originalFilename.slice(0, 50) : "upload",
+        originalName: cleanOriginalName,
         safeFileId,
         sizeBytes: rawBuffer.length,
         mimeType
@@ -1705,94 +1761,115 @@ var createExpenseSchema = z4.object({
   approvalStatus: z4.enum(["Draft", "Menunggu Persetujuan", "Disetujui", "Ditolak", "Dibatalkan"]).default("Menunggu Persetujuan"),
   notes: z4.string().optional()
 });
-expenseRouter.get("/", authMiddleware, (req, res) => {
-  try {
-    const { branchId, status, dateFrom, dateTo } = req.query;
-    let list = Array.from(db.companyExpenses.values());
-    if (branchId && branchId !== "ALL" && branchId !== "BR-ALL") {
-      list = list.filter((e) => e.branchId === branchId);
+expenseRouter.get(
+  "/",
+  authMiddleware,
+  requireRoles(["ADMIN", "LEADER", "KARYAWAN", "KASIR"]),
+  (req, res) => {
+    try {
+      const { branchId, status, dateFrom, dateTo } = req.query;
+      let list = Array.from(db.companyExpenses.values());
+      if (req.user?.role !== "ADMIN" && req.user?.branchId && req.user.branchId !== "BR-ALL") {
+        list = list.filter((e) => e.branchId === req.user?.branchId);
+      } else if (branchId && branchId !== "ALL" && branchId !== "BR-ALL") {
+        list = list.filter((e) => e.branchId === branchId);
+      }
+      if (status && status !== "ALL") {
+        list = list.filter((e) => e.approvalStatus === status);
+      }
+      if (dateFrom) {
+        list = list.filter((e) => e.date >= String(dateFrom));
+      }
+      if (dateTo) {
+        list = list.filter((e) => e.date <= String(dateTo));
+      }
+      list.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+      return res.status(200).json({
+        success: true,
+        data: list
+      });
+    } catch (err) {
+      return res.status(500).json({ success: false, message: err.message });
     }
-    if (status && status !== "ALL") {
-      list = list.filter((e) => e.approvalStatus === status);
-    }
-    if (dateFrom) {
-      list = list.filter((e) => e.date >= String(dateFrom));
-    }
-    if (dateTo) {
-      list = list.filter((e) => e.date <= String(dateTo));
-    }
-    list.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-    return res.status(200).json({
-      success: true,
-      data: list
-    });
-  } catch (err) {
-    return res.status(500).json({ success: false, message: err.message });
   }
-});
-expenseRouter.post("/", authMiddleware, (req, res) => {
-  try {
-    const validated = createExpenseSchema.parse(req.body);
-    const now = /* @__PURE__ */ new Date();
-    const dateStr = now.toISOString().slice(2, 10).replace(/-/g, "");
-    const randomSuffix = Math.floor(1e3 + Math.random() * 9e3);
-    const generatedNumber = validated.expenseNumber || `EXP-${dateStr}-${randomSuffix}`;
-    const id = `EXP-${Date.now()}-${randomSuffix}`;
-    const newExpense = {
-      id,
-      expenseNumber: generatedNumber,
-      date: validated.date,
-      branchId: validated.branchId,
-      branchName: validated.branchName,
-      categoryId: validated.categoryId,
-      categoryName: validated.categoryName,
-      subcategory: validated.subcategory,
-      name: validated.name,
-      description: validated.description || "",
-      amount: validated.amount,
-      accountingType: validated.accountingType,
-      paymentMethod: validated.paymentMethod,
-      sourceAccount: validated.sourceAccount,
-      vendorOrBeneficiary: validated.vendorOrBeneficiary,
-      picStaffId: validated.picStaffId,
-      picStaffName: validated.picStaffName,
-      invoiceRefNumber: validated.invoiceRefNumber,
-      attachmentUrl: validated.attachmentUrl,
-      attachmentFileName: validated.attachmentFileName,
-      approvalStatus: validated.approvalStatus,
-      paymentStatus: "Belum Dibayar",
-      paidAmount: 0,
-      balanceRemaining: validated.amount,
-      notes: validated.notes,
-      auditLogs: [
-        {
-          id: `LOG-${Date.now()}`,
-          timestamp: (/* @__PURE__ */ new Date()).toLocaleString("id-ID"),
-          userId: req.user?.userId || "SYSTEM",
-          userName: req.user?.username || "User",
-          action: validated.approvalStatus === "Draft" ? "Dibuat (Draft)" : "Diajukan Persetujuan",
-          notes: validated.notes || "Pengajuan pengeluaran dibuat"
+);
+expenseRouter.post(
+  "/",
+  authMiddleware,
+  requireRoles(["ADMIN", "LEADER", "KARYAWAN", "KASIR"]),
+  sensitiveActionRateLimiter,
+  (req, res) => {
+    try {
+      const validated = createExpenseSchema.parse(req.body);
+      if (req.user?.role !== "ADMIN" && req.user?.branchId && req.user.branchId !== "BR-ALL") {
+        if (validated.branchId !== req.user.branchId) {
+          return res.status(403).json({
+            success: false,
+            message: "Akses ditolak: Anda hanya berwenang mengajukan pengeluaran untuk cabang kerja Anda sendiri."
+          });
         }
-      ],
-      createdAt: (/* @__PURE__ */ new Date()).toISOString(),
-      updatedAt: (/* @__PURE__ */ new Date()).toISOString()
-    };
-    db.companyExpenses.set(id, newExpense);
-    AuditService.log({
-      userId: req.user?.userId || null,
-      action: "CREATE_EXPENSE",
-      module: "FINANCE_EXPENSES",
-      recordId: id,
-      newValue: { expenseNumber: generatedNumber, amount: validated.amount }
-    });
-    return res.status(201).json({
-      success: true,
-      data: newExpense
-    });
-  } catch (err) {
-    return res.status(400).json({ success: false, message: err.message });
+      }
+      const now = /* @__PURE__ */ new Date();
+      const dateStr = now.toISOString().slice(2, 10).replace(/-/g, "");
+      const randomSuffix = Math.floor(1e3 + Math.random() * 9e3);
+      const generatedNumber = validated.expenseNumber || `EXP-${dateStr}-${randomSuffix}`;
+      const id = `EXP-${Date.now()}-${randomSuffix}`;
+      const newExpense = {
+        id,
+        expenseNumber: generatedNumber,
+        date: validated.date,
+        branchId: validated.branchId,
+        branchName: validated.branchName,
+        categoryId: validated.categoryId,
+        categoryName: validated.categoryName,
+        subcategory: validated.subcategory,
+        name: validated.name,
+        description: validated.description || "",
+        amount: validated.amount,
+        accountingType: validated.accountingType,
+        paymentMethod: validated.paymentMethod,
+        sourceAccount: validated.sourceAccount,
+        vendorOrBeneficiary: validated.vendorOrBeneficiary,
+        picStaffId: validated.picStaffId,
+        picStaffName: validated.picStaffName,
+        invoiceRefNumber: validated.invoiceRefNumber,
+        attachmentUrl: validated.attachmentUrl,
+        attachmentFileName: validated.attachmentFileName,
+        approvalStatus: validated.approvalStatus,
+        paymentStatus: "Belum Dibayar",
+        paidAmount: 0,
+        balanceRemaining: validated.amount,
+        notes: validated.notes,
+        auditLogs: [
+          {
+            id: `LOG-${Date.now()}`,
+            timestamp: (/* @__PURE__ */ new Date()).toLocaleString("id-ID"),
+            userId: req.user?.userId || "SYSTEM",
+            userName: req.user?.username || "User",
+            action: validated.approvalStatus === "Draft" ? "Dibuat (Draft)" : "Diajukan Persetujuan",
+            notes: validated.notes || "Pengajuan pengeluaran dibuat"
+          }
+        ],
+        createdAt: (/* @__PURE__ */ new Date()).toISOString(),
+        updatedAt: (/* @__PURE__ */ new Date()).toISOString()
+      };
+      db.companyExpenses.set(id, newExpense);
+      AuditService.log({
+        userId: req.user?.userId || null,
+        action: "CREATE_EXPENSE",
+        module: "FINANCE_EXPENSES",
+        recordId: id,
+        newValue: { expenseNumber: generatedNumber, amount: validated.amount }
+      });
+      return res.status(201).json({
+        success: true,
+        data: newExpense
+      });
+    } catch (err) {
+      return res.status(400).json({ success: false, message: err.message });
+    }
   }
-});
+);
 expenseRouter.post("/:id/approve", authMiddleware, requireRoles(["ADMIN", "LEADER"]), (req, res) => {
   try {
     const { id } = req.params;
@@ -1857,49 +1934,74 @@ expenseRouter.post("/:id/reject", authMiddleware, requireRoles(["ADMIN", "LEADER
     return res.status(500).json({ success: false, message: err.message });
   }
 });
-expenseRouter.post("/:id/pay", authMiddleware, (req, res) => {
-  try {
-    const { id } = req.params;
-    const { paidAmount, paidAccount, notes } = req.body;
-    const expense = db.companyExpenses.get(id);
-    if (!expense) {
-      return res.status(404).json({ success: false, message: "Transaksi tidak ditemukan." });
+expenseRouter.post(
+  "/:id/pay",
+  authMiddleware,
+  requireRoles(["ADMIN", "LEADER", "KASIR"]),
+  sensitiveActionRateLimiter,
+  (req, res) => {
+    try {
+      const { id } = req.params;
+      const { paidAmount, paidAccount, notes } = req.body;
+      const expense = db.companyExpenses.get(id);
+      if (!expense) {
+        return res.status(404).json({ success: false, message: "Transaksi tidak ditemukan." });
+      }
+      if (expense.approvalStatus !== "Disetujui") {
+        return res.status(400).json({ success: false, message: "Hanya transaksi yang telah disetujui yang dapat dibayar." });
+      }
+      const payVal = Number(paidAmount);
+      if (!payVal || isNaN(payVal) || payVal <= 0) {
+        return res.status(400).json({ success: false, message: "Nominal pembayaran harus berupa angka positif lebih besar dari 0." });
+      }
+      if (payVal > expense.balanceRemaining) {
+        return res.status(400).json({
+          success: false,
+          message: `Nominal pembayaran (Rp ${payVal.toLocaleString("id-ID")}) melebihi sisa tagihan (Rp ${expense.balanceRemaining.toLocaleString("id-ID")}).`
+        });
+      }
+      const newPaidTotal = expense.paidAmount + payVal;
+      const newRemaining = Math.max(0, expense.amount - newPaidTotal);
+      expense.paidAmount = newPaidTotal;
+      expense.balanceRemaining = newRemaining;
+      expense.paymentStatus = newRemaining === 0 ? "Lunas" : "Dibayar Sebagian";
+      expense.paidAt = (/* @__PURE__ */ new Date()).toISOString();
+      expense.paidByUserId = req.user?.userId;
+      expense.paidByUserName = req.user?.username;
+      expense.paidAccount = paidAccount || expense.sourceAccount;
+      expense.updatedAt = (/* @__PURE__ */ new Date()).toISOString();
+      expense.auditLogs.push({
+        id: `LOG-${Date.now()}`,
+        timestamp: (/* @__PURE__ */ new Date()).toLocaleString("id-ID"),
+        userId: req.user?.userId || "SYSTEM",
+        userName: req.user?.username || "Cashier",
+        action: newRemaining === 0 ? "Pembayaran Lunas Dicatat" : "Pembayaran Sebagian Dicatat",
+        notes: `Dibayar: Rp ${payVal.toLocaleString("id-ID")} via ${expense.paidAccount}. Sisa: Rp ${newRemaining.toLocaleString("id-ID")}`
+      });
+      db.companyExpenses.set(id, expense);
+      AuditService.log({
+        userId: req.user?.userId,
+        action: "PAY_EXPENSE",
+        module: "FINANCE_EXPENSES",
+        recordId: id,
+        newValue: { paidAmount: payVal, balanceRemaining: newRemaining, paymentStatus: expense.paymentStatus },
+        ipAddress: req.ip
+      });
+      return res.status(200).json({ success: true, data: expense });
+    } catch (err) {
+      return res.status(500).json({ success: false, message: err.message });
     }
-    if (expense.approvalStatus !== "Disetujui") {
-      return res.status(400).json({ success: false, message: "Hanya transaksi yang disetujui yang dapat dibayar." });
-    }
-    const payVal = Number(paidAmount);
-    if (!payVal || payVal <= 0) {
-      return res.status(400).json({ success: false, message: "Nominal pembayaran harus lebih besar dari 0." });
-    }
-    const newPaidTotal = expense.paidAmount + payVal;
-    const newRemaining = Math.max(0, expense.amount - newPaidTotal);
-    expense.paidAmount = newPaidTotal;
-    expense.balanceRemaining = newRemaining;
-    expense.paymentStatus = newRemaining === 0 ? "Lunas" : "Dibayar Sebagian";
-    expense.paidAt = (/* @__PURE__ */ new Date()).toISOString();
-    expense.paidByUserId = req.user?.userId;
-    expense.paidByUserName = req.user?.username;
-    expense.paidAccount = paidAccount || expense.sourceAccount;
-    expense.updatedAt = (/* @__PURE__ */ new Date()).toISOString();
-    expense.auditLogs.push({
-      id: `LOG-${Date.now()}`,
-      timestamp: (/* @__PURE__ */ new Date()).toLocaleString("id-ID"),
-      userId: req.user?.userId || "SYSTEM",
-      userName: req.user?.username || "Cashier",
-      action: newRemaining === 0 ? "Pembayaran Lunas Dicatat" : "Pembayaran Sebagian Dicatat",
-      notes: `Dibayar: Rp ${payVal.toLocaleString("id-ID")} via ${expense.paidAccount}. Sisa: Rp ${newRemaining.toLocaleString("id-ID")}`
-    });
-    db.companyExpenses.set(id, expense);
-    return res.status(200).json({ success: true, data: expense });
-  } catch (err) {
-    return res.status(500).json({ success: false, message: err.message });
   }
-});
-expenseRouter.get("/categories", authMiddleware, (_req, res) => {
-  const categories = Array.from(db.expenseCategories.values());
-  return res.status(200).json({ success: true, data: categories });
-});
+);
+expenseRouter.get(
+  "/categories",
+  authMiddleware,
+  requireRoles(["ADMIN", "LEADER", "KARYAWAN", "KASIR"]),
+  (_req, res) => {
+    const categories = Array.from(db.expenseCategories.values());
+    return res.status(200).json({ success: true, data: categories });
+  }
+);
 
 // server/app.ts
 dotenv.config();
@@ -1916,6 +2018,7 @@ app.use(express.urlencoded({ extended: true, limit: "2mb" }));
 app.use(cookieParser());
 app.use(allowedMethodsMiddleware);
 app.use(antiPathTraversalMiddleware);
+app.use(xssSanitizeMiddleware);
 app.use("/api", generalApiRateLimiter);
 app.get(["/health", "/healthz", "/_healthz", "/api/health"], (_req, res) => {
   res.status(200).json({

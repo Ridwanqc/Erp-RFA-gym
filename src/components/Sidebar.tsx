@@ -244,9 +244,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
         },
         {
           id: 'absen' as ActiveTab,
-          label: 'Absensi & Presensi',
+          label: ['konten_kreator', 'keamanan', 'kebersihan', 'staff_umum', 'teknisi'].includes(role) ? 'Presensi Shift Staf' : 'Absensi & Presensi',
           icon: UserCheck,
-          roles: ['admin', 'admin_cabang', 'kasir', 'leader_pt', 'pt', 'keuangan'] as UserRole[]
+          roles: ['admin', 'admin_cabang', 'kasir', 'leader_pt', 'pt', 'keuangan', 'teknisi', 'konten_kreator', 'keamanan', 'kebersihan', 'staff_umum'] as UserRole[]
         },
         {
           id: 'quick-out' as ActiveTab,
@@ -259,6 +259,17 @@ export const Sidebar: React.FC<SidebarProps> = ({
           label: 'Otomasi & Kios Front Desk',
           icon: Zap,
           roles: ['admin', 'admin_cabang', 'kasir', 'leader_pt'] as UserRole[]
+        }
+      ]
+    },
+    {
+      group: 'CMS & Media Promosi',
+      items: [
+        {
+          id: 'settings-landing' as ActiveTab,
+          label: 'CMS & Landing Page',
+          icon: Globe,
+          roles: ['admin', 'manager', 'konten_kreator'] as UserRole[]
         }
       ]
     },
@@ -522,7 +533,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           id: 'settings-group',
           label: 'Pengaturan Sistem',
           icon: Settings,
-          roles: ['admin', 'admin_cabang', 'manager', 'kasir'] as UserRole[],
+          roles: ['admin', 'admin_cabang', 'manager', 'kasir', 'konten_kreator'] as UserRole[],
           subItems: [
             {
               id: 'settings-printer',
@@ -532,12 +543,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
             {
               id: 'settings-landing',
               label: 'Landing Page (CMS)',
-              roles: ['admin', 'manager']
+              roles: ['admin', 'manager', 'konten_kreator']
             },
             {
               id: 'settings-theme',
               label: 'Tema & Tampilan',
-              roles: ['admin', 'admin_cabang', 'manager', 'kasir']
+              roles: ['admin', 'admin_cabang', 'manager', 'kasir', 'konten_kreator']
             },
             {
               id: 'settings-roles',

@@ -75,6 +75,23 @@ export function formatFullDateIndo(date: Date = new Date()): string {
   });
 }
 
+/**
+ * Mengambil nama hari dalam Bahasa Indonesia (Senin, Selasa, dll.)
+ */
+export function getDayNameIndo(dateStr?: string): string {
+  try {
+    const cleanStr = dateStr ? (dateStr.includes('T') ? dateStr.split('T')[0] : dateStr.trim()) : APP_TODAY;
+    const d = new Date(cleanStr + 'T00:00:00');
+    if (!isNaN(d.getTime())) {
+      const dayName = d.toLocaleDateString('id-ID', { weekday: 'long' });
+      return dayName.charAt(0).toUpperCase() + dayName.slice(1);
+    }
+  } catch {}
+  const now = new Date();
+  const dayName = now.toLocaleDateString('id-ID', { weekday: 'long' });
+  return dayName.charAt(0).toUpperCase() + dayName.slice(1);
+}
+
 export function getDayDiff(targetDateStr: string, baseDateStr: string = APP_TODAY): number {
   if (!targetDateStr) return 999;
   const cleanTarget = targetDateStr.includes('T') ? targetDateStr.split('T')[0] : targetDateStr.trim();

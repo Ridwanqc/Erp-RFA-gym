@@ -1946,6 +1946,8 @@ export default function App() {
       }
       if (found.role === 'admin_cabang') {
         setActiveTab('dashboard');
+      } else if (found.role === 'konten_kreator') {
+        setActiveTab('settings-landing');
       } else if (found.role === 'leader_pt') {
         setActiveTab('leader-pt');
       } else if (found.role === 'pt') {
@@ -1972,7 +1974,9 @@ export default function App() {
     } else if (user.branchId && user.role !== 'admin' && user.role !== 'manager' && user.role !== 'keuangan') {
       setActiveBranchId(user.branchId);
     }
-    if (user.role === 'leader_pt') {
+    if (user.role === 'konten_kreator') {
+      setActiveTab('settings-landing');
+    } else if (user.role === 'leader_pt') {
       setActiveTab('leader-pt');
     } else if (user.role === 'pt') {
       setActiveTab('trainer-portal');
@@ -4322,7 +4326,8 @@ export default function App() {
 
           {(activeTab === 'absen' || activeTab === 'quick-out') && (
             <AttendanceView
-              initialTab={activeTab === 'quick-out' ? 'out' : 'member'}
+              currentUser={currentUser}
+              initialTab={activeTab === 'quick-out' ? 'out' : currentUser?.role === 'konten_kreator' ? 'staff' : 'member'}
               onTabChange={(attTab) => {
                 if (attTab === 'out') {
                   setActiveTab('quick-out');

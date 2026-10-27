@@ -47,6 +47,7 @@ import { printViaHiddenIframe, generateLockerSlipHtml, PrintPaperSize } from '..
 import { QuickOutSection } from './attendance/QuickOutSection';
 
 interface AttendanceViewProps {
+  currentUser?: User | null;
   initialTab?: 'member' | 'out' | 'staff' | 'analytics';
   members: Member[];
   staffUsers: User[];
@@ -65,6 +66,7 @@ interface AttendanceViewProps {
 }
 
 export const AttendanceView: React.FC<AttendanceViewProps> = ({
+  currentUser,
   initialTab,
   members,
   staffUsers,
@@ -82,7 +84,8 @@ export const AttendanceView: React.FC<AttendanceViewProps> = ({
   onTabChange
 }) => {
   const { settings, activeBranch, isAllBranches, branches } = useSettings();
-  const [activeTab, setActiveTab] = useState<'member' | 'out' | 'staff' | 'analytics'>(initialTab || 'member');
+  const defaultTab = initialTab || (currentUser?.role === 'konten_kreator' ? 'staff' : 'member');
+  const [activeTab, setActiveTab] = useState<'member' | 'out' | 'staff' | 'analytics'>(defaultTab);
   const [activeMemberSubTab, setActiveMemberSubTab] = useState<'attendance-list' | 'locker-board'>('attendance-list');
   const [isScannerOpen, setIsScannerOpen] = useState(false);
   const [attendanceBranchFilter, setAttendanceBranchFilter] = useState<string>('ALL');
@@ -91,9 +94,9 @@ export const AttendanceView: React.FC<AttendanceViewProps> = ({
     if (initialTab) {
       setActiveTab(initialTab);
     } else {
-      setActiveTab('member');
+      setActiveTab(currentUser?.role === 'konten_kreator' ? 'staff' : 'member');
     }
-  }, [initialTab]);
+  }, [initialTab, currentUser?.role]);
 
   const handleSelectTab = (tab: 'member' | 'out' | 'staff' | 'analytics') => {
     setActiveTab(tab);
@@ -131,7 +134,13 @@ export const AttendanceView: React.FC<AttendanceViewProps> = ({
   const [hasTowel, setHasTowel] = useState(true);
 
   // Staff form state
-  const [selectedStaffId, setSelectedStaffId] = useState('');
+  const [selectedStaffId, setSelectedStaffId] = useState(() => (currentUser?.role === 'konten_kreator' ? currentUser.id : ''));
+
+  useEffect(() => {
+    if (currentUser?.role === 'konten_kreator' && currentUser.id) {
+      setSelectedStaffId(currentUser.id);
+    }
+  }, [currentUser]);
 
   // Modals state
   const [isCheckInModalOpen, setIsCheckInModalOpen] = useState(false);
@@ -1239,6 +1248,22 @@ export const AttendanceView: React.FC<AttendanceViewProps> = ({
 
             {/* Live Real-Time Precision Clock */}
             <RealTimeClock variant="card" className="mb-4" />
+
+            {currentUser?.role === 'konten_kreator' && (
+              <div className="mb-4 p-3 rounded-2xl bg-fuchsia-500/10 border border-fuchsia-500/30 flex items-center gap-3">
+                <span className="p-2 rounded-xl bg-fuchsia-500/20 text-fuchsia-300 font-bold text-xs shrink-0">
+                  🎨
+                </span>
+                <div className="min-w-0 flex-1">
+                  <p className="text-xs font-bold text-white truncate">
+                    Halo, {currentUser.name}
+                  </p>
+                  <p className="text-[11px] text-fuchsia-300/90 truncate">
+                    Akun Staf Konten Kreator & CMS — Presensi Shift Anda
+                  </p>
+                </div>
+              </div>
+            )}
 
             <div className="space-y-4">
               <div>

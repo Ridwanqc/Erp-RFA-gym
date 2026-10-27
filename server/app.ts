@@ -9,7 +9,8 @@ import {
   helmetMiddleware,
   corsMiddleware,
   allowedMethodsMiddleware,
-  antiPathTraversalMiddleware
+  antiPathTraversalMiddleware,
+  xssSanitizeMiddleware
 } from './middleware/security';
 import { generalApiRateLimiter } from './middleware/rateLimiter';
 import { authRouter } from './routes/authRoutes';
@@ -49,7 +50,10 @@ app.use(allowedMethodsMiddleware);
 // 5. Anti Path Traversal Protection
 app.use(antiPathTraversalMiddleware);
 
-// 6. General API Rate Limiting
+// 6. XSS Input Sanitization
+app.use(xssSanitizeMiddleware);
+
+// 7. General API Rate Limiting
 app.use('/api', generalApiRateLimiter);
 
 // 7. Cloud Run & Kubernetes Health Check Probes

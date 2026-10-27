@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { db } from '../database/db';
 import { authMiddleware } from '../middleware/auth';
 import { requireRoles, requireMemberOwnershipOrStaff } from '../middleware/rbac';
+import { sensitiveActionRateLimiter } from '../middleware/rateLimiter';
 import { validateRequest } from '../middleware/validator';
 import { AuditService } from '../services/auditService';
 
@@ -10,9 +11,9 @@ export const memberRouter = Router();
 
 // Whitelisted profile update schema (Mass Assignment Protection)
 const updateMemberSchema = z.object({
-  phone: z.string().min(8).max(20).optional(),
-  email: z.string().email().optional(),
-  name: z.string().min(2).max(100).optional()
+  phone: z.string().min(8).max(20).regex(/^[0-9+-\s]+$/, 'Format nomor telepon tidak valid.').optional(),
+  email: z.string().email('Format email tidak valid.').max(100).optional(),
+  name: z.string().min(2, 'Nama minimal 2 karakter.').max(100).optional()
 }).strict(); // Disallows unknown fields like 'role', 'status', 'id'
 
 // 1. GET /api/members
@@ -57,10 +58,11 @@ memberRouter.get(
   }
 );
 
-// 3. PUT /api/members/:id (Mass Assignment Protected)
+// 3. PUT /api/members/:id (Mass Assignment Protected & Rate Limited)
 memberRouter.put(
   '/:id',
   authMiddleware,
+  sensitiveActionRateLimiter,
   requireMemberOwnershipOrStaff,
   validateRequest({ body: updateMemberSchema }),
   (req: Request, res: Response) => {
