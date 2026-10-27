@@ -7,6 +7,20 @@ import {VitePWA} from 'vite-plugin-pwa';
 export default defineConfig(() => {
   return {
     plugins: [
+      {
+        name: 'aistudio-control-plane',
+        configureServer(server) {
+          server.middlewares.use((req, res, next) => {
+            if (req.url && req.url.includes('/__aistudio_internal_control_plane/dev/status')) {
+              res.setHeader('Content-Type', 'application/json');
+              res.statusCode = 200;
+              res.end(JSON.stringify({ status: 'ok', ready: true }));
+              return;
+            }
+            next();
+          });
+        }
+      },
       react(),
       tailwindcss(),
       VitePWA({
@@ -126,9 +140,6 @@ export default defineConfig(() => {
             if (id.includes('node_modules/react') || id.includes('node_modules/react-dom')) {
               return 'vendor-react';
             }
-            if (id.includes('node_modules/firebase')) {
-              return 'vendor-firebase';
-            }
             if (id.includes('node_modules/lucide-react')) {
               return 'vendor-icons';
             }
@@ -137,6 +148,8 @@ export default defineConfig(() => {
       },
     },
     server: {
+      port: 3000,
+      host: '0.0.0.0',
       // HMR is disabled in AI Studio via DISABLE_HMR env var.
       // Do not modifyâfile watching is disabled to prevent flickering during agent edits.
       hmr: process.env.DISABLE_HMR !== 'true',

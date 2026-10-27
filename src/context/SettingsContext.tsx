@@ -27,12 +27,6 @@ import {
   DEFAULT_ROLE_DEFINITIONS,
   SYSTEM_MODULES
 } from '../data/settingsData';
-import {
-  saveBranchToFirestore,
-  deleteBranchFromFirestore,
-  subscribeBranches
-} from '../lib/firestoreService';
-import { auth, onAuthStateChanged } from '../lib/firebase';
 
 const SETTINGS_STORAGE_KEY = 'gympro_system_settings';
 const ROLES_STORAGE_KEY = 'gympro_role_definitions';
@@ -264,36 +258,6 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     }
   }, [branches]);
 
-  // Subscribe to Branches in Firestore if user is authenticated
-  useEffect(() => {
-    let unsubscribeBranchListener: (() => void) | undefined;
-    const unsubAuth = onAuthStateChanged(auth, (fbUser) => {
-      if (fbUser) {
-        try {
-          unsubscribeBranchListener = subscribeBranches((cloudBranches) => {
-            if (cloudBranches && cloudBranches.length > 0) {
-              setBranches((prev) => {
-                const map = new Map(prev.map((b) => [b.id, b]));
-                cloudBranches.forEach((cb) => map.set(cb.id, { ...map.get(cb.id), ...cb }));
-                return Array.from(map.values());
-              });
-            }
-          });
-        } catch (e) {
-          console.warn('Branches subscription error:', e);
-        }
-      } else if (unsubscribeBranchListener) {
-        unsubscribeBranchListener();
-        unsubscribeBranchListener = undefined;
-      }
-    });
-
-    return () => {
-      unsubAuth();
-      if (unsubscribeBranchListener) unsubscribeBranchListener();
-    };
-  }, []);
-
   // Persist Active Branch ID
   useEffect(() => {
     try {
@@ -403,11 +367,6 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       return [...updated, branchToCreate];
     });
 
-    // Cloud Firestore synchronization (non-blocking)
-    saveBranchToFirestore(branchToCreate).catch((err) => {
-      console.warn('Cloud save branch notice:', err);
-    });
-
     return branchToCreate;
   };
 
@@ -426,12 +385,6 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       });
       return updated;
     });
-
-    if (fullUpdatedBranch) {
-      saveBranchToFirestore(fullUpdatedBranch).catch((err) => {
-        console.warn('Cloud update branch notice:', err);
-      });
-    }
 
     // If active branch was updated, sync profile
     if (id === activeBranchId) {
@@ -477,11 +430,6 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
     const remaining = branches.filter((b) => b.id !== id);
     setBranches(remaining);
-
-    // Delete from Firestore (non-blocking)
-    deleteBranchFromFirestore(id).catch((err) => {
-      console.warn('Cloud delete branch notice:', err);
-    });
 
     if (activeBranchId === id) {
       const nextActiveId = remaining[0]?.id || 'BR-001';

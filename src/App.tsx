@@ -146,18 +146,13 @@ import { OfflineIndicator } from './components/OfflineIndicator';
 import { OnlineReservation } from './types/landingTypes';
 import { INITIAL_ONLINE_RESERVATIONS } from './data/landingData';
 import { APP_TODAY, formatRp, getTimestamp } from './utils/formatters';
-import { testConnection, auth, onAuthStateChanged, logOutFirebase, getAccessToken } from './lib/firebase';
 import { syncAllGymDataToSpreadsheet } from './lib/googleSheetsService';
 import {
   saveMemberToFirestore,
   saveTransactionToFirestore,
   saveAttendanceToFirestore,
   saveLeadToFirestore,
-  saveReservationToFirestore,
-  subscribeMembers,
-  subscribeTransactions,
-  subscribeReservations,
-  seedInitialFirestoreData
+  saveReservationToFirestore
 } from './lib/firestoreService';
 import {
   getRouteFromLocation,
@@ -244,7 +239,6 @@ export default function App() {
       return false;
     }
   });
-  const [firebaseConnected, setFirebaseConnected] = useState(true);
   const { isThemeModalOpen, closeThemeModal, setBackofficeActive } = useTheme();
   const {
     branches,
@@ -1749,97 +1743,6 @@ export default function App() {
   useEffect(() => {
     localStorage.setItem('rfa_followups', JSON.stringify(followUps));
   }, [followUps]);
-
-  // Firebase Boot Connectivity Test & Cloud Firestore Synchronization
-  useEffect(() => {
-    // 1. Mandatory connection test
-    testConnection().then((connected) => {
-      setFirebaseConnected(connected);
-    });
-
-    let unsubMembers: (() => void) | undefined;
-    let unsubTrx: (() => void) | undefined;
-    let unsubReservations: (() => void) | undefined;
-
-    // 2. Auth State Listener - Only attach onSnapshot listeners if auth is ready and user is authenticated
-    const unsubscribeAuth = onAuthStateChanged(auth, (fbUser) => {
-      if (fbUser) {
-        setFirebaseConnected(true);
-        // Seed initial mock records if cloud database is empty
-        seedInitialFirestoreData(INITIAL_MEMBERS, INITIAL_TRANSACTIONS).catch(() => {});
-
-        // Clean up previous listeners if any
-        if (unsubMembers) unsubMembers();
-        if (unsubTrx) unsubTrx();
-        if (unsubReservations) unsubReservations();
-
-        // 3. Real-Time Cloud Subscribers (merges cloud changes)
-        try {
-          unsubMembers = subscribeMembers(
-            (cloudMembers) => {
-              if (cloudMembers && cloudMembers.length > 0) {
-                setMembers((prev) => {
-                  const map = new Map(prev.map((m) => [m.id, m]));
-                  cloudMembers.forEach((cm) => map.set(cm.id, { ...map.get(cm.id), ...cm }));
-                  return Array.from(map.values());
-                });
-              }
-            },
-            () => {}
-          );
-
-          unsubTrx = subscribeTransactions(
-            (cloudTrx) => {
-              if (cloudTrx && cloudTrx.length > 0) {
-                setTransactions((prev) => {
-                  const map = new Map(prev.map((t) => [t.id, t]));
-                  cloudTrx.forEach((ct) => map.set(ct.id, { ...map.get(ct.id), ...ct }));
-                  return Array.from(map.values());
-                });
-              }
-            },
-            () => {}
-          );
-
-          unsubReservations = subscribeReservations(
-            (cloudRes) => {
-              if (cloudRes && cloudRes.length > 0) {
-                setReservations((prev) => {
-                  const map = new Map(prev.map((r) => [r.id, r]));
-                  cloudRes.forEach((cr) => map.set(cr.id, { ...map.get(cr.id), ...cr }));
-                  return Array.from(map.values());
-                });
-              }
-            },
-            () => {}
-          );
-        } catch (e) {
-          console.warn('Firestore subscription initialized in local fallback mode:', e);
-        }
-      } else {
-        // When user is not authenticated with Firebase Auth, clean up active cloud subscriptions
-        if (unsubMembers) {
-          unsubMembers();
-          unsubMembers = undefined;
-        }
-        if (unsubTrx) {
-          unsubTrx();
-          unsubTrx = undefined;
-        }
-        if (unsubReservations) {
-          unsubReservations();
-          unsubReservations = undefined;
-        }
-      }
-    });
-
-    return () => {
-      unsubscribeAuth();
-      if (unsubMembers) unsubMembers();
-      if (unsubTrx) unsubTrx();
-      if (unsubReservations) unsubReservations();
-    };
-  }, []);
 
   // Auto-Sync to Google Sheets: Every time data is inputted, updated, or deleted, it stays synchronized
   useEffect(() => {
@@ -3952,7 +3855,6 @@ export default function App() {
           onSwitchUser={handleSwitchUser}
           onLogout={handleLogout}
           isStoreClosed={isStoreClosed}
-          firebaseConnected={firebaseConnected}
           onToggleSidebar={handleToggleDesktopSidebar}
           onToggleMobileSidebar={() => setIsSidebarOpen(!isSidebarOpen)}
           isSidebarCollapsed={isDesktopCollapsed}

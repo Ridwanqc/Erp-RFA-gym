@@ -79,6 +79,11 @@ if (process.env.DATABASE_URL) {
   }
 }
 
+// AI Studio Internal Control Plane Status Check
+app.all(['/__aistudio_internal_control_plane/dev/status', '/__aistudio_internal_control_plane/*'], (_req: Request, res: Response) => {
+  return res.status(200).json({ status: 'ok', ready: true });
+});
+
 // 7. Cloud Run, Dokploy & Kubernetes Health Check Probes
 app.get(['/health', '/healthz', '/_healthz', '/api/health'], async (_req: Request, res: Response) => {
   let dbStatus = 'not_configured';

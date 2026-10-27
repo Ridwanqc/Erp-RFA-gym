@@ -8,9 +8,7 @@ const __dirname = path.dirname(__filename);
 const bundledServerPath = path.join(__dirname, 'server.js');
 
 if (fs.existsSync(bundledServerPath)) {
-  const target = './server.js';
-  await import(target);
+  await import('./server.js');
 } else {
-  const target = './server/app.js';
-  await import(target);
+  await import('./server/app.ts');
 }

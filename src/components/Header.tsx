@@ -27,7 +27,6 @@ interface HeaderProps {
   staffUsers?: User[];
   onSwitchUser?: (userId: string) => void;
   onLogout?: () => void;
-  firebaseConnected?: boolean;
   onOpenSettings?: (subTab?: 'printer' | 'theme' | 'roles' | 'security' | 'profile' | 'branches' | 'finance' | 'templates' | 'backup' | 'landing') => void;
   onOpenAddBranchModal?: () => void;
   onOpenLandingPage?: () => void;
