@@ -223,6 +223,10 @@ export default function App() {
   // Navigation & Platform View State
   const [guestView, setGuestView] = useState<'landing' | 'staff-login'>(() => {
     if (initialRoute.viewMode === 'staff-login') return 'staff-login';
+    // Smart Domain Detection: If accessed via admin.rfagym.com, open Staff Login directly
+    if (typeof window !== 'undefined' && window.location.hostname.startsWith('admin.')) {
+      return 'staff-login';
+    }
     return 'landing';
   });
   const [staffViewMode, setStaffViewMode] = useState<'erp' | 'landing'>(() => {
