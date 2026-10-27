@@ -5,13 +5,13 @@ FROM node:22-alpine AS builder
 WORKDIR /app
 
 # Install build dependencies
-RUN apk add --no-cache libc6-compat
+RUN apk add --no-cache libc6-compat python3 make g++
 
 # Copy package manifests first for Docker layer caching
-COPY package*.json ./
+COPY package.json package-lock.json* ./
 
 # Install all dependencies (including devDependencies required for Vite & esbuild)
-RUN npm ci --legacy-peer-deps || npm install --legacy-peer-deps
+RUN npm install --legacy-peer-deps
 
 # Copy all source files
 COPY . .
@@ -28,8 +28,8 @@ ENV NODE_ENV=production
 ENV PORT=3000
 
 # Install production dependencies only
-COPY package*.json ./
-RUN npm ci --only=production --legacy-peer-deps || npm install --only=production --legacy-peer-deps
+COPY package.json package-lock.json* ./
+RUN npm install --omit=dev --legacy-peer-deps
 
 # Copy compiled server and client distribution
 COPY --from=builder /app/server.js ./server.js

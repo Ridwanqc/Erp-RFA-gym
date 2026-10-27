@@ -56,10 +56,11 @@ export const corsOptions: CorsOptions = {
     if (!origin) return callback(null, true);
 
     const isExplicit = allowedOrigins.includes(origin);
+    const isRfagymDomain = /^https?:\/\/(?:[a-zA-Z0-9-]+\.)?rfagym\.com(?::\d+)?$/i.test(origin);
     const isGoogleCloudRun = /\.run\.app$/i.test(origin) || /\.google\.com$/i.test(origin);
     const isLocalDev = !isProd && origin.startsWith('http://localhost:');
 
-    if (isExplicit || isGoogleCloudRun || isLocalDev) {
+    if (isExplicit || isRfagymDomain || isGoogleCloudRun || isLocalDev) {
       callback(null, true);
     } else {
       callback(new Error(`CORS Error: Origin '${origin}' is not authorized by GymPro security policy.`));

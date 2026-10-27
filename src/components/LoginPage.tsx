@@ -478,7 +478,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin, staffUsers, onBac
                         setUsername(e.target.value);
                         if (errorMsg) setErrorMsg(null);
                       }}
-                      placeholder={lockoutTimer > 0 ? "Akses dibekukan..." : "Contoh: admin, kasir, keuangan, pt, atau S13"}
+                      placeholder={lockoutTimer > 0 ? "Akses dibekukan..." : "Masukkan ID Akun, Username, atau No. HP..."}
                       className="w-full pl-10 pr-4 py-3 bg-zinc-950 border border-zinc-800 rounded-2xl text-xs sm:text-sm text-white placeholder-zinc-500 focus:outline-none focus:border-orange-500 focus:ring-1 focus:ring-orange-500 transition disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-zinc-900/60"
                       autoFocus
                     />
@@ -546,99 +546,6 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin, staffUsers, onBac
                     />
                     <span className="text-xs text-zinc-400 font-medium">Ingat sesi di perangkat ini</span>
                   </label>
-                </div>
-
-                {/* Quick Staff Credentials Helper */}
-                <div className="pt-2 pb-1">
-                  <p className="text-[11px] font-semibold text-zinc-400 mb-1.5">
-                    Pilih Cepat Akun Staf (Sandi: 123):
-                  </p>
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
-                    <button
-                      type="button"
-                      disabled={lockoutTimer > 0 || isLoading}
-                      onClick={() => {
-                        setUsername('admin');
-                        setPassword('123');
-                        if (errorMsg) setErrorMsg(null);
-                      }}
-                      className="text-[11px] font-mono px-2 py-1.5 rounded-xl bg-zinc-950 border border-rose-500/30 text-rose-300 hover:bg-rose-500/10 transition text-center disabled:opacity-40"
-                    >
-                      👑 Admin HQ
-                    </button>
-                    <button
-                      type="button"
-                      disabled={lockoutTimer > 0 || isLoading}
-                      onClick={() => {
-                        setUsername('keuangan');
-                        setPassword('123');
-                        if (errorMsg) setErrorMsg(null);
-                      }}
-                      className="text-[11px] font-mono px-2 py-1.5 rounded-xl bg-zinc-950 border border-emerald-500/30 text-emerald-300 hover:bg-emerald-500/10 transition text-center disabled:opacity-40 font-bold"
-                    >
-                      💰 Keuangan
-                    </button>
-                    <button
-                      type="button"
-                      disabled={lockoutTimer > 0 || isLoading}
-                      onClick={() => {
-                        setUsername('kasir');
-                        setPassword('123');
-                        if (errorMsg) setErrorMsg(null);
-                      }}
-                      className="text-[11px] font-mono px-2 py-1.5 rounded-xl bg-zinc-950 border border-blue-500/30 text-blue-300 hover:bg-blue-500/10 transition text-center disabled:opacity-40"
-                    >
-                      🖥️ Kasir POS
-                    </button>
-                    <button
-                      type="button"
-                      disabled={lockoutTimer > 0 || isLoading}
-                      onClick={() => {
-                        setUsername('leader_pt');
-                        setPassword('123');
-                        if (errorMsg) setErrorMsg(null);
-                      }}
-                      className="text-[11px] font-mono px-2 py-1.5 rounded-xl bg-zinc-950 border border-amber-500/30 text-amber-300 hover:bg-amber-500/10 transition text-center disabled:opacity-40"
-                    >
-                      🏋️ Leader PT
-                    </button>
-                    <button
-                      type="button"
-                      disabled={lockoutTimer > 0 || isLoading}
-                      onClick={() => {
-                        setUsername('kreator');
-                        setPassword('123');
-                        if (errorMsg) setErrorMsg(null);
-                      }}
-                      className="text-[11px] font-mono px-2 py-1.5 rounded-xl bg-zinc-950 border border-fuchsia-500/30 text-fuchsia-300 hover:bg-fuchsia-500/10 transition text-center disabled:opacity-40 font-bold"
-                    >
-                      🎨 Konten Kreator
-                    </button>
-                    <button
-                      type="button"
-                      disabled={lockoutTimer > 0 || isLoading}
-                      onClick={() => {
-                        setUsername('keamanan');
-                        setPassword('123');
-                        if (errorMsg) setErrorMsg(null);
-                      }}
-                      className="text-[11px] font-mono px-2 py-1.5 rounded-xl bg-zinc-950 border border-indigo-500/30 text-indigo-300 hover:bg-indigo-500/10 transition text-center disabled:opacity-40 font-bold"
-                    >
-                      🛡️ Keamanan
-                    </button>
-                    <button
-                      type="button"
-                      disabled={lockoutTimer > 0 || isLoading}
-                      onClick={() => {
-                        setUsername('kebersihan');
-                        setPassword('123');
-                        if (errorMsg) setErrorMsg(null);
-                      }}
-                      className="text-[11px] font-mono px-2 py-1.5 rounded-xl bg-zinc-950 border border-teal-500/30 text-teal-300 hover:bg-teal-500/10 transition text-center disabled:opacity-40 font-bold"
-                    >
-                      🧹 Kebersihan
-                    </button>
-                  </div>
                 </div>
 
                 {/* Submit Button */}
@@ -745,39 +652,10 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin, staffUsers, onBac
 
               <div className="flex items-start gap-2.5">
                 <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
-                <div className="w-full">
-                  <span className="font-bold text-zinc-200">Daftar Akun Standar (Sandi: 123):</span>
-                  <div className="mt-2 space-y-1 font-mono text-[11px] text-zinc-300 bg-zinc-900/80 p-2.5 rounded-xl border border-zinc-800">
-                    <div className="flex justify-between">
-                      <span className="text-rose-300">Super Admin (HQ)</span>
-                      <span>Username: <strong className="text-white">admin</strong></span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-emerald-300 font-bold">Staf Keuangan (HQ)</span>
-                      <span>Username: <strong className="text-white">keuangan</strong></span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-blue-300">Kasir & Front Desk</span>
-                      <span>Username: <strong className="text-white">kasir</strong></span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-amber-300">Head Coach / Leader PT</span>
-                      <span>Username: <strong className="text-white">leader_pt</strong></span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-fuchsia-300 font-bold">Konten Kreator & CMS</span>
-                      <span>Username: <strong className="text-white">kreator</strong></span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <div className="flex items-start gap-2.5">
-                <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
                 <div>
-                  <span className="font-bold text-zinc-200">Reset Sandi Mandiri:</span>
+                  <span className="font-bold text-zinc-200">Reset Sandi Mandiri / Hubungi Admin:</span>
                   <p className="text-zinc-400 mt-0.5">
-                    Hubungi Admin atau PIC di meja operasional untuk bantuan pemulihan kata sandi akun Anda.
+                    Hubungi Administrator HQ, Manajer Operasional, atau Bagian HR untuk bantuan aktivasi atau pemulihan kata sandi akun Anda.
                   </p>
                 </div>
               </div>
