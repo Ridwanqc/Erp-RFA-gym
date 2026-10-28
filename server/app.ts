@@ -19,6 +19,7 @@ import { transactionRouter } from './routes/transactionRoutes';
 import { securityRouter } from './routes/securityRoutes';
 import { uploadRouter } from './routes/uploadRoutes';
 import { expenseRouter } from './routes/expenseRoutes';
+import { settingsRouter } from './routes/settingsRoutes';
 import { AuditService } from './services/auditService';
 
 dotenv.config();
@@ -151,6 +152,7 @@ app.use('/api/transactions', transactionRouter);
 app.use('/api/admin/security', securityRouter);
 app.use('/api/upload', uploadRouter);
 app.use('/api/expenses', expenseRouter);
+app.use('/api/settings', settingsRouter);
 
 // 9. Static Assets & Frontend Integration
 if (isProduction || fs.existsSync(distPath)) {

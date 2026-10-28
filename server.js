@@ -2004,6 +2004,113 @@ expenseRouter.get(
   }
 );
 
+// server/routes/settingsRoutes.ts
+import { Router as Router7 } from "express";
+var settingsRouter = Router7();
+var inMemorySettingsStore = {
+  google_sheets_config: {
+    activeSpreadsheetId: "",
+    spreadsheetName: "",
+    spreadsheetUrl: "",
+    autoSyncEnabled: true,
+    syncMethod: "oauth",
+    lastSyncTime: null,
+    googleClientId: ""
+  }
+};
+settingsRouter.get("/:key", async (req, res) => {
+  const { key } = req.params;
+  if (!pgPool) {
+    return res.status(200).json({
+      success: true,
+      key,
+      value: inMemorySettingsStore[key] || null,
+      source: "in_memory"
+    });
+  }
+  try {
+    const result = await pgPool.query(
+      "SELECT key, value, updated_at, updated_by FROM system_settings WHERE key = $1",
+      [key]
+    );
+    if (result.rows.length === 0) {
+      return res.status(200).json({
+        success: true,
+        key,
+        value: inMemorySettingsStore[key] || null,
+        source: "default"
+      });
+    }
+    return res.status(200).json({
+      success: true,
+      key,
+      value: result.rows[0].value,
+      updatedAt: result.rows[0].updated_at,
+      updatedBy: result.rows[0].updated_by,
+      source: "postgresql"
+    });
+  } catch (err) {
+    console.warn(`[Settings] DB query fallback for key ${key}:`, err.message);
+    return res.status(200).json({
+      success: true,
+      key,
+      value: inMemorySettingsStore[key] || null,
+      source: "in_memory_fallback"
+    });
+  }
+});
+settingsRouter.post("/:key", async (req, res) => {
+  const { key } = req.params;
+  const { value, updatedBy = "ADMIN" } = req.body;
+  if (!value) {
+    return res.status(400).json({ success: false, message: "Nilai konfigurasi (value) wajib disertakan." });
+  }
+  inMemorySettingsStore[key] = value;
+  if (!pgPool) {
+    return res.status(200).json({
+      success: true,
+      key,
+      value,
+      source: "in_memory"
+    });
+  }
+  try {
+    await pgPool.query(`
+      CREATE TABLE IF NOT EXISTS system_settings (
+        key VARCHAR(100) PRIMARY KEY,
+        value JSONB NOT NULL,
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+        updated_by VARCHAR(50) DEFAULT 'ADMIN'
+      );
+    `);
+    const result = await pgPool.query(
+      `INSERT INTO system_settings (key, value, updated_at, updated_by)
+       VALUES ($1, $2, CURRENT_TIMESTAMP, $3)
+       ON CONFLICT (key) DO UPDATE
+       SET value = EXCLUDED.value, updated_at = CURRENT_TIMESTAMP, updated_by = EXCLUDED.updated_by
+       RETURNING key, value, updated_at, updated_by`,
+      [key, JSON.stringify(value), updatedBy]
+    );
+    return res.status(200).json({
+      success: true,
+      key: result.rows[0].key,
+      value: result.rows[0].value,
+      updatedAt: result.rows[0].updated_at,
+      updatedBy: result.rows[0].updated_by,
+      source: "postgresql"
+    });
+  } catch (err) {
+    console.error(`[Settings] Failed to save setting ${key} to PostgreSQL:`, err);
+    return res.status(200).json({
+      success: true,
+      key,
+      value,
+      source: "in_memory_fallback",
+      warning: `Disimpan di memori runtime (Gagal simpan ke DB: ${err.message})`
+    });
+  }
+});
+
 // server/app.ts
 import pg from "pg";
 dotenv.config();
@@ -2102,6 +2209,7 @@ app.use("/api/transactions", transactionRouter);
 app.use("/api/admin/security", securityRouter);
 app.use("/api/upload", uploadRouter);
 app.use("/api/expenses", expenseRouter);
+app.use("/api/settings", settingsRouter);
 if (isProduction || fs.existsSync(distPath)) {
   app.use(
     express.static(distPath, {

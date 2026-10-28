@@ -35,9 +35,9 @@ export default defineConfig(() => {
         ],
         manifest: {
           id: '/',
-          name: 'GymPro ERP Enterprise',
-          short_name: 'GymPro ERP',
-          description: 'Sistem ERP Fitness & Gym terpadu dengan Manajemen Inventaris & Servis Alat Gym, Jadwal Maintenance & SPK Teknisi, Pengadaan & Sparepart, Paket Bundling Membership + PT, Kasir POS, dan Laporan Keuangan.',
+          name: 'RFA GYM',
+          short_name: 'RFA GYM',
+          description: 'Aplikasi Resmi RFA GYM - Presensi Member, Jadwal PT, Kasir POS & Manajemen Kebugaran Terpadu.',
           theme_color: '#09090b',
           background_color: '#09090b',
           display: 'standalone',

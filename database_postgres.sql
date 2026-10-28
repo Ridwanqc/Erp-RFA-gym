@@ -359,3 +359,23 @@ VALUES (
     true
 )
 ON CONFLICT (id) DO NOTHING;
+
+-- --------------------------------------------------------
+-- 15. TABEL SYSTEM SETTINGS (Google Sheets & ERP Configuration)
+-- --------------------------------------------------------
+CREATE TABLE IF NOT EXISTS system_settings (
+    key VARCHAR(100) PRIMARY KEY,
+    value JSONB NOT NULL,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_by VARCHAR(50) DEFAULT 'ADMIN'
+);
+
+INSERT INTO system_settings (key, value, updated_at, updated_by)
+VALUES (
+    'google_sheets_config',
+    '{"activeSpreadsheetId": "", "spreadsheetName": "", "autoSyncEnabled": true, "syncMethod": "oauth", "lastSyncTime": null}',
+    CURRENT_TIMESTAMP,
+    'SYSTEM'
+)
+ON CONFLICT (key) DO NOTHING;
+

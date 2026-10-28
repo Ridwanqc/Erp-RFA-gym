@@ -47,13 +47,13 @@ export const PWAInstallModal: React.FC<PWAInstallModalProps> = ({ isOpen, onClos
           <div className="flex items-center gap-3">
             <img
               src="/pwa-192x192.png"
-              alt="GymPro ERP"
+              alt="RFA GYM"
               className="w-12 h-12 rounded-2xl shadow-md border border-orange-500/30 object-cover bg-zinc-950 p-1"
             />
             <div>
               <div className="flex items-center gap-2">
                 <h3 className="text-base sm:text-lg font-black text-white tracking-tight">
-                  GymPro ERP PWA
+                  RFA GYM App
                 </h3>
                 <span className="text-[10px] font-extrabold uppercase px-2 py-0.5 rounded-full bg-orange-500/20 text-orange-400 border border-orange-500/30">
                   Mobile & Desktop
@@ -128,7 +128,7 @@ export const PWAInstallModal: React.FC<PWAInstallModalProps> = ({ isOpen, onClos
             {isInstallable && (
               <div className="p-3.5 bg-gradient-to-r from-orange-500/10 to-amber-500/10 border border-orange-500/30 rounded-2xl">
                 <p className="text-xs text-zinc-300 mb-2.5">
-                  Perangkat Anda siap memasang GymPro ERP secara langsung:
+                  Perangkat Anda siap memasang RFA GYM secara langsung:
                 </p>
                 <button
                   type="button"
@@ -159,7 +159,7 @@ export const PWAInstallModal: React.FC<PWAInstallModalProps> = ({ isOpen, onClos
                   Pilih menu <strong className="text-orange-400">"Install aplikasi"</strong> atau <strong className="text-orange-400">"Tambahkan ke Layar Utama"</strong> (*Add to Home screen*).
                 </li>
                 <li className="leading-relaxed">
-                  Tekan <strong className="text-white">"Install"</strong>. Aplikasi GymPro ERP akan langsung tersedia di menu aplikasi ponsel Anda.
+                  Tekan <strong className="text-white">"Install"</strong>. Aplikasi RFA GYM akan langsung tersedia di menu aplikasi ponsel Anda.
                 </li>
               </ol>
             </div>
@@ -179,7 +179,7 @@ export const PWAInstallModal: React.FC<PWAInstallModalProps> = ({ isOpen, onClos
                     1
                   </div>
                   <div className="text-zinc-300 text-xs">
-                    Buka halaman GymPro ERP ini menggunakan browser <strong className="text-white">Safari</strong> di iPhone/iPad Anda.
+                    Buka halaman RFA GYM ini menggunakan browser <strong className="text-white">Safari</strong> di iPhone/iPad Anda.
                   </div>
                 </div>
 

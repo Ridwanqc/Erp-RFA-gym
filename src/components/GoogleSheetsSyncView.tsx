@@ -22,7 +22,12 @@ import {
   Briefcase,
   Receipt,
   CalendarCheck,
-  Crown
+  Crown,
+  Database,
+  Key,
+  Save,
+  Check,
+  Settings
 } from 'lucide-react';
 import { Member, Transaction, Product, Schedule, User as AppUser, CompanyExpense, Attendance, PackageItem } from '../types';
 import {
@@ -130,6 +135,53 @@ export const GoogleSheetsSyncView: React.FC<GoogleSheetsSyncViewProps> = ({
   const [isLoadingPreview, setIsLoadingPreview] = useState(false);
   const [previewRows, setPreviewRows] = useState<any[][]>([]);
 
+  // PostgreSQL Database & Manual Auth Config State
+  const [isConfigModalOpen, setIsConfigModalOpen] = useState(false);
+  const [customClientId, setCustomClientId] = useState('');
+  const [manualTokenInput, setManualTokenInput] = useState('');
+  const [isSavingPostgres, setIsSavingPostgres] = useState(false);
+
+  // Load saved Google Sheets configuration from PostgreSQL database (database-rfa)
+  useEffect(() => {
+    // Fast initial load from local storage
+    try {
+      const saved = localStorage.getItem('rfa_google_sheets_config');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed.activeSpreadsheetId) {
+          setSelectedExistingId(parsed.activeSpreadsheetId);
+          if (onSetActiveSpreadsheetId) onSetActiveSpreadsheetId(parsed.activeSpreadsheetId);
+        }
+        if (parsed.googleClientId) setCustomClientId(parsed.googleClientId);
+        if (parsed.spreadsheetName) setSpreadsheetTitle(parsed.spreadsheetName);
+      }
+    } catch {}
+
+    // Load from PostgreSQL database (database-rfa)
+    fetch('/api/settings/google_sheets_config')
+      .then((r) => r.json())
+      .then((res) => {
+        if (res?.success && res?.value) {
+          const cfg = res.value;
+          if (cfg.activeSpreadsheetId) {
+            setSelectedExistingId(cfg.activeSpreadsheetId);
+            if (onSetActiveSpreadsheetId) {
+              onSetActiveSpreadsheetId(cfg.activeSpreadsheetId);
+            }
+          }
+          if (cfg.googleClientId) {
+            setCustomClientId(cfg.googleClientId);
+          }
+          if (cfg.spreadsheetName) {
+            setSpreadsheetTitle(cfg.spreadsheetName);
+          }
+        }
+      })
+      .catch((err) => {
+        console.warn('Could not load Google Sheets config from PostgreSQL:', err);
+      });
+  }, []);
+
   // Init auth token on mount
   useEffect(() => {
     getAccessToken().then((cached) => {
@@ -165,10 +217,41 @@ export const GoogleSheetsSyncView: React.FC<GoogleSheetsSyncViewProps> = ({
     }
   };
 
+  const handleSaveConfigToPostgres = async (sheetId?: string, clientId?: string) => {
+    try {
+      setIsSavingPostgres(true);
+      const targetId = sheetId || selectedExistingId || extractSpreadsheetId(customExistingUrl);
+      const res = await fetch('/api/settings/google_sheets_config', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          value: {
+            activeSpreadsheetId: targetId,
+            spreadsheetName: spreadsheetTitle,
+            autoSyncEnabled,
+            googleClientId: clientId !== undefined ? clientId : customClientId,
+            lastSyncTime: lastSyncTime || new Date().toISOString(),
+            database: 'database-rfa',
+            updatedAt: new Date().toISOString()
+          },
+          updatedBy: currentUser?.name || 'ADMIN'
+        })
+      });
+      const data = await res.json();
+      if (data?.success) {
+        showToast('Tersimpan di Database', 'Pengaturan Google Sheets tersimpan di PostgreSQL (database-rfa).', 'success');
+      }
+    } catch (err: any) {
+      console.warn('Gagal simpan ke PostgreSQL:', err);
+    } finally {
+      setIsSavingPostgres(false);
+    }
+  };
+
   const handleGoogleSignIn = async () => {
     try {
       setIsAuthenticating(true);
-      const result = await signInWithGoogle();
+      const result = await signInWithGoogle(customClientId);
       if (result) {
         setGoogleUser(result.user);
         setToken(result.accessToken);
@@ -178,13 +261,67 @@ export const GoogleSheetsSyncView: React.FC<GoogleSheetsSyncViewProps> = ({
           'success'
         );
         loadUserDriveFiles(result.accessToken);
+        handleSaveConfigToPostgres(selectedExistingId, customClientId);
       }
     } catch (err: any) {
+      if (err.message === 'MISSING_CLIENT_ID') {
+        setIsConfigModalOpen(true);
+        showToast(
+          'Konfigurasi Diperlukan',
+          'Masukkan Google OAuth Client ID atau Access Token Anda untuk menghubungkan.',
+          'info'
+        );
+      } else {
+        showToast(
+          'Gagal Login Google',
+          err.message || 'Izin Google Workspace diperlukan untuk menggunakan Google Sheets.',
+          'error'
+        );
+      }
+    } finally {
+      setIsAuthenticating(false);
+    }
+  };
+
+  const handleManualTokenSave = async () => {
+    if (!manualTokenInput.trim()) {
+      showToast('Token Kosong', 'Silakan tempelkan Google OAuth Access Token.', 'warning');
+      return;
+    }
+    const cleanToken = manualTokenInput.trim();
+    setIsAuthenticating(true);
+
+    try {
+      // Validate token with Google UserInfo
+      const res = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
+        headers: { Authorization: `Bearer ${cleanToken}` }
+      });
+      if (!res.ok) {
+        throw new Error('Token tidak valid atau telah kedaluwarsa. Silakan periksa kembali token Google Anda.');
+      }
+      const profile = await res.json();
+      const userObj = {
+        displayName: profile.name || 'Google User',
+        email: profile.email || 'Terhubung',
+        photoURL: profile.picture
+      };
+      setCachedAccessToken(cleanToken);
+      setToken(cleanToken);
+      setGoogleUser(userObj);
+      loadUserDriveFiles(cleanToken);
+
+      // Save configuration to PostgreSQL
+      await handleSaveConfigToPostgres(selectedExistingId, customClientId);
+
+      setIsConfigModalOpen(false);
+      setManualTokenInput('');
       showToast(
-        'Gagal Login Google',
-        err.message || 'Izin Google Workspace diperlukan untuk menggunakan Google Sheets.',
-        'error'
+        'Berhasil Terhubung ke Google',
+        `Akun ${profile.name || profile.email} aktif dan tersimpan di database-rfa.`,
+        'success'
       );
+    } catch (err: any) {
+      showToast('Verifikasi Token Gagal', err.message, 'error');
     } finally {
       setIsAuthenticating(false);
     }
@@ -386,6 +523,31 @@ export const GoogleSheetsSyncView: React.FC<GoogleSheetsSyncViewProps> = ({
               <p className="text-xs text-zinc-400 mt-1 max-w-2xl leading-relaxed">
                 Ekspor rekapitulasi keuangan, database member, presensi sesi PT, dan katalog produk langsung ke Google Spreadsheet di Google Drive Anda.
               </p>
+              <div className="flex items-center gap-2 mt-3 flex-wrap">
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-[11px] font-bold bg-blue-500/10 text-blue-400 border border-blue-500/30">
+                  <Database className="w-3.5 h-3.5 text-blue-400" />
+                  PostgreSQL: database-rfa
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setIsConfigModalOpen(true)}
+                  className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-[11px] font-bold bg-zinc-800 hover:bg-zinc-700 text-zinc-300 border border-zinc-700 transition cursor-pointer"
+                  title="Atur Google Client ID / Token Manual / Koneksi Database"
+                >
+                  <Key className="w-3.5 h-3.5 text-amber-400" />
+                  Konfigurasi OAuth & Token
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleSaveConfigToPostgres()}
+                  disabled={isSavingPostgres}
+                  className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-[11px] font-bold bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 transition cursor-pointer disabled:opacity-50"
+                  title="Simpan pengaturan sinkronisasi saat ini ke database PostgreSQL"
+                >
+                  <Save className="w-3.5 h-3.5 text-emerald-400" />
+                  {isSavingPostgres ? 'Menyimpan...' : 'Simpan ke PostgreSQL'}
+                </button>
+              </div>
             </div>
           </div>
 
@@ -402,7 +564,7 @@ export const GoogleSheetsSyncView: React.FC<GoogleSheetsSyncViewProps> = ({
                     />
                   ) : (
                     <div className="w-9 h-9 rounded-full bg-emerald-500/20 text-emerald-400 font-bold flex items-center justify-center text-xs border border-emerald-500/30">
-                      {googleUser.email?.slice(0, 2).toUpperCase()}
+                      {(googleUser.email || 'GO').slice(0, 2).toUpperCase()}
                     </div>
                   )}
                   <div>
@@ -417,42 +579,62 @@ export const GoogleSheetsSyncView: React.FC<GoogleSheetsSyncViewProps> = ({
                     </p>
                   </div>
                 </div>
-                <button
-                  type="button"
-                  onClick={handleGoogleDisconnect}
-                  className="p-1.5 text-zinc-400 hover:text-rose-400 rounded-lg hover:bg-zinc-800 transition"
-                  title="Putuskan sambungan Google"
-                >
-                  <LogOut className="w-4 h-4" />
-                </button>
+                <div className="flex items-center gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => setIsConfigModalOpen(true)}
+                    className="p-1.5 text-zinc-400 hover:text-white rounded-lg hover:bg-zinc-800 transition"
+                    title="Atur OAuth & Token"
+                  >
+                    <Settings className="w-4 h-4 text-amber-400" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleGoogleDisconnect}
+                    className="p-1.5 text-zinc-400 hover:text-rose-400 rounded-lg hover:bg-zinc-800 transition"
+                    title="Putuskan sambungan Google"
+                  >
+                    <LogOut className="w-4 h-4" />
+                  </button>
+                </div>
               </div>
             ) : (
-              <button
-                type="button"
-                onClick={handleGoogleSignIn}
-                disabled={isAuthenticating}
-                className="w-full sm:w-auto flex items-center justify-center gap-2.5 px-4 py-2.5 bg-white hover:bg-zinc-100 text-zinc-900 rounded-xl text-xs font-bold transition shadow-sm cursor-pointer disabled:opacity-50"
-              >
-                <svg className="w-4 h-4 shrink-0" viewBox="0 0 48 48">
-                  <path
-                    fill="#EA4335"
-                    d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"
-                  />
-                  <path
-                    fill="#4285F4"
-                    d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"
-                  />
-                  <path
-                    fill="#FBBC05"
-                    d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"
-                  />
-                  <path
-                    fill="#34A853"
-                    d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"
-                  />
-                </svg>
-                <span>{isAuthenticating ? 'Menghubungkan...' : 'Sign in with Google'}</span>
-              </button>
+              <div className="flex items-center gap-2 w-full sm:w-auto">
+                <button
+                  type="button"
+                  onClick={handleGoogleSignIn}
+                  disabled={isAuthenticating}
+                  className="flex-1 sm:flex-none flex items-center justify-center gap-2.5 px-4 py-2.5 bg-white hover:bg-zinc-100 text-zinc-900 rounded-xl text-xs font-bold transition shadow-sm cursor-pointer disabled:opacity-50"
+                >
+                  <svg className="w-4 h-4 shrink-0" viewBox="0 0 48 48">
+                    <path
+                      fill="#EA4335"
+                      d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"
+                    />
+                    <path
+                      fill="#4285F4"
+                      d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"
+                    />
+                    <path
+                      fill="#FBBC05"
+                      d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"
+                    />
+                    <path
+                      fill="#34A853"
+                      d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"
+                    />
+                  </svg>
+                  <span>{isAuthenticating ? 'Menghubungkan...' : 'Sign in with Google'}</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setIsConfigModalOpen(true)}
+                  className="p-2.5 text-zinc-400 hover:text-white rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 transition cursor-pointer shrink-0"
+                  title="Atur OAuth Client ID / Token Manual"
+                >
+                  <Key className="w-4 h-4 text-amber-400" />
+                </button>
+              </div>
             )}
           </div>
         </div>
@@ -1202,6 +1384,124 @@ export const GoogleSheetsSyncView: React.FC<GoogleSheetsSyncViewProps> = ({
                 }`}
               >
                 Ya, Lanjutkan Sinkronisasi
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* GOOGLE WORKSPACE OAUTH & POSTGRESQL CONFIGURATION MODAL (NON-FIREBASE) */}
+      {isConfigModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in">
+          <div className="bg-zinc-900 border border-zinc-700 rounded-3xl p-6 max-w-lg w-full space-y-5 shadow-2xl">
+            <div className="flex items-center justify-between border-b border-zinc-800 pb-3">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400">
+                  <Key className="w-5 h-5" />
+                </div>
+                <div>
+                  <h4 className="font-bold text-white text-base">Konfigurasi Google Sheets & Drive</h4>
+                  <p className="text-[11px] text-zinc-400 flex items-center gap-1.5 mt-0.5">
+                    <Database className="w-3.5 h-3.5 text-blue-400" />
+                    Database: <span className="text-blue-300 font-mono font-bold">database-rfa</span> (Murni PostgreSQL, Tanpa Firebase)
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsConfigModalOpen(false)}
+                className="text-zinc-400 hover:text-white p-2 rounded-xl hover:bg-zinc-800 transition cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Method 1: Google OAuth Client ID */}
+            <div className="space-y-2 bg-zinc-950/60 border border-zinc-800 rounded-2xl p-4">
+              <label className="block text-xs font-bold text-white flex items-center gap-1.5">
+                <span>Opsi 1: Google OAuth Client ID (Untuk Pop-up Sign-in)</span>
+              </label>
+              <p className="text-[11px] text-zinc-400">
+                Masukkan Client ID dari Google Cloud Console agar tombol <em>"Sign in with Google"</em> memunculkan pop-up akun.
+              </p>
+              <input
+                type="text"
+                value={customClientId}
+                onChange={(e) => setCustomClientId(e.target.value)}
+                placeholder="Contoh: 479391950001-xxxx.apps.googleusercontent.com"
+                className="w-full bg-zinc-900 border border-zinc-700 rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-emerald-500 font-mono"
+              />
+              <div className="flex justify-end pt-1">
+                <button
+                  type="button"
+                  onClick={async () => {
+                    await handleSaveConfigToPostgres(selectedExistingId, customClientId);
+                    setIsConfigModalOpen(false);
+                    if (customClientId) {
+                      handleGoogleSignIn();
+                    }
+                  }}
+                  className="px-3.5 py-1.5 bg-zinc-800 hover:bg-zinc-700 text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer"
+                >
+                  <Save className="w-3.5 h-3.5 text-emerald-400" />
+                  Simpan Client ID ke PostgreSQL
+                </button>
+              </div>
+            </div>
+
+            {/* Method 2: Paste OAuth Access Token Directly */}
+            <div className="space-y-2 bg-zinc-950/60 border border-zinc-800 rounded-2xl p-4">
+              <label className="block text-xs font-bold text-white flex items-center gap-1.5">
+                <span>Opsi 2: Tempel Google OAuth Access Token (Langsung Aktif)</span>
+                <span className="text-[9px] bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 px-1.5 py-0.5 rounded font-black">
+                  REKOMENDASI INSTAN
+                </span>
+              </label>
+              <p className="text-[11px] text-zinc-400 leading-relaxed">
+                Tempelkan Bearer Access Token Google untuk langsung menghubungkan dan menguji sinkronisasi ke spreadsheet tanpa perlu menyetel Client ID:
+              </p>
+              <div className="flex gap-2">
+                <input
+                  type="password"
+                  value={manualTokenInput}
+                  onChange={(e) => setManualTokenInput(e.target.value)}
+                  placeholder="ya29.a0AcM612x..."
+                  className="flex-1 bg-zinc-900 border border-zinc-700 rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-emerald-500 font-mono"
+                />
+                <button
+                  type="button"
+                  onClick={handleManualTokenSave}
+                  disabled={isAuthenticating || !manualTokenInput.trim()}
+                  className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold rounded-xl transition flex items-center gap-1.5 disabled:opacity-50 cursor-pointer shadow-md shrink-0"
+                >
+                  <Check className="w-4 h-4" />
+                  {isAuthenticating ? 'Memverifikasi...' : 'Terapkan Token'}
+                </button>
+              </div>
+              <div className="text-[10px] text-zinc-500 pt-1 flex items-center justify-between">
+                <span>Dapat diperoleh dari Google OAuth 2.0 Playground</span>
+                <a
+                  href="https://developers.google.com/oauthplayground"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-amber-400 hover:underline flex items-center gap-1"
+                >
+                  <span>Buka Playground</span>
+                  <ExternalLink className="w-3 h-3" />
+                </a>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-between pt-2">
+              <span className="text-[11px] text-zinc-400">
+                Data disimpan di database PostgreSQL <code className="text-zinc-200">database-rfa</code>
+              </span>
+              <button
+                type="button"
+                onClick={() => setIsConfigModalOpen(false)}
+                className="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs font-bold rounded-xl transition cursor-pointer"
+              >
+                Tutup
               </button>
             </div>
           </div>

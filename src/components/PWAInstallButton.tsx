@@ -38,7 +38,7 @@ export const PWAInstallButton: React.FC<PWAInstallButtonProps> = ({
           type="button"
           id="btn-install-pwa-compact"
           onClick={handleClick}
-          title="Pasang Aplikasi GymPro ERP (Android & iOS)"
+          title="Pasang Aplikasi RFA GYM (Android & iOS)"
           className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs font-bold bg-orange-500/15 hover:bg-orange-500/25 text-orange-400 border border-orange-500/30 transition active:scale-95 cursor-pointer shadow-xs ${className}`}
         >
           <Download className="w-3.5 h-3.5 text-orange-400 shrink-0" />
