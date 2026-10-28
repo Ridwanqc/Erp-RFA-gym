@@ -40,6 +40,7 @@ import { useSettings } from '../context/SettingsContext';
 import { StockTransferModal } from './StockTransferModal';
 import { TransactionActions } from './transaction/TransactionActions';
 import { resizeImageFile, PRESET_PRODUCT_IMAGES } from '../utils/imageUtils';
+import { uploadPhotoToServer } from '../utils/uploadService';
 
 interface ProductManagementViewProps {
   products: Product[];
@@ -108,8 +109,12 @@ export const ProductManagementView: React.FC<ProductManagementViewProps> = ({
     try {
       setIsProcessingImg(true);
       setPhotoError(null);
-      const optimizedDataUrl = await resizeImageFile(file, 500, 0.82);
-      setFormData((prev) => ({ ...prev, img: optimizedDataUrl }));
+      // Upload to persistent server storage volume (/app/uploads/products)
+      const uploadRes = await uploadPhotoToServer(file, {
+        category: 'products',
+        originalFilename: file.name
+      });
+      setFormData((prev) => ({ ...prev, img: uploadRes.url }));
     } catch (err: any) {
       setPhotoError(err?.message || 'Gagal memproses file foto');
     } finally {

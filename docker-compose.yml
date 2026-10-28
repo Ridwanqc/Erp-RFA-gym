@@ -1,0 +1,33 @@
+version: '3.8'
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: rfa_gym_app
+    restart: unless-stopped
+    ports:
+      - '3000:3000'
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      - APP_URL=https://rfagym.com
+      - DATABASE_URL=${DATABASE_URL:-postgresql://postgres:gmrupqphzbc4kmba@rfa-gym-databaserfa-hdpe58:5432/database-rfa}
+      - UPLOAD_DIR=/app/uploads
+      - JWT_SECRET=${JWT_SECRET:-rfa_gym_erp_sec_2026_9f83ac71b2d4e805f1a3e9c7d2b406e8}
+      - REFRESH_TOKEN_SECRET=${REFRESH_TOKEN_SECRET:-rfa_gym_erp_ref_2026_81a4b6c3d9e0f2175a4c8e9b0d2f3a57}
+    volumes:
+      # Persistent Named Volume: Foto tetap utuh saat redeploy, restart, atau build ulang
+      - rfa_gym_uploads:/app/uploads
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://127.0.0.1:3000/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+
+volumes:
+  # Named volume khusus seluruh upload foto member, staf, trainer, produk, dan struk nota
+  rfa_gym_uploads:
+    name: rfa_gym_uploads

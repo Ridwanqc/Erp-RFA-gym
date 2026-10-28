@@ -45,6 +45,7 @@ import {
   PASS_BG_UPDATE_EVENT,
   BackgroundPreset
 } from '../utils/memberPassConfig';
+import { uploadPhotoToServer } from '../utils/uploadService';
 
 declare global {
   interface Window {
@@ -499,13 +500,29 @@ export const IDCardModal: React.FC<IDCardModalProps> = ({
   };
 
   // Background Management Handlers
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
     if (file.size > 5 * 1024 * 1024) {
       alert('Ukuran berkas gambar maksimal 5MB.');
       return;
+    }
+
+    try {
+      const uploadRes = await uploadPhotoToServer(file, { category: 'member-cards' });
+      if (uploadRes.success && uploadRes.url) {
+        const updated: PassBackgroundConfig = {
+          ...bgConfig,
+          type: 'custom_image',
+          customImageUrl: uploadRes.url,
+          customImageName: file.name
+        };
+        setBgConfig(updated);
+        return;
+      }
+    } catch (err) {
+      console.warn('Fallback to local dataUrl for ID card background', err);
     }
 
     const reader = new FileReader();

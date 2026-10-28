@@ -17,9 +17,10 @@ import { authRouter } from './routes/authRoutes';
 import { memberRouter } from './routes/memberRoutes';
 import { transactionRouter } from './routes/transactionRoutes';
 import { securityRouter } from './routes/securityRoutes';
-import { uploadRouter } from './routes/uploadRoutes';
+import { uploadRouter, serveUploadsHandler } from './routes/uploadRoutes';
 import { expenseRouter } from './routes/expenseRoutes';
 import { settingsRouter } from './routes/settingsRoutes';
+import { initStorageDirectories } from './services/storageService';
 import { AuditService } from './services/auditService';
 
 dotenv.config();
@@ -30,6 +31,9 @@ const __dirname = path.dirname(__filename);
 // In compiled bundle, __dirname may point to root; check for dist relative to root
 const rootDir = process.cwd();
 const distPath = path.resolve(rootDir, 'dist');
+
+// Ensure persistent uploads directories exist on boot
+initStorageDirectories();
 
 const app = express();
 const isProduction = process.env.NODE_ENV === 'production';
@@ -153,6 +157,12 @@ app.use('/api/admin/security', securityRouter);
 app.use('/api/upload', uploadRouter);
 app.use('/api/expenses', expenseRouter);
 app.use('/api/settings', settingsRouter);
+
+// 8.1. Persistent Uploaded Photos Serving (Docker Named Volume rfa_gym_uploads)
+app.get('/uploads/:category/:filename', serveUploadsHandler);
+app.get('/uploads/:filename', (req: Request, res: Response) => {
+  return serveUploadsHandler({ ...req, params: { category: 'members', filename: req.params.filename } } as any, res);
+});
 
 // 9. Static Assets & Frontend Integration
 if (isProduction || fs.existsSync(distPath)) {

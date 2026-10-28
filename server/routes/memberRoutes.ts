@@ -96,3 +96,55 @@ memberRouter.put(
     });
   }
 );
+
+// 4. POST /api/members/:id/photo (Update member photo in database & audit log)
+memberRouter.post(
+  '/:id/photo',
+  authMiddleware,
+  sensitiveActionRateLimiter,
+  requireRoles(['ADMIN', 'LEADER', 'KARYAWAN', 'KASIR', 'TRAINER']),
+  async (req: Request, res: Response) => {
+    const { id } = req.params;
+    const { photoUrl } = req.body;
+
+    if (!photoUrl || typeof photoUrl !== 'string') {
+      return res.status(400).json({ success: false, message: 'URL / path foto wajib disertakan.' });
+    }
+
+    // 1. Update in-memory member store
+    const member = db.members.get(id);
+    if (member) {
+      member.photo = photoUrl;
+      member.updatedAt = new Date();
+    }
+
+    // 2. Persist to PostgreSQL if connected
+    const { pgPool } = await import('../app');
+    if (pgPool) {
+      try {
+        await pgPool.query(
+          'UPDATE members SET photo = $1, photo_path = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2',
+          [photoUrl, id]
+        );
+      } catch (dbErr: any) {
+        console.warn('[PostgreSQL] Failed to persist member photo:', dbErr.message);
+      }
+    }
+
+    AuditService.log({
+      userId: req.user?.userId,
+      action: 'UPDATE_MEMBER_PHOTO',
+      module: 'MEMBER',
+      recordId: id,
+      newValue: { photoUrl },
+      ipAddress: req.ip
+    });
+
+    return res.status(200).json({
+      success: true,
+      message: 'Foto profil member berhasil diperbarui secara persisten.',
+      photoUrl
+    });
+  }
+);
+

@@ -16,6 +16,7 @@ import {
   X
 } from 'lucide-react';
 import { performIdCardOcr, ExtractedIdData } from '../utils/idCardOcr';
+import { uploadPhotoToServer } from '../utils/uploadService';
 
 export interface OfficialIdCardFormData {
   jenisIdentitas: 'KTP' | 'SIM' | 'Paspor' | 'Kartu Pelajar';
@@ -85,10 +86,20 @@ export const OfficialIdCardSection: React.FC<OfficialIdCardSectionProps> = ({
 
         setLastOcrResult(extracted);
 
+        let persistentUrl = dataUrl;
+        try {
+          const uploadRes = await uploadPhotoToServer(file, { category: 'member-cards' });
+          if (uploadRes.success && uploadRes.url) {
+            persistentUrl = uploadRes.url;
+          }
+        } catch (e) {
+          console.warn('Fallback to local photo preview for ID card', e);
+        }
+
         // Auto-fill extracted values into form state
         const updatedState: OfficialIdCardFormData = {
           ...value,
-          fotoIdentitas: dataUrl,
+          fotoIdentitas: persistentUrl,
           jenisIdentitas: extracted.idType || value.jenisIdentitas,
           nomorIdentitas: extracted.idNumber || value.nomorIdentitas,
           tanggalLahir: extracted.birthDate || value.tanggalLahir,

@@ -27,6 +27,7 @@ import {
   GymAsset
 } from '../../types';
 import { APP_TODAY, formatRp } from '../../utils/formatters';
+import { uploadPhotoToServer } from '../../utils/uploadService';
 
 interface ExpenseInputFormProps {
   categories: ExpenseCategory[];
@@ -142,7 +143,7 @@ export const ExpenseInputForm: React.FC<ExpenseInputFormProps> = ({
   const [validationErrors, setValidationErrors] = useState<Record<string, string>>({});
 
   // Handle File Upload (Max 5MB, format image or pdf)
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     setAttachmentError('');
     const file = e.target.files?.[0];
     if (!file) return;
@@ -159,13 +160,27 @@ export const ExpenseInputForm: React.FC<ExpenseInputFormProps> = ({
       return;
     }
 
-    const reader = new FileReader();
-    reader.onload = () => {
-      setAttachmentUrl(reader.result as string);
-      setAttachmentFileName(file.name);
-      showToast('Lampiran Terunggah', `File ${file.name} berhasil dimuat.`, 'info');
-    };
-    reader.readAsDataURL(file);
+    try {
+      if (file.type.startsWith('image/')) {
+        const res = await uploadPhotoToServer(file, { category: 'expenses' });
+        if (res.success && res.url) {
+          setAttachmentUrl(res.url);
+          setAttachmentFileName(file.name);
+          showToast('Lampiran Terunggah', `File foto bukti ${file.name} berhasil disimpan secara persisten.`, 'success');
+          return;
+        }
+      }
+      
+      const reader = new FileReader();
+      reader.onload = () => {
+        setAttachmentUrl(reader.result as string);
+        setAttachmentFileName(file.name);
+        showToast('Lampiran Terunggah', `File ${file.name} berhasil dimuat.`, 'info');
+      };
+      reader.readAsDataURL(file);
+    } catch (err: any) {
+      setAttachmentError('Gagal mengunggah lampiran ke server persisten.');
+    }
   };
 
   const removeAttachment = () => {

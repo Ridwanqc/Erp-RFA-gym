@@ -10,6 +10,7 @@ import { useSettings } from '../context/SettingsContext';
 import { DEFAULT_PIC_PROTECTION } from '../data/settingsData';
 import { OfficialIdCardSection } from './OfficialIdCardSection';
 import { PhotoEnlargeModal } from './common/PhotoEnlargeModal';
+import { uploadPhotoToServer } from '../utils/uploadService';
 
 interface MasterDataViewProps {
   members: Member[];
@@ -165,23 +166,45 @@ export const MasterDataView: React.FC<MasterDataViewProps> = ({
     setIsModalOpen(true);
   };
 
-  const handlePhotoFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
+
+  const handlePhotoFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
-      const url = URL.createObjectURL(e.target.files[0]);
-      setPhotoUrl(url);
+      const file = e.target.files[0];
+      const category = activeTab === 'member' ? 'members' : 'trainers';
+      setIsUploadingPhoto(true);
+      try {
+        const result = await uploadPhotoToServer(file, {
+          category,
+          originalFilename: file.name
+        });
+        setPhotoUrl(result.url);
+        if (result.success) {
+          showToast('Foto Terunggah', 'Foto berhasil disimpan secara persisten di server.', 'success');
+        }
+      } catch (err: any) {
+        showToast('Peringatan Upload', err.message || 'Gagal mengunggah foto ke server.', 'warning');
+      } finally {
+        setIsUploadingPhoto(false);
+      }
     }
   };
 
-  const handleIdPhotoFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleIdPhotoFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       const file = e.target.files[0];
-      const reader = new FileReader();
-      reader.onload = () => {
-        if (typeof reader.result === 'string') {
-          setIdPhoto(reader.result);
-        }
-      };
-      reader.readAsDataURL(file);
+      setIsUploadingPhoto(true);
+      try {
+        const result = await uploadPhotoToServer(file, {
+          category: 'member-cards',
+          originalFilename: file.name
+        });
+        setIdPhoto(result.url);
+      } catch (err: any) {
+        showToast('Peringatan Upload', err.message || 'Gagal mengunggah foto identitas.', 'warning');
+      } finally {
+        setIsUploadingPhoto(false);
+      }
     }
   };
 

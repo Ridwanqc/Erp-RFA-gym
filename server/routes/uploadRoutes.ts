@@ -1,112 +1,233 @@
 import { Router, Request, Response } from 'express';
-import crypto from 'crypto';
-import { authMiddleware } from '../middleware/auth';
+import multer from 'multer';
+import path from 'path';
+import fs from 'fs';
+import jwt from 'jsonwebtoken';
+import { authMiddleware, JWT_SECRET } from '../middleware/auth';
 import { sensitiveActionRateLimiter } from '../middleware/rateLimiter';
 import { AuditService } from '../services/auditService';
+import {
+  saveImageFile,
+  parseBase64Image,
+  resolveStoredFilePath,
+  ALLOWED_CATEGORIES,
+  StorageCategory,
+  MAX_FILE_SIZE_BYTES
+} from '../services/storageService';
+import { pgPool } from '../app';
 
 export const uploadRouter = Router();
 
-const ALLOWED_MIME_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
-const MAX_FILE_SIZE_BYTES = 5 * 1024 * 1024; // 5MB
+// Configure Multer for in-memory handling prior to deep magic-byte inspection and persistent write
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: {
+    fileSize: MAX_FILE_SIZE_BYTES
+  }
+});
 
-uploadRouter.post('/', authMiddleware, sensitiveActionRateLimiter, (req: Request, res: Response) => {
-  try {
-    const { base64Data, originalFilename, mimeType } = req.body;
+/**
+ * 1. POST /api/upload
+ * Multi-mode endpoint: supports multipart/form-data (field: 'file' or 'photo') AND base64 JSON payload
+ */
+uploadRouter.post(
+  '/',
+  authMiddleware,
+  sensitiveActionRateLimiter,
+  upload.single('file'),
+  async (req: Request, res: Response) => {
+    try {
+      let rawBuffer: Buffer | null = null;
+      let originalFilename: string | undefined;
 
-    if (!base64Data || typeof base64Data !== 'string') {
-      return res.status(400).json({ success: false, message: 'Data file base64 wajib disertakan.' });
-    }
+      // Extract category from body or query param
+      const rawCategory = (req.body?.category || req.query?.category || 'members') as string;
+      const category: StorageCategory = ALLOWED_CATEGORIES.includes(rawCategory as StorageCategory)
+        ? (rawCategory as StorageCategory)
+        : 'members';
 
-    // 1. MIME Type Whitelist
-    if (!mimeType || !ALLOWED_MIME_TYPES.includes(mimeType.toLowerCase())) {
-      AuditService.recordSecurityEvent({
-        eventType: 'ILLEGAL_FILE_TYPE_UPLOAD',
-        severity: 'MEDIUM',
-        ipAddress: req.ip,
+      // Mode A: Multer Multipart Form-Data Upload
+      if (req.file && req.file.buffer) {
+        rawBuffer = req.file.buffer;
+        originalFilename = req.file.originalname;
+      }
+      // Mode B: Base64 JSON Payload (Webcam / Canvas Capture / FileReader)
+      else if (req.body?.base64Data && typeof req.body.base64Data === 'string') {
+        const parsed = parseBase64Image(req.body.base64Data);
+        rawBuffer = parsed.buffer;
+        originalFilename = req.body.originalFilename || `${category}-capture.jpg`;
+      }
+
+      if (!rawBuffer || rawBuffer.length === 0) {
+        return res.status(400).json({
+          success: false,
+          message: 'File gambar tidak ditemukan. Kirim file melalui form-data atau base64Data.'
+        });
+      }
+
+      // Save to persistent Docker volume with magic byte validation & safe uuid naming
+      const saved = await saveImageFile(rawBuffer, category, originalFilename);
+
+      // Optional: If entity ID is provided, automatically link to PostgreSQL table
+      const { memberId, staffId, productId, expenseId } = req.body;
+
+      if (pgPool) {
+        try {
+          if (memberId && category === 'members') {
+            await pgPool.query(
+              'UPDATE members SET photo = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2',
+              [saved.url, memberId]
+            );
+          } else if (staffId && (category === 'trainers' || category === 'employees')) {
+            await pgPool.query(
+              'UPDATE users SET photo = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2',
+              [saved.url, staffId]
+            );
+          } else if (productId && category === 'products') {
+            await pgPool.query(
+              'UPDATE products SET img = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2',
+              [saved.url, productId]
+            );
+          } else if (expenseId && category === 'expenses') {
+            await pgPool.query(
+              'UPDATE company_expenses SET attachment_url = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2',
+              [saved.url, expenseId]
+            );
+          }
+        } catch (dbErr: any) {
+          console.warn('[Storage] DB photo reference update warning:', dbErr.message);
+        }
+      }
+
+      AuditService.log({
         userId: req.user?.userId,
-        details: `Percobaan upload tipe file tidak sah: ${mimeType || 'unknown'}`
+        action: 'FILE_UPLOAD',
+        module: 'UPLOAD',
+        recordId: saved.filename,
+        newValue: {
+          category: saved.category,
+          filename: saved.filename,
+          url: saved.url,
+          sizeBytes: saved.sizeBytes,
+          mimeType: saved.mimeType,
+          memberId,
+          staffId,
+          productId
+        },
+        ipAddress: req.ip
       });
+
+      return res.status(201).json({
+        success: true,
+        message: 'Foto berhasil disimpan secara persisten di server.',
+        file: {
+          fileId: saved.filename,
+          filename: saved.filename,
+          category: saved.category,
+          sizeBytes: saved.sizeBytes,
+          mimeType: saved.mimeType,
+          url: saved.url
+        }
+      });
+    } catch (err: any) {
+      console.error('[Upload] Error saving file:', err);
       return res.status(400).json({
         success: false,
-        message: 'Tipe file tidak diizinkan. Hanya file JPG, PNG, dan WebP yang diperbolehkan.'
+        message: err.message || 'Gagal memproses dan menyimpan file upload.'
+      });
+    }
+  }
+);
+
+/**
+ * 2. GET /uploads/:category/:filename
+ * Secure file retrieval with access control, anti-path-traversal, and HTTP caching
+ */
+export const serveUploadsHandler = async (req: Request, res: Response) => {
+  try {
+    const { category, filename } = req.params;
+
+    const resolvedFilePath = resolveStoredFilePath(category, filename);
+    if (!resolvedFilePath) {
+      return res.status(404).json({
+        success: false,
+        message: 'Berkas foto tidak ditemukan atau path tidak sah.'
       });
     }
 
-    // 2. File size validation
-    const rawBuffer = Buffer.from(base64Data.replace(/^data:image\/\w+;base64,/, ''), 'base64');
-    if (rawBuffer.length > MAX_FILE_SIZE_BYTES) {
-      return res.status(400).json({
-        success: false,
-        message: `Ukuran file melebihi batas maksimum 5MB (Ukuran: ${(rawBuffer.length / 1024 / 1024).toFixed(2)}MB).`
-      });
+    // Determine authorization requirement:
+    // Products, equipment, and public assets are public.
+    // Members, trainers, employees, and expenses require valid session or verified access.
+    const isPublicCategory = ['products', 'equipment', 'public'].includes(category);
+
+    if (!isPublicCategory) {
+      let isAuthorized = false;
+
+      // Check Bearer Token
+      const authHeader = req.headers.authorization;
+      if (authHeader && authHeader.startsWith('Bearer ')) {
+        const token = authHeader.substring(7).trim();
+        try {
+          jwt.verify(token, JWT_SECRET);
+          isAuthorized = true;
+        } catch {}
+      }
+
+      // Check Cookie
+      if (!isAuthorized && req.cookies && req.cookies.accessToken) {
+        try {
+          jwt.verify(req.cookies.accessToken, JWT_SECRET);
+          isAuthorized = true;
+        } catch {}
+      }
+
+      // Check URL query token if loaded in <img> tag
+      if (!isAuthorized && req.query.token && typeof req.query.token === 'string') {
+        try {
+          jwt.verify(req.query.token, JWT_SECRET);
+          isAuthorized = true;
+        } catch {}
+      }
+
+      // Check referrer / same-origin in standard browser session
+      const host = req.headers.host;
+      const referer = req.headers.referer;
+      if (!isAuthorized && referer && host && referer.includes(host)) {
+        isAuthorized = true;
+      }
+
+      if (!isAuthorized) {
+        return res.status(401).json({
+          success: false,
+          message: 'Akses ditolak: Autentikasi diperlukan untuk mengakses foto privat.'
+        });
+      }
     }
 
-    // 3. File Signature / Magic Byte verification
-    const isValidSignature = (buffer: Buffer, mime: string): boolean => {
-      if (mime === 'image/jpeg') {
-        // JPEG starts with FF D8 FF
-        return buffer.length >= 3 && buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[2] === 0xff;
-      }
-      if (mime === 'image/png') {
-        // PNG starts with 89 50 4E 47
-        return buffer.length >= 4 && buffer[0] === 0x89 && buffer[1] === 0x50 && buffer[2] === 0x4e && buffer[3] === 0x47;
-      }
-      if (mime === 'image/webp') {
-        // WEBP starts with RIFF ... WEBP
-        return buffer.length >= 12 && buffer.toString('ascii', 0, 4) === 'RIFF' && buffer.toString('ascii', 8, 12) === 'WEBP';
-      }
-      return false;
+    // Set correct Content-Type header based on extension
+    const ext = path.extname(resolvedFilePath).toLowerCase();
+    const mimeTypes: Record<string, string> = {
+      '.jpg': 'image/jpeg',
+      '.jpeg': 'image/jpeg',
+      '.png': 'image/png',
+      '.webp': 'image/webp'
     };
 
-    if (!isValidSignature(rawBuffer, mimeType.toLowerCase())) {
-      AuditService.recordSecurityEvent({
-        eventType: 'MALICIOUS_FILE_SIGNATURE',
-        severity: 'HIGH',
-        ipAddress: req.ip,
-        userId: req.user?.userId,
-        details: `File signature mismatch! Header file tidak cocok dengan MIME type '${mimeType}'. Kemungkinan file berbahaya terselubung.`
-      });
-      return res.status(400).json({
-        success: false,
-        message: 'File tidak valid: Format biner file tidak sesuai dengan tipe file gambar asli.'
-      });
-    }
+    const contentType = mimeTypes[ext] || 'application/octet-stream';
+    res.setHeader('Content-Type', contentType);
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('Cache-Control', isPublicCategory ? 'public, max-age=604800' : 'private, max-age=86400');
 
-    // 4. Safe Randomized Filename Generation (Anti-Path-Traversal)
-    const ext = mimeType.split('/')[1] === 'jpeg' ? 'jpg' : mimeType.split('/')[1];
-    const safeFileId = 'DOC-' + crypto.randomUUID() + `.${ext}`;
-    const cleanOriginalName = typeof originalFilename === 'string'
-      ? originalFilename.replace(/[^a-zA-Z0-9._-]/g, '_').slice(0, 50)
-      : 'upload';
-
-    AuditService.log({
-      userId: req.user?.userId,
-      action: 'FILE_UPLOAD',
-      module: 'UPLOAD',
-      recordId: safeFileId,
-      newValue: {
-        originalName: cleanOriginalName,
-        safeFileId,
-        sizeBytes: rawBuffer.length,
-        mimeType
-      },
-      ipAddress: req.ip
+    // Stream file efficiently
+    const stream = fs.createReadStream(resolvedFilePath);
+    stream.on('error', () => {
+      res.status(500).end();
     });
-
-    return res.status(201).json({
-      success: true,
-      message: 'File berhasil diverifikasi dan disimpan secara aman.',
-      file: {
-        fileId: safeFileId,
-        sizeBytes: rawBuffer.length,
-        mimeType,
-        url: `/uploads/${safeFileId}`
-      }
-    });
+    return stream.pipe(res);
   } catch (err: any) {
     return res.status(500).json({
       success: false,
-      message: 'Gagal memproses file upload.'
+      message: 'Gagal membaca berkas foto.'
     });
   }
-});
+};

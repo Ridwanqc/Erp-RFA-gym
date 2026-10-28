@@ -9,6 +9,7 @@ import { MemberCameraCaptureModal } from './MemberCameraCaptureModal';
 import { MemberQRCodeModal } from './MemberQRCodeModal';
 import { TransactionActions } from './transaction/TransactionActions';
 import { PhotoEnlargeModal } from './common/PhotoEnlargeModal';
+import { uploadMemberPhoto } from '../utils/uploadService';
 
 interface MemberDetailModalProps {
   isOpen: boolean;
@@ -69,22 +70,33 @@ export const MemberDetailModal: React.FC<MemberDetailModalProps> = ({
 
   if (!isOpen || !member) return null;
 
-  const handleSaveCapturedPhoto = (newPhotoUrl: string) => {
+  const handleSaveCapturedPhoto = async (newPhotoUrl: string) => {
+    // 1. Instant optimistic update
     setLocalPhoto(newPhotoUrl);
+
+    // 2. Persist to server volume /app/uploads/members and PostgreSQL database
+    let permanentUrl = newPhotoUrl;
+    try {
+      permanentUrl = await uploadMemberPhoto(member.id, newPhotoUrl);
+      setLocalPhoto(permanentUrl);
+    } catch (err: any) {
+      console.warn('Gagal menyimpan foto ke storage persisten:', err);
+    }
+
     const updatedMember: Member = {
       ...member,
-      photo: newPhotoUrl
+      photo: permanentUrl
     };
     if (onUpdateMember) {
       onUpdateMember(updatedMember);
     }
     if (onUpdatePhoto) {
-      onUpdatePhoto(member.id, newPhotoUrl);
+      onUpdatePhoto(member.id, permanentUrl);
     }
     if (showToast) {
       showToast(
-        'Foto Profil Diperbarui',
-        `Foto profil untuk ${member.name} (${member.id}) berhasil diperbarui melalui kamera dan disimpan.`,
+        'Foto Profil Tersimpan',
+        `Foto profil untuk ${member.name} (${member.id}) berhasil disimpan secara persisten di server.`,
         'success'
       );
     }

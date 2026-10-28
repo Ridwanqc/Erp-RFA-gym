@@ -15,6 +15,12 @@ import {
   corsOptions
 } from '../middleware/security';
 import { requireRoles, requireMemberOwnershipOrStaff } from '../middleware/rbac';
+import {
+  verifyImageMagicBytes,
+  saveImageFile,
+  resolveStoredFilePath,
+  ALLOWED_CATEGORIES
+} from '../services/storageService';
 
 describe('Layered Security & Anti-Hacking Test Suite (TDD)', () => {
   beforeEach(() => {
@@ -453,6 +459,75 @@ describe('Layered Security & Anti-Hacking Test Suite (TDD)', () => {
       };
       requireMemberOwnershipOrStaff(reqUnassigned, res2, () => {});
       expect(unassignedBlocked).toBe(true);
+    });
+  });
+
+  describe('13. Persistent Photo Storage, Magic Bytes & Anti-Traversal Upload Validation', () => {
+    it('should correctly identify valid image magic bytes for JPEG, PNG, and WebP', () => {
+      // JPEG magic bytes: FF D8 FF
+      const jpegBuf = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46, 0x49, 0x46, 0x00, 0x01]);
+      const jpegRes = verifyImageMagicBytes(jpegBuf);
+      expect(jpegRes.isValid).toBe(true);
+      expect(jpegRes.mimeType).toBe('image/jpeg');
+
+      // PNG magic bytes: 89 50 4E 47 0D 0A 1A 0A
+      const pngBuf = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00, 0x0d]);
+      const pngRes = verifyImageMagicBytes(pngBuf);
+      expect(pngRes.isValid).toBe(true);
+      expect(pngRes.mimeType).toBe('image/png');
+
+      // WebP magic bytes: RIFF....WEBP
+      const webpBuf = Buffer.from('RIFF\x24\x00\x00\x00WEBPVP8 \x18\x00\x00\x00', 'binary');
+      const webpRes = verifyImageMagicBytes(webpBuf);
+      expect(webpRes.isValid).toBe(true);
+      expect(webpRes.mimeType).toBe('image/webp');
+    });
+
+    it('should reject fake files or malicious scripts masquerading as images', () => {
+      const phpScript = Buffer.from('<?php system($_GET["cmd"]); ?>');
+      const fakeRes = verifyImageMagicBytes(phpScript);
+      expect(fakeRes.isValid).toBe(false);
+      expect(fakeRes.mimeType).toBeNull();
+
+      const htmlPayload = Buffer.from('<html><script>alert(1)</script></html>');
+      const htmlRes = verifyImageMagicBytes(htmlPayload);
+      expect(htmlRes.isValid).toBe(false);
+      expect(htmlRes.mimeType).toBeNull();
+    });
+
+    it('should reject file uploads exceeding the 5MB size limit', async () => {
+      const oversizeBuf = Buffer.alloc(5 * 1024 * 1024 + 1024);
+      oversizeBuf[0] = 0xff;
+      oversizeBuf[1] = 0xd8;
+      oversizeBuf[2] = 0xff;
+
+      await expect(
+        saveImageFile(oversizeBuf, 'members')
+      ).rejects.toThrow(/melebihi batas 5MB/);
+    });
+
+    it('should reject invalid or manipulated upload categories', async () => {
+      const validJpeg = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46, 0x49, 0x46, 0x00, 0x01]);
+      await expect(
+        saveImageFile(validJpeg, 'malicious_cat' as any)
+      ).rejects.toThrow(/Kategori penyimpanan tidak valid/);
+    });
+
+    it('should save valid image to persistent storage and return clean safe URL', async () => {
+      const validJpeg = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46, 0x49, 0x46, 0x00, 0x01]);
+      const res = await saveImageFile(validJpeg, 'members', 'profile.jpg');
+
+      expect(res.category).toBe('members');
+      expect(res.url).toMatch(/^\/uploads\/members\/members-[a-f0-9-]+\.jpg$/);
+      expect(res.sizeBytes).toBe(validJpeg.length);
+      expect(res.mimeType).toBe('image/jpeg');
+    });
+
+    it('should prevent path traversal attempts in resolveStoredFilePath', () => {
+      expect(resolveStoredFilePath('members', '../../etc/passwd')).toBeNull();
+      expect(resolveStoredFilePath('members', '..\\windows\\win.ini')).toBeNull();
+      expect(resolveStoredFilePath('members', 'sub/../../etc/shadow')).toBeNull();
+      expect(resolveStoredFilePath('invalid_cat', 'test.jpg')).toBeNull();
     });
   });
 });

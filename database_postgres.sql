@@ -379,3 +379,29 @@ VALUES (
 )
 ON CONFLICT (key) DO NOTHING;
 
+-- --------------------------------------------------------
+-- 16. MIGRASI: PERSISTENT PHOTO STORAGE (photo_path)
+-- --------------------------------------------------------
+ALTER TABLE members ADD COLUMN IF NOT EXISTS photo_path TEXT;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS photo_path TEXT;
+ALTER TABLE products ADD COLUMN IF NOT EXISTS photo_path TEXT;
+ALTER TABLE company_expenses ADD COLUMN IF NOT EXISTS photo_path TEXT;
+
+CREATE TABLE IF NOT EXISTS equipment (
+    id VARCHAR(50) PRIMARY KEY DEFAULT uuid_generate_v4()::text,
+    name VARCHAR(150) NOT NULL,
+    category VARCHAR(50) NOT NULL DEFAULT 'Cardio',
+    brand VARCHAR(100),
+    model_number VARCHAR(100),
+    serial_number VARCHAR(100),
+    branch_id VARCHAR(50) REFERENCES branches(id) ON DELETE SET NULL,
+    status VARCHAR(50) NOT NULL DEFAULT 'Baik',
+    photo TEXT,
+    photo_path TEXT,
+    purchase_date DATE,
+    warranty_expired DATE,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+

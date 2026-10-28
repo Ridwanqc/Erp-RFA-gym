@@ -39,6 +39,20 @@ COPY --from=builder /app/public ./public
 COPY --from=builder /app/database_postgres.sql ./database_postgres.sql
 COPY --from=builder /app/prisma ./prisma
 
+# 4. Persistent Photo Upload Storage (Docker Named Volume rfa_gym_uploads)
+ENV UPLOAD_DIR=/app/uploads
+
+RUN mkdir -p /app/uploads/members \
+             /app/uploads/trainers \
+             /app/uploads/employees \
+             /app/uploads/products \
+             /app/uploads/equipment \
+             /app/uploads/member-cards \
+             /app/uploads/expenses && \
+    chmod -R 755 /app/uploads
+
+VOLUME ["/app/uploads"]
+
 # Expose standard application port
 EXPOSE 3000
 
