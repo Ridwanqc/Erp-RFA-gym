@@ -218,9 +218,17 @@ export default function App() {
   // Navigation & Platform View State
   const [guestView, setGuestView] = useState<'landing' | 'staff-login'>(() => {
     if (initialRoute.viewMode === 'staff-login') return 'staff-login';
-    // Smart Domain Detection: If accessed via admin.rfagym.com, open Staff Login directly
-    if (typeof window !== 'undefined' && window.location.hostname.startsWith('admin.')) {
-      return 'staff-login';
+    // If accessing ERP routes (/admin/* or /pos) while not logged in, prompt for Staff Login
+    if (initialRoute.viewMode === 'erp') return 'staff-login';
+    if (typeof window !== 'undefined') {
+      const path = window.location.pathname.toLowerCase();
+      if (path.startsWith('/admin') || path.startsWith('/login') || path === '/auth') {
+        return 'staff-login';
+      }
+      // Smart Domain Detection: If accessed via admin.rfagym.com, open Staff Login directly
+      if (window.location.hostname.startsWith('admin.')) {
+        return 'staff-login';
+      }
     }
     return 'landing';
   });
@@ -332,6 +340,7 @@ export default function App() {
         setGuestView('staff-login');
       } else if (route.viewMode === 'erp') {
         setStaffViewMode('erp');
+        setGuestView('staff-login');
       }
     };
     window.addEventListener('popstate', handlePopState);
@@ -1878,6 +1887,7 @@ export default function App() {
       localStorage.setItem('rfa_current_user_id', user.id);
     }
     setCurrentUser(user);
+    setStaffViewMode('erp');
     if (user.role === 'admin_cabang' && user.branchId) {
       setActiveBranchId(user.branchId);
     } else if (user.branchId && user.role !== 'admin' && user.role !== 'manager' && user.role !== 'keuangan') {
@@ -1906,6 +1916,8 @@ export default function App() {
     localStorage.removeItem('rfa_session_active');
     localStorage.removeItem('rfa_current_user_id');
     setCurrentUser(null);
+    setGuestView('staff-login');
+    navigateToPage('staff-login', undefined, true);
     logOutFirebase().catch(() => {});
     showToast('Logout Berhasil', 'Anda telah keluar dari sesi kerja. Silakan login kembali untuk melanjutkan.', 'info');
   };
@@ -3726,7 +3738,10 @@ export default function App() {
             attendances={attendances}
             studioClasses={studioClasses}
             staffUsers={staffUsers}
-            onOpenStaffLogin={() => setGuestView('staff-login')}
+            onOpenStaffLogin={() => {
+              setGuestView('staff-login');
+              navigateToPage('staff-login');
+            }}
             isStaffLoggedIn={false}
             onBookStudioClass={handleBookStudioClass}
             reservations={reservations}
@@ -3754,7 +3769,10 @@ export default function App() {
           <LoginPage
             onLogin={handleLogin}
             staffUsers={staffUsers}
-            onBackToLanding={() => setGuestView('landing')}
+            onBackToLanding={() => {
+              setGuestView('landing');
+              navigateToPage('landing');
+            }}
           />
         )}
 

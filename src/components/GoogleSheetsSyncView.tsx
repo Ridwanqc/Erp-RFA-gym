@@ -27,6 +27,7 @@ import {
 import { Member, Transaction, Product, Schedule, User as AppUser, CompanyExpense, Attendance, PackageItem } from '../types';
 import {
   auth,
+  onAuthStateChanged,
   signInWithGoogle,
   logOutFirebase,
   getAccessToken,
@@ -137,7 +138,7 @@ export const GoogleSheetsSyncView: React.FC<GoogleSheetsSyncViewProps> = ({
       }
     });
 
-    const unsubscribe = auth.onAuthStateChanged(async (user) => {
+    const unsubscribe = onAuthStateChanged(auth, async (user) => {
       setGoogleUser(user);
       const currentToken = await getAccessToken();
       setToken(currentToken);
