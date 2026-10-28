@@ -51,7 +51,7 @@ export const DEFAULT_GYM_PROFILE: GymBusinessProfile = {
   npwp: '01.345.678.9-041.000',
   openHoursWeekday: '06:00 - 22:00 WIB',
   openHoursWeekend: '07:00 - 21:00 WIB',
-  logoUrl: ''
+  logoUrl: '/rfa_logo.png'
 };
 
 export const DEFAULT_BRANCHES: GymBranch[] = [

@@ -259,11 +259,11 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin, staffUsers, onBac
       {/* Top Simple Bar */}
       <header className="px-3 sm:px-6 py-3 sm:py-4 border-b border-zinc-800/60 flex items-center justify-between z-10 backdrop-blur-md bg-zinc-950/40 min-w-0">
         <div className="flex items-center gap-2 sm:gap-3 min-w-0">
-          <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-gradient-to-br from-orange-500 to-amber-600 flex items-center justify-center text-zinc-950 font-black shadow-lg shadow-orange-500/25 shrink-0">
-            <Dumbbell className="w-4 h-4 sm:w-5 sm:h-5 -rotate-45" />
+          <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-zinc-900 border border-zinc-700/80 p-0.5 overflow-hidden flex items-center justify-center shadow-lg shadow-orange-500/25 shrink-0">
+            <img src="/rfa_logo.png" alt="RFA GYM" className="w-full h-full object-contain" />
           </div>
           <div className="min-w-0">
-            <span className="text-xs sm:text-sm font-black tracking-wider text-white truncate block">GYMPRO ERP</span>
+            <span className="text-xs sm:text-sm font-black tracking-wider text-white truncate block">RFA GYM</span>
             <span className="text-[9px] px-1.5 py-0.2 rounded bg-orange-500/20 text-orange-400 border border-orange-500/30 font-bold uppercase hidden xs:inline">
               Enterprise
             </span>

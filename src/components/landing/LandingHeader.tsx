@@ -43,7 +43,7 @@ export const LandingHeader: React.FC<LandingHeaderProps> = ({
   const { settings } = useSettings();
   const gymName = settings?.profile?.gymName || 'RFA GYM';
   const rawLogo = settings?.profile?.logoUrl;
-  const logoUrl = typeof rawLogo === 'string' && rawLogo.trim().length > 0 ? rawLogo.trim() : null;
+  const logoUrl = typeof rawLogo === 'string' && rawLogo.trim().length > 0 ? rawLogo.trim() : '/rfa_logo.png';
   const announcement = settings?.landing?.announcement;
 
   const [isScrolled, setIsScrolled] = useState(false);

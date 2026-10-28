@@ -33,7 +33,7 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
   const { settings } = useSettings();
   const gymName = settings?.profile?.gymName || 'RFA GYM';
   const rawLogo = settings?.profile?.logoUrl;
-  const logoUrl = typeof rawLogo === 'string' && rawLogo.trim().length > 0 ? rawLogo.trim() : null;
+  const logoUrl = typeof rawLogo === 'string' && rawLogo.trim().length > 0 ? rawLogo.trim() : '/rfa_logo.png';
 
   const heroConfig = settings?.landing?.hero || DEFAULT_LANDING_CONFIG.hero;
 

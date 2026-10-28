@@ -652,8 +652,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
         {/* Brand Header */}
         <div className="h-16 flex items-center justify-between px-4 border-b border-zinc-800 bg-zinc-900/40 shrink-0">
           <div className="flex items-center gap-3 overflow-hidden">
-            <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-orange-600 to-orange-500 flex items-center justify-center shadow-lg shadow-orange-500/20 text-white font-black italic text-lg tracking-tighter shrink-0">
-              R
+            <div className="w-9 h-9 rounded-xl bg-zinc-900 border border-zinc-700/80 p-0.5 overflow-hidden flex items-center justify-center shadow-lg shadow-orange-500/20 shrink-0">
+              <img src="/rfa_logo.png" alt="RFA GYM" className="w-full h-full object-contain" />
             </div>
             {/* Show title when not collapsed on desktop, or always on mobile */}
             <div className={`flex flex-col truncate ${isCollapsed ? 'lg:hidden' : 'block'}`}>

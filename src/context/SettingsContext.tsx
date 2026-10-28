@@ -92,7 +92,13 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
             return {
               printer: isLegacyPrinter ? DEFAULT_PRINTER_CONFIG : { ...DEFAULT_PRINTER_CONFIG, ...(parsed.printer || {}) },
-              profile: isLegacyProfile ? DEFAULT_GYM_PROFILE : { ...DEFAULT_GYM_PROFILE, ...(parsed.profile || {}) },
+              profile: isLegacyProfile
+                ? DEFAULT_GYM_PROFILE
+                : {
+                    ...DEFAULT_GYM_PROFILE,
+                    ...(parsed.profile || {}),
+                    logoUrl: parsed.profile?.logoUrl || '/rfa_logo.png'
+                  },
               paymentAndTax: { ...DEFAULT_PAYMENT_AND_TAX, ...(parsed.paymentAndTax || {}) },
               templates: { ...DEFAULT_WHATSAPP_TEMPLATES, ...(parsed.templates || {}) },
               picProtection: { ...DEFAULT_PIC_PROTECTION, ...(parsed.picProtection || {}) },
