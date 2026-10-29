@@ -5,6 +5,7 @@ import { authMiddleware } from '../middleware/auth';
 import { requireRoles } from '../middleware/rbac';
 import { sensitiveActionRateLimiter } from '../middleware/rateLimiter';
 import { AuditService } from '../services/auditService';
+import { PostgresService } from '../services/postgresService';
 
 export const expenseRouter = Router();
 
@@ -45,10 +46,16 @@ expenseRouter.get(
   '/',
   authMiddleware,
   requireRoles(['ADMIN', 'LEADER', 'KARYAWAN', 'KASIR']),
-  (req: Request, res: Response) => {
+  async (req: Request, res: Response) => {
     try {
       const { branchId, status, dateFrom, dateTo } = req.query;
-      let list = Array.from(db.companyExpenses.values());
+      let list: any[] = [];
+      if (PostgresService.isConnected()) {
+        list = await PostgresService.getExpenses(branchId as string);
+      }
+      if (list.length === 0) {
+        list = Array.from(db.companyExpenses.values());
+      }
 
       // Branch isolation: non-admin staff can only view expenses for their assigned branch
       if (req.user?.role !== 'ADMIN' && req.user?.branchId && req.user.branchId !== 'BR-ALL') {

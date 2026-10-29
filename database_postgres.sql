@@ -323,17 +323,17 @@ ALTER TABLE members ENABLE ROW LEVEL SECURITY;
 -- --------------------------------------------------------
 INSERT INTO branches (id, name, address, phone, whatsapp)
 VALUES 
-    ('BR-ALL', 'Headquarters & All Branches', 'Jakarta Pusat', '021-500123', '081299887766'),
-    ('BR-001', 'GymPro Sudirman Central', 'Gedung Sudirman Lantai 3', '021-500124', '081299887767')
+    ('BR-ALL', 'RFA GYM Headquarter', 'Jakarta Pusat', '021-500123', '081299887766'),
+    ('BR-001', 'RFA GYM Sudirman Central', 'Gedung Sudirman Lantai 3', '021-500124', '081299887767')
 ON CONFLICT (id) DO NOTHING;
 
 -- Seed Admin, Kasir, Leader, Trainer, Member
 INSERT INTO users (id, username, email, password_hash, name, role, status, branch_id, branch_name)
 VALUES
-    ('usr-admin-001', 'admin', 'admin@gympro.id', '$2a$10$wT8eF7QY6u3rJ81y5x3hIeqmUvG91F9q1X5p1v5N1B9m1r1e1s1u1', 'Super Admin GymPro', 'ADMIN', 'ACTIVE', 'BR-ALL', 'Headquarters & All Branches'),
-    ('usr-leader-001', 'leader_sudirman', 'leader.sudirman@gympro.id', '$2a$10$wT8eF7QY6u3rJ81y5x3hIeqmUvG91F9q1X5p1v5N1B9m1r1e1s1u1', 'Budi Branch Manager', 'LEADER', 'ACTIVE', 'BR-001', 'GymPro Sudirman Central'),
-    ('usr-kasir-001', 'kasir_dina', 'dina.kasir@gympro.id', '$2a$10$wT8eF7QY6u3rJ81y5x3hIeqmUvG91F9q1X5p1v5N1B9m1r1e1s1u1', 'Dina Front Desk & Kasir', 'KASIR', 'ACTIVE', 'BR-001', 'GymPro Sudirman Central'),
-    ('usr-trainer-001', 'coach_reza', 'reza.coach@gympro.id', '$2a$10$wT8eF7QY6u3rJ81y5x3hIeqmUvG91F9q1X5p1v5N1B9m1r1e1s1u1', 'Coach Reza Pratama', 'TRAINER', 'ACTIVE', 'BR-001', 'GymPro Sudirman Central')
+    ('usr-admin-001', 'admin', 'admin@rfagym.com', '$2a$10$wT8eF7QY6u3rJ81y5x3hIeqmUvG91F9q1X5p1v5N1B9m1r1e1s1u1', 'Super Admin RFA GYM', 'ADMIN', 'ACTIVE', 'BR-ALL', 'RFA GYM Headquarter'),
+    ('usr-leader-001', 'leader_sudirman', 'leader.sudirman@rfagym.com', '$2a$10$wT8eF7QY6u3rJ81y5x3hIeqmUvG91F9q1X5p1v5N1B9m1r1e1s1u1', 'Budi Branch Manager', 'LEADER', 'ACTIVE', 'BR-001', 'RFA GYM Sudirman Central'),
+    ('usr-kasir-001', 'kasir_dina', 'dina.kasir@rfagym.com', '$2a$10$wT8eF7QY6u3rJ81y5x3hIeqmUvG91F9q1X5p1v5N1B9m1r1e1s1u1', 'Dina Front Desk & Kasir', 'KASIR', 'ACTIVE', 'BR-001', 'RFA GYM Sudirman Central'),
+    ('usr-trainer-001', 'coach_reza', 'reza.coach@rfagym.com', '$2a$10$wT8eF7QY6u3rJ81y5x3hIeqmUvG91F9q1X5p1v5N1B9m1r1e1s1u1', 'Coach Reza Pratama', 'TRAINER', 'ACTIVE', 'BR-001', 'RFA GYM Sudirman Central')
 ON CONFLICT (username) DO NOTHING;
 
 -- Seed Official Packages

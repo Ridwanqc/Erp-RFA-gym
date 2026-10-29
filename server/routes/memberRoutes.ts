@@ -6,6 +6,7 @@ import { requireRoles, requireMemberOwnershipOrStaff } from '../middleware/rbac'
 import { sensitiveActionRateLimiter } from '../middleware/rateLimiter';
 import { validateRequest } from '../middleware/validator';
 import { AuditService } from '../services/auditService';
+import { PostgresService } from '../services/postgresService';
 
 export const memberRouter = Router();
 
@@ -21,8 +22,15 @@ memberRouter.get(
   '/',
   authMiddleware,
   requireRoles(['ADMIN', 'LEADER', 'KARYAWAN', 'KASIR', 'TRAINER']),
-  (req: Request, res: Response) => {
-    let members = Array.from(db.members.values());
+  async (req: Request, res: Response) => {
+    let members: any[] = [];
+    if (PostgresService.isConnected()) {
+      members = await PostgresService.getMembers(req.query.branchId as string);
+    }
+    
+    if (members.length === 0) {
+      members = Array.from(db.members.values());
+    }
 
     // If Trainer, only show assigned members
     if (req.user?.role === 'TRAINER') {
@@ -31,8 +39,27 @@ memberRouter.get(
 
     return res.status(200).json({
       success: true,
+      source: PostgresService.isConnected() ? 'postgresql' : 'in_memory',
       count: members.length,
       data: members
+    });
+  }
+);
+
+// 1.1. POST /api/members (Create or sync member to PostgreSQL)
+memberRouter.post(
+  '/',
+  authMiddleware,
+  requireRoles(['ADMIN', 'LEADER', 'KARYAWAN', 'KASIR']),
+  async (req: Request, res: Response) => {
+    const memberData = req.body;
+    if (PostgresService.isConnected()) {
+      await PostgresService.saveMember(memberData);
+    }
+    return res.status(200).json({
+      success: true,
+      message: 'Member berhasil disimpan ke database.',
+      data: memberData
     });
   }
 );

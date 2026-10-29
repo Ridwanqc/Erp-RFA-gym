@@ -22,6 +22,7 @@ import { expenseRouter } from './routes/expenseRoutes';
 import { settingsRouter } from './routes/settingsRoutes';
 import { initStorageDirectories } from './services/storageService';
 import { AuditService } from './services/auditService';
+import { PostgresService } from './services/postgresService';
 
 dotenv.config();
 
@@ -61,28 +62,9 @@ app.use(xssSanitizeMiddleware);
 // 7. General API Rate Limiting
 app.use('/api', generalApiRateLimiter);
 
-import pg from 'pg';
-
 // Initialize PostgreSQL Connection Pool if DATABASE_URL is provided (Dokploy / Production)
-export let pgPool: pg.Pool | null = null;
-if (process.env.DATABASE_URL) {
-  try {
-    const isSsl = process.env.DATABASE_URL.includes('sslmode=require') || process.env.DB_SSL === 'true';
-    pgPool = new pg.Pool({
-      connectionString: process.env.DATABASE_URL,
-      connectionTimeoutMillis: 5000,
-      ssl: isSsl ? { rejectUnauthorized: false } : undefined
-    });
-
-    pgPool.query('SELECT 1').then(() => {
-      console.log('[PostgreSQL] Connected successfully to database');
-    }).catch((err) => {
-      console.warn('[PostgreSQL] Database initial ping failed (will retry on requests):', err.message);
-    });
-  } catch (err: any) {
-    console.warn('[PostgreSQL] Pool initialization error:', err?.message);
-  }
-}
+import { pgPool } from './database/dbConnection';
+export { pgPool };
 
 // AI Studio Internal Control Plane Status Check
 app.all(['/__aistudio_internal_control_plane/dev/status', '/__aistudio_internal_control_plane/*'], (_req: Request, res: Response) => {
@@ -157,6 +139,22 @@ app.use('/api/admin/security', securityRouter);
 app.use('/api/upload', uploadRouter);
 app.use('/api/expenses', expenseRouter);
 app.use('/api/settings', settingsRouter);
+
+// 8.1. Live PostgreSQL Stats and Master Data endpoints
+app.get('/api/database/stats', async (_req: Request, res: Response) => {
+  const stats = await PostgresService.getDatabaseStats();
+  return res.status(200).json(stats);
+});
+
+app.get('/api/products', async (req: Request, res: Response) => {
+  const products = await PostgresService.getProducts(req.query.branchId as string);
+  return res.status(200).json({ success: true, count: products.length, data: products });
+});
+
+app.get('/api/packages', async (_req: Request, res: Response) => {
+  const packages = await PostgresService.getPackages();
+  return res.status(200).json({ success: true, count: packages.length, data: packages });
+});
 
 // 8.1. Persistent Uploaded Photos Serving (Docker Named Volume rfa_gym_uploads)
 app.get('/uploads/:category/:filename', serveUploadsHandler);

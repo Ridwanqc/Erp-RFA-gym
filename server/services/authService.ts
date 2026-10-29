@@ -3,6 +3,7 @@ import jwt from 'jsonwebtoken';
 import { db, UserEntity, UserSessionEntity } from '../database/db';
 import { JWT_SECRET, REFRESH_TOKEN_SECRET, AuthenticatedUserPayload } from '../middleware/auth';
 import { AuditService } from './auditService';
+import { PostgresService } from './postgresService';
 
 export interface TokenPair {
   accessToken: string;
@@ -34,10 +35,13 @@ export class AuthService {
   ): Promise<TokenPair> {
     const cleanIdentifier = identifier.trim().toLowerCase();
 
-    // 1. Search user by username or email
-    const user = Array.from(db.users.values()).find(
-      (u) => u.username.toLowerCase() === cleanIdentifier || u.email.toLowerCase() === cleanIdentifier
-    );
+    // 1. Search user in PostgreSQL first (if connected), with fallback to in-memory store
+    let user: UserEntity | null = await PostgresService.getUserByUsernameOrEmail(cleanIdentifier);
+    if (!user) {
+      user = Array.from(db.users.values()).find(
+        (u) => u.username.toLowerCase() === cleanIdentifier || u.email.toLowerCase() === cleanIdentifier
+      ) || null;
+    }
 
     // 2. Generic failure message to prevent user enumeration
     const genericFailure = 'Username atau password salah.';
@@ -84,6 +88,8 @@ export class AuthService {
         user.lockedUntil = new Date(Date.now() + 15 * 60 * 1000); // 15 mins lock
         user.status = 'LOCKED';
 
+        await PostgresService.recordFailedLogin(user.id, user.failedLoginAttempts, user.lockedUntil);
+
         AuditService.recordSecurityEvent({
           eventType: 'BRUTE_FORCE_LOCKOUT',
           severity: 'HIGH',
@@ -106,6 +112,8 @@ export class AuthService {
         throw new Error('Akun telah dikunci sementara selama 15 menit karena 5 kali percobaan login gagal berturut-turut.');
       }
 
+      await PostgresService.recordFailedLogin(user.id, user.failedLoginAttempts, null);
+
       AuditService.log({
         userId: user.id,
         action: 'LOGIN_FAILED',
@@ -124,12 +132,14 @@ export class AuthService {
       throw new Error(`Akun Anda tidak aktif (${user.status}). Hubungi administrator.`);
     }
 
-    // 6. Reset failed attempts & update last login
+    // 6. Reset failed attempts & update last login in memory and PostgreSQL
     user.failedLoginAttempts = 0;
     user.lockedUntil = null;
     user.status = 'ACTIVE';
     user.lastLoginAt = new Date();
     user.updatedAt = new Date();
+
+    await PostgresService.recordSuccessfulLogin(user.id);
 
     // 7. Create Session & Issue Tokens
     const sessionId = 'SES-' + Date.now() + '-' + Math.random().toString(36).substring(2, 9);

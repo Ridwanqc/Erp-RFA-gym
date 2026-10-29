@@ -550,6 +550,294 @@ var init_auth = __esm({
   }
 });
 
+// server/database/dbConnection.ts
+import pg from "pg";
+var pgPool;
+var init_dbConnection = __esm({
+  "server/database/dbConnection.ts"() {
+    pgPool = null;
+    if (process.env.DATABASE_URL) {
+      try {
+        const isSsl = process.env.DATABASE_URL.includes("sslmode=require") || process.env.DB_SSL === "true";
+        pgPool = new pg.Pool({
+          connectionString: process.env.DATABASE_URL,
+          connectionTimeoutMillis: 5e3,
+          ssl: isSsl ? { rejectUnauthorized: false } : void 0
+        });
+        pgPool.query("SELECT 1").then(() => {
+          console.log("[PostgreSQL] Connected successfully to database");
+        }).catch((err) => {
+          console.warn("[PostgreSQL] Database initial ping failed (will retry on requests):", err.message);
+        });
+      } catch (err) {
+        console.warn("[PostgreSQL] Pool initialization error:", err?.message);
+      }
+    }
+  }
+});
+
+// server/services/postgresService.ts
+var PostgresService;
+var init_postgresService = __esm({
+  "server/services/postgresService.ts"() {
+    init_dbConnection();
+    PostgresService = class {
+      /**
+       * Check if PostgreSQL is configured and active
+       */
+      static isConnected() {
+        return pgPool !== null;
+      }
+      /**
+       * Search user by username or email directly from PostgreSQL
+       */
+      static async getUserByUsernameOrEmail(identifier) {
+        if (!pgPool) return null;
+        try {
+          const clean = identifier.trim().toLowerCase();
+          const res = await pgPool.query(
+            `SELECT 
+          id, username, email, password_hash as "passwordHash", 
+          name, role, status, branch_id as "branchId", branch_name as "branchName",
+          failed_login_attempts as "failedLoginAttempts", 
+          locked_until as "lockedUntil", 
+          must_change_password as "mustChangePassword",
+          created_at as "createdAt",
+          updated_at as "updatedAt"
+        FROM users 
+        WHERE LOWER(username) = $1 OR LOWER(email) = $1 
+        LIMIT 1`,
+            [clean]
+          );
+          if (res.rows.length === 0) return null;
+          return res.rows[0];
+        } catch (err) {
+          console.warn("[PostgresService] getUserByUsernameOrEmail failed:", err.message);
+          return null;
+        }
+      }
+      /**
+       * Update user successful login timestamp & reset failed attempts in PostgreSQL
+       */
+      static async recordSuccessfulLogin(userId) {
+        if (!pgPool) return;
+        try {
+          await pgPool.query(
+            `UPDATE users 
+         SET last_login_at = CURRENT_TIMESTAMP, 
+             failed_login_attempts = 0, 
+             locked_until = NULL,
+             status = 'ACTIVE'
+         WHERE id = $1`,
+            [userId]
+          );
+        } catch (err) {
+          console.warn("[PostgresService] recordSuccessfulLogin failed:", err.message);
+        }
+      }
+      /**
+       * Record failed login attempts or lockout in PostgreSQL
+       */
+      static async recordFailedLogin(userId, attempts, lockedUntil) {
+        if (!pgPool) return;
+        try {
+          await pgPool.query(
+            `UPDATE users 
+         SET failed_login_attempts = $1, 
+             locked_until = $2,
+             status = CASE WHEN $2 IS NOT NULL THEN 'LOCKED' ELSE status END
+         WHERE id = $3`,
+            [attempts, lockedUntil, userId]
+          );
+        } catch (err) {
+          console.warn("[PostgresService] recordFailedLogin failed:", err.message);
+        }
+      }
+      /**
+       * Fetch all members from PostgreSQL
+       */
+      static async getMembers(branchId) {
+        if (!pgPool) return [];
+        try {
+          let query = `
+        SELECT 
+          id, member_code as "memberCode", name, phone, email, status, gender,
+          join_date as "joinDate", expired, pt_quota as "ptQuota",
+          assigned_trainer_id as "assignedTrainerId", branch_id as "branchId",
+          photo, photo_path as "photoPath", is_frozen as "isFrozen", notes,
+          created_at as "createdAt", updated_at as "updatedAt"
+        FROM members
+      `;
+          const params = [];
+          if (branchId && branchId !== "ALL" && branchId !== "BR-ALL") {
+            query += ` WHERE branch_id = $1`;
+            params.push(branchId);
+          }
+          query += ` ORDER BY created_at DESC`;
+          const res = await pgPool.query(query, params);
+          return res.rows;
+        } catch (err) {
+          console.warn("[PostgresService] getMembers failed:", err.message);
+          return [];
+        }
+      }
+      /**
+       * Upsert a member in PostgreSQL
+       */
+      static async saveMember(member) {
+        if (!pgPool) return false;
+        try {
+          await pgPool.query(
+            `INSERT INTO members (
+          id, member_code, name, phone, email, status, gender, join_date, expired,
+          pt_quota, assigned_trainer_id, branch_id, photo, photo_path, notes
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+        ON CONFLICT (id) DO UPDATE SET
+          name = EXCLUDED.name,
+          phone = EXCLUDED.phone,
+          email = EXCLUDED.email,
+          status = EXCLUDED.status,
+          pt_quota = EXCLUDED.pt_quota,
+          assigned_trainer_id = EXCLUDED.assigned_trainer_id,
+          branch_id = EXCLUDED.branch_id,
+          photo = COALESCE(EXCLUDED.photo, members.photo),
+          photo_path = COALESCE(EXCLUDED.photo_path, members.photo_path),
+          notes = EXCLUDED.notes,
+          updated_at = CURRENT_TIMESTAMP`,
+            [
+              member.id,
+              member.memberCode || member.code || `MEM-${Date.now()}`,
+              member.name,
+              member.phone,
+              member.email || null,
+              member.status || "Aktif",
+              member.gender || "L",
+              member.joinDate || /* @__PURE__ */ new Date(),
+              member.expired || null,
+              member.ptQuota || 0,
+              member.assignedTrainerId || null,
+              member.branchId || null,
+              member.photo || null,
+              member.photoPath || member.photo || null,
+              member.notes || null
+            ]
+          );
+          return true;
+        } catch (err) {
+          console.warn("[PostgresService] saveMember failed:", err.message);
+          return false;
+        }
+      }
+      /**
+       * Fetch all products from PostgreSQL
+       */
+      static async getProducts(branchId) {
+        if (!pgPool) return [];
+        try {
+          let query = `SELECT id, name, cost, price, stock, cat, img, photo_path as "photoPath", branch_id as "branchId", branch_name as "branchName", is_active as "isActive" FROM products`;
+          const params = [];
+          if (branchId && branchId !== "ALL" && branchId !== "BR-ALL") {
+            query += ` WHERE branch_id = $1`;
+            params.push(branchId);
+          }
+          query += ` ORDER BY name ASC`;
+          const res = await pgPool.query(query, params);
+          return res.rows;
+        } catch (err) {
+          console.warn("[PostgresService] getProducts failed:", err.message);
+          return [];
+        }
+      }
+      /**
+       * Fetch all packages from PostgreSQL
+       */
+      static async getPackages() {
+        if (!pgPool) return [];
+        try {
+          const res = await pgPool.query(`SELECT id, name, category, price, duration_days as "durationDays", sessions, active FROM packages WHERE active = true ORDER BY price ASC`);
+          return res.rows;
+        } catch (err) {
+          console.warn("[PostgresService] getPackages failed:", err.message);
+          return [];
+        }
+      }
+      /**
+       * Fetch all expenses from PostgreSQL
+       */
+      static async getExpenses(branchId) {
+        if (!pgPool) return [];
+        try {
+          let query = `
+        SELECT 
+          id, expense_number as "expenseNumber", expense_date as "date",
+          branch_id as "branchId", category_id as "categoryId", category_name as "categoryName",
+          subcategory, name, description, amount, accounting_type as "accountingType",
+          payment_method as "paymentMethod", source_account as "sourceAccount",
+          vendor_or_beneficiary as "vendorOrBeneficiary", pic_staff_id as "picStaffId",
+          invoice_ref_number as "invoiceRefNumber", attachment_url as "attachmentUrl",
+          photo_path as "photoPath", approval_status as "approvalStatus",
+          paid_amount as "paidAmount", balance_remaining as "balanceRemaining",
+          paid_at as "paidAt", paid_by_user_id as "paidByUserId",
+          created_at as "createdAt", updated_at as "updatedAt"
+        FROM company_expenses
+      `;
+          const params = [];
+          if (branchId && branchId !== "ALL" && branchId !== "BR-ALL") {
+            query += ` WHERE branch_id = $1`;
+            params.push(branchId);
+          }
+          query += ` ORDER BY expense_date DESC`;
+          const res = await pgPool.query(query, params);
+          return res.rows;
+        } catch (err) {
+          console.warn("[PostgresService] getExpenses failed:", err.message);
+          return [];
+        }
+      }
+      /**
+       * Fetch database statistics and row counts
+       */
+      static async getDatabaseStats() {
+        if (!pgPool) {
+          return {
+            connected: false,
+            mode: "in_memory",
+            message: "DATABASE_URL belum dikonfigurasi di environment variables."
+          };
+        }
+        try {
+          const [usersCnt, membersCnt, prodCnt, pkgCnt, trxCnt, expCnt] = await Promise.all([
+            pgPool.query("SELECT COUNT(*) as count FROM users"),
+            pgPool.query("SELECT COUNT(*) as count FROM members"),
+            pgPool.query("SELECT COUNT(*) as count FROM products"),
+            pgPool.query("SELECT COUNT(*) as count FROM packages"),
+            pgPool.query("SELECT COUNT(*) as count FROM transactions"),
+            pgPool.query("SELECT COUNT(*) as count FROM company_expenses")
+          ]);
+          return {
+            connected: true,
+            mode: "postgresql_live",
+            database: "database-rfa",
+            counts: {
+              users: parseInt(usersCnt.rows[0]?.count || "0", 10),
+              members: parseInt(membersCnt.rows[0]?.count || "0", 10),
+              products: parseInt(prodCnt.rows[0]?.count || "0", 10),
+              packages: parseInt(pkgCnt.rows[0]?.count || "0", 10),
+              transactions: parseInt(trxCnt.rows[0]?.count || "0", 10),
+              expenses: parseInt(expCnt.rows[0]?.count || "0", 10)
+            }
+          };
+        } catch (err) {
+          return {
+            connected: false,
+            error: err.message
+          };
+        }
+      }
+    };
+  }
+});
+
 // server/services/authService.ts
 import bcrypt2 from "bcryptjs";
 import jwt2 from "jsonwebtoken";
@@ -559,6 +847,7 @@ var init_authService = __esm({
     init_db();
     init_auth();
     init_auditService();
+    init_postgresService();
     AuthService = class {
       /**
        * Secure Login with Brute-Force Lockout Protection:
@@ -567,9 +856,12 @@ var init_authService = __esm({
        */
       static async login(identifier, passwordPlain, ipAddress, userAgent) {
         const cleanIdentifier = identifier.trim().toLowerCase();
-        const user = Array.from(db.users.values()).find(
-          (u) => u.username.toLowerCase() === cleanIdentifier || u.email.toLowerCase() === cleanIdentifier
-        );
+        let user = await PostgresService.getUserByUsernameOrEmail(cleanIdentifier);
+        if (!user) {
+          user = Array.from(db.users.values()).find(
+            (u) => u.username.toLowerCase() === cleanIdentifier || u.email.toLowerCase() === cleanIdentifier
+          ) || null;
+        }
         const genericFailure = "Username atau password salah.";
         if (!user) {
           await bcrypt2.compare(passwordPlain, "$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy");
@@ -600,6 +892,7 @@ var init_authService = __esm({
           if (user.failedLoginAttempts >= 5) {
             user.lockedUntil = new Date(Date.now() + 15 * 60 * 1e3);
             user.status = "LOCKED";
+            await PostgresService.recordFailedLogin(user.id, user.failedLoginAttempts, user.lockedUntil);
             AuditService.recordSecurityEvent({
               eventType: "BRUTE_FORCE_LOCKOUT",
               severity: "HIGH",
@@ -619,6 +912,7 @@ var init_authService = __esm({
             });
             throw new Error("Akun telah dikunci sementara selama 15 menit karena 5 kali percobaan login gagal berturut-turut.");
           }
+          await PostgresService.recordFailedLogin(user.id, user.failedLoginAttempts, null);
           AuditService.log({
             userId: user.id,
             action: "LOGIN_FAILED",
@@ -638,6 +932,7 @@ var init_authService = __esm({
         user.status = "ACTIVE";
         user.lastLoginAt = /* @__PURE__ */ new Date();
         user.updatedAt = /* @__PURE__ */ new Date();
+        await PostgresService.recordSuccessfulLogin(user.id);
         const sessionId = "SES-" + Date.now() + "-" + Math.random().toString(36).substring(2, 9);
         const accessTokenPayload = {
           userId: user.id,
@@ -1107,6 +1402,7 @@ var init_memberRoutes = __esm({
     init_rateLimiter();
     init_validator();
     init_auditService();
+    init_postgresService();
     memberRouter = Router2();
     updateMemberSchema = z2.object({
       phone: z2.string().min(8).max(20).regex(/^[0-9+-\s]+$/, "Format nomor telepon tidak valid.").optional(),
@@ -1117,15 +1413,38 @@ var init_memberRoutes = __esm({
       "/",
       authMiddleware,
       requireRoles(["ADMIN", "LEADER", "KARYAWAN", "KASIR", "TRAINER"]),
-      (req, res) => {
-        let members = Array.from(db.members.values());
+      async (req, res) => {
+        let members = [];
+        if (PostgresService.isConnected()) {
+          members = await PostgresService.getMembers(req.query.branchId);
+        }
+        if (members.length === 0) {
+          members = Array.from(db.members.values());
+        }
         if (req.user?.role === "TRAINER") {
           members = members.filter((m) => m.assignedTrainerId === req.user?.userId);
         }
         return res.status(200).json({
           success: true,
+          source: PostgresService.isConnected() ? "postgresql" : "in_memory",
           count: members.length,
           data: members
+        });
+      }
+    );
+    memberRouter.post(
+      "/",
+      authMiddleware,
+      requireRoles(["ADMIN", "LEADER", "KARYAWAN", "KASIR"]),
+      async (req, res) => {
+        const memberData = req.body;
+        if (PostgresService.isConnected()) {
+          await PostgresService.saveMember(memberData);
+        }
+        return res.status(200).json({
+          success: true,
+          message: "Member berhasil disimpan ke database.",
+          data: memberData
         });
       }
     );
@@ -2112,6 +2431,7 @@ var init_expenseRoutes = __esm({
     init_rbac();
     init_rateLimiter();
     init_auditService();
+    init_postgresService();
     expenseRouter = Router6();
     createExpenseSchema = z4.object({
       expenseNumber: z4.string().optional(),
@@ -2148,10 +2468,16 @@ var init_expenseRoutes = __esm({
       "/",
       authMiddleware,
       requireRoles(["ADMIN", "LEADER", "KARYAWAN", "KASIR"]),
-      (req, res) => {
+      async (req, res) => {
         try {
           const { branchId, status, dateFrom, dateTo } = req.query;
-          let list = Array.from(db.companyExpenses.values());
+          let list = [];
+          if (PostgresService.isConnected()) {
+            list = await PostgresService.getExpenses(branchId);
+          }
+          if (list.length === 0) {
+            list = Array.from(db.companyExpenses.values());
+          }
           if (req.user?.role !== "ADMIN" && req.user?.branchId && req.user.branchId !== "BR-ALL") {
             list = list.filter((e) => e.branchId === req.user?.branchId);
           } else if (branchId && branchId !== "ALL" && branchId !== "BR-ALL") {
@@ -2513,8 +2839,7 @@ import { fileURLToPath } from "url";
 import fs3 from "fs";
 import dotenv from "dotenv";
 import cookieParser from "cookie-parser";
-import pg from "pg";
-var __filename, __dirname, rootDir, distPath, app, isProduction, pgPool, host, port, app_default;
+var __filename, __dirname, rootDir, distPath, app, isProduction, host, port, app_default;
 var init_app = __esm({
   "server/app.ts"() {
     init_security();
@@ -2528,6 +2853,8 @@ var init_app = __esm({
     init_settingsRoutes();
     init_storageService();
     init_auditService();
+    init_postgresService();
+    init_dbConnection();
     dotenv.config();
     __filename = fileURLToPath(import.meta.url);
     __dirname = path3.dirname(__filename);
@@ -2545,24 +2872,6 @@ var init_app = __esm({
     app.use(antiPathTraversalMiddleware);
     app.use(xssSanitizeMiddleware);
     app.use("/api", generalApiRateLimiter);
-    pgPool = null;
-    if (process.env.DATABASE_URL) {
-      try {
-        const isSsl = process.env.DATABASE_URL.includes("sslmode=require") || process.env.DB_SSL === "true";
-        pgPool = new pg.Pool({
-          connectionString: process.env.DATABASE_URL,
-          connectionTimeoutMillis: 5e3,
-          ssl: isSsl ? { rejectUnauthorized: false } : void 0
-        });
-        pgPool.query("SELECT 1").then(() => {
-          console.log("[PostgreSQL] Connected successfully to database");
-        }).catch((err) => {
-          console.warn("[PostgreSQL] Database initial ping failed (will retry on requests):", err.message);
-        });
-      } catch (err) {
-        console.warn("[PostgreSQL] Pool initialization error:", err?.message);
-      }
-    }
     app.all(["/__aistudio_internal_control_plane/dev/status", "/__aistudio_internal_control_plane/*"], (_req, res) => {
       return res.status(200).json({ status: "ok", ready: true });
     });
@@ -2626,6 +2935,18 @@ var init_app = __esm({
     app.use("/api/upload", uploadRouter);
     app.use("/api/expenses", expenseRouter);
     app.use("/api/settings", settingsRouter);
+    app.get("/api/database/stats", async (_req, res) => {
+      const stats = await PostgresService.getDatabaseStats();
+      return res.status(200).json(stats);
+    });
+    app.get("/api/products", async (req, res) => {
+      const products = await PostgresService.getProducts(req.query.branchId);
+      return res.status(200).json({ success: true, count: products.length, data: products });
+    });
+    app.get("/api/packages", async (_req, res) => {
+      const packages = await PostgresService.getPackages();
+      return res.status(200).json({ success: true, count: packages.length, data: packages });
+    });
     app.get("/uploads/:category/:filename", serveUploadsHandler);
     app.get("/uploads/:filename", (req, res) => {
       return serveUploadsHandler({ ...req, params: { category: "members", filename: req.params.filename } }, res);
